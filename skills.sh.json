@@ -1,0 +1,15 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "groupings": [
+    {
+      "title": "Secrets",
+      "description": "Agent-safe secret management with hal-vault: SSH-key encrypted storage, tag search, and masked-by-default output.",
+      "skills": ["hal-vault"]
+    },
+    {
+      "title": "Media",
+      "description": "Agent-safe image handling with ImageMagick: read metadata, resize/crop/composite/montage/watermark/convert, and lossless compression before sending so images stay small and never leak local paths.",
+      "skills": ["hal-image"]
+    }
+  ]
+}
