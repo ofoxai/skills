@@ -20,6 +20,7 @@ Or a single skill:
 ```
 npx skills add ofoxai/skills@hal-vault
 npx skills add ofoxai/skills@hal-image
+npx skills add ofoxai/skills@cloudflare-drop
 ```
 
 ## Skills
@@ -28,6 +29,7 @@ npx skills add ofoxai/skills@hal-image
 |-------|-------|-------------|
 | [hal-vault](skills/hal-vault/SKILL.md) | Secrets | Agent-safe secret management: SSH-key encrypted storage, tag search, masked-by-default output — store, search, and inject secrets without ever seeing or leaking them. |
 | [hal-image](skills/hal-image/SKILL.md) | Media | Agent-safe image handling: read metadata, resize/crop/composite/montage/watermark/convert with ImageMagick, and losslessly compress before sending so images stay small and transfers don't stall. |
+| [cloudflare-drop](skills/cloudflare-drop/SKILL.md) | Deploy | Publish a static site (folder or zip of HTML/CSS/JS/images) to [Cloudflare Drop](https://cloudflare.com/drop) and get a live, shareable `*.workers.dev` URL in seconds — no account, no build. Drives the browser (Drop has no API yet), backend-agnostic, always flags the 60-minute expiry and fails open rather than inventing a link. |
 
 ## Why a monorepo
 
