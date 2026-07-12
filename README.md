@@ -1,6 +1,6 @@
 # ofoxai/skills
 
-High-standard, open-source [agent skills](https://skills.sh) from **OFOX AI** —
+High-standard, open-source [agent skills](https://www.skills.sh/ofoxai/skills) from **OFOX AI** —
 one monorepo so every skill ships with the same quality bar (clear safety
 contracts, real-tool recipes, no leaking of secrets or local paths).
 
