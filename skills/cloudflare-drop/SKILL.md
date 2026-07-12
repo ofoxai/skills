@@ -1,6 +1,6 @@
 ---
 name: cloudflare-drop
-description: Publish a static site (a folder or zip of HTML/CSS/JS/images/fonts) to Cloudflare Drop and get back a live, shareable URL in seconds — no account, no build, no config. Use when you have a finished static page or site and need to hand someone a link they can open on any device, and a 60-minute ephemeral preview is enough (reports, mockups, one-off landing pages, AI-generated HTML, "give me a link I can share"). Cloudflare Drop has no API or CLI yet, so this drives the browser to drag-and-drop onto cloudflare.com/drop; it is backend-agnostic (works with any browser-automation surface — claude-in-chrome, playwright, a hal-chrome profile, etc.). Deliver the drop-{id}.{words}.workers.dev preview URL, always flag the 60-minute expiry, and fail open (offer the file) rather than invent a link. For permanent hosting, claim the deployment or use Cloudflare Pages/Workers instead.
+description: Publish a static site (a folder or zip of HTML/CSS/JS/images/fonts) to Cloudflare Drop and get back a live, shareable URL in seconds — no account, no build, no config. Use when you have a finished static page or site and need to hand someone a link they can open on any device, and a 60-minute ephemeral preview is enough (reports, mockups, one-off landing pages, AI-generated HTML, "give me a link I can share"). Cloudflare Drop has no API or CLI yet, so this runs a packaged headless-playwright script (references/deploy.mjs) that uploads via setInputFiles and reads back the real drop-{id}.{words}.workers.dev URL from the DOM — one command, no hand-driving a browser. It bakes a 60-minute expiry countdown into the page (top-right) so the viewer knows when the link dies, always flags the expiry, and fails open (deliver the file) rather than invent a link. For permanent hosting, claim the deployment or use Cloudflare Pages/Workers instead.
 license: MIT
 metadata:
   author: ofoxai
@@ -22,15 +22,35 @@ someone a **link they can open and share on any device** for a report, a mockup,
 an AI-generated page — anything where a one-hour window is enough. For a permanent
 home, claim the drop or deploy to Cloudflare Pages/Workers instead.
 
-## The one hard fact about the mechanic
+## The default path: one packaged script (don't hand-drive a browser)
 
-**Cloudflare Drop has no API, CLI, or MCP endpoint** (as of this writing). Both the
-upload and the claim are human-shaped — a browser dropzone. So this skill **drives
-a browser**. It does not care *which* browser-automation surface you have
-(claude-in-chrome, Playwright, Puppeteer, a dedicated hal-chrome profile, a generic
-`computer`-style tool) — it describes the **action sequence and the pitfalls**, and
-you map each step onto your own tools. See `references/upload-flow.md` for the
-per-backend mapping.
+**Cloudflare Drop has no API, CLI, or MCP endpoint** (as of this writing) — the
+upload is a browser dropzone. But you do **not** hand-drive a browser step by step
+(that was slow and error-prone). The default is a **packaged headless-playwright
+script** proven on real Drop:
+
+```bash
+npx playwright install chromium   # once, if the chromium binary isn't cached
+node references/deploy.mjs <page.html>
+```
+
+`deploy.mjs` does the whole thing in one shot: injects the 60-minute expiry
+countdown into the page → stages it as `index.html` at a clean zip root → uploads
+via `setInputFiles` (reliable, no OS drag) → **reads the real
+`*.workers.dev` URL from the DOM** → curl-self-verifies HTTP 200 before printing
+`RESULT_URL` / `CLAIM_LINK` / `EXPIRY_EPOCH`. It never invents a URL and never
+reports one that didn't 200.
+
+Why a script, not a live-driven browser: Drop is an **anonymous dropzone — no login
+state** — so headless playwright is faster, deterministic, and needs no resident
+browser. Hand-driving a browser (e.g. hal-chrome) is only worth it for a
+**login-required** site; Drop isn't one. See `references/upload-flow.md` for the
+low-level dropzone details and the fallback backends.
+
+> This skill does exactly one thing — deploy a static site to Cloudflare Drop and
+> return a temporary URL. Choosing between a temporary link and a permanent host,
+> and any credential onboarding that a permanent host needs, belong to **hal-html**
+> (the delivery orchestrator), not here.
 
 ## When to use
 
