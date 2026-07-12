@@ -13,7 +13,7 @@
     },
     {
       "title": "Deploy",
-      "description": "Publish static sites to shareable URLs. cloudflare-drop drives the browser to drag-and-drop a folder or zip onto Cloudflare Drop and returns a live *.workers.dev preview in seconds — no account, no build — always flagging the 60-minute expiry and failing open rather than inventing a link.",
+      "description": "Publish static sites to shareable URLs. cloudflare-drop runs a packaged headless-playwright script that uploads a folder or zip to Cloudflare Drop and reads back a live *.workers.dev preview in seconds — no account, no build — baking a 60-minute expiry countdown into the page, always flagging the expiry, and failing open rather than inventing a link.",
       "skills": ["cloudflare-drop"]
     }
   ]
