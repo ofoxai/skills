@@ -4,7 +4,7 @@ description: Publish a static site (a folder or zip of HTML/CSS/JS/images/fonts)
 license: MIT
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "1.0.1"
 ---
 
 # cloudflare-drop: publish a static site as a shareable link, no account
@@ -161,6 +161,44 @@ it; say what you can't do and offer the fallback.
    > on any device, shareable. Heads-up: it's a Cloudflare Drop preview, so it
    > **expires in ~60 minutes**. Want it kept permanently? I can give you the claim
    > link (sign in to keep it), or deploy it to Cloudflare Pages for a stable URL."
+
+## Renewing an expired link (the 60-minute window ran out)
+
+A Drop link dies after 60 minutes. When someone comes back to an expired link,
+you don't have to re-run the whole pipeline by hand — every deploy is **archived
+to a content-addressed index**, so one command rebuilds and redeploys it:
+
+```bash
+node references/deploy.mjs renew <old-url|id>
+```
+
+What it does: resolves the `drop-{id}` from the url → reads the deploy index →
+takes the archived HTML copy → **strips the stale countdown and re-injects a
+fresh one** → redeploys → records `renewed_from` (the chain back to the
+original) → prints the **NEW** url, claim link, expiry, and `RENEWED_FROM`.
+
+**Expectation honesty — renew returns a *new* url, not the original.** Drop
+cannot revive a dead link; a renew is a fresh deploy of the same content, so the
+`*.workers.dev` address changes. Say this plainly when you deliver a renewed
+link, and offer the **claim link** as the way to make it permanent (claiming is
+the only escape from the 60-minute cycle). If the id was never archived (deployed
+before indexing, or from another machine), renew **fails loudly** — it won't
+guess or invent a link.
+
+### The deploy index, briefly
+
+- **Home** resolves in layers: `$CLOUDFLARE_DROP_HOME` > (hal2099)
+  `~/.hal2099-<inst>/drop/` > (standalone) `~/.cloudflare-drop/`. It is **never**
+  the skill dir or a session workspace — those get committed or cleaned up, so an
+  index there would dangle.
+- **`index.jsonl`** — one line per deploy, keyed on the drop id
+  (title/summary/deploy-time/`expires_at`/`claim_url`/`sha256`/`renewed_from`).
+- **`artifacts/<sha256>.html`** — a content-addressed copy of the deployed page;
+  identical content is stored once (sha256 dedupe).
+- **Pruning** (keep it small, don't over-build a GC): artifacts are
+  content-addressed, so it's safe to periodically delete old files —
+  `find <home>/artifacts -mtime +2 -delete`. An expired drop can't be renewed
+  once its content is gone anyway, and a fresh deploy re-archives.
 
 ## v2 / upgrade path (keep this in mind)
 
