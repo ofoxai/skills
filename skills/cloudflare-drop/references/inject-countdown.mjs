@@ -40,6 +40,46 @@ export function injectCountdown(html, expiryEpoch) {
   }
 }
 
+/**
+ * Remove a previously-injected countdown from a page (round-014 spec 05).
+ *
+ * A page pulled from the deploy archive already carries a countdown stamped with
+ * the OLD expiry. On renew we strip it, then re-inject a fresh one — so the
+ * renewed page counts down from the NEW deploy, never the stale one.
+ * Idempotent + fail-open: a page with no countdown (or bad input) is returned
+ * effectively unchanged.
+ *
+ * @param {string} html
+ * @returns {string} html with the countdown block (style + div + script) removed
+ */
+export function stripCountdown(html) {
+  try {
+    const src = typeof html === 'string' ? html : '';
+    if (!src.includes(`id="${MARKER_ID}"`)) return src;
+    // Our injected block is a contiguous <style>…<div id=marker>…</div>…<script>…</script>
+    // run built by countdownSnippet(). Match from the opening <style> that owns
+    // the marker id through the closing </script> that follows the marker div.
+    const re = new RegExp(
+      `\\s*<style>[\\s\\S]*?#${MARKER_ID}[\\s\\S]*?<\\/style>\\s*` +
+        `<div id="${MARKER_ID}"[\\s\\S]*?<\\/div>\\s*` +
+        `<script>[\\s\\S]*?<\\/script>`,
+      'i',
+    );
+    const stripped = src.replace(re, '');
+    // If the structured match didn't catch it (hand-edited markup), fall back to
+    // dropping just the marker div so we never re-inject on top of an old one.
+    if (stripped.includes(`id="${MARKER_ID}"`)) {
+      return stripped.replace(
+        new RegExp(`<div id="${MARKER_ID}"[\\s\\S]*?<\\/div>`, 'i'),
+        '',
+      );
+    }
+    return stripped;
+  } catch {
+    return typeof html === 'string' ? html : '';
+  }
+}
+
 function countdownSnippet(expiryEpoch) {
   const epoch = Number.isFinite(expiryEpoch) ? Math.floor(expiryEpoch) : 0;
   // Colors go through :root vars so light/dark themes override the same set.
