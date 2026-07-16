@@ -3,6 +3,31 @@
 All notable changes to the **cloudflare-drop** skill. Versioning follows SemVer;
 this skill starts at 1.0.0 and self-increments PATCH per iteration.
 
+## 1.0.2 — renew integrity, content self-verify, portable home, claim etiquette (round-015 feedback)
+
+From round-015 e2e feedback (A3: a 33.7KB page renewed to a 1.8KB head-only husk;
+A6: a blank/truncated page still 200'd and was reported as success; U1a: the skill
+hardcoded a host-app path layer and assumed playwright was installable; U1b: a
+claim/permanent-link pitch was tacked onto ordinary deliveries).
+
+- **Renew content integrity (A3)**: the countdown block is now fenced by a unique
+  comment pair, so `stripCountdown` excises exactly it and never the page body.
+  The old content-shape regex spanned the page's own `<style>`/`<div>`/`<script>`
+  and ate everything between them — renewing a full page down to a head-only husk.
+- **Content self-verify (A6)**: `deployHtmlString` verifies the served page's byte
+  size (vs the source, allowing the injected countdown's growth) AND a body
+  sentinel after the HTTP 200 backoff — a blank/truncated 200 now fails loudly as
+  `URL_UNVERIFIED`. Both fresh deploy and renew route through this single
+  verification exit, so no caller hand-`sleep`+curls.
+- **Portable home (U1a)**: `resolveHome` is exactly two layers —
+  `$CLOUDFLARE_DROP_HOME` > `~/.cloudflare-drop/`. The host-app middle layer and
+  its instance detection are gone; an embedding app integrates purely by injecting
+  `CLOUDFLARE_DROP_HOME`. Playwright is loaded lazily via `ensurePlaywright`, which
+  fails with an explicit install-guidance error when it's missing/uninstallable.
+- **Claim etiquette (U1b)**: `renew` surfaces `RENEW_COUNT` (the `renewed_from`
+  chain depth) and offers the claim/permanent link ONLY at the 3rd renew of the
+  same content; every other delivery is just the link + a one-line expiry reminder.
+
 ## 1.0.1 — deploy index + renew + self-verify backoff (round-014 spec 05)
 
 From round-013 feedback (#96: a v1 link expired before the user opened it;

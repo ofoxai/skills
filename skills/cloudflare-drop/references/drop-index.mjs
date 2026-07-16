@@ -10,8 +10,11 @@
 //
 // `renew` reads the entry, takes the archived copy, strips the stale countdown,
 // re-injects a fresh one, redeploys, and records `renewed_from` so the chain is
-// auditable. The index HOME resolves in layers (env > hal2099 inst > standalone)
-// and is NEVER the skill dir or a session workspace.
+// auditable. The index HOME resolves in exactly two portable layers
+// ($CLOUDFLARE_DROP_HOME > ~/.cloudflare-drop/) and is NEVER the skill dir or a
+// session workspace. This skill is published standalone, so it carries zero
+// host-app awareness — an embedding app integrates purely by injecting
+// CLOUDFLARE_DROP_HOME (round-016 spec 02, U1a).
 //
 // Prune note (keep the store small, don't over-build a GC): artifacts are
 // content-addressed under artifacts/, so it's safe to periodically delete files
@@ -50,15 +53,20 @@ export function idFromUrl(urlOrId) {
 }
 
 /**
- * Resolve where the index lives, in layers:
- *   $CLOUDFLARE_DROP_HOME  >  (hal2099) ~/.hal2099-<inst>/drop/  >  ~/.cloudflare-drop/
+ * Resolve where the index lives, in exactly two portable layers:
+ *   $CLOUDFLARE_DROP_HOME  >  ~/.cloudflare-drop/
  * Never the skill dir or a session workspace — those get cleaned up / committed,
  * so an index there would dangle or leak. A HOME that points at one is a loud error.
  *
- * @param {{env?:NodeJS.ProcessEnv, cwd?:string}} [opts]
+ * The skill is standalone: it has no notion of any host app. An embedding app
+ * points the index at an instance-specific dir purely by setting
+ * CLOUDFLARE_DROP_HOME in the deploy environment — there is no baked-in
+ * middle layer (round-016 spec 02, U1a).
+ *
+ * @param {{env?:NodeJS.ProcessEnv}} [opts]
  * @returns {string} absolute path to the index home
  */
-export function resolveHome({ env = process.env, cwd = process.cwd() } = {}) {
+export function resolveHome({ env = process.env } = {}) {
   const explicit = env.CLOUDFLARE_DROP_HOME;
   if (explicit) {
     const abs = resolve(explicit);
@@ -66,23 +74,8 @@ export function resolveHome({ env = process.env, cwd = process.cwd() } = {}) {
     return abs;
   }
 
-  const inst = detectInstance(env, cwd);
-  if (inst) {
-    return join(homedir(), `.hal2099-${inst}`, 'drop');
-  }
-
-  // Standalone default.
+  // Standalone default — the only fallback.
   return join(homedir(), '.cloudflare-drop');
-}
-
-// A hal2099 instance is identified by env (HAL_INSTANCE / HAL2099_INSTANCE) or
-// by a cwd sitting under an `agents/<inst>/…` tree.
-function detectInstance(env, cwd) {
-  if (env.HAL_INSTANCE) return env.HAL_INSTANCE;
-  if (env.HAL2099_INSTANCE) return env.HAL2099_INSTANCE;
-  const m = String(cwd || '').match(/[/\\]agents[/\\]([^/\\]+)/);
-  if (m && m[1] !== '.template') return m[1];
-  return null;
 }
 
 // Refuse a HOME that would drop the index inside our own skill tree or a session
@@ -205,6 +198,30 @@ export function readArtifact(entry, home = resolveHome()) {
 }
 
 /**
+ * Count how many renews deep an id sits — the depth of its `renewed_from` chain
+ * back to the root deploy (round-016 spec 03, U1b). The original deploy is 0;
+ * each renew adds one. Claim etiquette offers the permanent link only once a
+ * chain reaches the 3rd renew.
+ *
+ * @param {string} id      a drop id already in the index
+ * @param {string} [home]
+ * @returns {number} chain depth (0 for the root or an unknown id)
+ */
+export function renewCountFor(id, home = resolveHome()) {
+  let count = 0;
+  let cursor = id;
+  const seen = new Set(); // guard against a malformed self-referential chain
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    const entry = readEntry(cursor, home);
+    if (!entry || !entry.renewed_from) break;
+    count += 1;
+    cursor = entry.renewed_from;
+  }
+  return count;
+}
+
+/**
  * Renew an expired (or soon-to-expire) Drop link: read the archived content,
  * strip the stale countdown, inject a fresh one stamped with the new expiry,
  * redeploy, record the renewed_from chain, and return the NEW result.
@@ -261,11 +278,16 @@ export async function renew(urlOrId, { deployFn, home = resolveHome(), now } = {
     now: nowSec,
   });
 
+  // How many renews deep this new link now is — the delivery skill gates the
+  // claim/permanent-link offer on renewCount >= 3 (round-016 spec 03, U1b).
+  const renewCount = renewCountFor(newEntry.id, home);
+
   return {
     url: res.url,
     claim: res.claim || null,
     expiryEpoch,
     renewedFrom: oldId,
+    renewCount,
     entry: newEntry,
   };
 }

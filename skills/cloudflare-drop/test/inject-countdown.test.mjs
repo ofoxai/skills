@@ -3,7 +3,7 @@
 // Run: node --test agents/.template/sessions/.session-template/.claude/skills/cloudflare-drop/test/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { injectCountdown } from '../references/inject-countdown.mjs';
+import { injectCountdown, stripCountdown } from '../references/inject-countdown.mjs';
 
 const EXPIRY = 1_800_000_000; // a fixed epoch-seconds value for deterministic assertions
 
@@ -37,4 +37,57 @@ test('fail-open — unparseable/empty input returns something usable, never thro
   assert.doesNotThrow(() => injectCountdown('', EXPIRY));
   const out = injectCountdown('not really html', EXPIRY);
   assert.ok(typeof out === 'string' && out.length > 0, 'returns a non-empty string');
+});
+
+// --- strip content integrity (round-016 spec 02, A3) -----------------------
+// The renew path is inject → archive → strip → re-inject. round-015 A3: a 33.7KB
+// page renewed to 1.8KB — strip's fragile cross-body regex ate the whole body,
+// leaving only head + the countdown CSS. A page that carries its OWN <style> /
+// <div> / <script> (every real page does) is exactly what tripped it.
+
+// A realistic large page: its own <style>, many <div>s, its own <script> — the
+// shapes the old strip regex spanned across when it swallowed the body.
+function bigPage() {
+  const rows = Array.from(
+    { length: 40 },
+    (_, i) => `<div class="row">Section ${i}: substantial body content here.</div>`,
+  ).join('\n');
+  return (
+    '<!doctype html><html><head><title>Big Report</title>\n' +
+    '<style>.row{padding:8px}</style>\n</head><body>\n' +
+    '<h1>Quarterly Report</h1>\n' +
+    rows +
+    "\n<script>function foo(){return 1;}</script>\n</body></html>"
+  );
+}
+
+test('strip preserves the full body of a page that has its own style/div/script', () => {
+  const page = bigPage();
+  const withCd = injectCountdown(page, EXPIRY);
+  const stripped = stripCountdown(withCd);
+
+  // The whole body survives — the A3 regression was strip eating everything
+  // between the page's first <style> and the countdown's </script>.
+  assert.ok(stripped.includes('Section 39'), 'last body row survives strip');
+  assert.ok(stripped.includes('<h1>Quarterly Report</h1>'), 'heading survives strip');
+  assert.ok(stripped.includes('function foo(){return 1;}'), "page's own script survives strip");
+  assert.ok(stripped.includes('.row{padding:8px}'), "page's own <style> survives strip");
+  // And the countdown itself is gone (so re-inject won't stack two).
+  assert.ok(!stripped.includes('id="drop-expiry-countdown"'), 'countdown removed');
+  // Size sanity: stripped ≈ original (not the head-only ~1.8KB artifact).
+  assert.ok(
+    stripped.length >= page.length * 0.9,
+    `stripped size ~= original (got ${stripped.length} vs ${page.length})`,
+  );
+});
+
+test('inject → strip round-trips back to (effectively) the original page', () => {
+  const page = bigPage();
+  const restored = stripCountdown(injectCountdown(page, EXPIRY));
+  // Every non-countdown byte is preserved; the only delta is the injected block.
+  assert.equal(
+    restored.replace(/\s+/g, ' ').trim(),
+    page.replace(/\s+/g, ' ').trim(),
+    'strip(inject(page)) === page (modulo the injected countdown block)',
+  );
 });

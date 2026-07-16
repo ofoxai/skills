@@ -4,7 +4,7 @@ description: Publish a static site (a folder or zip of HTML/CSS/JS/images/fonts)
 license: MIT
 metadata:
   author: ofoxai
-  version: "1.0.1"
+  version: "1.0.2"
 ---
 
 # cloudflare-drop: publish a static site as a shareable link, no account
@@ -45,12 +45,11 @@ Why a script, not a live-driven browser: Drop is an **anonymous dropzone — no 
 state** — so headless playwright is faster, deterministic, and needs no resident
 browser. Hand-driving a browser (e.g. hal-chrome) is only worth it for a
 **login-required** site; Drop isn't one. See `references/upload-flow.md` for the
-low-level dropzone details and the fallback backends.
+low-level dropzone details.
 
 > This skill does exactly one thing — deploy a static site to Cloudflare Drop and
-> return a temporary URL. Choosing between a temporary link and a permanent host,
-> and any credential onboarding that a permanent host needs, belong to **hal-html**
-> (the delivery orchestrator), not here.
+> return a shareable URL. Permanence, when it's needed, is **claiming the Drop**
+> (sign in to keep it) — there's no other backend and no credential to onboard.
 
 ## When to use
 
@@ -174,23 +173,35 @@ node references/deploy.mjs renew <old-url|id>
 
 What it does: resolves the `drop-{id}` from the url → reads the deploy index →
 takes the archived HTML copy → **strips the stale countdown and re-injects a
-fresh one** → redeploys → records `renewed_from` (the chain back to the
-original) → prints the **NEW** url, claim link, expiry, and `RENEWED_FROM`.
+fresh one** → redeploys → self-verifies the full content is live (size +
+sentinel, not just a 200) → records `renewed_from` (the chain back to the
+original) → prints the **NEW** url, expiry, `RENEWED_FROM`, and `RENEW_COUNT`.
 
 **Expectation honesty — renew returns a *new* url, not the original.** Drop
 cannot revive a dead link; a renew is a fresh deploy of the same content, so the
 `*.workers.dev` address changes. Say this plainly when you deliver a renewed
-link, and offer the **claim link** as the way to make it permanent (claiming is
-the only escape from the 60-minute cycle). If the id was never archived (deployed
-before indexing, or from another machine), renew **fails loudly** — it won't
-guess or invent a link.
+link. If the id was never archived (deployed before indexing, or from another
+machine), renew **fails loudly** — it won't guess or invent a link.
+
+**Claim etiquette — offer the permanent link only at the 3rd renew (U1b).** Most
+deliveries are just **the new link + a one-line expiry reminder, nothing else,
+like a normal person** — no "claim it to keep it forever" pitch on every message.
+The command gates this for you: it prints `RENEW_COUNT` and only surfaces a
+`CLAIM_LINK` once the same content has been renewed **3 times** (`RENEW_COUNT >=
+3`); before that it prints `CLAIM_OFFER none`. Follow that signal — deliver just
+the link + expiry on the first delivery and the first two renews, and mention
+claiming only when the tool surfaces the claim link (a page renewed three times
+is one the viewer keeps returning to, so keeping it permanently is finally worth
+raising).
 
 ### The deploy index, briefly
 
-- **Home** resolves in layers: `$CLOUDFLARE_DROP_HOME` > (hal2099)
-  `~/.hal2099-<inst>/drop/` > (standalone) `~/.cloudflare-drop/`. It is **never**
-  the skill dir or a session workspace — those get committed or cleaned up, so an
-  index there would dangle.
+- **Home** resolves in exactly two portable layers: `$CLOUDFLARE_DROP_HOME` >
+  (standalone) `~/.cloudflare-drop/`. It is **never** the skill dir or a session
+  workspace — those get committed or cleaned up, so an index there would dangle.
+  The skill carries no host-app awareness; an embedding app points the index at
+  an instance-specific dir purely by setting `CLOUDFLARE_DROP_HOME` in the deploy
+  environment (there is no baked-in middle layer).
 - **`index.jsonl`** — one line per deploy, keyed on the drop id
   (title/summary/deploy-time/`expires_at`/`claim_url`/`sha256`/`renewed_from`).
 - **`artifacts/<sha256>.html`** — a content-addressed copy of the deployed page;
