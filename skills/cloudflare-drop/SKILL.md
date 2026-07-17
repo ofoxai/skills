@@ -41,6 +41,12 @@ via `setInputFiles` (reliable, no OS drag) → **reads the real
 `RESULT_URL` / `CLAIM_LINK` / `EXPIRY_EPOCH`. It never invents a URL and never
 reports one that didn't 200.
 
+> **`URL_UNVERIFIED` = deploy failed — do NOT deliver that URL; fall back to the
+> file.** If the script prints `URL_UNVERIFIED` (no 200, or a blank/truncated page
+> that didn't match the content self-verify), the deploy did not succeed. Never
+> hand that URL to the user — treat it as a failure, say so plainly, and offer the
+> HTML file instead (fail-open, discipline #5).
+
 Why a script, not a live-driven browser: Drop is an **anonymous dropzone — no login
 state** — so headless playwright is faster, deterministic, and needs no resident
 browser. Hand-driving a browser (e.g. hal-chrome) is only worth it for a

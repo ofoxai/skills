@@ -66,8 +66,16 @@ export function stripCountdown(html) {
     // Preferred path: the block is fenced by our unique comment pair, so we
     // excise EXACTLY it (start-marker … end-marker) and touch nothing else —
     // no dependence on how many <style>/<div>/<script> the page itself carries.
-    const s = src.indexOf(FENCE_START);
-    const e = src.indexOf(FENCE_END);
+    //
+    // C2 (round-016): match the LAST fence pair, not the first. The injected block
+    // is always appended just before </body>, so it is the final fence occurrence.
+    // If the page's OWN body quotes the literal sentinel strings (a report about the
+    // countdown, a doc echoing the markers), a first-match indexOf would excise from
+    // that body sentinel through the injected end — silently deleting real content
+    // (and verifyContent wouldn't catch it: still a plausible-size 200). lastIndexOf
+    // anchors on the block we injected, so strip only ever removes our own block.
+    const s = src.lastIndexOf(FENCE_START);
+    const e = src.lastIndexOf(FENCE_END);
     if (s !== -1 && e !== -1 && e > s) {
       // Also swallow the leading newline we inserted before the fence, if present.
       let cut = s;

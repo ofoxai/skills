@@ -91,3 +91,45 @@ test('inject → strip round-trips back to (effectively) the original page', () 
     'strip(inject(page)) === page (modulo the injected countdown block)',
   );
 });
+
+// --- C2 (round-016): last-fence matching, not first ------------------------
+// The injected block is ALWAYS the last fence pair on the page (inserted before
+// </body>). If a page's OWN body happens to contain the literal fence sentinel
+// strings (a report ABOUT the countdown mechanism, a doc quoting the markers, a
+// page that echoes them), a first-match indexOf would excise from the page's
+// body sentinel to the injected end — silently deleting real content, and
+// verifyContent wouldn't catch it (it still 200s with a plausible size). strip
+// must anchor on the LAST fence pair so it only ever removes the block it injected.
+test('C2: strip is lossless on a page whose body contains the literal fence sentinels', () => {
+  const START = '<!--drop-expiry-countdown:start-->';
+  const END = '<!--drop-expiry-countdown:end-->';
+  // A page that legitimately quotes the fence markers in its own visible content.
+  const page =
+    '<!doctype html><html><head><title>How the countdown works</title></head><body>\n' +
+    '<h1>Countdown internals</h1>\n' +
+    `<pre>The block is fenced by ${START} … ${END} so strip excises exactly it.</pre>\n` +
+    '<p>IMPORTANT BODY PARAGRAPH that must survive a strip.</p>\n' +
+    '</body></html>';
+
+  const withCd = injectCountdown(page, EXPIRY);
+  const stripped = stripCountdown(withCd);
+
+  // The page's own quoted sentinels + the paragraph after them must survive.
+  assert.ok(
+    stripped.includes('IMPORTANT BODY PARAGRAPH that must survive a strip.'),
+    'body content after the page-quoted sentinels must not be deleted',
+  );
+  assert.ok(stripped.includes('Countdown internals'), 'heading survives');
+  assert.ok(
+    stripped.includes(`fenced by ${START} … ${END}`),
+    "the page's own quoted sentinels are body content and must survive",
+  );
+  // The injected countdown element is gone (so re-inject won't stack two).
+  assert.ok(!stripped.includes('id="drop-expiry-countdown"'), 'the injected countdown is removed');
+  // Round-trip is content-lossless (modulo the injected block).
+  assert.equal(
+    stripped.replace(/\s+/g, ' ').trim(),
+    page.replace(/\s+/g, ' ').trim(),
+    'strip(inject(page)) === page even when the body quotes the fence sentinels',
+  );
+});
