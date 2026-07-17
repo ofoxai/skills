@@ -14,9 +14,44 @@
 // Prints on success:  RESULT_URL <url>  /  CLAIM_LINK <url|none>  /  EXPIRY_EPOCH <n>
 // Prints on failure:  NO_URL_FOUND / ERROR <msg>   (caller fails open — never invents a URL)
 
-import { chromium } from 'playwright';
-
 const DROP_URL = 'https://cloudflare.com/drop';
+
+// Playwright is loaded LAZILY (not a top-level import) so a device without it
+// fails with an explicit, actionable error instead of an opaque module-load
+// crash that leaves a restricted/offline box hanging (round-016 spec 02, U1a).
+const PLAYWRIGHT_INSTALL_HINT =
+  "playwright is required to drive the Cloudflare Drop dropzone but isn't available. " +
+  'Install it once, then retry:\n' +
+  '  pnpm add -g playwright   # or: npm i -g playwright\n' +
+  '  npx playwright install chromium\n' +
+  "If this device can't install packages (restricted/offline), Drop can't be " +
+  'driven here — deliver the .html file instead (fail open, never invent a link).';
+
+/**
+ * Ensure playwright is available and return its `chromium` API, or throw a clear
+ * error with install guidance. Never assume it's present — a missing dependency
+ * on a restricted/offline device must be an honest, actionable failure.
+ * @param {{importFn?:(spec:string)=>Promise<any>}} [opts] injectable for tests
+ * @returns {Promise<import('playwright').BrowserType>}
+ */
+export async function ensurePlaywright({ importFn } = {}) {
+  const load = importFn || ((spec) => import(spec));
+  let mod;
+  try {
+    mod = await load('playwright');
+  } catch (e) {
+    const err = new Error(`${PLAYWRIGHT_INSTALL_HINT}\n(underlying: ${(e && e.message) || e})`);
+    err.code = 'PLAYWRIGHT_MISSING';
+    throw err;
+  }
+  const chromium = mod && (mod.chromium || (mod.default && mod.default.chromium));
+  if (!chromium) {
+    const err = new Error(PLAYWRIGHT_INSTALL_HINT);
+    err.code = 'PLAYWRIGHT_MISSING';
+    throw err;
+  }
+  return chromium;
+}
 // gotcha 2 — the Drop deploy is SLOW. round-012 saw it sit on "18/18 regions
 // reached / Finishing up" well past 30s; a short timeout reads no URL. Poll >=120s.
 const DEPLOY_POLL_MS = 120_000;
@@ -27,6 +62,7 @@ const DEPLOY_POLL_MS = 120_000;
  * @returns {Promise<{url:string|null, claim:string|null, uploadedAtUTC:string}>}
  */
 export async function uploadToDrop(zipPath) {
+  const chromium = await ensurePlaywright();
   const browser = await chromium.launch({ headless: true });
   try {
     const ctx = await browser.newContext({

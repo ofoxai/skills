@@ -13,6 +13,12 @@
 //   - fail-open: never throws; countdown is an enhancement, must not block delivery.
 
 const MARKER_ID = 'drop-expiry-countdown';
+// The injected block is fenced by a unique comment pair so strip can excise
+// exactly it — never anything of the page's own (round-016 spec 02 / A3: the old
+// content-shape regex spanned the page's own <style>/<div>/<script> and ate the
+// whole body, renewing a 33.7KB page down to a 1.8KB head-only husk).
+const FENCE_START = '<!--drop-expiry-countdown:start-->';
+const FENCE_END = '<!--drop-expiry-countdown:end-->';
 
 /**
  * @param {string} html          the page HTML
@@ -56,25 +62,35 @@ export function stripCountdown(html) {
   try {
     const src = typeof html === 'string' ? html : '';
     if (!src.includes(`id="${MARKER_ID}"`)) return src;
-    // Our injected block is a contiguous <style>…<div id=marker>…</div>…<script>…</script>
-    // run built by countdownSnippet(). Match from the opening <style> that owns
-    // the marker id through the closing </script> that follows the marker div.
-    const re = new RegExp(
-      `\\s*<style>[\\s\\S]*?#${MARKER_ID}[\\s\\S]*?<\\/style>\\s*` +
-        `<div id="${MARKER_ID}"[\\s\\S]*?<\\/div>\\s*` +
-        `<script>[\\s\\S]*?<\\/script>`,
-      'i',
-    );
-    const stripped = src.replace(re, '');
-    // If the structured match didn't catch it (hand-edited markup), fall back to
-    // dropping just the marker div so we never re-inject on top of an old one.
-    if (stripped.includes(`id="${MARKER_ID}"`)) {
-      return stripped.replace(
-        new RegExp(`<div id="${MARKER_ID}"[\\s\\S]*?<\\/div>`, 'i'),
-        '',
-      );
+
+    // Preferred path: the block is fenced by our unique comment pair, so we
+    // excise EXACTLY it (start-marker … end-marker) and touch nothing else —
+    // no dependence on how many <style>/<div>/<script> the page itself carries.
+    //
+    // C2 (round-016): match the LAST fence pair, not the first. The injected block
+    // is always appended just before </body>, so it is the final fence occurrence.
+    // If the page's OWN body quotes the literal sentinel strings (a report about the
+    // countdown, a doc echoing the markers), a first-match indexOf would excise from
+    // that body sentinel through the injected end — silently deleting real content
+    // (and verifyContent wouldn't catch it: still a plausible-size 200). lastIndexOf
+    // anchors on the block we injected, so strip only ever removes our own block.
+    const s = src.lastIndexOf(FENCE_START);
+    const e = src.lastIndexOf(FENCE_END);
+    if (s !== -1 && e !== -1 && e > s) {
+      // Also swallow the leading newline we inserted before the fence, if present.
+      let cut = s;
+      if (cut > 0 && src[cut - 1] === '\n') cut -= 1;
+      return src.slice(0, cut) + src.slice(e + FENCE_END.length);
     }
-    return stripped;
+
+    // Fallback for a page injected by an older (pre-fence) version, or one
+    // hand-edited so the fence is gone: drop just the marker <div>. This is the
+    // narrowest possible non-greedy match — it cannot span the page body because
+    // it starts at the marker div and stops at that div's own </div>.
+    return src.replace(
+      new RegExp(`<div id="${MARKER_ID}"[\\s\\S]*?<\\/div>`, 'i'),
+      '',
+    );
   } catch {
     return typeof html === 'string' ? html : '';
   }
@@ -85,7 +101,9 @@ function countdownSnippet(expiryEpoch) {
   // Colors go through :root vars so light/dark themes override the same set.
   // Defaults are provided inline (var(--x, fallback)) so the pill also renders on
   // pages that don't define these variables.
+  // Fenced by a unique comment pair so stripCountdown excises exactly this block.
   return `
+${FENCE_START}
 <style>
   #${MARKER_ID}{
     position:fixed;top:12px;right:12px;z-index:2147483647;
@@ -121,5 +139,6 @@ function countdownSnippet(expiryEpoch) {
   }
   tick();
 })();</script>
+${FENCE_END}
 `;
 }

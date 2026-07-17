@@ -41,3 +41,49 @@ test('reads the URL from the DOM, never invents it', () => {
   assert.match(src, /never (invent|transcribe|screenshot)|from the DOM/i,
     'must state the do-not-invent-URL discipline');
 });
+
+// --- playwright dependency honesty (round-016 spec 02, U1a) ----------------
+// A restricted/offline device may not have playwright and can't install it. The
+// deploy must fail with an EXPLICIT error + install instructions, never a silent
+// assumption (a bare ERR_MODULE_NOT_FOUND) that leaves the device hanging.
+
+test('exports ensurePlaywright as an explicit, testable dependency guard', async () => {
+  const mod = await import(uploadPath);
+  assert.equal(typeof mod.ensurePlaywright, 'function', 'must export ensurePlaywright');
+});
+
+test('ensurePlaywright throws a clear error WITH install guidance when missing', async () => {
+  const { ensurePlaywright } = await import(uploadPath);
+  // Simulate playwright being absent by injecting a loader that rejects.
+  const missingLoader = async () => {
+    throw new Error("Cannot find package 'playwright'");
+  };
+  await assert.rejects(
+    () => ensurePlaywright({ importFn: missingLoader }),
+    (e) => {
+      assert.match(e.message, /playwright/i, 'names the missing dependency');
+      assert.match(e.message, /npx playwright install|pnpm add|npm i/i, 'gives an install command');
+      return true;
+    },
+    'a missing playwright must surface an explicit, actionable error',
+  );
+});
+
+test('ensurePlaywright returns the chromium handle when present', async () => {
+  const { ensurePlaywright } = await import(uploadPath);
+  const fakeChromium = { launch: async () => ({}) };
+  const okLoader = async () => ({ chromium: fakeChromium });
+  const chromium = await ensurePlaywright({ importFn: okLoader });
+  assert.equal(chromium, fakeChromium, 'returns the chromium API when playwright loads');
+});
+
+test('the deploy path does NOT statically import playwright (loads it lazily)', () => {
+  // A static top-level `import ... from 'playwright'` crashes the whole module on
+  // a device without playwright — before any honest error can be shown. The
+  // dependency must be loaded lazily through the guard instead.
+  assert.doesNotMatch(
+    src,
+    /^\s*import\s+\{[^}]*\}\s+from\s+['"]playwright['"]/m,
+    'must not statically import playwright at module top level',
+  );
+});

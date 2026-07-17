@@ -18,6 +18,7 @@ import {
   idFromUrl,
   readEntry,
   renew,
+  renewCountFor,
 } from '../drop-index.mjs';
 
 const HTML = '<!doctype html><html><body><h1>Report</h1></body></html>';
@@ -50,19 +51,38 @@ test('resolveHome: $CLOUDFLARE_DROP_HOME wins when set', () => {
   }
 });
 
-test('resolveHome: hal2099 instance → ~/.hal2099-<inst>/drop/', () => {
-  // A hal2099 instance is detected from cwd sitting under an agents/<inst> tree,
-  // or from a HAL_INSTANCE env var.
-  const home = resolveHome({
-    env: { HAL_INSTANCE: 'acme' },
-    cwd: '/tmp',
-  });
-  assert.equal(home, join(homedir(), '.hal2099-acme', 'drop'));
+test('resolveHome: portable — only two layers, no hal2099 middle layer (U1a)', () => {
+  // round-016 U1a: the skill is published standalone, so it must carry ZERO
+  // hal2099 awareness. There is no `~/.hal2099-<inst>/drop` layer anymore — a
+  // hal2099-looking env / cwd resolves to the SAME standalone default. hal2099
+  // integration is done purely by injecting CLOUDFLARE_DROP_HOME at deploy time.
+  const standalone = join(homedir(), '.cloudflare-drop');
+  assert.equal(
+    resolveHome({ env: { HAL_INSTANCE: 'acme' }, cwd: '/tmp' }),
+    standalone,
+    'a HAL_INSTANCE env must NOT create a hal2099-specific home',
+  );
+  assert.equal(
+    resolveHome({ env: {}, cwd: '/x/agents/acme/sessions/s1' }),
+    standalone,
+    'a hal2099-looking cwd must NOT create a hal2099-specific home',
+  );
 });
 
 test('resolveHome: standalone default → ~/.cloudflare-drop/', () => {
   const home = resolveHome({ env: {}, cwd: '/tmp' });
   assert.equal(home, join(homedir(), '.cloudflare-drop'));
+});
+
+test('resolveHome: $CLOUDFLARE_DROP_HOME injection is the only integration seam', () => {
+  const dir = tmpHome();
+  try {
+    // This is how hal2099 lands the index under the instance dir — via env only.
+    const home = resolveHome({ env: { CLOUDFLARE_DROP_HOME: dir }, cwd: '/x/agents/acme' });
+    assert.equal(home, dir, 'the injected env wins over any cwd/instance heuristics');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('resolveHome refuses the skill dir / a session workspace', () => {
@@ -241,6 +261,109 @@ test('renew strips a stale countdown before re-injecting (no double countdown)',
     // = 8100), and the stale expiry (1000) is gone.
     assert.ok(deployedHtml.includes('data-expiry-epoch="8100"'), 'fresh expiry stamped (now+3600)');
     assert.ok(!deployedHtml.includes('data-expiry-epoch="1000"'), 'stale expiry gone');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('renew reproduces the FULL body of a large page (A3: no head-only truncation)', async () => {
+  // round-015 A3: renewing a 33.7KB page produced a 1.8KB page — strip ate the
+  // whole body, leaving only head + countdown CSS. This guards the whole renew
+  // chain (archive → strip → re-inject → deploy) end to end: the html handed to
+  // the deploy fn must carry the entire source body, sized like the source.
+  const home = tmpHome();
+  try {
+    // A realistic large page with its own <style>/<div>/<script> (what tripped strip).
+    const rows = Array.from(
+      { length: 60 },
+      (_, i) => `<div class="row">Section ${i}: substantial content to make this page large.</div>`,
+    ).join('\n');
+    const bigPage =
+      '<!doctype html><html><head><title>Big</title>\n<style>.row{padding:8px}</style>\n</head><body>\n' +
+      '<h1>Big Report</h1>\n' +
+      rows +
+      "\n<script>function foo(){return 1;}</script>\n</body></html>";
+
+    // Archive the page EXACTLY as deploy does — with the countdown already
+    // injected (recordDeploy stores the staged index.html, which carries it).
+    // This is what tripped A3: renew strips this stale countdown before re-inject.
+    const { injectCountdown } = await import('../inject-countdown.mjs');
+    const archived = injectCountdown(bigPage, 1_000);
+    recordDeploy({ url: URL_A, title: 'Big', html: archived, expiryEpoch: 1_000, home });
+
+    let deployedHtml = null;
+    const fakeDeploy = async (html) => {
+      deployedHtml = html;
+      return { url: URL_B, claim: null, expiryEpoch: 5_000 };
+    };
+    await renew('ab12', { home, deployFn: fakeDeploy, now: 4_500 });
+
+    // Body sentinels present — not the head-only ~1.8KB artifact.
+    assert.ok(deployedHtml.includes('Section 59'), 'last body row present after renew');
+    assert.ok(deployedHtml.includes('<h1>Big Report</h1>'), 'heading present after renew');
+    assert.ok(deployedHtml.includes('function foo(){return 1;}'), "page's own script present");
+    // Renewed size is within tolerance of the source (source + one countdown block),
+    // never a fraction of it. The old bug produced < 10% of the source size.
+    assert.ok(
+      deployedHtml.length >= bigPage.length * 0.9,
+      `renewed size ~= source (got ${deployedHtml.length} vs ${bigPage.length})`,
+    );
+    // Exactly one fresh countdown (stale stripped, not stacked).
+    const cd = (deployedHtml.match(/id="drop-expiry-countdown"/g) || []).length;
+    assert.equal(cd, 1, 'exactly one countdown after renew');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- renewCount: the renewed_from chain depth (round-016 spec 03, U1b) -------
+// Claim etiquette gates on how many times the SAME content has been renewed.
+// The renew output surfaces renewCount so the delivery skill offers the claim
+// link ONLY at the 3rd renew (renewCount >= 3), link + expiry every other time.
+
+test('renew surfaces renewCount, incrementing along the renewed_from chain', async () => {
+  const home = tmpHome();
+  try {
+    // Original deploy (renewCount 0 — it's not a renew).
+    const { injectCountdown } = await import('../inject-countdown.mjs');
+    recordDeploy({ url: URL_A, title: 'Doc', html: injectCountdown(HTML, 1_000), expiryEpoch: 1_000, home });
+
+    // Each renew's deployFn returns the NEXT url in the chain.
+    const urls = [
+      'https://drop-r1.a.workers.dev',
+      'https://drop-r2.b.workers.dev',
+      'https://drop-r3.c.workers.dev',
+    ];
+    let step = 0;
+    const fakeDeploy = async () => ({ url: urls[step++], claim: 'https://cloudflare.com/drop/claim/x', expiryEpoch: 9_000 });
+
+    // 1st renew: original → r1 → renewCount 1.
+    const a = await renew('ab12', { home, deployFn: fakeDeploy, now: 1_500 });
+    assert.equal(a.renewCount, 1, 'first renew → renewCount 1');
+
+    // 2nd renew: r1 → r2 → renewCount 2.
+    const b = await renew('r1', { home, deployFn: fakeDeploy, now: 2_000 });
+    assert.equal(b.renewCount, 2, 'second renew → renewCount 2');
+
+    // 3rd renew: r2 → r3 → renewCount 3 (this is where claim is offered).
+    const c = await renew('r2', { home, deployFn: fakeDeploy, now: 2_500 });
+    assert.equal(c.renewCount, 3, 'third renew → renewCount 3 (claim-offer threshold)');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('renewCountFor walks the renewed_from chain to a given id', () => {
+  const home = tmpHome();
+  try {
+    recordDeploy({ url: URL_A, html: HTML, expiryEpoch: 1, home }); // ab12, root
+    recordDeploy({ url: 'https://drop-x1.a.workers.dev', html: HTML, expiryEpoch: 2, renewedFrom: 'ab12', home });
+    recordDeploy({ url: 'https://drop-x2.b.workers.dev', html: HTML, expiryEpoch: 3, renewedFrom: 'x1', home });
+
+    assert.equal(renewCountFor('ab12', home), 0, 'the root is renewCount 0');
+    assert.equal(renewCountFor('x1', home), 1, 'one hop from root → 1');
+    assert.equal(renewCountFor('x2', home), 2, 'two hops from root → 2');
+    assert.equal(renewCountFor('nope', home), 0, 'an unknown id → 0 (no chain)');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
