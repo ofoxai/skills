@@ -222,13 +222,14 @@ function sanitizeName(s) {
 
 /** Minimal flag parser for the CLI (`--ttl 30m`, `--name x`, `--permanent`). */
 export function parseArgs(argv) {
-  const out = { _: [], ttl: null, name: null, permanent: false, pauseOAuth: true };
+  const out = { _: [], ttl: null, name: null, permanent: false, pauseOAuth: true, noCountdown: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--ttl') out.ttl = argv[++i];
     else if (a === '--name') out.name = argv[++i];
     else if (a === '--permanent') out.permanent = true;
     else if (a === '--no-pause-oauth') out.pauseOAuth = false;
+    else if (a === '--no-countdown') out.noCountdown = true;
     else out._.push(a);
   }
   return out;
@@ -262,7 +263,10 @@ export async function deployPage(htmlPath, opts = {}) {
     expiryEpoch = Math.floor(Date.now() / 1000) + honest.seconds;
   }
 
-  const { stagedDir, indexPath } = stageForDrop(htmlPath, expiryEpoch);
+  // --no-countdown skips only the on-page banner; the real 60m expiry of a
+  // temporary preview is unchanged and EXPIRY_EPOCH is still printed.
+  const pageExpiry = opts.noCountdown ? null : expiryEpoch;
+  const { stagedDir, indexPath } = stageForDrop(htmlPath, pageExpiry);
   const res = deployWithWrangler(stagedDir, {
     name: workerNameFrom(htmlPath, opts.name),
     compatibilityDate: todayISO(),

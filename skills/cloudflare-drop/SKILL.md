@@ -4,7 +4,7 @@ description: Publish a static site (a folder of HTML/CSS/JS/images/fonts) to Clo
 license: MIT
 metadata:
   author: ofoxai
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 
 # cloudflare-drop: publish a static site as a shareable link
@@ -62,6 +62,7 @@ sentinel — a blank/truncated page that still 200s fails as `URL_UNVERIFIED`.
 | `--name my-report` | worker name (becomes the subdomain). Defaults to a sanitized filename. |
 | `--permanent` | force a normal (account) deploy. Requires credentials. |
 | `--no-pause-oauth` | never touch the local OAuth file (see below). |
+| `--no-countdown` | skip baking the countdown into the page. The real expiry is unchanged — a temporary preview still dies at 60 minutes and the CLI still prints `EXPIRY_EPOCH`; only the on-page banner is omitted. Use when the reader finds the banner noisy and you (the operator) own the claim-before-expiry responsibility. |
 
 ## The TTL is a display, not a lifetime
 
