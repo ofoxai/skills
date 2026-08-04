@@ -6,6 +6,7 @@
 // resolve its home in the right layers (env > hal2099 inst > standalone), and
 // never live in the skill dir or a session workspace. `renew` reads it back,
 // re-injects a fresh countdown, redeploys, and records the renewed_from chain.
+import { DEFAULT_TTL_SECONDS } from '../ttl.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -30,12 +31,24 @@ function tmpHome(prefix = 'drop-idx-') {
 
 // --- idFromUrl -------------------------------------------------------------
 
-test('idFromUrl extracts the drop-{id} segment from a workers.dev url', () => {
+test('idFromUrl extracts the drop-{id} segment from a legacy dropzone url', () => {
   assert.equal(idFromUrl(URL_A), 'ab12');
   assert.equal(idFromUrl('https://drop-9xy.foo-bar.workers.dev/'), '9xy');
   // A bare id is accepted as-is (renew <id> path).
   assert.equal(idFromUrl('ab12'), 'ab12');
   assert.equal(idFromUrl('drop-ab12'), 'ab12');
+});
+
+test('idFromUrl keys a wrangler url on the worker name, not the whole url', () => {
+  // Regression (2.0.0): wrangler deploys are `<worker>.<account>.workers.dev`,
+  // which has no `drop-` segment. The old regex fell through and returned the
+  // ENTIRE url as the key, so `renew <worker-name>` could never find the entry.
+  assert.equal(
+    idFromUrl('https://freyr-test-r2.ethereal-composer.workers.dev'),
+    'freyr-test-r2',
+  );
+  assert.equal(idFromUrl('https://my-report.brave-lion.workers.dev/'), 'my-report');
+  assert.equal(idFromUrl('my-report'), 'my-report', 'bare worker name still works');
 });
 
 // --- resolveHome layering --------------------------------------------------
@@ -203,10 +216,13 @@ test('renew reads the index, re-injects a fresh countdown, redeploys, records re
     // The real expiry (from the deploy's own clock) is surfaced.
     assert.equal(result.expiryEpoch, 2_000, 'the deploy-measured expiry is returned');
 
-    // The redeployed html carries a FRESH countdown (stamped with the renew's
-    // provisional expiry = now + 3600 = 5100), not the stale 1000.
+    // The redeployed html carries a FRESH countdown, stamped with the renew's
+    // provisional expiry (now + the default TTL), not the stale 1000.
     assert.ok(deployedHtml.includes('drop-expiry-countdown'), 'fresh countdown injected');
-    assert.ok(deployedHtml.includes('5100'), 'fresh provisional expiry stamped (now+3600)');
+    assert.ok(
+      deployedHtml.includes(String(1_500 + DEFAULT_TTL_SECONDS)),
+      'fresh provisional expiry stamped (now + default TTL)',
+    );
     assert.ok(!deployedHtml.includes('data-expiry-epoch="1000"'), 'stale expiry not carried over');
 
     // The new entry records the renewed_from chain (points back to the old id)
@@ -237,9 +253,12 @@ test('renew strips a stale countdown before re-injecting (no double countdown)',
 
     const count = (deployedHtml.match(/id="drop-expiry-countdown"/g) || []).length;
     assert.equal(count, 1, 'exactly one countdown after renew (stale one stripped)');
-    // A fresh countdown is stamped with the renew's provisional expiry (now+3600
-    // = 8100), and the stale expiry (1000) is gone.
-    assert.ok(deployedHtml.includes('data-expiry-epoch="8100"'), 'fresh expiry stamped (now+3600)');
+    // A fresh countdown is stamped with the renew's provisional expiry
+    // (now + default TTL), and the stale expiry (1000) is gone.
+    assert.ok(
+      deployedHtml.includes(`data-expiry-epoch="${4_500 + DEFAULT_TTL_SECONDS}"`),
+      'fresh expiry stamped (now + default TTL)',
+    );
     assert.ok(!deployedHtml.includes('data-expiry-epoch="1000"'), 'stale expiry gone');
   } finally {
     rmSync(home, { recursive: true, force: true });

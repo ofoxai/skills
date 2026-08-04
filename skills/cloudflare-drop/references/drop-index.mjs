@@ -30,21 +30,34 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { injectCountdown, stripCountdown } from './inject-countdown.mjs';
+import { resolveTtlSeconds } from './ttl.mjs';
 
 const INDEX_FILE = 'index.jsonl';
 const ARTIFACT_DIR = 'artifacts';
-const EXPIRY_WINDOW_SECONDS = 3600; // Drop links live ~60 min from deploy.
 
 /**
- * Extract the drop-{id} key from a Drop URL, or accept a bare id/`drop-id`.
- * `https://drop-ab12.brave-lion.workers.dev` → `ab12`.
+ * Extract the index key from a deploy URL, or accept a bare id.
+ *
+ * Two URL shapes exist because the backend changed in 2.0.0:
+ *   wrangler (current): `https://<worker>.<account>.workers.dev` → `<worker>`
+ *   dropzone (legacy):  `https://drop-ab12.brave-lion.workers.dev` → `ab12`
+ * Legacy entries stay renewable, and a key is never the whole URL — an index
+ * keyed on the full URL can't be looked up by `renew <name>`.
+ *
  * @param {string} urlOrId
  * @returns {string}
  */
 export function idFromUrl(urlOrId) {
   const s = String(urlOrId || '').trim();
-  const m = s.match(/drop-([a-z0-9]+)/i);
-  if (m) return m[1];
+  // Legacy dropzone shape keeps its short id so old entries remain renewable.
+  const legacy = s.match(/\bdrop-([a-z0-9]+)\b/i);
+  if (legacy) return legacy[1];
+  // Current shape: the first label of a *.workers.dev host is the worker name.
+  const host = s.match(/^https?:\/\/([^/]+)/i);
+  if (host) {
+    const first = host[1].split('.')[0];
+    if (first) return first;
+  }
   // A bare id (renew <id> path) — accept it verbatim.
   return s.replace(/^drop-/i, '');
 }
@@ -214,13 +227,14 @@ export function readArtifact(entry, home = resolveHome()) {
  *
  * @param {string} urlOrId  the old url or bare id to renew
  * @param {object} opts
+ * @param {string|number} [opts.ttl] countdown window to stamp (e.g. '180m'); defaults per ttl.mjs
  * @param {(html:string)=>Promise<{url:string,claim?:string|null,expiryEpoch?:number}>} opts.deployFn
  *        redeploys the given html; returns the new url/claim/expiry.
  * @param {string} [opts.home]
  * @param {number} [opts.now]   deploy epoch seconds (default: Date.now())
  * @returns {Promise<{url:string, claim:string|null, expiryEpoch:number, renewedFrom:string, entry:object}>}
  */
-export async function renew(urlOrId, { deployFn, home = resolveHome(), now } = {}) {
+export async function renew(urlOrId, { deployFn, home = resolveHome(), now, ttl } = {}) {
   if (typeof deployFn !== 'function') {
     throw new Error('renew: a deployFn is required');
   }
@@ -240,7 +254,7 @@ export async function renew(urlOrId, { deployFn, home = resolveHome(), now } = {
   // but we stamp a best-effort fresh one before deploy so the page is never blank
   // of a countdown; the deploy fn may re-stamp with its measured upload time.
   const stripped = stripCountdown(archived);
-  const provisionalExpiry = nowSec + EXPIRY_WINDOW_SECONDS;
+  const provisionalExpiry = nowSec + resolveTtlSeconds({ ttl });
   const staged = injectCountdown(stripped, provisionalExpiry);
 
   const res = await deployFn(staged);

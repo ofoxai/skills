@@ -3,6 +3,49 @@
 All notable changes to the **cloudflare-drop** skill. Versioning follows SemVer;
 this skill starts at 1.0.0 and self-increments PATCH per iteration.
 
+## 2.0.0 — Wrangler CLI backend, honest TTL, playwright path removed
+
+**Breaking**: the headless-playwright dropzone upload is gone (`references/upload.mjs`,
+`references/upload-flow.md`, `test/upload-static.test.mjs` deleted). Cloudflare's own
+"For AI agents" guidance on cloudflare.com/drop now tells agents to use Wrangler for
+local CLI workflows, and the dropzone DOM had changed such that the browser flow
+returned `NO_URL_FOUND` on every attempt. v1 explicitly predicted this switch.
+
+- **`references/wrangler.mjs`** (new) — CLI backend. Detects which hosting mode can
+  actually work (`CLOUDFLARE_API_TOKEN` → permanent account deploy; nothing → 60-min
+  `--temporary` preview) instead of guessing and retrying, since wrangler refuses
+  `--temporary` under existing auth and refuses a normal deploy non-interactively
+  without a token. Parses the deployed URL and claim link out of real output.
+- **OAuth pause** — a machine with a browser `wrangler login` deadlocks: too
+  authenticated for a preview, not authenticated enough to deploy non-interactively.
+  The config is moved aside for the deploy and restored in a `finally` — with a test
+  asserting restoration **after a thrown deploy**. Opt out with `--no-pause-oauth`.
+- **`references/ttl.mjs`** (new) — single source of truth for the countdown window.
+  `--ttl` / `$CLOUDFLARE_DROP_TTL` accept `s/m/h/d` (bare numbers = minutes), and
+  the default stays **60m** — deliberately. A longer default is dead configuration:
+  previews clamp it away and permanent deploys inject no countdown at all, so it
+  would never reach a reader. `--ttl` is for *shortening* the window; outliving the
+  hour is a hosting-mode decision (token → permanent), not a TTL setting.
+  The TTL is explicitly a *display*, not a lifetime:
+  `honestTtl()` clamps any window over 60m on a temporary preview (printing
+  `TTL_CLAMPED`), and permanent deploys get **no countdown at all** — a countdown on
+  a link that never dies is as dishonest as 180m on one that dies at 60.
+- **`deploy.mjs`** — rewritten around the CLI: `--ttl` / `--name` / `--permanent` /
+  `--no-pause-oauth`, prints `MODE` so the caller can state permanent vs temporary,
+  and only archives temporary deploys (a permanent url never needs renewing).
+  `renew` takes `--ttl`. Self-verify backoff and the deploy index are unchanged.
+- **`idFromUrl` fixed for the new URL shape** (found by dogfooding the release):
+  wrangler urls are `<worker>.<account>.workers.dev` with no `drop-` segment, so
+  the old regex fell through and stored the ENTIRE url as the index key — `renew
+  <worker-name>` could then never find its entry. Now keys on the first host label,
+  with the legacy `drop-{id}` shape still recognised so old entries stay renewable.
+- **`renew` keeps the original worker name**, so a renewed link stays recognisable
+  (it was landing on `page.<account>.workers.dev` from the temp staging filename).
+- **Tests**: 43 passing. New `ttl.test.mjs` (parse/precedence/clamp/format) and
+  `wrangler.test.mjs` (mode detection, flag assembly, and the credential-restoration
+  guarantees). Existing renew assertions now bind to `DEFAULT_TTL_SECONDS` instead of
+  a hard-coded 3600, so changing the default no longer breaks the suite.
+
 ## 1.0.1 — deploy index + renew + self-verify backoff (round-014 spec 05)
 
 From round-013 feedback (#96: a v1 link expired before the user opened it;
