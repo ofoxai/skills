@@ -33,7 +33,9 @@ returned `NO_URL_FOUND` on every attempt. v1 explicitly predicted this switch.
 - **`deploy.mjs`** — rewritten around the CLI: `--ttl` / `--name` / `--permanent` /
   `--no-pause-oauth`, prints `MODE` so the caller can state permanent vs temporary,
   and only archives temporary deploys (a permanent url never needs renewing).
-  `renew` takes `--ttl`. Self-verify backoff and the deploy index are unchanged.
+  `renew` takes `--ttl`. Self-verify backoff and the deploy index are unchanged;
+  the 1.0.2 content self-verify (size + sentinel, single verification exit for
+  deploy AND renew) is folded into the wrangler pipeline in the 2.0.0 merge.
 - **`idFromUrl` fixed for the new URL shape** (found by dogfooding the release):
   wrangler urls are `<worker>.<account>.workers.dev` with no `drop-` segment, so
   the old regex fell through and stored the ENTIRE url as the index key — `renew
@@ -41,10 +43,36 @@ returned `NO_URL_FOUND` on every attempt. v1 explicitly predicted this switch.
   with the legacy `drop-{id}` shape still recognised so old entries stay renewable.
 - **`renew` keeps the original worker name**, so a renewed link stays recognisable
   (it was landing on `page.<account>.workers.dev` from the temp staging filename).
-- **Tests**: 43 passing. New `ttl.test.mjs` (parse/precedence/clamp/format) and
+- **Tests**: 55 passing after the merge with 1.0.2. New `ttl.test.mjs`
+  (parse/precedence/clamp/format) and
   `wrangler.test.mjs` (mode detection, flag assembly, and the credential-restoration
   guarantees). Existing renew assertions now bind to `DEFAULT_TTL_SECONDS` instead of
   a hard-coded 3600, so changing the default no longer breaks the suite.
+
+## 1.0.2 — renew integrity, content self-verify, portable home, claim etiquette (round-015 feedback)
+
+From round-015 e2e feedback (A3: a 33.7KB page renewed to a 1.8KB head-only husk;
+A6: a blank/truncated page still 200'd and was reported as success; U1a: the skill
+hardcoded a host-app path layer and assumed playwright was installable; U1b: a
+claim/permanent-link pitch was tacked onto ordinary deliveries).
+
+- **Renew content integrity (A3)**: the countdown block is now fenced by a unique
+  comment pair, so `stripCountdown` excises exactly it and never the page body.
+  The old content-shape regex spanned the page's own `<style>`/`<div>`/`<script>`
+  and ate everything between them — renewing a full page down to a head-only husk.
+- **Content self-verify (A6)**: `deployHtmlString` verifies the served page's byte
+  size (vs the source, allowing the injected countdown's growth) AND a body
+  sentinel after the HTTP 200 backoff — a blank/truncated 200 now fails loudly as
+  `URL_UNVERIFIED`. Both fresh deploy and renew route through this single
+  verification exit, so no caller hand-`sleep`+curls.
+- **Portable home (U1a)**: `resolveHome` is exactly two layers —
+  `$CLOUDFLARE_DROP_HOME` > `~/.cloudflare-drop/`. The host-app middle layer and
+  its instance detection are gone; an embedding app integrates purely by injecting
+  `CLOUDFLARE_DROP_HOME`. Playwright is loaded lazily via `ensurePlaywright`, which
+  fails with an explicit install-guidance error when it's missing/uninstallable.
+- **Claim etiquette (U1b)**: `renew` surfaces `RENEW_COUNT` (the `renewed_from`
+  chain depth) and offers the claim/permanent link ONLY at the 3rd renew of the
+  same content; every other delivery is just the link + a one-line expiry reminder.
 
 ## 1.0.1 — deploy index + renew + self-verify backoff (round-014 spec 05)
 

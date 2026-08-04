@@ -3,7 +3,7 @@
 // Run: node --test agents/.template/sessions/.session-template/.claude/skills/cloudflare-drop/test/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { injectCountdown } from '../references/inject-countdown.mjs';
+import { injectCountdown, stripCountdown } from '../references/inject-countdown.mjs';
 
 const EXPIRY = 1_800_000_000; // a fixed epoch-seconds value for deterministic assertions
 
@@ -37,4 +37,99 @@ test('fail-open — unparseable/empty input returns something usable, never thro
   assert.doesNotThrow(() => injectCountdown('', EXPIRY));
   const out = injectCountdown('not really html', EXPIRY);
   assert.ok(typeof out === 'string' && out.length > 0, 'returns a non-empty string');
+});
+
+// --- strip content integrity (round-016 spec 02, A3) -----------------------
+// The renew path is inject → archive → strip → re-inject. round-015 A3: a 33.7KB
+// page renewed to 1.8KB — strip's fragile cross-body regex ate the whole body,
+// leaving only head + the countdown CSS. A page that carries its OWN <style> /
+// <div> / <script> (every real page does) is exactly what tripped it.
+
+// A realistic large page: its own <style>, many <div>s, its own <script> — the
+// shapes the old strip regex spanned across when it swallowed the body.
+function bigPage() {
+  const rows = Array.from(
+    { length: 40 },
+    (_, i) => `<div class="row">Section ${i}: substantial body content here.</div>`,
+  ).join('\n');
+  return (
+    '<!doctype html><html><head><title>Big Report</title>\n' +
+    '<style>.row{padding:8px}</style>\n</head><body>\n' +
+    '<h1>Quarterly Report</h1>\n' +
+    rows +
+    "\n<script>function foo(){return 1;}</script>\n</body></html>"
+  );
+}
+
+test('strip preserves the full body of a page that has its own style/div/script', () => {
+  const page = bigPage();
+  const withCd = injectCountdown(page, EXPIRY);
+  const stripped = stripCountdown(withCd);
+
+  // The whole body survives — the A3 regression was strip eating everything
+  // between the page's first <style> and the countdown's </script>.
+  assert.ok(stripped.includes('Section 39'), 'last body row survives strip');
+  assert.ok(stripped.includes('<h1>Quarterly Report</h1>'), 'heading survives strip');
+  assert.ok(stripped.includes('function foo(){return 1;}'), "page's own script survives strip");
+  assert.ok(stripped.includes('.row{padding:8px}'), "page's own <style> survives strip");
+  // And the countdown itself is gone (so re-inject won't stack two).
+  assert.ok(!stripped.includes('id="drop-expiry-countdown"'), 'countdown removed');
+  // Size sanity: stripped ≈ original (not the head-only ~1.8KB artifact).
+  assert.ok(
+    stripped.length >= page.length * 0.9,
+    `stripped size ~= original (got ${stripped.length} vs ${page.length})`,
+  );
+});
+
+test('inject → strip round-trips back to (effectively) the original page', () => {
+  const page = bigPage();
+  const restored = stripCountdown(injectCountdown(page, EXPIRY));
+  // Every non-countdown byte is preserved; the only delta is the injected block.
+  assert.equal(
+    restored.replace(/\s+/g, ' ').trim(),
+    page.replace(/\s+/g, ' ').trim(),
+    'strip(inject(page)) === page (modulo the injected countdown block)',
+  );
+});
+
+// --- C2 (round-016): last-fence matching, not first ------------------------
+// The injected block is ALWAYS the last fence pair on the page (inserted before
+// </body>). If a page's OWN body happens to contain the literal fence sentinel
+// strings (a report ABOUT the countdown mechanism, a doc quoting the markers, a
+// page that echoes them), a first-match indexOf would excise from the page's
+// body sentinel to the injected end — silently deleting real content, and
+// verifyContent wouldn't catch it (it still 200s with a plausible size). strip
+// must anchor on the LAST fence pair so it only ever removes the block it injected.
+test('C2: strip is lossless on a page whose body contains the literal fence sentinels', () => {
+  const START = '<!--drop-expiry-countdown:start-->';
+  const END = '<!--drop-expiry-countdown:end-->';
+  // A page that legitimately quotes the fence markers in its own visible content.
+  const page =
+    '<!doctype html><html><head><title>How the countdown works</title></head><body>\n' +
+    '<h1>Countdown internals</h1>\n' +
+    `<pre>The block is fenced by ${START} … ${END} so strip excises exactly it.</pre>\n` +
+    '<p>IMPORTANT BODY PARAGRAPH that must survive a strip.</p>\n' +
+    '</body></html>';
+
+  const withCd = injectCountdown(page, EXPIRY);
+  const stripped = stripCountdown(withCd);
+
+  // The page's own quoted sentinels + the paragraph after them must survive.
+  assert.ok(
+    stripped.includes('IMPORTANT BODY PARAGRAPH that must survive a strip.'),
+    'body content after the page-quoted sentinels must not be deleted',
+  );
+  assert.ok(stripped.includes('Countdown internals'), 'heading survives');
+  assert.ok(
+    stripped.includes(`fenced by ${START} … ${END}`),
+    "the page's own quoted sentinels are body content and must survive",
+  );
+  // The injected countdown element is gone (so re-inject won't stack two).
+  assert.ok(!stripped.includes('id="drop-expiry-countdown"'), 'the injected countdown is removed');
+  // Round-trip is content-lossless (modulo the injected block).
+  assert.equal(
+    stripped.replace(/\s+/g, ' ').trim(),
+    page.replace(/\s+/g, ' ').trim(),
+    'strip(inject(page)) === page even when the body quotes the fence sentinels',
+  );
 });
