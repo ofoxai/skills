@@ -25,6 +25,7 @@ npx skills add ofoxai/skills@ofox-video-core
 npx skills add ofoxai/skills@seedance-short-drama
 npx skills add ofoxai/skills@seedance-ad-creative
 npx skills add ofoxai/skills@seedance-product-video
+npx skills add ofoxai/skills@ofox-image-core
 ```
 
 ## Skills
@@ -38,6 +39,7 @@ npx skills add ofoxai/skills@seedance-product-video
 | [seedance-short-drama](skills/seedance-short-drama/SKILL.md) | Video | Generate a realistic-human, dialogue-driven short-drama shot from a script or scene description via the Ofox video API (Seedance 2.5): builds a shot-craft prompt (character appearance, quoted dialogue, scene-cut timing cues), shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
 | [seedance-ad-creative](skills/seedance-ad-creative/SKILL.md) | Video | Generate a cinematic brand/product ad clip from a description or product photo via the Ofox video API (Seedance 2.5): builds a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
 | [seedance-product-video](skills/seedance-product-video/SKILL.md) | Video | Generate a clean, catalog-style e-commerce product video from a real product photo via the Ofox video API (Seedance 2.5): plain white-background prompt with a simple turntable/orbit motion (no cinematic camera language), strongly prefers image-to-video for literal product accuracy, shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
+| [ofox-image-core](skills/ofox-image-core/SKILL.md) | Image | Shared execution layer for the Ofox image generation API (`openai/gpt-image-2`, `google/gemini-3.1-flash-image`, `bailian/qwen-image-3.0-pro`): validates parameters client-side, sends one synchronous text-to-image request, base64-decodes and saves the result, and reports real token usage. A library skill other scenario skills (e.g. a character-reference-image step ahead of video generation) build on — not typically installed on its own unless you're calling the Ofox image API directly with custom parameters. |
 
 ## Why a monorepo
 

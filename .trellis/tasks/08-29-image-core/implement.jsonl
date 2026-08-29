@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "CONTRIBUTING.md", "reason": "Repo's mandatory quality bar for every skill"}
+{"file": ".trellis/spec/skills/index.md", "reason": "Skill-authoring conventions: absolute-path reporting, delegation shape"}
+{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "Don't-trust-docs-blindly lesson, verify with real calls"}
+{"file": ".trellis/tasks/08-29-image-core/research/ofox-images-api.md", "reason": "Full Ofox images API reference and known gotchas"}

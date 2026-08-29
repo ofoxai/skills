@@ -136,3 +136,73 @@ caller passed), `seedance-ad-creative/SKILL.md`, `seedance-product-video/SKILL.m
 (mode-specific requirements can hide inside general-looking parameters;
 isolate by comparing against a sibling model that works) is the reusable
 part.
+
+## Gotcha: a response field describing media output can be wrong — third instance of "verify the real artifact"
+
+**What happened**: `ofox-image-core`'s real end-to-end test (2026-08-29,
+`google/gemini-3.1-flash-image`, `size: 512x512` requested) got back a
+response claiming `"size": "512x512"` — matching the request exactly. The
+actual downloaded PNG, verified with `file`/`sips -g pixelWidth -g
+pixelHeight`, is really `1024x1024`; the model appears to always generate
+at its native resolution and just echo back whatever `size` was requested.
+Unconfirmed for `openai/gpt-image-2` / `bailian/qwen-image-3.0-pro`.
+
+**Lesson**: same pattern as the two entries above — Ofox's video API's
+`mirror_urls`/`unsigned_urls` presence claim, and `seedance-2.5`'s
+`aspect_ratio` value-list claim. A documented or response-reported field
+describing media output is not itself proof of the real artifact's
+properties. When a caller needs an actual guarantee (a working URL, an
+aspect ratio, or here, pixel dimensions), verify by inspecting the real
+downloaded/generated artifact, not by trusting the field. See the two
+entries above for the reusable general instinct; this entry just records
+the third confirmed instance.
+
+**Where this is implemented in this repo**:
+`skills/ofox-image-core/references/api-params.md` and `SKILL.md` (the
+gotcha writeup and the guidance to check the real file's dimensions
+instead of the response's `size` field); `skills/ofox-image-core/references/pricing.md`'s
+verified example documents the same real call.
+
+**Scope note**: confirmed only for `google/gemini-3.1-flash-image` via
+Ofox, dated 2026-08-29 — re-verify if Ofox/Google changes this, or once the
+other two models are tested for the same behavior.
+
+## Gotcha: inferring a response's *shape* from doc prose (not a real example) can produce a "confirmed" claim that's simply wrong
+
+**What happened**: `ofox-image-core`'s original research documented `400
+provider_type_unavailable` as a "confirmed" `error.code` for
+`/v1/images/generations`, based on reading Ofox's docs prose describing a
+provider/model-mismatch scenario in words — not from an actual response
+example. A real rejected call (2026-08-29, an invalid
+`extra_body.provider.type`, exactly the scenario that prose was describing)
+returned a different shape entirely: `{"error": {"message", "type":
+"invalid_request_error", "code": 400}}` — an OpenAI-SDK-style shape where
+`code` is literally the HTTP status as a number, not a semantic string, and
+`provider_type_unavailable` appears nowhere in the real response. The
+*value* being guessed wasn't just wrong — the entire *shape* being reasoned
+about (which field carries the semantic meaning) was wrong.
+
+**Lesson**: this is a stronger case than "a documented field might be
+absent" (the `mirror_urls` entry above) — here, the vendor's docs never gave
+a literal example response at all, and the shape was inferred from prose
+describing a scenario, then written up in this repo's own docs as
+"confirmed." In this repo, "confirmed" for anything about an API's
+request/response contract — including the *shape* of an error object, not
+just whether a named field like `mirror_urls` is present or a value list
+like `aspect_ratio`'s is complete — must mean "observed in an actual
+response," never "described in the vendor's prose, however specific it
+sounds." When only prose is available, say so plainly ("documented in
+prose, not yet confirmed by a real response") instead of writing it up as
+an observed fact.
+
+**Where this is implemented in this repo**:
+`skills/ofox-image-core/references/api-params.md` and `SKILL.md` (corrected
+error-handling sections), `skills/ofox-image-core/references/ofox-image.sh`'s
+`print_api_error` (now keys off `error.type`, the real classifier, instead
+of the never-actually-real `error.code` string),
+`.trellis/tasks/08-29-image-core/research/ofox-images-api.md`.
+
+**Scope note**: specific to Ofox's `/v1/images/generations` error shape,
+dated 2026-08-29 — re-verify if Ofox changes this. The general lesson (a
+"confirmed" claim in this repo's own docs must mean observed, not inferred
+from prose) applies to every gotcha entry in this file, not just this one.
