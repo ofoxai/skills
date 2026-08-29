@@ -82,3 +82,57 @@ Ofox API detail dated 2026-08-29 — re-verify against
 `https://ofox.ai/docs/api/videos` if Ofox's API changes; the general lesson
 (don't hard-require a "preferred" field the docs don't guarantee, verify
 with a real call) is the reusable part.
+
+## Gotcha: a documented general parameter can silently require a specific,
+## undocumented value for one model
+
+**What happened**: Ofox's video-creation docs describe `aspect_ratio` as a
+general parameter accepting a fixed list of values (`16:9`, `9:16`, `1:1`,
+`4:3`, `3:4`, `3:2`, `2:3`, `21:9`, `9:21`) with no mention of any
+model-specific constraint, and `bytedance/seedance-2.5`'s own model page
+confirms it supports image-to-video with no caveat either. In reality,
+`bytedance/seedance-2.5` + an attached image (`frame_images` or
+`input_references`) **requires `aspect_ratio: "adaptive"`** — a value not
+even in the documented list — and rejects every documented value (mix of
+`400 invalid_request` and `502 upstream_error` depending on exactly which
+other fields were present). Text-to-video on the same model works fine with
+any documented aspect ratio; only the image-attached path has this
+requirement. Discovered 2026-08-29 through 6 real, paid-or-free-depending-on-
+response API attempts (see `.trellis/tasks/archive/2026-08/08-29-product-video/research/seedance-2.5-image-to-video.md`
+for the full attempt log and exact job ids) — not something reasoning about
+the docs alone would surface, and not something provider-routing
+(`provider.type`) had anything to do with (that was a plausible-looking red
+herring, ruled out by testing it directly).
+
+**Lesson**: for a model that supports multiple generation modes (t2v / i2v /
+v2v), do not assume a documented general parameter's valid-value list or
+default applies uniformly across modes for every model. When something
+works for text-only but fails for the same model with a reference
+image/video attached (or vice versa), suspect a mode-specific requirement
+that isn't in the general parameter docs, and check by testing the
+narrowest possible variable (same request, only the mode-defining field
+changed) — comparing against a *different model in the same family* that
+does work (here, `bytedance/seedance-2.0` succeeded with the exact same
+`frame_images` shape and no special aspect ratio) is what actually isolated
+this to "2.5 + image needs `adaptive`," not the image itself, not the
+provider, not the reference URL.
+
+**Also learned in the same investigation**: when a fix like this touches a
+shared execution-layer skill (`ofox-video-core`), check every scenario skill
+that already ships example commands using the affected parameter — both
+`seedance-ad-creative` and `seedance-product-video` had to be corrected
+because their existing image-to-video examples showed an explicit
+`--aspect-ratio` that a fixed script would now silently override. A
+shared-layer fix isn't done until its blast radius on dependent skills'
+own documentation is checked, not just the shared code.
+
+**Where this is implemented in this repo**:
+`skills/ofox-video-core/references/ofox-video.sh` (the model+mode-conditional
+override, with a printed `NOTE:` — never silently override a value the
+caller passed), `seedance-ad-creative/SKILL.md`, `seedance-product-video/SKILL.md`.
+
+**Scope note**: specific to `bytedance/seedance-2.5` via Ofox, dated
+2026-08-29 — re-verify if Ofox/ByteDance changes this. The general lesson
+(mode-specific requirements can hide inside general-looking parameters;
+isolate by comparing against a sibling model that works) is the reusable
+part.
