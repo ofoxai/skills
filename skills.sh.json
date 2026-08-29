@@ -15,6 +15,11 @@
       "title": "Deploy",
       "description": "Publish static sites to shareable URLs. cloudflare-drop runs one packaged command built on the Wrangler CLI: permanent deploy to your Cloudflare account when CLOUDFLARE_API_TOKEN is set, or a 60-minute claimable *.workers.dev preview when not — always stating which you got, baking an honest expiry countdown into previews, self-verifying the served content (not just a 200), and failing open rather than inventing a link.",
       "skills": ["cloudflare-drop"]
+    },
+    {
+      "title": "Video",
+      "description": "Generate video with the Ofox video API (Seedance 2.5). ofox-video-core is the shared execution layer (submit, poll, download, report cost) that seedance-short-drama (dialogue-driven short-drama shots) and seedance-ad-creative (cinematic brand/product ad clips) build on for scenario-specific prompt craft and defaults.",
+      "skills": ["ofox-video-core", "seedance-short-drama", "seedance-ad-creative"]
     }
   ]
 }
