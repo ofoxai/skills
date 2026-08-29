@@ -2,9 +2,14 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
+homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.1.1"
+  version: "1.1.2"
+  openclaw:
+    requires:
+      env: [OFOX_API_KEY]
+      bins: [curl, jq]
 ---
 
 # ofox-video-core: Ofox video API execution layer
@@ -200,3 +205,19 @@ error-mapping, or download logic above. They own the scenario-specific
 prompt template, recommended parameter defaults, and the pre-generation
 cost estimate (using `references/pricing.md`'s formula); this skill owns
 the mechanics of talking to the API correctly and safely.
+
+## Compatible with existing prompt-writing skills
+
+This skill is an execution layer, not a director layer — it does not compete
+with skills that specialize in writing Seedance prompts, it just runs
+whatever prompt it's given. If the user already has a well-crafted prompt
+from a "director" skill such as
+[`LeoYeAI/seedance-skills`](https://github.com/LeoYeAI/seedance-skills) or
+[`liyue-aigc/seedance-2-5-video-director`](https://github.com/liyue-aigc/seedance-2-5-video-director),
+pass that prompt straight to `ofox-video.sh generate` — there's no need to
+run this repo's own scenario-specific prompt-crafting steps (the ones
+`seedance-short-drama`/`seedance-ad-creative`/`seedance-product-video`/
+`seedance-anime-drama` each document) on top of a prompt that's already been
+written. Those scenario skills exist for users who don't already have a
+prompt and want one built for them; treat an existing director-skill output
+as a ready-to-use prompt, not raw material to rewrite.

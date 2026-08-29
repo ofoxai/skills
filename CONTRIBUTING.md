@@ -34,11 +34,27 @@ A skill name is lowercase kebab-case and matches its directory name, the
      The agent decides whether to load the skill from this alone — make the
      triggers concrete, not vague.>
    license: MIT
+   homepage: https://github.com/ofoxai/skills/tree/main/skills/<name>
    metadata:
      author: ofoxai
      version: "1.0.0"   # semver; bump on every published change
+     openclaw:
+       requires:
+         env: [ENV_VAR_ONE]    # every env var the skill's script(s) read, direct or transitive
+         bins: [tool-one]      # every CLI tool the skill's script(s) call, direct or transitive
    ---
    ```
+   - `homepage` always points at the skill's own directory in this repo
+     (`https://github.com/ofoxai/skills/tree/main/skills/<name>`) — required
+     for every skill, new or existing.
+   - `metadata.openclaw.requires.env`/`requires.bins` must list every
+     environment variable and command-line tool the skill actually needs,
+     including ones pulled in transitively by delegating to another skill's
+     script (e.g. a scenario skill built on `ofox-video-core` still needs
+     `OFOX_API_KEY`, `curl`, `jq` even though it never calls them directly).
+     A missing entry here is a metadata/reality mismatch — treat it as a bug.
+     If a skill genuinely needs no env vars or no extra bins, omit that key
+     rather than declaring an empty list.
 3. **Safety contract up front.** If the skill touches anything sensitive
    (secrets, local file paths, credentials, destructive ops), state the
    non-negotiable discipline near the top — what the agent must never do. See

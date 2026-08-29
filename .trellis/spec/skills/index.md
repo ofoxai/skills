@@ -51,8 +51,12 @@ bar restated as a checklist, not a separate standard):
 - [ ] English only — no Chinese/CJK anywhere in the shipped `SKILL.md`,
       `references/`, or any file that ships with the skill.
 - [ ] Frontmatter complete: `name` == directory name, `description` with
-      concrete "use when" triggers, `license: MIT`, `metadata.author: ofoxai`,
-      `metadata.version` bumped on every published change.
+      concrete "use when" triggers, `license: MIT`, `homepage` pointing at
+      `https://github.com/ofoxai/skills/tree/main/skills/<name>`,
+      `metadata.author: ofoxai`, `metadata.version` bumped on every published
+      change, `metadata.openclaw.requires.env`/`requires.bins` listing every
+      env var/CLI tool the skill's script(s) actually need (direct or
+      transitive via a delegated-to skill).
 - [ ] Safety contract stated near the top if the skill touches secrets/keys.
 - [ ] Every command in the skill has actually been run on a real machine —
       `bash -n` and (if available) `shellcheck` for shell scripts is the

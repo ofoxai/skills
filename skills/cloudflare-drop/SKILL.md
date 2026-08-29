@@ -2,9 +2,10 @@
 name: cloudflare-drop
 description: Publish a static site (a folder of HTML/CSS/JS/images/fonts) to Cloudflare and get back a live, shareable URL in seconds. Use when you have a finished static page or site and need to hand someone a link they can open on any device — reports, mockups, one-off landing pages, AI-generated HTML, "give me a link I can share". Runs one packaged command (references/deploy.mjs) built on the Wrangler CLI, which is what Cloudflare's own agent guidance tells agents to use. Deploys permanently to your Cloudflare account when credentials are present, or as a 60-minute claimable preview when they are not — and says plainly which one you got. Bakes an expiry countdown into previews (matched to the real 60-minute limit; --ttl to shorten it), and fails open (deliver the file) rather than invent a link.
 license: MIT
+homepage: https://github.com/ofoxai/skills/tree/main/skills/cloudflare-drop
 metadata:
   author: ofoxai
-  version: "2.1.0"
+  version: "2.1.1"
 ---
 
 # cloudflare-drop: publish a static site as a shareable link

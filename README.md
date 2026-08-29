@@ -15,19 +15,36 @@ Install everything:
 npx skills add ofoxai/skills
 ```
 
-Or a single skill:
+Or a single skill, optionally scoped to one agent with `--agent`:
 
 ```
-npx skills add ofoxai/skills@hal-vault
-npx skills add ofoxai/skills@hal-image
-npx skills add ofoxai/skills@cloudflare-drop
-npx skills add ofoxai/skills@ofox-video-core
-npx skills add ofoxai/skills@seedance-short-drama
-npx skills add ofoxai/skills@seedance-ad-creative
-npx skills add ofoxai/skills@seedance-product-video
-npx skills add ofoxai/skills@ofox-image-core
-npx skills add ofoxai/skills@seedance-anime-drama
+npx skills add ofoxai/skills@<skill-name> --agent claude-code
+npx skills add ofoxai/skills@<skill-name> --agent codex
+npx skills add ofoxai/skills@<skill-name> --agent opencode
+npx skills add ofoxai/skills@<skill-name> --agent '*'   # all supported agents
 ```
+
+This pattern applies to every skill name below. The four user-facing
+scenario skills are the ones most people install directly:
+
+- `seedance-short-drama`
+- `seedance-ad-creative`
+- `seedance-product-video`
+- `seedance-anime-drama`
+
+Already running Codex / Claude Code / Cline with an Ofox key configured?
+Installing one of these skills doesn't need a new key — the same
+`OFOX_API_KEY` generates video/images immediately.
+
+`ofox-video-core` and `ofox-image-core` are the library skills the four
+above build on: a scenario skill pulls in the one(s) it needs
+automatically, so you typically don't install these two standalone unless
+you're calling the Ofox API directly with custom parameters.
+
+The same `--agent`-scoped install pattern also works for the two
+pre-existing standalone skills — `hal-vault`, `hal-image` — and
+`cloudflare-drop`, none of which touch `OFOX_API_KEY` (they don't call the
+Ofox API at all).
 
 ## Skills
 
