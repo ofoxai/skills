@@ -4,7 +4,7 @@ description: Shared execution layer for the Ofox video generation API (api.ofox.
 license: MIT
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # ofox-video-core: Ofox video API execution layer
@@ -104,6 +104,17 @@ real testing found at least one otherwise-valid, publicly reachable image
 URL rejected by the upstream provider with a download-failure-shaped error,
 while the same image worked reliably once base64-encoded — likely
 bot/hotlink protection on some hosts, not something under our control.
+
+Local files of any realistic size are supported: the base64 data URI is
+built into the request body via a temp file and `jq --rawfile`/`--slurpfile`
+and posted to the API via `curl --data-binary @file`, never via a `jq
+--arg`/`--argjson` or `curl -d` **command-line** value. An earlier version
+of this script did the latter and broke on any real photo whose base64
+encoding exceeded the OS's `ARG_MAX` (roughly any real photo over ~750KB) —
+verified with a real 885KB PNG (1,179,996-byte base64 encoding) failing
+with `jq: Argument list too long` before any network call was made. Fixed
+2026-08-29; see `.trellis/spec/skills/external-api-integration.md` for the
+general lesson.
 
 **`bytedance/seedance-2.5` (the default model) requires `aspect_ratio:
 "adaptive"` for any image-to-video request** — every other value fails,

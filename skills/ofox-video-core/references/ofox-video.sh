@@ -444,34 +444,71 @@ cmd_generate() {
   [ -n "$real_person" ] && payload=$(printf '%s' "$payload" | jq --argjson v "$real_person" '.real_person=$v')
   [ -n "$callback_url" ] && payload=$(printf '%s' "$payload" | jq --arg v "$callback_url" '.callback_url=$v')
 
+  # A local image's base64 data URI can be well over 1MB (frame_first_ref/
+  # frame_last_ref below), and `--extra-json` could in principle carry one
+  # too (e.g. an embedded base64 image inside input_references). Passing a
+  # string that large as a `jq --arg`/`--argjson` command-line value hits
+  # the OS's ARG_MAX (execve argv+environ limit, 1,048,576 bytes on this
+  # machine) and fails with "jq: Argument list too long" *before any
+  # network call is made* — reproduced for real with a real 885KB PNG whose
+  # base64 encoding (1,179,996 bytes) already exceeded ARG_MAX on its own.
+  # Fix: never put a potentially-large value in a jq command-line argument.
+  # Write it to a temp file instead and read it with `--rawfile`/
+  # `--slurpfile` (file content, not an exec argument — not subject to
+  # ARG_MAX). Same short-lived create/use/remove-immediately pattern as
+  # tmp_body below, so a temp file never survives past the single jq call
+  # that needs it, on every path (success or an early `return 1`).
   if [ -n "$frame_first" ] || [ -n "$frame_last" ]; then
-    local frames='[]' frame_first_ref frame_last_ref
+    local frames='[]' frame_first_ref frame_last_ref tmp_ref
     if [ -n "$frame_first" ]; then
       frame_first_ref=$(resolve_image_ref "$frame_first") || return 1
-      frames=$(printf '%s' "$frames" | jq --arg u "$frame_first_ref" '. + [{"type":"image_url","image_url":{"url":$u},"frame_type":"first_frame"}]')
+      tmp_ref=$(mktemp)
+      printf '%s' "$frame_first_ref" >"$tmp_ref"
+      frames=$(printf '%s' "$frames" | jq --rawfile u "$tmp_ref" '. + [{"type":"image_url","image_url":{"url":$u},"frame_type":"first_frame"}]')
+      rm -f "$tmp_ref"
     fi
     if [ -n "$frame_last" ]; then
       frame_last_ref=$(resolve_image_ref "$frame_last") || return 1
-      frames=$(printf '%s' "$frames" | jq --arg u "$frame_last_ref" '. + [{"type":"image_url","image_url":{"url":$u},"frame_type":"last_frame"}]')
+      tmp_ref=$(mktemp)
+      printf '%s' "$frame_last_ref" >"$tmp_ref"
+      frames=$(printf '%s' "$frames" | jq --rawfile u "$tmp_ref" '. + [{"type":"image_url","image_url":{"url":$u},"frame_type":"last_frame"}]')
+      rm -f "$tmp_ref"
     fi
-    payload=$(printf '%s' "$payload" | jq --argjson f "$frames" '.frame_images=$f')
+    # frames itself now embeds whatever large base64 data URI was resolved
+    # above, so merging it into payload must also avoid --argjson on the
+    # command line — same reasoning, same fix.
+    tmp_ref=$(mktemp)
+    printf '%s' "$frames" >"$tmp_ref"
+    payload=$(printf '%s' "$payload" | jq --slurpfile f "$tmp_ref" '.frame_images=$f[0]')
+    rm -f "$tmp_ref"
   fi
 
   if [ -n "$extra_json" ]; then
-    payload=$(printf '%s' "$payload" | jq --argjson extra "$extra_json" '. * $extra')
+    local tmp_extra
+    tmp_extra=$(mktemp)
+    printf '%s' "$extra_json" >"$tmp_extra"
+    payload=$(printf '%s' "$payload" | jq --slurpfile extra "$tmp_extra" '. * $extra[0]')
+    rm -f "$tmp_extra"
   fi
 
   # --- create the job (exactly one create call per invocation) ---
 
   echo "Submitting job to Ofox (model=$model)..." >&2
-  local tmp_body http_code curl_rc body
+  # payload can itself now be well over 1MB (a resolved frame image is
+  # inlined into it above) — pass it to curl via `--data-binary @file`, not
+  # `-d "$payload"`. The latter is an exec argument like jq --arg/--argjson
+  # above and would hit the same ARG_MAX wall just one step later.
+  local tmp_body http_code curl_rc body tmp_payload
+  tmp_payload=$(mktemp)
+  printf '%s' "$payload" >"$tmp_payload"
   tmp_body=$(mktemp)
   http_code=$(curl -sS -o "$tmp_body" -w '%{http_code}' \
     -X POST "$API_BASE/videos" \
     -H "Authorization: Bearer $OFOX_API_KEY" \
     -H "Content-Type: application/json" \
-    -d "$payload")
+    --data-binary @"$tmp_payload")
   curl_rc=$?
+  rm -f "$tmp_payload"
   body=$(cat "$tmp_body")
   rm -f "$tmp_body"
 

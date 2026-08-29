@@ -206,3 +206,60 @@ of the never-actually-real `error.code` string),
 dated 2026-08-29 — re-verify if Ofox changes this. The general lesson (a
 "confirmed" claim in this repo's own docs must mean observed, not inferred
 from prose) applies to every gotcha entry in this file, not just this one.
+
+## Gotcha: passing large data through `jq --arg`/`--argjson` (or any command-line
+## value) can silently hit the OS's `ARG_MAX` — unlike the entries above, this
+## isn't an API-documentation gap at all
+
+**What happened**: `ofox-video-core`'s local-file support for
+`--frame-first-image`/`--frame-last-image` base64-encodes a local image file
+into a `data:image/<ext>;base64,...` URI, then passed that entire string as
+a `jq --arg`/`--argjson` **command-line** value while building the
+`frame_images` request field (and the assembled request body was then
+passed to `curl` the same way, via `-d "$payload"`). A real, paid-adjacent
+end-to-end test (2026-08-29, `seedance-anime-drama`, a real 885KB PNG
+character reference image) failed with `jq: Argument list too long` —
+**before any network call was made** — because the PNG's base64 encoding
+(1,179,996 bytes) already exceeded this machine's `ARG_MAX`
+(`getconf ARG_MAX` = 1,048,576 bytes, the OS-enforced limit on the combined
+size of a new process's `argv` + `environ`). Any real photo whose base64
+encoding exceeds roughly 1MB (any real photo over ~750KB, ordinarily) broke
+the local-file feature entirely — not an edge case, the common case for
+real reference photos.
+
+**Lesson**: this is a different class of gotcha from every other entry in
+this file. The other entries are about not trusting what a third-party
+API's documentation claims about its own request/response contract; this
+one is an OS/shell-level limit that applies **regardless of what any API
+documents or accepts** — it fires during local request-building, before a
+single byte reaches the network. Any time a shell script builds a payload
+that could embed a large blob (base64-encoded binary data especially, but
+also long free text) and passes that value as a literal command-line
+argument to an external command (`jq --arg`/`--argjson`, `curl -d`, or any
+other `execve`d command), that value's size is bounded by `ARG_MAX`, and
+exceeding it fails ungracefully (`Argument list too long`) with no relation
+to the API's own limits. The fix is mechanical and general: never put a
+potentially-large value in an exec argument. Write it to a temp file and
+read the file's raw content instead — `jq --rawfile`/`--slurpfile` (not
+`--arg`/`--argjson`), `curl --data-binary @file` (not `-d "$value"`). A
+value merely captured into a shell variable via command substitution
+(`x=$(cmd)`) is not itself a problem — bash variables aren't
+`ARG_MAX`-bound — the risk is specifically when that variable is later
+handed to another program *as one of its arguments*. Clean up the temp
+file(s) on every exit path (the existing `tmp_body`-style
+create/use/remove-immediately pattern in this repo's scripts already does
+this correctly for short-lived files; extend the same pattern rather than
+inventing a new one).
+
+**Where this is implemented in this repo**:
+`skills/ofox-video-core/references/ofox-video.sh` — the `frame_images`
+build (`--rawfile` for each resolved frame reference, `--slurpfile` to
+merge the frames array and `--extra-json` into the payload) and the create
+call (`curl --data-binary @file` instead of `-d "$payload"`); the module's
+`SKILL.md` documents the fix in the local-file section.
+
+**Scope note**: the exact `ARG_MAX` value (1,048,576 bytes) is specific to
+this machine (macOS) and can differ by OS/kernel/config — the general
+lesson (large values must never be passed as command-line arguments; route
+them through a file instead) is the reusable part and applies to any shell
+script in this repo, not just Ofox integrations.

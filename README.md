@@ -26,6 +26,7 @@ npx skills add ofoxai/skills@seedance-short-drama
 npx skills add ofoxai/skills@seedance-ad-creative
 npx skills add ofoxai/skills@seedance-product-video
 npx skills add ofoxai/skills@ofox-image-core
+npx skills add ofoxai/skills@seedance-anime-drama
 ```
 
 ## Skills
@@ -40,6 +41,7 @@ npx skills add ofoxai/skills@ofox-image-core
 | [seedance-ad-creative](skills/seedance-ad-creative/SKILL.md) | Video | Generate a cinematic brand/product ad clip from a description or product photo via the Ofox video API (Seedance 2.5): builds a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
 | [seedance-product-video](skills/seedance-product-video/SKILL.md) | Video | Generate a clean, catalog-style e-commerce product video from a real product photo via the Ofox video API (Seedance 2.5): plain white-background prompt with a simple turntable/orbit motion (no cinematic camera language), strongly prefers image-to-video for literal product accuracy, shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
 | [ofox-image-core](skills/ofox-image-core/SKILL.md) | Image | Shared execution layer for the Ofox image generation API (`openai/gpt-image-2`, `google/gemini-3.1-flash-image`, `bailian/qwen-image-3.0-pro`): validates parameters client-side, sends one synchronous text-to-image request, base64-decodes and saves the result, and reports real token usage. A library skill other scenario skills (e.g. a character-reference-image step ahead of video generation) build on — not typically installed on its own unless you're calling the Ofox image API directly with custom parameters. |
+| [seedance-anime-drama](skills/seedance-anime-drama/SKILL.md) | Video | Turn a novel/script excerpt into an anime- or manga-style storyboard shot: generates one character reference image via `ofox-image-core`, then reuses that exact same image as `--frame-first-image` across every shot of that character via `ofox-video-core` for real visual consistency, instead of repeated text description alone. Shows a combined cost estimate (image, once per character; video, once per shot). Built on both `ofox-image-core` and `ofox-video-core`. |
 
 ## Why a monorepo
 

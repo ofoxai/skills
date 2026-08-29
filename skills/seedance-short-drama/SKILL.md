@@ -4,7 +4,7 @@ description: Generate a single realistic-human, dialogue-driven short-drama shot
 license: MIT
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "1.0.1"
 ---
 
 # seedance-short-drama: dialogue-driven short-drama shots
@@ -181,3 +181,7 @@ plus the short-drama-specific ones:
   proceeding.
 - Multi-shot video editing/stitching across several generated clips — this
   skill produces individual clips only.
+- Anime- or manga-style scenes, especially ones needing the same character
+  to look identical across multiple shots — use `seedance-anime-drama`
+  instead: it generates and reuses an actual reference image (not just
+  repeated text) for character consistency.
