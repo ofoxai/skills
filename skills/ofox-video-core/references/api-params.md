@@ -17,11 +17,11 @@ Seedance 2.5) before it ever calls the API.
 | `prompt` | string | yes | `--prompt` | Text description of the video. |
 | `duration` | integer | no | `--duration` | Seconds. Seedance 2.5 supports 4–30, any integer. Other models may have different ranges — the script only enforces 4–30 when `model` is exactly `bytedance/seedance-2.5`. |
 | `resolution` | string | no | `--resolution` | One of `480p` `720p` `1080p` `1K` `2K` `4K`. |
-| `aspect_ratio` | string | no | `--aspect-ratio` | One of `16:9` `9:16` `1:1` `4:3` `3:4` `3:2` `2:3` `21:9` `9:21`. |
+| `aspect_ratio` | string | no | `--aspect-ratio` | One of `16:9` `9:16` `1:1` `4:3` `3:4` `3:2` `2:3` `21:9` `9:21` `adaptive`. **`bytedance/seedance-2.5` image-to-video requires `adaptive`** — see below, the script forces this for you and prints a notice when it does. |
 | `size` | string | no | `--size` | `WIDTHxHEIGHT` (e.g. `1280x720`) — alternative to `resolution`. Don't send both unless you've confirmed the model accepts it; prefer `resolution` for Seedance 2.5. |
 | `generate_audio` | boolean | no | `--generate-audio true\|false` | Default `true` server-side. |
 | `seed` | integer | no | `--seed` | Deterministic generation. |
-| `frame_images` | array | no | `--frame-first-image URL`, `--frame-last-image URL` | Image-to-video via first/last frame. The script builds the `{type, image_url, frame_type}` objects for you — pass either or both flags. |
+| `frame_images` | array | no | `--frame-first-image URL\|PATH`, `--frame-last-image URL\|PATH` | Image-to-video via first/last frame. Accepts a remote URL (used as-is) or a local readable file path (auto base64-encoded into a `data:image/<ext>;base64,...` URI). The script builds the `{type, image_url, frame_type}` objects for you — pass either or both flags. |
 | `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. |
 | `real_person` | boolean | no | `--real-person true\|false` | Default `false`. Enables real-person reference preprocessing. |
 | `callback_url` | string | no | `--callback-url` | Must be `https://` and must not point to a private network. |
@@ -42,6 +42,38 @@ bash references/ofox-video.sh generate \
   --frame-first-image "https://example.com/dog.jpg"
 ```
 
+A local file path also works and is preferred when available (see below):
+
+```bash
+bash references/ofox-video.sh generate \
+  --prompt "Make the dog in the frame start running" \
+  --duration 5 \
+  --frame-first-image "/Users/me/photos/dog.jpg"
+```
+
+### `bytedance/seedance-2.5` image-to-video requires `aspect_ratio: adaptive`
+
+Verified against the real API: with the default model
+(`bytedance/seedance-2.5`), attaching `frame_images` and sending any
+`aspect_ratio` value other than `adaptive` fails — every documented
+aspect ratio (or omitting it) was rejected across multiple real attempts,
+while `adaptive` succeeded. `ofox-video.sh` forces `aspect_ratio` to
+`adaptive` automatically whenever `--frame-first-image`/`--frame-last-image`
+is combined with `bytedance/seedance-2.5` (the effective model, whether
+passed explicitly or left at the default), and always prints a `NOTE:` to
+stderr when it does — it never overrides silently. This requirement is
+specific to `bytedance/seedance-2.5`; `bytedance/seedance-2.0` does
+image-to-video without it (verified separately, not assumed).
+
+### Local file vs. remote URL reliability
+
+Prefer a local file over a remote URL for `frame_images` when the user has
+one. Real testing found a publicly reachable, valid image URL rejected by
+the upstream provider with a download-failure-shaped error on more than one
+attempt (likely bot/hotlink protection on that host), while the same image
+base64-encoded from a local file worked reliably. The script handles the
+encoding for you — just pass the local path.
+
 ## Poll response (`GET /v1/videos/{id}`)
 
 States: `pending` → `queued` → `in_progress` → terminal (`completed` /
@@ -56,12 +88,16 @@ On `completed`:
 | `usage.video_seconds` | Billed duration (includes v2v input duration when applicable). |
 | `usage.video_cost` | Actual cost, a string with 10 decimal places. The script prints this exactly — never estimate or invent a number here. |
 
-## Error codes (`error.code`, never `error.message`)
+## Error codes (`error.code`) and `error.message`
 
-`error.message` text is not a stable contract — don't branch logic on it,
-and don't just echo it to the user. `ofox-video.sh` maps every documented
-`error.code` to its own fixed, actionable message (see `print_error_message`
-in the script) instead of surfacing raw API text.
+`error.message` free text is not a stable contract to branch logic on — the
+exact wording can change — but it can carry a specific, useful detail the
+generic mapped explanation doesn't (a real example: a minimum reference-image
+width, seen in the message even though `error.code` was the generic
+`invalid_request`). `ofox-video.sh` maps every documented `error.code` to
+its own fixed, actionable message (see `print_error_message` in the
+script), and **always** also prints `error.message` when present, labeled
+`Upstream message: ...` — not only when `error.code` is absent/unrecognized.
 
 | HTTP | `error.code` | Meaning |
 |---|---|---|
@@ -79,6 +115,7 @@ in the script) instead of surfacing raw API text.
 | 429 | `rate_limited` | Poll too frequently, or upstream rate limit. |
 | 502 | `upstream_error` / `route_error` | Provider-side failure. |
 | 500 | `internal_error` | Platform-side failure. |
+| n/a (seen on a terminal `failed` job, not a create-time HTTP error) | `output_moderation_failed` | The generated **output** failed a post-generation content check — happens *after* the job ran, not at submission, so it cannot be caught by client-side validation. Verified: the response's `usage` field is `null`/absent, so **this job is not billed**. Safe to retry with a brand-new `generate` call using a different prompt/reference — that's a new request, not a resubmission of the failed one. |
 
 `real_person: true` image validation failures (checked when Ofox fetches
 the reference image, not by this script): `bad_data_uri`, `download_failed`,

@@ -18,8 +18,8 @@
     },
     {
       "title": "Video",
-      "description": "Generate video with the Ofox video API (Seedance 2.5). ofox-video-core is the shared execution layer (submit, poll, download, report cost) that seedance-short-drama (dialogue-driven short-drama shots) and seedance-ad-creative (cinematic brand/product ad clips) build on for scenario-specific prompt craft and defaults.",
-      "skills": ["ofox-video-core", "seedance-short-drama", "seedance-ad-creative"]
+      "description": "Generate video with the Ofox video API (Seedance 2.5). ofox-video-core is the shared execution layer (submit, poll, download, report cost) that seedance-short-drama (dialogue-driven short-drama shots), seedance-ad-creative (cinematic brand/product ad clips), and seedance-product-video (clean white-background e-commerce product showcases) build on for scenario-specific prompt craft and defaults.",
+      "skills": ["ofox-video-core", "seedance-short-drama", "seedance-ad-creative", "seedance-product-video"]
     }
   ]
 }

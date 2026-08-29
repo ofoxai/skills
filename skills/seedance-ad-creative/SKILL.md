@@ -4,7 +4,7 @@ description: Generate a cinematic brand/product ad clip from a product descripti
 license: MIT
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "1.0.2"
 ---
 
 # seedance-ad-creative: cinematic product/brand ad clips
@@ -102,20 +102,33 @@ away from any voice generation.
 Prefer image-to-video over describing the product purely in text — Seedance
 renders the real product (label text, exact shape) far more faithfully from
 a reference image than from a text description, which can distort fine
-label detail or logos:
+label detail or logos. Prefer a local file over a remote URL when the user
+has one: `ofox-video-core` auto-base64-encodes a local file, which real
+testing found more reliable than depending on the upstream provider being
+able to fetch an arbitrary third-party URL (some hosts' bot/hotlink
+protection can reject an otherwise valid, publicly reachable image URL).
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate \
   --prompt "Camera slowly orbits 30 degrees around the product, soft rim light, cinematic color grade" \
-  --frame-first-image "https://example.com/product-photo.jpg" \
-  --duration 10 --resolution 1080p --aspect-ratio 16:9
+  --frame-first-image "/path/to/local/product-photo.jpg" \
+  --duration 10 --resolution 1080p
 ```
+
+**Note on `--aspect-ratio` with an attached image**: don't pass
+`--aspect-ratio` here for the default model — `ofox-video-core` forces
+`aspect_ratio` to `adaptive` whenever an image (`--frame-first-image`/
+`--frame-last-image`) is combined with `bytedance/seedance-2.5` (this
+skill's default model), overriding anything else with a printed notice.
+`--aspect-ratio` (`16:9`/`9:16`/`1:1`/etc., see Recommended defaults below)
+only takes effect on the **pure text-to-video** path, when no image is
+attached.
 
 If the reference image includes an actual person (e.g. a spokesperson or
 model in the shot, not just the product), add `--real-person true` per the
 API contract. That path validates the image server-side and can fail with
 `bad_data_uri`/`download_failed`/`unreachable`/`not_image`/`too_large` if the
-URL isn't a small, valid, publicly reachable image — see the failure table
+image isn't a small, valid file the API can use — see the failure table
 below.
 
 ## Recommended defaults
@@ -125,7 +138,7 @@ below.
 | `--model` | `bytedance/seedance-2.5` (script default, no flag needed) | current-generation model |
 | `--duration` | `10` (adjust to match the request, e.g. `15` if asked for 15 seconds) | typical short-ad length; Seedance 2.5 accepts 4–30 |
 | `--resolution` | `1080p` for a deliverable brand asset; suggest `720p` as a cheaper draft/preview pass | brand assets are usually published, so higher fidelity is worth the extra cost — but confirm with the user given the price difference (see cost estimate below) |
-| `--aspect-ratio` | `16:9` (landscape) | cinematic/hero framing for websites and YouTube; pass `--aspect-ratio 9:16` for a vertical social-ad cut or `1:1` for feed placements |
+| `--aspect-ratio` | `16:9` (landscape) — **pure text-to-video only** | cinematic/hero framing for websites and YouTube; pass `--aspect-ratio 9:16` for a vertical social-ad cut or `1:1` for feed placements. **Does not apply once an image is attached** with the default model — `ofox-video-core` forces `adaptive` in that case (see above) |
 | `--generate-audio` | `true` (server default, no flag needed) | ambient/music track; the prompt should say "no dialogue" if that matters |
 
 ## Cost estimate — show this before generating
@@ -171,7 +184,8 @@ plus the ad-creative-specific ones:
 | Exit `2` | `curl`/`jq` missing, or `OFOX_API_KEY` not set | Re-run `ofox-video-core`'s `check` and follow its install/signup guidance |
 | Exit `3`, `error.code: insufficient_credits` | Ofox balance too low, especially likely at 1080p | No charge was made; suggest a cheaper 720p draft or adding credits at `https://app.ofox.ai` |
 | Exit `3`, job ends `failed`, or `invalid_request` on create, with no other error code hint | Likely a moderation rejection: prompts referencing a real celebrity/spokesperson likeness without consent, another brand's trademarked logo, or copyrighted characters are commonly rejected | Remove the flagged real-person/trademark/copyrighted reference from the prompt (or reference image), then call `generate` again — this is a **new** request, not a resubmission of the failed one, so it's safe to retry immediately |
-| `bad_data_uri` / `download_failed` / `unreachable` / `not_image` / `too_large` on an image-to-video job | The `--frame-first-image`/`--frame-last-image` URL isn't a small, valid, publicly reachable image | Re-host the product photo somewhere publicly accessible, confirm it's a real image file under the size limit, and retry |
+| Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated **output** failed a post-generation content check — happens after the job ran, not at submission. Not billed (no `usage` field on the response) | Retry with a brand-new `generate` call using a different prompt or reference image — a new request, not a resubmission of the failed one, so it's safe |
+| `bad_data_uri` / `download_failed` / `unreachable` / `not_image` / `too_large` on an image-to-video job | The `--frame-first-image`/`--frame-last-image` reference isn't a small, valid image the API can use (a remote URL that isn't publicly reachable, or a local file that failed to read/encode) | Prefer a local file (auto-base64'd, more reliable than some remote URLs — see above); confirm it's a real image file under the size limit and retry |
 | Product label text or logo looks distorted/illegible in the result | Pure text-to-video can't render fine label detail reliably | Switch to image-to-video with `--frame-first-image` pointing at the real product photo instead of describing the label in text |
 | Exit `4`, timed out waiting for completion | Job is still running upstream, not failed | Do **not** re-run `generate`; run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID` using the job id printed before the timeout |
 | Exit `5`, ambiguous network failure on create | No HTTP response received at all — can't tell if a job was created | Do not guess or retry `generate`; tell the user to check `https://app.ofox.ai` for a job that may already be running, per `ofox-video-core`'s no-resubmit rule |
@@ -180,7 +194,6 @@ plus the ad-creative-specific ones:
 
 - Dialogue-driven scenes with characters talking — use `seedance-short-drama`
   instead.
-- The product photo the user wants to reference is confidential/local-only
-  and can't be hosted at a public URL — `frame_images` requires a reachable
-  URL; a pure text description is the fallback (with the label-fidelity
-  caveat above).
+- Plain catalog/listing footage (white background, literal turntable
+  rotation, no mood or camera language) rather than a cinematic brand ad —
+  use `seedance-product-video` instead.

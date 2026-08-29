@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "CONTRIBUTING.md", "reason": "Repo's mandatory quality bar for every skill"}
+{"file": ".trellis/spec/skills/index.md", "reason": "Skill-authoring conventions: delegate to shared execution layer, absolute-path reporting"}
+{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "No-resubmit rule and API-docs-distrust lesson, applies to this skill's use of ofox-video-core"}
+{"file": ".trellis/tasks/08-29-product-video/research/seedance-2.5-image-to-video.md", "reason": "Verified root cause and exact fix list for the Seedance 2.5 image-to-video bug"}

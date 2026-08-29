@@ -16,12 +16,21 @@
 #   --prompt TEXT             required
 #   --duration N               seconds (Seedance 2.5: 4-30)
 #   --resolution VAL            480p | 720p | 1080p | 1K | 2K | 4K
-#   --aspect-ratio VAL          16:9 | 9:16 | 1:1 | 4:3 | 3:4 | 3:2 | 2:3 | 21:9 | 9:21
+#   --aspect-ratio VAL          16:9 | 9:16 | 1:1 | 4:3 | 3:4 | 3:2 | 2:3 | 21:9 | 9:21 | adaptive
 #   --size WxH                  e.g. 1280x720 (alternative to --resolution)
 #   --generate-audio true|false default: true (server-side default)
 #   --seed N
-#   --frame-first-image URL     image-to-video: first frame
-#   --frame-last-image URL      image-to-video: last frame
+#   --frame-first-image URL|PATH image-to-video: first frame. Accepts a remote
+#                               http(s):// URL (used as-is) or a local,
+#                               readable file path (base64-encoded into a
+#                               data: URI automatically). NOTE: for
+#                               bytedance/seedance-2.5 (the default model),
+#                               attaching any frame image forces
+#                               aspect_ratio=adaptive regardless of
+#                               --aspect-ratio — a visible notice is printed
+#                               when this happens, it is never silent.
+#   --frame-last-image URL|PATH  image-to-video: last frame (same URL/local
+#                               file support and adaptive-override behavior)
 #   --real-person true|false
 #   --callback-url URL          must be https://
 #   --extra-json JSON           merged into the request body as-is (advanced:
@@ -63,7 +72,7 @@ DEFAULT_MAX_WAIT=540
 DEFAULT_POLL_INTERVAL=6
 
 VALID_RESOLUTIONS="480p 720p 1080p 1K 2K 4K"
-VALID_ASPECT_RATIOS="16:9 9:16 1:1 4:3 3:4 3:2 2:3 21:9 9:21"
+VALID_ASPECT_RATIOS="16:9 9:16 1:1 4:3 3:4 3:2 2:3 21:9 9:21 adaptive"
 
 # ---------------------------------------------------------------------------
 # small helpers
@@ -76,6 +85,51 @@ list_contains() {
     [ "$item" = "$needle" ] && return 0
   done
   return 1
+}
+
+resolve_image_ref() {
+  # $1 = the raw value passed to --frame-first-image/--frame-last-image.
+  #
+  # Passes http(s):// URLs and already-formed data: URIs through unchanged.
+  # Base64-encodes a readable local file into a data:image/<ext>;base64,...
+  # URI (portable `base64` + `tr` only, no new dependency). A bare string
+  # that's neither a URL nor an existing local file is passed through as-is
+  # so the API's own validation produces a clear error rather than this
+  # script guessing. But a path that DOES exist as a file yet can't be read
+  # (permissions) is a clear local problem — fail loudly and non-zero here
+  # rather than silently sending the raw filesystem path as if it were a
+  # usable image reference.
+  local val="$1" ext ctype b64
+  case "$val" in
+    http://*|https://*|data:*)
+      printf '%s' "$val"
+      return 0
+      ;;
+  esac
+  if [ -f "$val" ] && [ ! -r "$val" ]; then
+    echo "ERROR: local image file '$val' exists but is not readable (check file permissions)." >&2
+    return 1
+  fi
+  if [ -f "$val" ] && [ -r "$val" ]; then
+    ext=$(printf '%s' "$val" | sed -E 's/.*\.//' | tr '[:upper:]' '[:lower:]')
+    case "$ext" in
+      jpg|jpeg) ctype="image/jpeg" ;;
+      png) ctype="image/png" ;;
+      webp) ctype="image/webp" ;;
+      gif) ctype="image/gif" ;;
+      bmp) ctype="image/bmp" ;;
+      *) ctype="image/jpeg" ;;
+    esac
+    b64=$(base64 <"$val" 2>/dev/null | tr -d '\n')
+    if [ -z "$b64" ]; then
+      echo "ERROR: failed to base64-encode local image file '$val'." >&2
+      return 1
+    fi
+    printf 'data:%s;base64,%s' "$ctype" "$b64"
+    return 0
+  fi
+  printf '%s' "$val"
+  return 0
 }
 
 usage() {
@@ -172,6 +226,8 @@ print_error_message() {
       echo "  $code: the upstream video provider failed. If this happened on job creation, no job was made and it is safe to retry create; if it happened while polling an existing job, retry the poll — do not create a new job." >&2 ;;
     internal_error)
       echo "  internal_error: an Ofox platform-side error. If this happened on job creation, no job was made and it is safe to retry create; if it happened while polling, retry the poll — do not create a new job." >&2 ;;
+    output_moderation_failed)
+      echo "  output_moderation_failed: the job's OUTPUT failed a post-generation content check — this happens AFTER the video was generated, not at submission, and cannot be caught by client-side validation. This job is NOT billed (no usage field on the response). Safe fix: submit a brand-new generate call with a different prompt or reference image/audio — this is a new request, not a resubmission of the failed one." >&2 ;;
     bad_data_uri|download_failed|unreachable|not_image|too_large)
       echo "  $code: the real_person reference image failed validation (must be a small, publicly reachable, valid image). Check the image URL and retry." >&2 ;;
     "")
@@ -183,10 +239,18 @@ print_error_message() {
 
 print_api_error() {
   # $1 = context ("create" or "poll"), $2 = http_code, $3 = response body
-  local context="$1" http_code="$2" body="$3" code
+  local context="$1" http_code="$2" body="$3" code message
   code=$(printf '%s' "$body" | jq -r '.error.code // empty' 2>/dev/null)
+  message=$(printf '%s' "$body" | jq -r '.error.message // empty' 2>/dev/null)
   echo "ERROR: Ofox API rejected the $context request (HTTP $http_code)." >&2
   print_error_message "$code"
+  # error.message is not a stable contract to branch logic on (see the
+  # error-code table), but it can carry a specific detail the generic
+  # mapped explanation above doesn't (e.g. a minimum image width) — always
+  # surface it, not only when error.code itself is unrecognized/absent.
+  if [ -n "$message" ]; then
+    echo "  Upstream message: $message" >&2
+  fi
   if [ -z "$code" ]; then
     echo "  Raw response body:" >&2
     printf '%s\n' "$body" >&2
@@ -351,6 +415,21 @@ cmd_generate() {
 
   if ! check_api_key; then return 2; fi
 
+  # --- bytedance/seedance-2.5 image-to-video requires aspect_ratio=adaptive ---
+  # Verified against the real API (see the seedance-2.5-image-to-video
+  # research): every other aspect_ratio value fails once frame_images is
+  # attached for this model, whether the caller passed one explicitly or
+  # left it at the client default. Force it, and always say so — never
+  # silently change a value the caller passed (or didn't pass).
+  if { [ -n "$frame_first" ] || [ -n "$frame_last" ]; } && [ "$model" = "bytedance/seedance-2.5" ]; then
+    if [ -n "$aspect_ratio" ] && [ "$aspect_ratio" != "adaptive" ]; then
+      echo "NOTE: forcing aspect_ratio=adaptive for bytedance/seedance-2.5 image-to-video (required by the API); ignoring requested aspect ratio '$aspect_ratio'." >&2
+    else
+      echo "NOTE: forcing aspect_ratio=adaptive for bytedance/seedance-2.5 image-to-video (required by the API)." >&2
+    fi
+    aspect_ratio="adaptive"
+  fi
+
   # --- build the request payload ---
 
   local payload='{}'
@@ -366,12 +445,14 @@ cmd_generate() {
   [ -n "$callback_url" ] && payload=$(printf '%s' "$payload" | jq --arg v "$callback_url" '.callback_url=$v')
 
   if [ -n "$frame_first" ] || [ -n "$frame_last" ]; then
-    local frames='[]'
+    local frames='[]' frame_first_ref frame_last_ref
     if [ -n "$frame_first" ]; then
-      frames=$(printf '%s' "$frames" | jq --arg u "$frame_first" '. + [{"type":"image_url","image_url":{"url":$u},"frame_type":"first_frame"}]')
+      frame_first_ref=$(resolve_image_ref "$frame_first") || return 1
+      frames=$(printf '%s' "$frames" | jq --arg u "$frame_first_ref" '. + [{"type":"image_url","image_url":{"url":$u},"frame_type":"first_frame"}]')
     fi
     if [ -n "$frame_last" ]; then
-      frames=$(printf '%s' "$frames" | jq --arg u "$frame_last" '. + [{"type":"image_url","image_url":{"url":$u},"frame_type":"last_frame"}]')
+      frame_last_ref=$(resolve_image_ref "$frame_last") || return 1
+      frames=$(printf '%s' "$frames" | jq --arg u "$frame_last_ref" '. + [{"type":"image_url","image_url":{"url":$u},"frame_type":"last_frame"}]')
     fi
     payload=$(printf '%s' "$payload" | jq --argjson f "$frames" '.frame_images=$f')
   fi
@@ -529,6 +610,17 @@ poll_and_download() {
           failed|cancelled|expired)
             echo "ERROR: job $job_id ended with status '$status'." >&2
             print_error_message "$(printf '%s' "$body" | jq -r '.error.code // empty')"
+            # Same rule as print_api_error(): a terminal failed/cancelled/
+            # expired job can carry a useful error.message even when the
+            # response itself was a normal HTTP 200 (this is exactly how
+            # output_moderation_failed was first found — a 200 poll response
+            # with a job-level failure, not an HTTP-level error) — never
+            # swallow it.
+            local job_message
+            job_message=$(printf '%s' "$body" | jq -r '.error.message // empty' 2>/dev/null)
+            if [ -n "$job_message" ]; then
+              echo "  Upstream message: $job_message" >&2
+            fi
             return 3
             ;;
           pending|queued|in_progress)
