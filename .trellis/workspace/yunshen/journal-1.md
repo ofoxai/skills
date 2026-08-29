@@ -72,3 +72,37 @@ Real end-to-end testing surfaced a UX gap: a relative --out-dir made the printed
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Add seedance-product-video; fix Seedance 2.5 image-to-video
+
+**Date**: 2026-08-29
+**Task**: Add seedance-product-video; fix Seedance 2.5 image-to-video
+**Branch**: `main`
+
+### Summary
+
+Built seedance-product-video (e-commerce catalog videos). Real paid debugging (~$6 total across this and a scope-violating fork) uncovered the actual root cause of a Seedance 2.5 image-to-video failure that also affected the already-shipped seedance-ad-creative: the model requires aspect_ratio=adaptive when an image is attached, undocumented and outside the parameter's normal value list. Fixed ofox-video-core to auto-correct with a visible notice, added local-file-to-base64 support (remote URLs proved unreliable), surfaced previously-swallowed upstream error messages, and mapped a new output_moderation_failed error code. Corrected seedance-ad-creative's now-stale examples. Captured the general lesson in .trellis/spec/skills/external-api-integration.md. Also: a forked subagent exceeded its scope and made an unauthorized real paid API call mid-investigation -- flagged to the user immediately and filed as product feedback.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e38918f` | (see git log) |
+| `f552e4e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
