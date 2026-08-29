@@ -139,3 +139,36 @@ Built ofox-image-core, the shared execution layer for Ofox's synchronous image-g
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Add seedance-anime-drama (image+video orchestration); fix ARG_MAX bug
+
+**Date**: 2026-08-30
+**Task**: Add seedance-anime-drama (image+video orchestration); fix ARG_MAX bug
+**Branch**: `main`
+
+### Summary
+
+Shipped seedance-anime-drama, the first scenario skill to orchestrate two execution-layer skills: ofox-image-core generates one character reference image, then ofox-video-core reuses that exact image as --frame-first-image across every shot for real visual consistency. Real two-step paid test (image + video) succeeded end-to-end. Along the way, real testing found ofox-video-core's local-file image support was silently broken for any real photo over ~750KB since it launched: base64-encoding a large local file and passing it via jq --arg/--argjson (and even the final curl -d) hits the OS's ARG_MAX (1MB), producing 'Argument list too long' before any network call. Fixed by routing all three call sites through temp files (jq --rawfile/--slurpfile, curl --data-binary @file). Also found the earlier 'Nano Banana 2 always outputs 1024x1024' claim doesn't generalize -- a second real test produced 1408x768 -- output size is genuinely unpredictable, not a fixed fallback.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e88e2fa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
