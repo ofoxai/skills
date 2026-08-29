@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~174 | Active |
+| `journal-1.md` | ~207 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-08-30 | Phase A: ClawHub metadata, per-agent install commands, upstream compatibility | `0fb1089` | `main` |
 | 5 | 2026-08-30 | Add seedance-anime-drama (image+video orchestration); fix ARG_MAX bug | `e88e2fa` | `main` |
 | 4 | 2026-08-29 | Add ofox-image-core (text-to-image execution layer) | `6e76c8b` | `main` |
 | 3 | 2026-08-29 | Add seedance-product-video; fix Seedance 2.5 image-to-video | `e38918f`, `f552e4e` | `main` |

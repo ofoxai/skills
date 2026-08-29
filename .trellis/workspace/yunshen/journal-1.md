@@ -172,3 +172,36 @@ Shipped seedance-anime-drama, the first scenario skill to orchestrate two execut
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: Phase A: ClawHub metadata, per-agent install commands, upstream compatibility
+
+**Date**: 2026-08-30
+**Task**: Phase A: ClawHub metadata, per-agent install commands, upstream compatibility
+**Branch**: `main`
+
+### Summary
+
+Closed a gap-analysis finding against the source plan: none of the 9 shipped skills declared metadata.openclaw.requires (env/bins) or homepage, which ClawHub's automated scan explicitly checks for -- would have failed as 'metadata mismatch' on any real publish attempt. Added accurate requires.env/bins (traced through each skill's actual delegation chain, not copy-pasted) and homepage to all 9 SKILL.md files, retrofit the 3 pre-existing skills with homepage only, updated CONTRIBUTING.md's template so this doesn't regress, rewrote README's Install section with the --agent claude-code/codex/opencode/'*' pattern (independently verified against the real installed skills CLI, not just inherited from the doc), and added an upstream-compatibility note to ofox-video-core naming the popular prompt-writing 'director' skills it complements. Pure documentation -- no scripts touched, no external action taken (no push, no publish, no PRs to third-party repos).
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0fb1089` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
