@@ -4,7 +4,7 @@ description: Shared execution layer for the Ofox video generation API (api.ofox.
 license: MIT
 metadata:
   author: ofoxai
-  version: "1.0.1"
+  version: "1.0.2"
 ---
 
 # ofox-video-core: Ofox video API execution layer
@@ -97,6 +97,13 @@ state which model/resolution/duration/aspect ratio were **actually used**
 number or claim a video is ready without a real `VIDEO_PATH` from the
 script.
 
+**Always state the full `VIDEO_PATH` as its own standalone line in your
+reply to the user** — not folded into a sentence or buried mid-paragraph.
+The script always resolves `--out-dir` to an absolute path before printing
+`VIDEO_PATH`, so relay that absolute path exactly as printed; the file's
+location is the actual deliverable here, and the user should be able to
+find it without re-deriving your working directory.
+
 ## The no-resubmit rule (non-negotiable)
 
 **Never re-run `generate` for the same logical request just because it's
@@ -139,6 +146,7 @@ exit code:
 | `3` | The API rejected the request, or the job ended `failed`/`cancelled`/`expired`. The mapped message explains why (see `references/api-params.md` for the full error-code table). |
 | `4` | Timed out waiting for a terminal state. The job is still running — `poll JOB_ID`, do not `generate` again. |
 | `5` | Ambiguous network failure on create — no HTTP response received. Do not auto-retry; check the dashboard first. |
+| `6` | `--out-dir` could not be created or entered (bad path, permissions) — a local filesystem problem, not an API problem. If this happened during `generate`, the job itself is unaffected (already created or still running server-side); do not re-run `generate`. Fix `--out-dir` and re-run `poll JOB_ID --out-dir <a writable directory>`. |
 
 ## For scenario skills built on this
 

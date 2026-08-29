@@ -63,3 +63,6 @@ bar restated as a checklist, not a separate standard):
       docs-only implementation isn't sufficient for billable API integrations.
 - [ ] `README.md`'s Skills table and `skills.sh.json` updated and consistent
       with the skill's actual directory name and frontmatter `name`.
+- [ ] Any skill that writes a file to disk resolves and reports an
+      **absolute** path — never a relative path the user must infer their
+      own working directory to locate.

@@ -43,6 +43,11 @@
 #      received at all). We cannot tell whether the job was created
 #      server-side. Do not auto-retry create — check https://app.ofox.ai
 #      first, then retry manually only if nothing was created.
+#   6  --out-dir could not be created or entered (bad path, permissions).
+#      This is a local filesystem problem, not an API problem — if it
+#      happened during 'generate', the job may already exist server-side
+#      (or still be running). Do NOT re-run 'generate'; fix --out-dir and
+#      re-run: ofox-video.sh poll JOB_ID --out-dir <a writable directory>
 #
 # No-resubmit rule: once a create call gets a response (any HTTP status),
 # this script never issues a second create call for the same invocation. If
@@ -478,8 +483,24 @@ cmd_poll() {
 poll_and_download() {
   local job_id="$1" polling_url="$2" out_dir="$3" max_wait="$4" poll_interval="$5"
   local elapsed=0 tmp_body http_code curl_rc body status
+  local out_dir_input="$out_dir"
 
   mkdir -p "$out_dir" 2>/dev/null
+
+  # Resolve out_dir to an absolute, canonical path before it's used to build
+  # any output path in download_result(). A caller-supplied relative
+  # --out-dir (e.g. '.' or 'some/subdir') must never leak into a printed
+  # VIDEO_PATH — the location of the downloaded file is this skill's actual
+  # deliverable. Portable bash builtins only, no readlink -f/realpath
+  # dependency (matches the curl+jq-only contract).
+  out_dir=$(cd "$out_dir" 2>/dev/null && pwd)
+  if [ -z "$out_dir" ]; then
+    echo "ERROR: --out-dir '$out_dir_input' could not be created or entered (bad path or missing permissions)." >&2
+    echo "Job $job_id was not affected by this — it may already exist or still be running server-side." >&2
+    echo "Do NOT re-run 'generate' for the same request. Fix --out-dir to a writable directory and re-run:" >&2
+    echo "  $0 poll $job_id --out-dir <a writable directory>" >&2
+    return 6
+  fi
 
   while [ "$elapsed" -lt "$max_wait" ]; do
     tmp_body=$(mktemp)
