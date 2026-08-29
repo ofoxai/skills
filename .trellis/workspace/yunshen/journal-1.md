@@ -39,3 +39,36 @@ Shipped v1 of the Seedance 2.5 execution-layer skills: ofox-video-core (shared s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Fix ofox-video-core VIDEO_PATH to always be absolute
+
+**Date**: 2026-08-29
+**Task**: Fix ofox-video-core VIDEO_PATH to always be absolute
+**Branch**: `main`
+
+### Summary
+
+Real end-to-end testing surfaced a UX gap: a relative --out-dir made the printed VIDEO_PATH ambiguous, and the calling agent could report a path the user couldn't reliably locate. Fixed by resolving out_dir to an absolute path in poll_and_download() (new exit code 6 for an uncreatable/unwritable out-dir), added a standalone-VIDEO_PATH-line reporting requirement to ofox-video-core's SKILL.md, and generalized the lesson into .trellis/spec/skills/index.md's Quality Check for future scenario skills.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f25a1e1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
