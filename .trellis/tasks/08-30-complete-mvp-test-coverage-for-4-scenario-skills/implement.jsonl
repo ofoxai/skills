@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "Log of real gotchas found during prior live testing of these same skills (ARG_MAX bug, mirror_urls fallback, aspect_ratio quirks) — any new bug this task finds must be checked against/added here."}
+{"file": ".trellis/spec/skills/index.md", "reason": "Skills spec layer index, for any other conventions relevant to editing skills/ scripts."}
