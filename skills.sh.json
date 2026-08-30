@@ -15,6 +15,16 @@
       "title": "Deploy",
       "description": "Publish static sites to shareable URLs. cloudflare-drop runs one packaged command built on the Wrangler CLI: permanent deploy to your Cloudflare account when CLOUDFLARE_API_TOKEN is set, or a 60-minute claimable *.workers.dev preview when not — always stating which you got, baking an honest expiry countdown into previews, self-verifying the served content (not just a 200), and failing open rather than inventing a link.",
       "skills": ["cloudflare-drop"]
+    },
+    {
+      "title": "Video",
+      "description": "Generate video with the Ofox video API (Seedance 2.5). ofox-video-core is the shared execution layer (submit, poll, download, report cost) that seedance-short-drama (dialogue-driven short-drama shots), seedance-ad-creative (cinematic brand/product ad clips), seedance-product-video (clean white-background e-commerce product showcases), and seedance-anime-drama (anime/manga storyboard shots with real image-based character consistency, orchestrating ofox-video-core with ofox-image-core) build on for scenario-specific prompt craft and defaults.",
+      "skills": ["ofox-video-core", "seedance-short-drama", "seedance-ad-creative", "seedance-product-video", "seedance-anime-drama"]
+    },
+    {
+      "title": "Image",
+      "description": "Generate images with the Ofox image API (openai/gpt-image-2, google/gemini-3.1-flash-image, bailian/qwen-image-3.0-pro). ofox-image-core is the shared execution layer for this synchronous, no-job-id API: validates parameters, sends one request, decodes and saves the result, and reports real token usage. A library skill other scenario skills (e.g. a video pipeline's character-reference-image step) build on.",
+      "skills": ["ofox-image-core"]
     }
   ]
 }

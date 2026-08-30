@@ -2,9 +2,20 @@
 name: hal-vault
 description: Securely store, search, and use secrets (API keys, tokens, passwords, SSH keys) with hal-vault, an SSH-key encrypted local secret store. Use when the user shares a credential that should be saved, asks what secrets are stored or where a key is, or when a command/workflow needs a secret injected. Core discipline - never print raw secret values into chat, logs, or files; reference secrets only by their masked form, and use --reveal exclusively inside command substitution.
 license: MIT
+version: "1.1.0"
+homepage: https://github.com/ofoxai/skills/tree/main/skills/hal-vault
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "1.1.0"
+  openclaw:
+    requires:
+      bins: [hal-vault]
+    envVars:
+      - name: HAL_VAULT_DIR
+        required: false
+        description: Vault directory. Resolution order is the -d flag, then this variable, then ~/.hal-vault.
+    emoji: "🔐"
+    homepage: https://github.com/ofoxai/skills/tree/main/skills/hal-vault
 ---
 
 # hal-vault: agent-safe secret management

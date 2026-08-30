@@ -15,13 +15,36 @@ Install everything:
 npx skills add ofoxai/skills
 ```
 
-Or a single skill:
+Or a single skill, optionally scoped to one agent with `--agent`:
 
 ```
-npx skills add ofoxai/skills@hal-vault
-npx skills add ofoxai/skills@hal-image
-npx skills add ofoxai/skills@cloudflare-drop
+npx skills add ofoxai/skills@<skill-name> --agent claude-code
+npx skills add ofoxai/skills@<skill-name> --agent codex
+npx skills add ofoxai/skills@<skill-name> --agent opencode
+npx skills add ofoxai/skills@<skill-name> --agent '*'   # all supported agents
 ```
+
+This pattern applies to every skill name below. The four user-facing
+scenario skills are the ones most people install directly:
+
+- `seedance-short-drama`
+- `seedance-ad-creative`
+- `seedance-product-video`
+- `seedance-anime-drama`
+
+Already running Codex / Claude Code / Cline with an Ofox key configured?
+Installing one of these skills doesn't need a new key — the same
+`OFOX_API_KEY` generates video/images immediately.
+
+`ofox-video-core` and `ofox-image-core` are the library skills the four
+above build on: a scenario skill pulls in the one(s) it needs
+automatically, so you typically don't install these two standalone unless
+you're calling the Ofox API directly with custom parameters.
+
+The same `--agent`-scoped install pattern also works for the two
+pre-existing standalone skills — `hal-vault`, `hal-image` — and
+`cloudflare-drop`, none of which touch `OFOX_API_KEY` (they don't call the
+Ofox API at all).
 
 ## Skills
 
@@ -30,6 +53,12 @@ npx skills add ofoxai/skills@cloudflare-drop
 | [hal-vault](skills/hal-vault/SKILL.md) | Secrets | Agent-safe secret management: SSH-key encrypted storage, tag search, masked-by-default output — store, search, and inject secrets without ever seeing or leaking them. |
 | [hal-image](skills/hal-image/SKILL.md) | Media | Agent-safe image handling: read metadata, resize/crop/composite/montage/watermark/convert with ImageMagick, and losslessly compress before sending so images stay small and transfers don't stall. |
 | [cloudflare-drop](skills/cloudflare-drop/SKILL.md) | Deploy | Publish a static site (a folder of HTML/CSS/JS/images/fonts) to Cloudflare and get a live, shareable `*.workers.dev` URL in seconds. One packaged command built on the Wrangler CLI (Cloudflare's own agent guidance): permanent deploy when `CLOUDFLARE_API_TOKEN` is set, 60-minute claimable preview when not — always says which one you got. Bakes an honest expiry countdown into previews, self-verifies the served content (not just a 200), and fails open rather than inventing a link. |
+| [ofox-video-core](skills/ofox-video-core/SKILL.md) | Video | Shared execution layer for the Ofox video generation API (Seedance 2.5): submits a job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. A library skill the other Video skills (`seedance-short-drama`, `seedance-ad-creative`, `seedance-product-video`) build on — not typically installed on its own unless you're calling the Ofox video API directly with custom parameters. |
+| [seedance-short-drama](skills/seedance-short-drama/SKILL.md) | Video | Generate a realistic-human, dialogue-driven short-drama shot from a script or scene description via the Ofox video API (Seedance 2.5): builds a shot-craft prompt (character appearance, quoted dialogue, scene-cut timing cues), shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
+| [seedance-ad-creative](skills/seedance-ad-creative/SKILL.md) | Video | Generate a cinematic brand/product ad clip from a description or product photo via the Ofox video API (Seedance 2.5): builds a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
+| [seedance-product-video](skills/seedance-product-video/SKILL.md) | Video | Generate a clean, catalog-style e-commerce product video from a real product photo via the Ofox video API (Seedance 2.5): plain white-background prompt with a simple turntable/orbit motion (no cinematic camera language), strongly prefers image-to-video for literal product accuracy, shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
+| [ofox-image-core](skills/ofox-image-core/SKILL.md) | Image | Shared execution layer for the Ofox image generation API (`openai/gpt-image-2`, `google/gemini-3.1-flash-image`, `bailian/qwen-image-3.0-pro`): validates parameters client-side, sends one synchronous text-to-image request, base64-decodes and saves the result, and reports real token usage. A library skill other scenario skills (e.g. a character-reference-image step ahead of video generation) build on — not typically installed on its own unless you're calling the Ofox image API directly with custom parameters. |
+| [seedance-anime-drama](skills/seedance-anime-drama/SKILL.md) | Video | Turn a novel/script excerpt into an anime- or manga-style storyboard shot: generates one character reference image via `ofox-image-core`, then reuses that exact same image as `--frame-first-image` across every shot of that character via `ofox-video-core` for real visual consistency, instead of repeated text description alone. Shows a combined cost estimate (image, once per character; video, once per shot). Built on both `ofox-image-core` and `ofox-video-core`. |
 
 ## Why a monorepo
 

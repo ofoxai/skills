@@ -1,0 +1,49 @@
+# Changelog
+
+All notable changes to the **seedance-short-drama** skill. Versioning follows SemVer.
+
+This file starts at 1.0.3; earlier versions predate it.
+
+## 1.2.0 — chaining does not apply here, and now says so
+
+`ofox-video-core` 1.6.0 added `chain`, which carries one shot's closing frame
+into the next for visual continuity. **It cannot be used for this skill**:
+Seedance 2.5 image-to-video refuses reference frames containing a real person
+(`input_moderation_failed`, nothing billed), and this skill is
+realistic-human by definition. Documented up front so a user doesn't discover
+it mid-sequence — consecutive short-drama shots are generated independently,
+with continuity coming from repeating the character description verbatim.
+
+## 1.1.1 — cost guidance uses the script's own estimate
+
+`ofox-video.sh` now prints a cost estimate before submitting, read from live
+rates. This skill's guidance no longer tells the agent to compute one by hand
+from a table that can go stale — relay the printed figure, and if it says the
+estimate is unavailable, say that rather than substituting a number.
+
+## 1.1.0 — jobs are pinned to the byteplus upstream
+
+**Behavior change, inherited from ofox-video-core 1.4.0.** Jobs now go to the
+`byteplus` upstream (ByteDance's platform for markets outside mainland China)
+instead of wherever Ofox's weighted routing sent them. The two upstreams
+moderate differently and routing was explicitly unpredictable, so the same
+prompt could pass one run and be rejected the next. Pass `--provider
+volcengine` for the mainland platform or `--provider auto` for the old
+behavior. Pricing is identical either way.
+
+No change to prompts or defaults otherwise.
+
+## 1.0.3 — ClawHub frontmatter
+
+- Frontmatter now carries a top-level `version` and
+  `metadata.openclaw.homepage`/`envVars`/`primaryEnv`. ClawHub's publish
+  scanner reads those, not `metadata.version` or the top-level `homepage`
+  this skill already had.
+- No change to prompts, defaults, or behavior.
+
+### Inherited from ofox-video-core 1.2.0
+
+This skill delegates execution, so it picks up per-model parameter validation
+for free: a bad `--duration`/`--resolution`/`--aspect-ratio` for the chosen
+model is now caught locally, with that model's own legal values named, instead
+of costing a round trip to come back as a generic `invalid_request`.
