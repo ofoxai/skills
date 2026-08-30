@@ -205,3 +205,36 @@ Closed a gap-analysis finding against the source plan: none of the 9 shipped ski
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Close §5.5 test-matrix gap for 4 scenario skills
+
+**Date**: 2026-08-30
+**Task**: Close §5.5 test-matrix gap for 4 scenario skills
+**Branch**: `feat/seedance-video-skills`
+
+### Summary
+
+Verified the 3 previously-unexercised §5.5 test items (bad-param errors, jq-less install prompt via a PATH sandbox since Docker wasn't running, and a live Codex CLI cross-agent run of seedance-short-drama triggered by natural language with no OFOX_API_KEY set) for ofox-video-core and ofox-image-core, which both scenario-skill families delegate to. All cases passed cleanly on first try -- no bugs found, no script changes needed. Also ran one extra real API call (user-approved, confirmed $0 cost) with a nonexistent model name to verify the model_not_found error-code mapping matches real server behavior. OpenCode left as a documented known gap (not installed locally). npm packaging and the four-directory publish stay deferred per the existing V1 scope decision -- this closes the doc's own §5.5 quality bar for the 4 already-shipped skills without expanding scope.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0e33ce8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
