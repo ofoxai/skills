@@ -1,0 +1,3 @@
+{"file": "2026-08-28_GitHub两类仓库操作手册.md", "reason": "Source spec for this repo's structure: §4.3 README layout, §4.4 case format, §4.5 sourcing mix, §6 utm link convention -- all requirements in prd.md are traced to specific subsections here."}
+{"file": "CONTRIBUTING.md", "reason": "Tone/format reference from the sibling ofoxai/skills repo for writing this new repo's own CONTRIBUTING.md and README."}
+{"file": "skills/ofox-video-core/references/pricing.md", "reason": "Source numbers for the pricing table in README.md -- must match exactly, not be re-derived or guessed."}
