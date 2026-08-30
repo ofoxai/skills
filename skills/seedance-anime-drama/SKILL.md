@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Turn a novel/script excerpt into an anime- or manga-style storyboard shot using the Ofox image and video APIs — generates one character reference image with ofox-image-core, then reuses that exact same image as `--frame-first-image` across every shot of that character via ofox-video-core, for real visual consistency instead of relying on repeated text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime/manga styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.1.1"
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.1.1"
+  version: "1.2.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -76,8 +76,26 @@ either:
 - describe it as one continuous camera move within a single clip (a
   push-in, a pan, a walk-and-follow), or
 - generate one clip per cut as **separate `generate` calls** (each a
-  separately billed job) and stitch them with an external video tool — this
-  skill does not do multi-clip editing/stitching.
+  separately billed job), or
+- use **`ofox-video-core`'s `chain`**, which feeds each shot's closing frame
+  into the next as its opening frame and joins the results into one file.
+
+**Chaining works for this skill specifically**, and that is not a given:
+Seedance 2.5 image-to-video refuses reference frames containing a real person,
+so a live-action sequence cannot be chained — but an anime/manga character is
+not a photoreal person, so these shots chain fine. Verified continuity is
+strong: the next shot opens on very nearly the exact frame it was fed, then
+follows its own prompt.
+
+Two ways to keep a character consistent, and they compose:
+
+- **The character sheet** (Step 1 below) locks *who* the character is across
+  shots that are otherwise unrelated.
+- **`chain`** locks *where everything is* between consecutive shots — set,
+  framing, lighting.
+
+Use the sheet for shots that cut to a new setup, and `chain` for shots that
+continue the same moment.
 
 Don't assume how many shots a novel excerpt needs — confirm the shot count
 and content with the user first; deciding that is the user's/calling

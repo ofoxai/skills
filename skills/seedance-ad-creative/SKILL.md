@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.1.1"
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.1.1"
+  version: "1.2.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -163,6 +163,20 @@ weight, and the two moderate differently, so pinning keeps results consistent.
 Pass `--provider volcengine` for the mainland platform, or `--provider auto` to
 let Ofox choose. Pricing is identical either way. See
 `ofox-video-core/references/api-params.md` for the detail.
+
+
+## Multi-shot ad sequences
+
+`ofox-video-core`'s `chain` subcommand builds a sequence where each shot opens
+on the previous shot's closing frame — set, lighting and framing carry over —
+and joins them into one file. Useful for a beat sequence (establishing, then
+push-in, then hero) that would otherwise cut between unrelated renders.
+
+It works as long as no shot carries a photoreal person: Seedance 2.5
+image-to-video refuses real-person reference frames, so a sequence built
+around a human model can't be chained, while product and environment shots
+can. Each shot is a separately billed job; the run estimates the total before
+spending.
 
 ## Cost estimate — show this before generating
 

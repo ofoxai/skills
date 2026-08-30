@@ -4,6 +4,13 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.2.0 — multi-shot ad sequences
+
+Documents `ofox-video-core` 1.6.0's `chain` for beat sequences (establishing →
+push-in → hero) that would otherwise cut between unrelated renders. Works for
+product and environment shots; a sequence built around a photoreal human model
+cannot be chained, since Seedance 2.5 refuses real-person reference frames.
+
 ## 1.1.1 — cost guidance uses the script's own estimate
 
 `ofox-video.sh` now prints a cost estimate before submitting, read from live

@@ -4,6 +4,14 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.2.0 — multi-shot product sequences
+
+Documents `ofox-video-core` 1.6.0's `chain`: each shot opens on the previous
+shot's closing frame, so the product keeps its position and lighting across
+cuts, and the shots are joined into one file. Applies here because the
+real-person restriction that blocks chaining live-action sequences does not
+apply to objects.
+
 ## 1.1.1 — cost guidance uses the script's own estimate
 
 `ofox-video.sh` now prints a cost estimate before submitting, read from live

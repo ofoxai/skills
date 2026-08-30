@@ -4,6 +4,16 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.2.0 — chaining does not apply here, and now says so
+
+`ofox-video-core` 1.6.0 added `chain`, which carries one shot's closing frame
+into the next for visual continuity. **It cannot be used for this skill**:
+Seedance 2.5 image-to-video refuses reference frames containing a real person
+(`input_moderation_failed`, nothing billed), and this skill is
+realistic-human by definition. Documented up front so a user doesn't discover
+it mid-sequence — consecutive short-drama shots are generated independently,
+with continuity coming from repeating the character description verbatim.
+
 ## 1.1.1 — cost guidance uses the script's own estimate
 
 `ofox-video.sh` now prints a cost estimate before submitting, read from live

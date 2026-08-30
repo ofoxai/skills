@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Generate a single realistic-human, dialogue-driven short-drama shot from a script or scene description using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (character appearance, quoted dialogue, scene-cut timing cues), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative) or for anything not involving people/dialogue.
 license: MIT
-version: "1.1.1"
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.1.1"
+  version: "1.2.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -59,6 +59,15 @@ close-up), either:
 - generate one clip per cut as **separate `generate` calls** (each is a
   separately billed job) and stitch them with an external video tool — this
   skill does not do multi-clip editing/stitching.
+
+**`ofox-video-core`'s `chain` subcommand does not help here.** It carries one
+shot's closing frame into the next for visual continuity, but Seedance 2.5
+image-to-video **refuses reference frames containing a real person**
+(`input_moderation_failed`) — and this skill is realistic-human by definition.
+Nothing is billed when that happens, but the chain stops. Tell the user that
+straight rather than letting them discover it mid-sequence: consecutive
+short-drama shots have to be generated independently, and continuity comes
+from repeating the same character description word for word.
 
 Don't try to cram an entire multi-scene script into one call; ask the user
 which single scene/shot to render if the request spans more than one.

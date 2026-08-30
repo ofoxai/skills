@@ -4,6 +4,16 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.2.0 — multi-shot sequences can now be chained
+
+`ofox-video-core` 1.6.0's `chain` feeds each shot's closing frame into the
+next and joins the results. **It works for this skill and not for live-action
+ones** — Seedance 2.5 refuses real-person reference frames, but an anime
+character is not a photoreal person. Documents how chaining composes with the
+existing character sheet: the sheet locks *who* the character is across
+unrelated setups, `chain` locks *where everything is* between consecutive
+shots.
+
 ## 1.1.1 — cost guidance uses the script's own estimate
 
 `ofox-video.sh` now prints a cost estimate before submitting, read from live
