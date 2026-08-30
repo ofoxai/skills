@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Generate a clean, catalog-style e-commerce product video from a real product photo (or, less reliably, a text description) using the Ofox video API (Seedance 2.5) — writes a plain-background, literal-accuracy prompt (precise product description, simple turntable/orbit motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.0.2"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.0.2"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -172,6 +172,16 @@ plainly: if a specific output ratio is required for a platform (e.g. a
 strict `1:1` grid), the product photo itself should be cropped/padded to
 that ratio *before* generating, since the generation step will no longer
 be able to force a different one once an image is attached.
+
+
+## Which upstream renders it
+
+Jobs are pinned to the `byteplus` upstream (ByteDance's platform for markets
+outside mainland China). Ofox otherwise picks between it and Volcengine Ark by
+weight, and the two moderate differently, so pinning keeps results consistent.
+Pass `--provider volcengine` for the mainland platform, or `--provider auto` to
+let Ofox choose. Pricing is identical either way. See
+`ofox-video-core/references/api-params.md` for the detail.
 
 ## Cost estimate — show this before generating
 

@@ -9,6 +9,7 @@
 # Usage:
 #   ofox-video.sh check
 #   ofox-video.sh models
+#   ofox-video.sh providers [MODEL]   (local/public, no API key)
 #   ofox-video.sh generate --prompt "..." [OPTIONS]
 #   ofox-video.sh batch --prompt "..." --takes N [OPTIONS]
 #   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
@@ -32,6 +33,15 @@
 #   --aspect-ratio VAL          validated per model, e.g. 21:9 | 16:9 | 4:3 |
 #                               1:1 | 3:4 | 9:16 | adaptive for Seedance 2.5;
 #                               16:9 | 9:16 | 1:1 for Wan 2.x.
+#   --provider SLUG             pin the upstream. Defaults to byteplus for
+#                               bytedance/seedance-* (Ofox otherwise routes by
+#                               weight and which upstream serves a request is
+#                               not predictable). 'auto' sends no pin. Also
+#                               settable via OFOX_VIDEO_PROVIDER. Pricing is
+#                               identical across upstreams — this is a region
+#                               and moderation choice, not a cost one.
+#   --print-payload             dump the request body to stderr before sending
+#                               (the API key is in a header, not the body)
 #   --size WxH                  e.g. 1280x720 (alternative to --resolution)
 #   --generate-audio true|false default: true (server-side default)
 #   --seed N
@@ -100,6 +110,23 @@ VALID_ASPECT_RATIOS="21:9 16:9 4:3 1:1 3:4 9:16 adaptive"
 # from ("live" | "cache" | "stale-cache" | "snapshot").
 MODELS_FILE=""
 MODELS_SOURCE=""
+
+# Upstream providers. Ofox routes a multi-upstream model by weight and says
+# outright that "which provider serves any single request is not predictable".
+# For Seedance that alternates between BytePlus (outside mainland China) and
+# Volcengine Ark (mainland), which moderate differently — so the same prompt
+# can pass one run and be rejected the next with nothing to point at.
+#
+# Measured 2026-08-30 via the public catalog endpoint: all four
+# bytedance/seedance-* are served by byteplus + volcengine; all four alibaba/*
+# by aliyun alone. We pin Seedance to byteplus and leave everything else alone:
+# with a single upstream, weighted routing is already deterministic, so pinning
+# would change nothing while adding a hardcoded fact that can rot.
+#
+# Pricing is identical across upstreams (verified tier by tier), so this is a
+# region/reliability/moderation choice, never a cost one.
+VALID_PROVIDERS="openai anthropic gemini azure_foundry foundry aws_bedrock bedrock google_vertex vertex aliyun volcengine byteplus deepseek moonshot zhipu minimax grok jina tencent"
+DEFAULT_SEEDANCE_PROVIDER="byteplus"
 
 # ---------------------------------------------------------------------------
 # small helpers
@@ -195,6 +222,67 @@ load_models() {
   return 1
 }
 
+default_provider_for() {
+  # $1 = model id. Prints the upstream to pin, or nothing to let Ofox route.
+  # Only models served by MORE THAN ONE upstream belong here.
+  case "$1" in
+    bytedance/seedance-*) echo "$DEFAULT_SEEDANCE_PROVIDER" ;;
+    *) echo "" ;;
+  esac
+}
+
+catalog_cache_path() {
+  # $1 = model id. One cache file per model; '/' isn't legal in a filename.
+  local slug
+  slug="$(printf '%s' "$1" | tr '/' '-')"
+  echo "${XDG_CACHE_HOME:-$HOME/.cache}/ofox/catalog-${slug}.json"
+}
+
+load_catalog() {
+  # $1 = model id. Fetches the public, keyless model catalog entry, which
+  # carries provider_cards[] (each upstream and its price matrix). Prints the
+  # cache file path on success. Never fetched for the default provider — only
+  # for explicit --provider validation and the 'providers' subcommand.
+  local model="$1" cache_file age
+  cache_file="$(catalog_cache_path "$model")"
+
+  if [ -f "$cache_file" ]; then
+    age="$(file_age_seconds "$cache_file")" || age=""
+    if [ -n "$age" ] && [ "$age" -lt "$MODELS_CACHE_TTL" ]; then
+      printf '%s' "$cache_file"
+      return 0
+    fi
+  fi
+
+  local base tmp
+  # The catalog lives under /v2 while API_BASE points at /v1.
+  base="${API_BASE%/v1}"
+  mkdir -p "$(dirname "$cache_file")" 2>/dev/null
+  tmp="$(mktemp "${TMPDIR:-/tmp}/ofox-catalog.XXXXXX")" || return 1
+  if curl -fsS --max-time 10 \
+    "$base/v2/models/catalog/$model?include=provider_price" -o "$tmp" 2>/dev/null &&
+    jq -e '(.provider_cards | length) > 0' "$tmp" >/dev/null 2>&1; then
+    mv -f "$tmp" "$cache_file" 2>/dev/null || cache_file="$tmp"
+    printf '%s' "$cache_file"
+    return 0
+  fi
+  rm -f "$tmp"
+
+  # A stale copy still answers "which upstreams serve this model" well enough.
+  if [ -f "$cache_file" ]; then
+    printf '%s' "$cache_file"
+    return 0
+  fi
+  return 1
+}
+
+catalog_providers() {
+  # $1 = model id. Prints that model's upstreams, space-separated, or nothing.
+  local f
+  f="$(load_catalog "$1")" || return 1
+  jq -r '[.provider_cards[].provider_type] | join(" ")' "$f" 2>/dev/null
+}
+
 model_entry() {
   # $1 = model id (or one of its aliases). Prints that model's whole entry as
   # compact JSON, or nothing if the list doesn't have it.
@@ -265,10 +353,15 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
 
   ofox-video.sh check
   ofox-video.sh models
+  ofox-video.sh providers [MODEL]
   ofox-video.sh generate --prompt "..." [OPTIONS]
   ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [OPTIONS]
   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]
+
+Seedance jobs are pinned to the byteplus upstream by default; override with
+--provider volcengine, or --provider auto to let Ofox route by weight. Run
+'providers' to see a model's upstreams. Pricing is identical across them.
 
 Run with no arguments for this message. See the top of this file, or
 skills/ofox-video-core/SKILL.md and references/api-params.md, for the full
@@ -320,6 +413,51 @@ cmd_check() {
   return "$ok"
 }
 
+cmd_providers() {
+  # Lists the upstreams serving a model, with each one's price tiers. Needs no
+  # API key — the catalog endpoint is public — so it is safe before signing up.
+  check_curl_jq || return 2
+  local model="${1:-$DEFAULT_MODEL}"
+  local f
+  if ! f="$(load_catalog "$model")"; then
+    echo "ERROR: could not fetch the provider list for '$model'." >&2
+    echo "  Check the model id (run 'ofox-video.sh models'), or try again when the network is available." >&2
+    return 3
+  fi
+
+  local providers
+  providers="$(jq -r '[.provider_cards[].provider_type] | join(" ")' "$f")"
+  echo "Upstream providers for $model: $providers"
+  echo
+
+  jq -r '
+    ["PROVIDER", "RESOLUTION", "MODE", "$/s"],
+    (.provider_cards[] | .provider_type as $p
+      | (.pricing.video_pricing.tiers[]? | select(.resolution)
+         | [$p, .resolution, (.input_type // "-"), .price]))
+    | @tsv' "$f" | column -t -s "$(printf '\t')"
+
+  echo
+  case "$model" in
+    bytedance/seedance-*)
+      echo "This skill pins Seedance to '$DEFAULT_SEEDANCE_PROVIDER' by default. Without a pin, Ofox"
+      echo "distributes requests by weight and which upstream serves any one request is"
+      echo "not predictable — which matters because these two moderate differently:"
+      echo "  byteplus    ByteDance's platform for markets outside mainland China"
+      echo "  volcengine  Volcengine Ark, its mainland China platform, standard moderation"
+      echo "Pricing is identical across both, so this is a region and moderation choice,"
+      echo "never a cost one. Override with --provider, or --provider auto to unpin."
+      ;;
+    *)
+      if [ "$(printf '%s' "$providers" | wc -w | tr -d ' ')" -le 1 ]; then
+        echo "Only one upstream serves this model, so routing is already deterministic"
+        echo "and this skill sends no provider field for it."
+      fi
+      ;;
+  esac
+  return 0
+}
+
 cmd_models() {
   # Lists the video models with their real limits and per-second base price.
   # Needs no API key — GET /v1/models is public — so it is safe to run before
@@ -362,6 +500,10 @@ print_error_message() {
   case "$code" in
     invalid_request)
       echo "  invalid_request: a required field is missing or a parameter value is invalid. Re-check model, prompt, duration, resolution, aspect_ratio." >&2 ;;
+    invalid_provider_type)
+      echo "  invalid_provider_type: the provider slug sent is not one Ofox recognises. Run 'ofox-video.sh providers MODEL' for the valid ones, or pass --provider auto to let Ofox choose." >&2 ;;
+    provider_type_unavailable)
+      echo "  provider_type_unavailable: that provider is a real slug but does not serve this model. Run 'ofox-video.sh providers MODEL' to see which do, or pass --provider auto to let Ofox choose." >&2 ;;
     invalid_callback_url)
       echo "  invalid_callback_url: callback_url must be HTTPS and must not point to a private/internal network." >&2 ;;
     references_conflict)
@@ -389,7 +531,10 @@ print_error_message() {
     internal_error)
       echo "  internal_error: an Ofox platform-side error. If this happened on job creation, no job was made and it is safe to retry create; if it happened while polling, retry the poll — do not create a new job." >&2 ;;
     output_moderation_failed)
-      echo "  output_moderation_failed: the job's OUTPUT failed a post-generation content check — this happens AFTER the video was generated, not at submission, and cannot be caught by client-side validation. This job is NOT billed (no usage field on the response). Safe fix: submit a brand-new generate call with a different prompt or reference image/audio — this is a new request, not a resubmission of the failed one." >&2 ;;
+      echo "  output_moderation_failed: the job's OUTPUT failed a post-generation content check — this happens AFTER the video was generated, not at submission, and cannot be caught by client-side validation. This job is NOT billed (no usage field on the response)." >&2
+      echo "    Two fixes. Both are new requests, not resubmissions of the failed one, so neither double-bills:" >&2
+      echo "    1. Retry on the other upstream. Seedance is served by byteplus and volcengine, which moderate differently, so the same prompt can pass on one and not the other. Use --provider volcengine if you were on byteplus, or --provider byteplus if you were on volcengine." >&2
+      echo "    2. Change the prompt or the reference image/audio." >&2 ;;
     bad_data_uri|download_failed|unreachable|not_image|too_large)
       echo "  $code: the real_person reference image failed validation (must be a small, publicly reachable, valid image). Check the image URL and retry." >&2 ;;
     "")
@@ -427,6 +572,9 @@ cmd_generate() {
   if ! check_curl_jq; then return 2; fi
 
   local model="$DEFAULT_MODEL"
+  local provider=""
+  local provider_explicit=""
+  local print_payload=""
   local prompt=""
   local duration=""
   local resolution=""
@@ -447,7 +595,14 @@ cmd_generate() {
   while [ $# -gt 0 ]; do
     key="$1"
     case "$key" in
-      --model|--prompt|--duration|--resolution|--aspect-ratio|--size|--generate-audio|--seed|--frame-first-image|--frame-last-image|--real-person|--callback-url|--extra-json|--out-dir|--max-wait|--poll-interval)
+      --print-payload)
+        print_payload=1
+        shift
+        continue
+        ;;
+    esac
+    case "$key" in
+      --model|--prompt|--duration|--resolution|--aspect-ratio|--size|--generate-audio|--seed|--provider|--frame-first-image|--frame-last-image|--real-person|--callback-url|--extra-json|--out-dir|--max-wait|--poll-interval)
         if [ $# -lt 2 ]; then
           echo "ERROR: $key requires a value." >&2
           return 1
@@ -469,6 +624,7 @@ cmd_generate() {
       --size) size="$val" ;;
       --generate-audio) generate_audio="$val" ;;
       --seed) seed="$val" ;;
+      --provider) provider="$val"; provider_explicit=1 ;;
       --frame-first-image) frame_first="$val" ;;
       --frame-last-image) frame_last="$val" ;;
       --real-person) real_person="$val" ;;
@@ -559,6 +715,51 @@ cmd_generate() {
     ! list_contains "i2v" "$ok_modes"; then
     echo "ERROR: $model does not support image-to-video (frame images). It supports: $ok_modes" >&2
     return 1
+  fi
+
+  # --- upstream provider ---------------------------------------------------
+  # Precedence: --provider > OFOX_VIDEO_PROVIDER > per-model default.
+  # "auto" at any level means send no provider field and let Ofox route.
+  if [ -z "$provider_explicit" ]; then
+    provider="${OFOX_VIDEO_PROVIDER:-}"
+    [ -z "$provider" ] && provider="$(default_provider_for "$model")"
+  fi
+
+  if [ "$provider" = "auto" ]; then
+    provider=""
+  elif [ -n "$provider" ]; then
+    if ! list_contains "$provider" "$VALID_PROVIDERS"; then
+      echo "ERROR: --provider '$provider' is not a known Ofox provider slug." >&2
+      echo "  Valid slugs: $VALID_PROVIDERS" >&2
+      echo "  Run 'ofox-video.sh providers $model' to see which ones serve this model, or use --provider auto to let Ofox choose." >&2
+      return 1
+    fi
+    # Check the slug actually serves this model, but only from catalog data we
+    # can get; never block a request because the catalog was unreachable.
+    local model_providers=""
+    if [ -n "$provider_explicit" ] || [ -n "${OFOX_VIDEO_PROVIDER:-}" ]; then
+      model_providers="$(catalog_providers "$model" 2>/dev/null)" || model_providers=""
+    else
+      # Default path: only cross-check against a cache already on disk, so the
+      # common case costs no network call at all.
+      local cached
+      cached="$(catalog_cache_path "$model")"
+      if [ -f "$cached" ]; then
+        model_providers="$(jq -r '[.provider_cards[].provider_type] | join(" ")' "$cached" 2>/dev/null)"
+      fi
+    fi
+    if [ -n "$model_providers" ] && ! list_contains "$provider" "$model_providers"; then
+      if [ -n "$provider_explicit" ]; then
+        echo "ERROR: provider '$provider' does not serve $model." >&2
+        echo "  This model is served by: $model_providers" >&2
+        echo "  Use one of those, or --provider auto to let Ofox choose." >&2
+        return 1
+      fi
+      # A default that the catalog says won't work: warn and stand down rather
+      # than fail a request the user never asked to pin.
+      echo "NOTE: the default provider '$provider' does not serve $model (it is served by: $model_providers). Letting Ofox route this one instead." >&2
+      provider=""
+    fi
   fi
 
   if [ -n "$size" ]; then
@@ -694,6 +895,10 @@ cmd_generate() {
     rm -f "$tmp_ref"
   fi
 
+  if [ -n "$provider" ]; then
+    payload=$(printf '%s' "$payload" | jq --arg v "$provider" '.provider = {type: $v}')
+  fi
+
   if [ -n "$extra_json" ]; then
     local tmp_extra
     tmp_extra=$(mktemp)
@@ -702,9 +907,17 @@ cmd_generate() {
     rm -f "$tmp_extra"
   fi
 
+  if [ -n "$print_payload" ]; then
+    # The API key travels in an Authorization header, never in this body, so
+    # printing it leaks nothing. Useful for seeing what actually got sent.
+    echo "PAYLOAD $(printf '%s' "$payload" | jq -c .)" >&2
+  fi
+
   # --- create the job (exactly one create call per invocation) ---
 
-  echo "Submitting job to Ofox (model=$model)..." >&2
+  local provider_label="auto (Ofox weighted)"
+  [ -n "$provider" ] && provider_label="$provider"
+  echo "Submitting job to Ofox (model=$model, provider=$provider_label)..." >&2
   # payload can itself now be well over 1MB (a resolved frame image is
   # inlined into it above) — pass it to curl via `--data-binary @file`, not
   # `-d "$payload"`. The latter is an exec argument like jq --arg/--argjson
@@ -796,6 +1009,11 @@ cmd_batch() {
         ;;
       --no-contact-sheet)
         sheet="never"; shift; continue
+        ;;
+      --print-payload)
+        # Valueless flags have to be forwarded without consuming the next
+        # argument, or they eat whatever follows them.
+        passthrough+=("$key"); shift; continue
         ;;
       *)
         if [ $# -lt 2 ]; then
@@ -1298,6 +1516,11 @@ main() {
       ;;
     models)
       cmd_models
+      return $?
+      ;;
+    providers)
+      shift
+      cmd_providers "$@"
       return $?
       ;;
     generate)

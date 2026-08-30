@@ -4,6 +4,18 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.1.0 — jobs are pinned to the byteplus upstream
+
+**Behavior change, inherited from ofox-video-core 1.4.0.** Jobs now go to the
+`byteplus` upstream (ByteDance's platform for markets outside mainland China)
+instead of wherever Ofox's weighted routing sent them. The two upstreams
+moderate differently and routing was explicitly unpredictable, so the same
+prompt could pass one run and be rejected the next. Pass `--provider
+volcengine` for the mainland platform or `--provider auto` for the old
+behavior. Pricing is identical either way.
+
+No change to prompts or defaults otherwise.
+
 ## 1.0.3 — ClawHub frontmatter
 
 - Frontmatter now carries a top-level `version` and

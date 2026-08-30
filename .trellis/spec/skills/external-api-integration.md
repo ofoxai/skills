@@ -368,3 +368,81 @@ it), but don't claim a version problem is "fixed" because frontmatter now
 has one. `--dry-run --json` is cheap and answers what the tool actually
 does; its `fileCount` is also the quickest way to confirm a `references/`
 file will really ship and that strays (`.DS_Store`) won't.
+
+## Pattern: pin the upstream when a provider routes by weight
+
+**Discovered**: 2026-08-30, adding provider support to `ofox-video.sh`.
+
+An aggregator that serves one model from several upstreams usually routes
+between them, and Ofox says so outright:
+
+> "When no `provider` field is sent, ofox distributes the request by weight
+> across the channels currently serving that model" — and "which provider
+> serves any single request is not predictable."
+
+That is fine until the upstreams differ in a way the user can feel. For
+Seedance they differ in **moderation policy** (`volcengine`, ByteDance's
+mainland platform, is stricter than `byteplus`, its platform for other
+markets). The consequence is a genuinely confusing failure: the same prompt
+passes one run and comes back `output_moderation_failed` the next, with
+nothing for the user to point at, because they cannot see which upstream ran
+it.
+
+**The lesson**: when an aggregated API exposes an upstream selector, find out
+whether the upstreams differ behaviorally before deciding to ignore it. If
+they do, an unpinned default is a source of irreproducible bugs, not a
+convenience.
+
+### What to check before pinning
+
+1. **Which models actually have a choice.** Measured across all eight video
+   models: the four `bytedance/seedance-*` have two upstreams, the four
+   `alibaba/*` have one. Only multi-upstream models need pinning — with a
+   single upstream, weighted routing is already deterministic, so pinning
+   changes nothing and only adds a hardcoded fact that can rot when the model
+   later gains a second upstream. **Not pinning is the more robust choice
+   there, not the lazier one.**
+2. **Whether price differs.** Here it does not — verified tier by tier across
+   both upstreams (480p/720p/1080p × t2v/v2v identical). Say so in the docs:
+   a reader who sees "choose your upstream" will otherwise assume the choice
+   is about money and pick wrong for the wrong reason.
+3. **What the failure modes are**, and map them in the same change that makes
+   them reachable. Adding `--provider` made `invalid_provider_type` and
+   `provider_type_unavailable` possible, so both were mapped at once.
+
+### Verify the mapping against the real API — it is free
+
+Both codes were confirmed with real calls that cost nothing, because a
+rejected create never makes a job:
+
+| Sent | HTTP | `error.code` | `error.message` |
+|---|---|---|---|
+| a real slug that doesn't serve the model | 400 | `provider_type_unavailable` | "no available channel for the requested platform" |
+| a slug outside the enum | 400 | `invalid_provider_type` | "unknown provider type" |
+
+This is the cheap half of the earlier lesson about not inferring an API's
+error shape from doc prose: a create that gets rejected is billable-free, so
+deliberately triggering each documented error is a $0 way to confirm a
+mapping instead of guessing it. Do this whenever adding a parameter that
+introduces new error codes.
+
+**Note the asymmetry that bit us before**: `provider_type_unavailable` was
+once *guessed* from doc prose for the **image** endpoint and recorded as an
+unverified invention. It is now confirmed for the **video** endpoint. Those
+are different confirmations — do not let one launder the other.
+
+### Shape that worked
+
+- Default applied by a **prefix rule**, not a lookup, so the common path costs
+  no network call. Legitimate only because the mapping was measured first.
+- An explicit flag, an env var for a persistent default, and an `auto` value
+  that opts back out — flag beats env var beats default.
+- Validation against catalog data **when it is already at hand**, failing open
+  when it is not: a check you could not run is never a reason to block a
+  request that would have worked.
+- The chosen upstream printed on the existing submit line, so a behavior
+  change from "random" to "fixed" is visible without adding output noise.
+- A `--print-payload` flag. It makes "does this parameter really reach the
+  request body" testable without sending anything, and is genuinely useful for
+  debugging. Safe here because the API key travels in a header, never the body
+  — confirm that before adding one elsewhere.

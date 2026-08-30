@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.0.4"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.0.4"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -153,6 +153,16 @@ below.
 | `--resolution` | `1080p` for a deliverable brand asset; suggest `720p` as a cheaper draft/preview pass | brand assets are usually published, so higher fidelity is worth the extra cost — but confirm with the user given the price difference (see cost estimate below) |
 | `--aspect-ratio` | `16:9` (landscape) — **pure text-to-video only** | cinematic/hero framing for websites and YouTube; pass `--aspect-ratio 9:16` for a vertical social-ad cut or `1:1` for feed placements. **Does not apply once an image is attached** with the default model — `ofox-video-core` forces `adaptive` in that case (see above) |
 | `--generate-audio` | `true` (server default, no flag needed) | ambient/music track; the prompt should say "no dialogue" if that matters |
+
+
+## Which upstream renders it
+
+Jobs are pinned to the `byteplus` upstream (ByteDance's platform for markets
+outside mainland China). Ofox otherwise picks between it and Volcengine Ark by
+weight, and the two moderate differently, so pinning keeps results consistent.
+Pass `--provider volcengine` for the mainland platform, or `--provider auto` to
+let Ofox choose. Pricing is identical either way. See
+`ofox-video-core/references/api-params.md` for the detail.
 
 ## Cost estimate — show this before generating
 

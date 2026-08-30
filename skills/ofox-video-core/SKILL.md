@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.3.0"
+version: "1.4.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.3.0"
+  version: "1.4.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -125,6 +125,40 @@ bash references/ofox-video.sh contact-sheet clip1.mp4 clip2.mp4 [--out-dir DIR]
 
 No API call, no key, no cost. Useful for comparing takes from separate runs,
 or rebuilding a sheet you skipped.
+
+## Which upstream serves the job
+
+Seedance is served by two upstreams, and by default Ofox picks one by weight —
+its docs say outright that "which provider serves any single request is not
+predictable". They moderate differently, so an unpinned job that comes back
+`output_moderation_failed` may just have landed on the stricter one, with
+nothing for the user to point at.
+
+**This skill pins Seedance to `byteplus`.** No flag needed, no network call to
+decide it.
+
+| | `volcengine` | `byteplus` (default) |
+|---|---|---|
+| Platform | Volcengine Ark, mainland China | BytePlus, markets outside mainland China |
+| Moderation | Standard | More permissive |
+| Price | identical | identical |
+
+Pricing is identical across the two — this is a region and moderation choice,
+never a cost one. Say so if a user asks which is cheaper.
+
+```bash
+bash references/ofox-video.sh generate --provider volcengine ...  # mainland
+bash references/ofox-video.sh generate --provider auto ...        # let Ofox route
+export OFOX_VIDEO_PROVIDER=volcengine                             # persistent default
+bash references/ofox-video.sh providers                           # see a model's upstreams
+```
+
+Models with only one upstream (`alibaba/*` today) get no pin — routing there
+is already deterministic.
+
+If a job fails `output_moderation_failed`, retrying on the other upstream is a
+real fix and is worth offering: the rejected job was never billed, and a retry
+is a new request, not a resubmission.
 
 ## Availability check
 

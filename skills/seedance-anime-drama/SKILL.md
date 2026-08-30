@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Turn a novel/script excerpt into an anime- or manga-style storyboard shot using the Ofox image and video APIs — generates one character reference image with ofox-image-core, then reuses that exact same image as `--frame-first-image` across every shot of that character via ofox-video-core, for real visual consistency instead of relying on repeated text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime/manga styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.0.2"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.0.2"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -203,6 +203,16 @@ This is a real accuracy tradeoff, not a full solution: the secondary
 character has no image-based consistency guarantee across shots. Treat it
 as the workaround it is, not as feature parity with the primary character's
 mechanism.
+
+
+## Which upstream renders it
+
+Jobs are pinned to the `byteplus` upstream (ByteDance's platform for markets
+outside mainland China). Ofox otherwise picks between it and Volcengine Ark by
+weight, and the two moderate differently, so pinning keeps results consistent.
+Pass `--provider volcengine` for the mainland platform, or `--provider auto` to
+let Ofox choose. Pricing is identical either way. See
+`ofox-video-core/references/api-params.md` for the detail.
 
 ## Cost estimate — show this before calling either API
 

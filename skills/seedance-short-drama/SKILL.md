@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Generate a single realistic-human, dialogue-driven short-drama shot from a script or scene description using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (character appearance, quoted dialogue, scene-cut timing cues), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative) or for anything not involving people/dialogue.
 license: MIT
-version: "1.0.3"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.0.3"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -137,6 +137,16 @@ handheld camera feel.
 
 Always confirm the actual duration/aspect ratio with the user's request first
 (e.g. "15 seconds" in the trigger example overrides the 10s default).
+
+
+## Which upstream renders it
+
+Jobs are pinned to the `byteplus` upstream (ByteDance's platform for markets
+outside mainland China). Ofox otherwise picks between it and Volcengine Ark by
+weight, and the two moderate differently, so pinning keeps results consistent.
+Pass `--provider volcengine` for the mainland platform, or `--provider auto` to
+let Ofox choose. Pricing is identical either way. See
+`ofox-video-core/references/api-params.md` for the detail.
 
 ## Cost estimate — show this before generating
 

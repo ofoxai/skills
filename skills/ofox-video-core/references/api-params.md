@@ -25,12 +25,81 @@ Seedance 2.5) before it ever calls the API.
 | `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. |
 | `real_person` | boolean | no | `--real-person true\|false` | Default `false`. Enables real-person reference preprocessing. |
 | `callback_url` | string | no | `--callback-url` | Must be `https://` and must not point to a private network. |
-| `provider` | object | no | via `--extra-json` | Upstream routing options; pass `{"provider": {...}}`. |
+| `provider` | object | no | `--provider SLUG` | Pins the upstream that serves the job. **Defaults to `byteplus` for `bytedance/seedance-*`** — see below. `--provider auto` sends no pin. `provider.options.<slug>` passthrough is not exposed as a flag; use `--extra-json`. |
 
 `--extra-json` is merged into the built request body last (object merge —
 its keys win over anything the flags set), so it's the escape hatch for any
 field not exposed as a dedicated flag. It must be valid JSON; the script
 checks that with `jq` before submitting.
+
+## Upstream providers (`provider.type`)
+
+A model can be served by more than one upstream. Ofox's own words for what
+happens when you don't say which:
+
+> When no `provider` field is sent, ofox distributes the request by weight
+> across the channels currently serving that model — and which provider serves
+> any single request is not predictable.
+
+Measured 2026-08-30 across all eight video models:
+
+| Model | Upstreams |
+|---|---|
+| `bytedance/seedance-2.5` | `byteplus`, `volcengine` |
+| `bytedance/seedance-2.0` | `byteplus`, `volcengine` |
+| `bytedance/seedance-2.0-fast` | `byteplus`, `volcengine` |
+| `bytedance/seedance-2.0-mini` | `byteplus`, `volcengine` |
+| `alibaba/wan-2.6`, `alibaba/wan-2.7` | `aliyun` |
+| `alibaba/happyhorse-1.0`, `-1.1` | `aliyun` |
+
+### The two that serve Seedance
+
+| | `volcengine` | `byteplus` |
+|---|---|---|
+| Platform | Volcengine Ark — ByteDance's mainland China platform | BytePlus — ByteDance's platform for markets outside mainland China |
+| Moderation | Standard | More permissive |
+| Price | identical | identical |
+
+**Pricing is identical across upstreams** — verified tier by tier
+(480p/720p/1080p × t2v/v2v). Choosing one is a region, reliability and
+moderation decision, never a cost one. Don't let anyone believe otherwise.
+
+Because the two moderate differently, an unpinned job that fails
+`output_moderation_failed` may simply have landed on the stricter upstream —
+and the user has no way to tell which one they got. That is the main reason
+this skill pins by default.
+
+### What the script does
+
+- **Default**: `byteplus` for `bytedance/seedance-*`. This is a prefix rule,
+  not a lookup — the 4/4 measurement above makes it accurate, and it keeps the
+  common path free of any network call.
+- **Single-upstream models get no pin.** With one upstream, weighted routing is
+  already deterministic; pinning would change nothing and would only add a
+  hardcoded fact that can rot if the model later gains a second upstream.
+- **Override**: `--provider volcengine` (mainland, standard moderation),
+  `--provider auto` (no pin, back to weighted routing), or `OFOX_VIDEO_PROVIDER`
+  for a persistent default. An explicit flag beats the environment variable.
+- **Validation**: an unknown slug is rejected locally. A real slug that doesn't
+  serve the chosen model is rejected too, naming the ones that do — but only
+  when catalog data is at hand. If the catalog can't be reached, the request
+  goes through with the pin as given; a check we couldn't run is never a reason
+  to block a request (fail open).
+- The chosen upstream is printed on the submit line, so it's never a mystery
+  which one a given job used.
+
+### Discovering upstreams (`GET /v2/models/catalog/...`)
+
+Public and keyless, like the model list:
+
+```
+GET https://api.ofox.ai/v2/models/catalog/{owner}/{slug}?include=provider_price
+```
+
+Returns `provider_cards[]`: each upstream, its `provider_type`, and a full
+`pricing.video_pricing.tiers[]` matrix of resolution × input_type × price.
+`ofox-video.sh providers [MODEL]` prints exactly this. Cached for 24h next to
+the model list, per model.
 
 ## The model list (`GET /v1/models`)
 
@@ -144,6 +213,8 @@ script), and **always** also prints `error.message` when present, labeled
 |---|---|---|
 | 400 | `invalid_request` | Missing/invalid parameter. |
 | 400 | `invalid_callback_url` | `callback_url` not HTTPS or points to a private network. |
+| 400 | `invalid_provider_type` | The provider slug is not one Ofox recognises. |
+| 400 | `provider_type_unavailable` | A real slug, but it does not serve this model. `ofox-video.sh providers MODEL` lists the ones that do. |
 | 400 | `references_conflict` | Both `frame_images` and `input_references` were sent. |
 | 400 | `too_many_references` | Over the 9 image / 3 audio / 1 video reference limits. |
 | 400 | `cancel_not_supported` | Upstream can't interrupt this job. |

@@ -4,6 +4,49 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.4.0 — pin Seedance to the byteplus upstream
+
+**Behavior change.** Seedance jobs now go to the `byteplus` upstream by
+default. They previously went wherever Ofox's weighted routing sent them,
+alternating unpredictably between BytePlus and Volcengine Ark.
+
+Why it matters: Ofox states outright that with no `provider` field, "which
+provider serves any single request is not predictable" — and the two upstreams
+**moderate differently**. So an unpinned job that came back
+`output_moderation_failed` may simply have landed on the stricter one, with
+nothing for the user to point at. Pinning makes results reproducible.
+
+- **New `--provider SLUG`.** Was previously reachable only by hand-writing
+  `{"provider":{"type":"..."}}` into `--extra-json`, which nothing documented.
+  `--provider auto` sends no pin; `OFOX_VIDEO_PROVIDER` sets a persistent
+  default; an explicit flag beats the environment variable. `batch` forwards it.
+- **Only multi-upstream models are pinned.** Measured across all eight video
+  models: the four `bytedance/seedance-*` are served by `byteplus` +
+  `volcengine`, the four `alibaba/*` by `aliyun` alone. Single-upstream models
+  get no pin — routing is already deterministic there, and hardcoding it would
+  only add a fact that can rot if they later gain a second upstream.
+- **The default costs no network call** — it is a prefix rule, accurate per the
+  measurement above, not a lookup.
+- **Pricing is identical across upstreams** (verified tier by tier). This is a
+  region and moderation choice, never a cost one; the docs now say so, so
+  nobody assumes there is money in it.
+- **Validation**: an unknown slug is rejected locally; a real slug that doesn't
+  serve the chosen model is rejected too, naming the ones that do — but only
+  when catalog data is at hand. An unreachable catalog never blocks a request.
+- **Two error codes mapped**: `invalid_provider_type` and
+  `provider_type_unavailable`, both pointing at `--provider auto`.
+- **`output_moderation_failed` guidance now names the other upstream** as a
+  remedy alongside changing the prompt. The rejected job was never billed and a
+  retry is a new request, not a resubmission.
+- **New `providers [MODEL]` subcommand**: a model's upstreams and their full
+  price matrix, from the public keyless catalog endpoint. No API key needed.
+- **New `--print-payload`**: dump the request body to stderr before sending.
+  The API key is in a header, never the body, so this leaks nothing.
+- The submit line now names the upstream:
+  `Submitting job to Ofox (model=..., provider=byteplus)`.
+
+Tests: `references/test/provider.test.sh`, 27 cases, free by construction.
+
 ## 1.3.0 — `batch` takes with real per-take billing, `contact-sheet`
 
 - **New `batch --takes N`**: N takes of one prompt, each its own job, run
