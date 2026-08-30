@@ -101,18 +101,46 @@ Load-bearing facts, all verified live 2026-08-30:
 
 ## Acceptance Criteria
 
-- [ ] `--provider` reaches the request body as `provider.type` (proven via
-      `--print-payload`)
-- [ ] Seedance defaults to `byteplus` with no flag and no network call
-- [ ] `--provider auto` sends no `provider` key at all
-- [ ] `OFOX_VIDEO_PROVIDER` sets the default; an explicit flag beats it
-- [ ] A slug outside the enum is rejected locally
-- [ ] A slug that doesn't serve the model is rejected locally, naming the real
-      upstreams
-- [ ] A non-Seedance model gets no default provider
-- [ ] Both new error codes map to actionable messages naming `--provider auto`
-- [ ] `providers` works with no API key
-- [ ] Existing suites green, shellcheck clean, zero CJK
+- [x] `--provider` reaches the request body as `provider.type` — proven by
+      `--print-payload` in tests and by the live run's payload line
+- [x] Seedance defaults to `byteplus` with no flag and no network call
+      (verified with a cold cache and an unroutable API base)
+- [x] `--provider auto` sends no `provider` key at all
+- [x] `OFOX_VIDEO_PROVIDER` sets the default; an explicit flag beats it
+- [x] A slug outside the enum is rejected locally
+- [x] A slug that doesn't serve the model is rejected locally, naming the real
+      upstreams — and passed through (not blocked) when catalog data is
+      unavailable
+- [x] A non-Seedance model gets no default provider (`alibaba/wan-2.7`,
+      `alibaba/happyhorse-1.1` both verified to send no provider key)
+- [x] Both new error codes map to actionable messages naming `--provider auto`
+- [x] `providers` works with no API key
+- [x] Existing suites green, shellcheck clean, zero CJK
+
+## Verification
+
+| Check | Result |
+|---|---|
+| provider tests | 27/27 |
+| video validation tests | 36/36 |
+| batch tests | 21/21 |
+| image validation tests | 18/18 |
+| cloudflare-drop | 57/57 |
+| shellcheck | zero warnings |
+| CJK under skills/ | zero |
+| clawhub --dry-run | ok, 10 files |
+| Error-code mapping vs real API ($0) | both confirmed — `provider_type_unavailable` → "no available channel for the requested platform"; `invalid_provider_type` → "unknown provider type" |
+| Live paid run | seedance-2.5 480p/4s, payload carried `provider.type=byteplus`, completed, billed $0.44 as estimated |
+
+## What changed from the plan
+
+- The three-tier default resolution in the first sketch collapsed to a single
+  prefix rule once all eight models were measured: 4/4 seedance have both
+  upstreams, 4/4 alibaba have one. No catalog lookup is needed to decide the
+  default, so the common path makes no network call at all.
+- Single-upstream models deliberately get **no** entry rather than being
+  pinned to their only upstream — pinning would change nothing today and
+  would lock in a fact that rots if they gain a second upstream.
 
 ## Definition of Done
 
