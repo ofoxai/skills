@@ -2,14 +2,22 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.1.2"
+  version: "1.2.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
       bins: [curl, jq]
+    primaryEnv: OFOX_API_KEY
+    envVars:
+      - name: OFOX_API_KEY
+        required: true
+        description: Ofox API key. Create one at https://app.ofox.ai (Settings -> API Keys). The same key works across every Ofox skill.
+    emoji: "🎬"
+    homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 ---
 
 # ofox-video-core: Ofox video API execution layer

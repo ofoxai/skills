@@ -2,10 +2,17 @@
 name: hal-image
 description: Handle images with ImageMagick (magick) — read metadata, resize, crop, rotate, convert format, combine images (side-by-side or grids with montage), overlay logos/watermarks, and losslessly compress with oxipng before sending. Use when the user sends an image to process, when you produce an image to deliver, or before attaching any image to a message or upload — compressing first keeps transfers fast and tokens low. Core discipline - always compress before delivering, never expose local file paths to the user, and fail open (if a tool is missing or a step errors, pass the original through unchanged; never block the task).
 license: MIT
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/hal-image
 metadata:
   author: ofoxai
-  version: "1.0.1"
+  version: "1.1.0"
+  openclaw:
+    requires:
+      env: []
+      bins: [magick, oxipng]
+    emoji: "🏞️"
+    homepage: https://github.com/ofoxai/skills/tree/main/skills/hal-image
 ---
 
 # hal-image: agent-safe image handling

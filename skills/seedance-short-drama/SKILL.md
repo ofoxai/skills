@@ -2,14 +2,22 @@
 name: seedance-short-drama
 description: Generate a single realistic-human, dialogue-driven short-drama shot from a script or scene description using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (character appearance, quoted dialogue, scene-cut timing cues), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative) or for anything not involving people/dialogue.
 license: MIT
+version: "1.0.3"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.0.2"
+  version: "1.0.3"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
       bins: [curl, jq]
+    primaryEnv: OFOX_API_KEY
+    envVars:
+      - name: OFOX_API_KEY
+        required: true
+        description: Ofox API key. Create one at https://app.ofox.ai (Settings -> API Keys). The same key works across every Ofox skill.
+    emoji: "🎭"
+    homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 ---
 
 # seedance-short-drama: dialogue-driven short-drama shots

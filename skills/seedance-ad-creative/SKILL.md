@@ -2,14 +2,22 @@
 name: seedance-ad-creative
 description: Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
+version: "1.0.4"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.0.3"
+  version: "1.0.4"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
       bins: [curl, jq]
+    primaryEnv: OFOX_API_KEY
+    envVars:
+      - name: OFOX_API_KEY
+        required: true
+        description: Ofox API key. Create one at https://app.ofox.ai (Settings -> API Keys). The same key works across every Ofox skill.
+    emoji: "📺"
+    homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 ---
 
 # seedance-ad-creative: cinematic product/brand ad clips
