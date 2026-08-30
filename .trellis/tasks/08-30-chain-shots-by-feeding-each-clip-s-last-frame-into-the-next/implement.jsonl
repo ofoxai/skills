@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/skills/index.md", "reason": "Skill-authoring bar: CHANGELOG entry, absolute paths for anything written to disk, docs consistency, clawhub --dry-run."}
+{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "The no-resubmit rule that chain must honor per shot, the fail-open requirement for optional tooling, and the recorded gotchas this feature depends on: local frame files beat remote URLs, seedance-2.5 i2v forces adaptive aspect ratio, and the ARG_MAX fix that makes large local frames work at all."}
