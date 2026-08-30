@@ -22,7 +22,7 @@ Seedance 2.5) before it ever calls the API.
 | `generate_audio` | boolean | no | `--generate-audio true\|false` | Default `true` server-side. |
 | `seed` | integer | no | `--seed` | Deterministic generation. |
 | `frame_images` | array | no | `--frame-first-image URL\|PATH`, `--frame-last-image URL\|PATH` | Image-to-video via first/last frame. Accepts a remote URL (used as-is) or a local readable file path (auto base64-encoded into a `data:image/<ext>;base64,...` URI). The script builds the `{type, image_url, frame_type}` objects for you — pass either or both flags. |
-| `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. |
+| `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Element types are `image_url`, `audio_url`, `video_url` — see below. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. |
 | `real_person` | boolean | no | `--real-person true\|false` | Default `false`. Routes an **authorized** real-person reference image through Ofox's privacy-preserving preprocessing, which is otherwise refused by the upstream. Ofox documents this for `bytedance/seedance-2.0`; **not confirmed for 2.5** — see the real-person section below. |
 | `callback_url` | string | no | `--callback-url` | Must be `https://` and must not point to a private network. |
 | `provider` | object | no | `--provider SLUG` | Pins the upstream that serves the job. **Defaults to `byteplus` for `bytedance/seedance-*`** — see below. `--provider auto` sends no pin. `provider.options.<slug>` passthrough is not exposed as a flag; use `--extra-json`. |
@@ -31,6 +31,52 @@ Seedance 2.5) before it ever calls the API.
 its keys win over anything the flags set), so it's the escape hatch for any
 field not exposed as a dedicated flag. It must be valid JSON; the script
 checks that with `jq` before submitting.
+
+## Reference inputs (`input_references`) and video-to-video
+
+Element shapes, per the create-video docs and confirmed for video by a real
+accepted request:
+
+```json
+{"type": "image_url", "image_url": {"url": "https://example.com/subject.jpg"}}
+{"type": "audio_url", "audio_url": {"url": "https://example.com/voice.mp3"}}
+{"type": "video_url", "video_url": {"url": "https://example.com/ref.mp4"}}
+```
+
+Note the type is `video_url`, **not** `video`. Getting that wrong is not
+cosmetic: the cost estimate keys off it, and an earlier version of this script
+guessed `video` and therefore quoted the t2v rate for a v2v job (estimated
+$0.44, billed $0.56).
+
+**A video reference must be a URL.** No base64 data URI form is documented for
+video, and none has been tested — unlike `frame_images`, where a local file is
+supported and is in fact *preferred* over a URL. So anything wanting v2v needs
+its input hosted somewhere publicly reachable first.
+
+A working source, if the input is something this API produced: the
+`unsigned_urls` link from a completed job. Verified 2026-08-31 — an
+unauthenticated ranged GET returned `HTTP 206 video/mp4`, and the upstream
+fetched it successfully. Those links are documented as temporary (may expire
+within 24h), so this works for a fresh job, not an archival one.
+
+### What v2v does — and what one real run did not settle
+
+Ofox describes a video reference as "Guide subject / style
+(reference-to-video), **not precise frame anchors**." The duration ceiling is
+unchanged at 4-30s, so there is **no mechanism here for extending a video
+beyond a single job's length**.
+
+One real run (4s 480p, feeding a previous job's output, prompt asking to
+continue the scene) produced an output whose opening frame closely matched the
+input's closing frame. That is consistent with continuation — and equally
+consistent with a style reference reproducing a near-identical static scene,
+because the subject was a motionless cup. **The run does not distinguish the
+two**, and nothing here should be read as proving continuation works.
+
+For multi-shot continuity, `chain` is the better tool on every axis that was
+measured: it bills at the t2v rate ($0.11/s vs $0.14/s at 480p), takes a local
+file instead of requiring a hosted URL, and anchors on an actual frame rather
+than a soft reference.
 
 ## Upstream providers (`provider.type`)
 
@@ -195,7 +241,7 @@ On `completed`:
 |---|---|
 | `mirror_urls` | CDN-signed, persistent — the script downloads from here when present. |
 | `unsigned_urls` | Upstream original, temporary (may expire within 24h) — used by the script **only when `mirror_urls` is absent or empty**, which does happen on real completed jobs. Once downloaded, the file is local either way, so the expiry window doesn't matter after that. |
-| `usage.video_seconds` | Billed duration (includes v2v input duration when applicable). |
+| `usage.video_seconds` | Billed duration. **Measured**: for a v2v job with a 4s input and a 4s output this was `4`, not `8` — the input video's duration is *not* added on top. (An earlier version of this table claimed it was; that claim was never measured and is wrong for this case.) The v2v *rate* still applies, which is where the extra cost comes from. |
 | `usage.video_cost` | Actual cost, a string with 10 decimal places. The script prints this exactly — never estimate or invent a number here. |
 
 ## Error codes (`error.code`) and `error.message`

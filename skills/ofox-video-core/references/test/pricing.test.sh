@@ -118,6 +118,45 @@ else
 fi
 
 echo
+echo "=== Video-to-video is priced at the v2v tier ==="
+# The API's reference type is "video_url". Getting this wrong quotes the t2v
+# rate for a v2v job — measured 2026-08-31: estimated $0.44, billed $0.56.
+v2v_refs='{"input_references":[{"type":"video_url","video_url":{"url":"https://example.com/ref.mp4"}}]}'
+out=$(bash "$TARGET" generate --prompt x --duration 4 --resolution 480p \
+  --extra-json "$v2v_refs" 2>&1)
+amount=$(printf '%s' "$out" | est_amount)
+expect_v2v=$(awk 'BEGIN{printf "%.2f", 4*0.14}')
+if [ "$amount" = "$expect_v2v" ]; then
+  pass "a video_url reference estimates at the v2v rate (\$$amount)"
+else
+  fail "v2v should estimate \$$expect_v2v, not the t2v rate" "got '\$$amount'"
+fi
+
+# A bare "video" type isn't what the API uses, but tolerate it rather than
+# silently pricing it as t2v.
+alt_refs='{"input_references":[{"type":"video","video_url":{"url":"https://example.com/ref.mp4"}}]}'
+out=$(bash "$TARGET" generate --prompt x --duration 4 --resolution 480p \
+  --extra-json "$alt_refs" 2>&1)
+amount=$(printf '%s' "$out" | est_amount)
+if [ "$amount" = "$expect_v2v" ]; then
+  pass "a bare 'video' type is tolerated and still priced as v2v"
+else
+  fail "'video' should also price as v2v" "got '\$$amount'"
+fi
+
+# Image references are not v2v — they bill at t2v.
+img_refs='{"input_references":[{"type":"image_url","image_url":{"url":"https://example.com/a.jpg"}}]}'
+out=$(bash "$TARGET" generate --prompt x --duration 4 --resolution 480p \
+  --extra-json "$img_refs" 2>&1)
+amount=$(printf '%s' "$out" | est_amount)
+expect_t2v=$(awk 'BEGIN{printf "%.2f", 4*0.11}')
+if [ "$amount" = "$expect_t2v" ]; then
+  pass "image references still estimate at the t2v rate (\$$amount)"
+else
+  fail "image refs should stay t2v at \$$expect_t2v" "got '\$$amount'"
+fi
+
+echo
 echo "=== Offline: the bundled snapshot still produces an estimate ==="
 rm -rf "${XDG_CACHE_HOME:?}"
 offline

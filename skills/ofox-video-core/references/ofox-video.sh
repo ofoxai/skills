@@ -928,8 +928,16 @@ cmd_generate() {
 
   # Say what this will cost before spending anything. i2v bills at t2v rates —
   # only a video input moves it to the v2v tier.
+  #
+  # The API's reference element type is "video_url" (alongside "image_url" and
+  # "audio_url"), NOT "video". An earlier version of this check guessed "video"
+  # and so quoted the t2v rate for a v2v job: a real run estimated $0.44 and
+  # billed $0.56. Both spellings are accepted now — mispricing a job is worse
+  # than tolerating a type string the API wouldn't have taken anyway.
   local est_mode="t2v"
-  if printf '%s' "$extra_json" | jq -e '.input_references // [] | map(select(.type == "video")) | length > 0' >/dev/null 2>&1; then
+  if printf '%s' "$extra_json" |
+    jq -e '(.input_references // []) | map(select(.type == "video_url" or .type == "video")) | length > 0' \
+      >/dev/null 2>&1; then
     est_mode="v2v"
   fi
   if [ -n "$duration" ]; then

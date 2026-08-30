@@ -512,3 +512,44 @@ The inverse also holds and is worth keeping straight: a dependency that is
 merely an *enhancement* (the contact sheet, the concat join) must fail open
 and never cost anyone their results. The distinction is whether the flow can
 still deliver what was paid for without it.
+
+## The prose-inference mistake, recurring — and what finally caught it
+
+This file already warns against inferring an API's shape from documentation
+prose instead of a real call. On 2026-08-31 the same mistake shipped again, in
+the change whose entire purpose was estimate accuracy.
+
+The v2v cost check tested `input_references[].type == "video"`. The API's value
+is `video_url`. A v2v job was therefore priced at the t2v rate: estimated
+$0.44, billed $0.56.
+
+**Why the existing warning didn't prevent it.** The earlier instances were
+about *error* shapes — obviously uncertain territory, so they got scrutiny.
+This was a *request* field, in a code path the author was writing anyway, and
+it felt too small to check. The size of the guess is not what makes it risky;
+being a guess is.
+
+**Why the test suite didn't catch it.** Every case in the suites drives the
+script through its flags. `input_references` has no flag — it is only reachable
+via `--extra-json` — so no test had ever sent one. **An escape-hatch parameter
+is exactly where untested assumptions accumulate**, because the flags around it
+are covered and the gap is invisible in a green run. When a script offers a
+passthrough, write at least one test that goes through it.
+
+**What actually caught it**: a real paid call whose printed estimate did not
+match its printed bill. Both numbers being on screen, in the same output, is
+what made a 27% gap impossible to miss. That is an argument for printing an
+estimate and the real cost in the same place, beyond the user-facing reason.
+
+### Corollary: measure a billing claim before writing it down
+
+The same run disproved a claim this repo had been carrying:
+`usage.video_seconds` "includes v2v input duration when applicable". A 4s input
+producing a 4s output billed **4** seconds, not 8. The claim came from doc
+prose and had never been checked. The v2v premium comes from the per-second
+*rate*, not from counting input seconds.
+
+Billing claims are worth the same skepticism as error codes: they are
+load-bearing (someone budgets against them), cheap to verify (one small job
+prints `usage` in full), and easy to get subtly wrong from prose alone.
+

@@ -4,6 +4,31 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.6.1 — fix: video-to-video was quoted at the text-to-video rate
+
+The estimate added in 1.5.0 detected v2v by looking for `type == "video"` in
+`input_references`. The API's actual value is **`video_url`**, so a v2v job was
+priced at the t2v tier and the user was quoted low — a real run estimated
+$0.44 and billed $0.56, 27% more. 1.5.0 existed to stop wrong estimates; this
+was that exact failure inside the feature meant to prevent it. Both spellings
+are accepted now.
+
+The same run corrected a claim of ours that had never been measured:
+`api-params.md` said `usage.video_seconds` "includes v2v input duration when
+applicable". **It does not** — a 4s input with a 4s output billed 4 seconds,
+not 8. The extra cost of v2v comes from the rate, not from counting the input.
+
+Also documents, now that a real request has confirmed them: the
+`input_references` element shapes (`image_url` / `audio_url` / `video_url`),
+that a video reference must be a **URL** with no local-file path (unlike
+`frame_images`), and that a completed job's `unsigned_urls` link works as one.
+
+And states what the run did **not** settle: the output opened on nearly the
+input's closing frame, but a motionless cup cannot distinguish "continues from
+the last frame" from "restages a similar scene from a style reference". No
+claim is made either way. For multi-shot continuity `chain` is better on every
+measured axis — cheaper, takes local files, anchors on a real frame.
+
 ## 1.6.0 — `chain`: multi-shot sequences with real visual continuity
 
 One job is one take, so a sequence meant several jobs that shared nothing and
