@@ -16,6 +16,8 @@
 #
 # Usage:
 #   ofox-image.sh check
+#   ofox-image.sh models
+  ofox-image.sh models
 #   ofox-image.sh generate --prompt "..." --model NAME --quality VAL [OPTIONS]
 #
 # generate OPTIONS:
@@ -86,7 +88,20 @@ set -u
 API_BASE="${OFOX_API_BASE_URL:-https://api.ofox.ai/v1}"
 GET_KEY_URL="https://app.ofox.ai"
 
-VALID_MODELS="openai/gpt-image-2 google/gemini-3.1-flash-image bailian/qwen-image-3.0-pro"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODELS_SNAPSHOT="$SCRIPT_DIR/models-snapshot.json"
+MODELS_CACHE_TTL="${OFOX_MODELS_TTL:-86400}" # 24h
+
+# The models this skill's docs and pricing notes cover in depth. It is NOT a
+# whitelist — --model is checked against the live model list (see load_models),
+# so any image model Ofox offers works. This is only what gets named in help
+# text when we have no list to name real models from.
+DOCUMENTED_MODELS="openai/gpt-image-2 google/gemini-3.1-flash-image bailian/qwen-image-3.0-pro"
+
+# Set by load_models(): the file holding the model list, and where it came
+# from ("live" | "cache" | "stale-cache" | "snapshot").
+MODELS_FILE=""
+MODELS_SOURCE=""
 VALID_SIZES="auto 1024x1024 1536x1024 1024x1536 256x256 512x512 1792x1024 1024x1792"
 VALID_QUALITIES="auto low medium high standard hd"
 VALID_OUTPUT_FORMATS="png jpeg webp"
@@ -119,6 +134,103 @@ decode_b64_to_file() {
     return 0
   fi
   return 1
+}
+
+# ---------------------------------------------------------------------------
+# model list
+#
+# GET /v1/models is public, keyless and free, and reports which models serve
+# /v1/images/generations. Checking --model against it means this skill works
+# with every image model Ofox offers instead of a hand-maintained list of
+# three that silently rejected the other eleven.
+#
+# Unlike the video API, the models endpoint exposes no per-model size/quality
+# capability data for image models (there is no image_attributes to match
+# video_attributes), so --size/--quality/--output-format/--background stay
+# hardcoded from the docs. Only the model id itself is validated dynamically.
+#
+# This mirrors the same logic in ofox-video-core's ofox-video.sh rather than
+# sharing it: each skill must work when installed on its own, so a shared file
+# across skill directories is not an option (CONTRIBUTING rule 7).
+#
+# Order of preference: fresh cache -> live fetch -> stale cache -> bundled
+# snapshot -> no check at all. A missing model list never blocks a request
+# (CONTRIBUTING rule 6, fail open).
+# ---------------------------------------------------------------------------
+
+file_age_seconds() {
+  # Portable mtime age. BSD stat (macOS) and GNU stat (Linux) disagree on
+  # flags, so try both rather than assuming a platform.
+  local f="$1" mtime now
+  mtime="$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null)" || return 1
+  [ -n "$mtime" ] || return 1
+  now="$(date +%s)"
+  echo $((now - mtime))
+}
+
+load_models() {
+  # Idempotent: the list is fetched at most once per invocation.
+  [ -n "$MODELS_FILE" ] && return 0
+
+  local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/ofox"
+  local cache_file="$cache_dir/models.json"
+  local age
+
+  if [ -f "$cache_file" ]; then
+    age="$(file_age_seconds "$cache_file")" || age=""
+    if [ -n "$age" ] && [ "$age" -lt "$MODELS_CACHE_TTL" ]; then
+      MODELS_FILE="$cache_file"
+      MODELS_SOURCE="cache"
+      return 0
+    fi
+  fi
+
+  # No Authorization header: this endpoint is public, and sending the key
+  # where it isn't needed is a habit worth not having.
+  local tmp
+  mkdir -p "$cache_dir" 2>/dev/null
+  tmp="$(mktemp "${TMPDIR:-/tmp}/ofox-models.XXXXXX")" || tmp=""
+  if [ -n "$tmp" ] &&
+    curl -fsS --max-time 10 "$API_BASE/models" -o "$tmp" 2>/dev/null &&
+    jq -e '(.data | length) > 0' "$tmp" >/dev/null 2>&1; then
+    if mv -f "$tmp" "$cache_file" 2>/dev/null; then
+      MODELS_FILE="$cache_file"
+    else
+      MODELS_FILE="$tmp" # cache dir unwritable; use it for this run only
+    fi
+    MODELS_SOURCE="live"
+    return 0
+  fi
+  [ -n "$tmp" ] && rm -f "$tmp"
+
+  if [ -f "$cache_file" ]; then
+    MODELS_FILE="$cache_file"
+    MODELS_SOURCE="stale-cache"
+    echo "NOTE: could not refresh the model list from $API_BASE/models; using the cached copy at $cache_file." >&2
+    return 0
+  fi
+
+  if [ -f "$MODELS_SNAPSHOT" ]; then
+    MODELS_FILE="$MODELS_SNAPSHOT"
+    MODELS_SOURCE="snapshot"
+    local snap_date
+    snap_date="$(jq -r '._snapshot_date // "unknown date"' "$MODELS_SNAPSHOT" 2>/dev/null)"
+    echo "NOTE: could not reach $API_BASE/models; checking --model against the bundled snapshot ($snap_date). A model added since then may be rejected here — set OFOX_SKIP_MODEL_VALIDATION=1 to skip the check." >&2
+    return 0
+  fi
+
+  MODELS_SOURCE="none"
+  echo "NOTE: no model list available (fetch failed, no cache, no bundled snapshot). Skipping the --model check; the API will have the final say." >&2
+  return 1
+}
+
+model_entry() {
+  # $1 = model id (or one of its aliases). Prints that model's whole entry as
+  # compact JSON, or nothing if the list doesn't have it.
+  [ -n "$MODELS_FILE" ] || return 1
+  jq -c --arg m "$1" \
+    'first(.data[] | select(.id == $m or ((.aliases // []) | index($m)) != null)) // empty' \
+    "$MODELS_FILE" 2>/dev/null
 }
 
 infer_extension() {
@@ -194,6 +306,34 @@ cmd_check() {
     echo "OK: curl, jq, and OFOX_API_KEY are all present."
   fi
   return "$ok"
+}
+
+cmd_models() {
+  # Lists the image models with their per-image output price. Needs no API key
+  # — GET /v1/models is public — so it is safe to run before signing up.
+  check_curl_jq || return 2
+  load_models || true
+  if [ -z "$MODELS_FILE" ]; then
+    echo "ERROR: could not obtain a model list (no network, no cache, no bundled snapshot)." >&2
+    return 3
+  fi
+
+  echo "Image models (source: $MODELS_SOURCE)"
+  echo
+  jq -r '
+    ["MODEL", "$/OUTPUT IMAGE TOKEN"],
+    (.data[]
+      | select((.supported_endpoints // []) | index("/v1/images/generations"))
+      | [ .id + (if .is_deprecated then " (deprecated)" else "" end),
+          (.pricing.output_image // "-") ])
+    | @tsv' "$MODELS_FILE" | column -t -s "$(printf '\t')"
+
+  echo
+  echo "Prices are per output image token, not per image — see references/pricing.md"
+  echo "for how that turns into a cost. This skill documents these in depth:"
+  echo "  $DOCUMENTED_MODELS"
+  echo "Others work but their size/quality support is not documented here."
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -295,12 +435,28 @@ cmd_generate() {
   # --- validation (no network calls made before this point) ---
 
   if [ -z "$model" ]; then
-    echo "ERROR: --model is required. Valid values: $VALID_MODELS" >&2
+    echo "ERROR: --model is required. Run 'ofox-image.sh models' to list them; this skill documents $DOCUMENTED_MODELS in depth." >&2
     return 1
   fi
-  if ! list_contains "$model" "$VALID_MODELS"; then
-    echo "ERROR: --model '$model' is not one of the documented models. Valid values: $VALID_MODELS" >&2
-    return 1
+
+  if [ "${OFOX_SKIP_MODEL_VALIDATION:-}" != "1" ] && load_models; then
+    local entry
+    entry="$(model_entry "$model")"
+    if [ -z "$entry" ]; then
+      # An id the list doesn't have. Only treat that as an error when the list
+      # is current — a snapshot may simply predate the model.
+      if [ "$MODELS_SOURCE" = "snapshot" ] || [ "$MODELS_SOURCE" = "stale-cache" ]; then
+        echo "NOTE: '$model' is not in the $MODELS_SOURCE model list, which may just be out of date. Sending it anyway; the API will validate it." >&2
+      else
+        echo "ERROR: --model '$model' is not in the Ofox model list. Run 'ofox-image.sh models' to see what is available." >&2
+        return 1
+      fi
+    elif ! printf '%s' "$entry" | jq -e '(.supported_endpoints // []) | index("/v1/images/generations")' >/dev/null 2>&1; then
+      echo "ERROR: --model '$model' exists but does not support image generation (/v1/images/generations). Run 'ofox-image.sh models' to see the image models." >&2
+      return 1
+    elif printf '%s' "$entry" | jq -e '.is_deprecated == true' >/dev/null 2>&1; then
+      echo "NOTE: '$model' is marked deprecated by Ofox. It still runs for now; consider moving to a current model." >&2
+    fi
   fi
 
   if [ -z "$prompt" ]; then
@@ -504,6 +660,10 @@ main() {
   case "$mode" in
     check)
       cmd_check
+      return $?
+      ;;
+    models)
+      cmd_models
       return $?
       ;;
     generate)

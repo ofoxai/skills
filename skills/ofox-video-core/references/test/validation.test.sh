@@ -189,7 +189,7 @@ else
     "$code" "$(printf '%s' "$out" | head -3 | tr '\n' ' ')"
   FAIL=$((FAIL + 1))
 fi
-if printf '%s' "$out" | grep -qi 'snapshot\|offline\|cached\|could not refresh'; then
+if printf '%s' "$out" | grep -qi 'bundled snapshot'; then
   printf 'ok    falling back to the bundled snapshot is announced, not silent\n'
   PASS=$((PASS + 1))
 else

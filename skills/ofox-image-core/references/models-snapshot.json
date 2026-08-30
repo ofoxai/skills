@@ -1,0 +1,220 @@
+{
+  "_snapshot_note": "Offline fallback only. ofox-image.sh fetches the live list from GET /v1/models (public, no API key) and only reads this file when that fetch fails. Regenerate with: references/refresh-snapshot.sh",
+  "_snapshot_date": "2026-08-30",
+  "object": "list",
+  "data": [
+    {
+      "id": "bailian/qwen-image-3.0",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "qwen-image-3.0"
+      ],
+      "pricing": {
+        "output_image": null
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "bailian/qwen-image-3.0-pro",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "qwen-image-3.0-pro"
+      ],
+      "pricing": {
+        "output_image": null
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "google/gemini-2.5-flash-image",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "gemini-2.5-flash-image"
+      ],
+      "pricing": {
+        "output_image": "0.00003"
+      },
+      "supported_endpoints": [
+        "/v1/chat/completions",
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "google/gemini-3-pro-image",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "gemini-3-pro-image"
+      ],
+      "pricing": {
+        "output_image": "0.00012"
+      },
+      "supported_endpoints": [
+        "/v1/chat/completions",
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "google/gemini-3.1-flash-image",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "gemini-3.1-flash-image"
+      ],
+      "pricing": {
+        "output_image": "0.00006"
+      },
+      "supported_endpoints": [
+        "/v1/chat/completions",
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite-image",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "gemini-3.1-flash-lite-image"
+      ],
+      "pricing": {
+        "output_image": "0.00003"
+      },
+      "supported_endpoints": [
+        "/v1/chat/completions",
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "microsoft/mai-image-2.5",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "mai-image-2.5",
+        "mai-image-2.5-2026-06-02",
+        "mai-image-2.5-20260602"
+      ],
+      "pricing": {
+        "output_image": "0.000047"
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "microsoft/mai-image-2.5-flash",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "mai-image-2.5-flash",
+        "mai-image-2.5-flash-2026-06-02",
+        "mai-image-2.5-flash-20260602"
+      ],
+      "pricing": {
+        "output_image": "0.000026"
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "microsoft/mai-image-2.5-pro",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "mai-image-2.5-pro",
+        "mai-image-2.5-pro-2026-06-19",
+        "mai-image-2.5-pro-20260619"
+      ],
+      "pricing": {
+        "output_image": "0.000106"
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "openai/gpt-image-1.5",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "gpt-image-1.5",
+        "gpt-image-1.5-2025-12-16",
+        "gpt-image-1.5-20251216"
+      ],
+      "pricing": {
+        "output_image": "0.000032"
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "openai/gpt-image-2",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "gpt-image-2",
+        "gpt-image-2-2026-04-21",
+        "gpt-image-2-20260421"
+      ],
+      "pricing": {
+        "output_image": "0.00003"
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "volcengine/doubao-seedream-4.5",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "doubao-seedream-4.5",
+        "doubao-seedream-4-5-251128"
+      ],
+      "pricing": {
+        "output_image": null
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "volcengine/doubao-seedream-5.0-lite",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "doubao-seedream-5.0-lite",
+        "doubao-seedream-5-0-260128"
+      ],
+      "pricing": {
+        "output_image": null
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "volcengine/doubao-seedream-5.0-pro",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "doubao-seedream-5.0-pro",
+        "doubao-seedream-5-0-pro-260628"
+      ],
+      "pricing": {
+        "output_image": null
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    }
+  ]
+}
