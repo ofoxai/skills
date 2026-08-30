@@ -271,3 +271,36 @@ Installed OpenCode CLI (pnpm add -g opencode-ai, manual postinstall since pnpm b
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Scaffold awesome-seedance-2.5 collection repo (local-only)
+
+**Date**: 2026-08-30
+**Task**: Scaffold awesome-seedance-2.5 collection repo (local-only)
+**Branch**: `feat/seedance-video-skills`
+
+### Summary
+
+Built the second of the two planned repo types from the source task doc -- a case/prompt showcase repo distinct from the already-shipped ofoxai/skills execution-layer repo. Corrected a brainstorm misfire mid-task: initially assumed 'the other repo' meant the minor ofox-media-skills-cli npm installer mentioned in doc §5.2, but the user clarified it meant the doc's actual second top-level repo type (§1/§3.1), the awesome-seedance-2.5 collection repo -- scrapped the wrong task and restarted on the right one. Created a new sibling repo at ~/code/awesome-seedance-2.5 with its own standalone PRD.md (kept separate from this repo's trellis task per explicit user instruction, so the two projects' planning docs don't mix), then scaffolded via trellis-implement/trellis-check sub-agents: tri-lingual README (en/zh-CN/ja) with the full doc-specified case-collection layout, CC0 LICENSE, CONTRIBUTING.md, CASE_TEMPLATE.md, images/ convention doc. Zero real cases this round (need the user's own Ofox playground runs first). The check pass found and fixed one real defect: 4 links pointed at the bare ofox.ai homepage, violating the source doc's own link policy (homepage linked exactly once, from the org profile README, never from this repo) -- repointed to the case-backlink target instead. Repo is committed locally but deliberately NOT pushed and NOT created on GitHub -- the source doc explicitly gates publishing this repo on an ofox.ai site page (seedance-2-5-prompts) that doesn't exist yet. One trellis-implement sub-agent run failed mid-task on an unrelated API-level content-filtering error before producing any files; a clean retry succeeded fully.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `36a071b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

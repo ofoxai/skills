@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~273 | Active |
+| `journal-1.md` | ~306 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-08-30 | Scaffold awesome-seedance-2.5 collection repo (local-only) | `36a071b` | `feat/seedance-video-skills` |
 | 8 | 2026-08-30 | Install OpenCode CLI, close last §5.5 cross-agent test gap | `d1e6a08` | `feat/seedance-video-skills` |
 | 7 | 2026-08-30 | Close §5.5 test-matrix gap for 4 scenario skills | `0e33ce8` | `feat/seedance-video-skills` |
 | 6 | 2026-08-30 | Phase A: ClawHub metadata, per-agent install commands, upstream compatibility | `0fb1089` | `main` |
