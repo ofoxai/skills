@@ -122,7 +122,7 @@ ${FENCE_START}
   #${MARKER_ID}.expired .dot{background:var(--drop-cd-dot-expired,#fca5a5)}
 </style>
 <div id="${MARKER_ID}" data-expiry-epoch="${epoch}" role="status" aria-live="polite">
-  <span class="dot"></span><span class="txt">链接有效性检测中…</span>
+  <span class="dot"></span><span class="txt">Checking link validity\u2026</span>
 </div>
 <script>(function(){
   var el=document.getElementById(${JSON.stringify(MARKER_ID)});
@@ -132,9 +132,9 @@ ${FENCE_START}
   function pad(n){return(n<10?'0':'')+n;}
   function tick(){
     var left=expiry-Math.floor(Date.now()/1000);
-    if(left<=0){el.classList.add('expired');txt.textContent='已过期，让主人重新生成';return;}
+    if(left<=0){el.classList.add('expired');txt.textContent='Link expired \u2014 ask for a fresh one';return;}
     var m=Math.floor(left/60),s=left%60;
-    txt.textContent='链接将在 '+pad(m)+':'+pad(s)+' 后过期';
+    txt.textContent='Link expires in '+pad(m)+':'+pad(s);
     setTimeout(tick,1000);
   }
   tick();

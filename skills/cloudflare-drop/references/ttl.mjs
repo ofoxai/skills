@@ -96,11 +96,12 @@ export function honestTtl(ttlSeconds, mode) {
   return { seconds: want, clamped: false, reason: null };
 }
 
-/** Human-readable window, e.g. `180 分钟` / `3 小时`. */
+/** Human-readable window, e.g. `180 minutes` / `3 hours`. */
 export function formatTtl(sec) {
   const s = Math.floor(sec);
-  if (s % 86400 === 0 && s >= 86400) return `${s / 86400} 天`;
-  if (s % 3600 === 0 && s >= 3600) return `${s / 3600} 小时`;
-  if (s % 60 === 0) return `${s / 60} 分钟`;
-  return `${s} 秒`;
+  const unit = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  if (s % 86400 === 0 && s >= 86400) return unit(s / 86400, 'day');
+  if (s % 3600 === 0 && s >= 3600) return unit(s / 3600, 'hour');
+  if (s % 60 === 0) return unit(s / 60, 'minute');
+  return unit(s, 'second');
 }

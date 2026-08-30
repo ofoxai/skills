@@ -2,6 +2,21 @@
 
 All notable changes to the **cloudflare-drop** skill. Versioning follows SemVer.
 
+## 2.2.0 — English-only copy, ClawHub metadata
+
+- **Breaking for readers, not for callers**: the countdown banner and
+  `formatTtl()` now render in English (`Link expires in 04:12`,
+  `Link expired — ask for a fresh one`, `45 minutes`). They previously rendered
+  in Chinese, which violated CONTRIBUTING rule 1 — these skills are public and
+  international. No flag, argument, or exit code changed; only the strings a
+  reader sees. If you were matching the old strings downstream, update them.
+- Frontmatter now declares `metadata.openclaw` (node/npx, with
+  `CLOUDFLARE_API_TOKEN` and `CF_API_TOKEN` marked optional — without one the
+  skill publishes a preview rather than failing) and a top-level `version`,
+  which is what ClawHub's publish scanner actually reads.
+- Verified with `clawhub skill publish --dry-run` (ok, 14 files packaged) and
+  the full suite: 57 tests passing.
+
 ## 2.1.0 — `--no-countdown`
 
 - New `--no-countdown` flag: skip baking the countdown banner into the page.

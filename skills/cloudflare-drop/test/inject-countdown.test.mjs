@@ -12,7 +12,7 @@ test('injects a countdown into a page that has none', () => {
   const out = injectCountdown(html, EXPIRY);
   assert.match(out, /id="drop-expiry-countdown"/, 'countdown element must be present');
   assert.match(out, new RegExp(String(EXPIRY)), 'the real expiry epoch must be stamped in');
-  assert.match(out, /链接将在/, 'countdown copy must be present');
+  assert.match(out, /Link expires in/, 'countdown copy must be present');
   assert.ok(out.includes('<h1>Report</h1>'), 'original content preserved');
 });
 

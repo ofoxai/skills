@@ -81,8 +81,8 @@ test('honestTtl does not clamp permanent deploys', () => {
 });
 
 test('formatTtl renders whole units', () => {
-  assert.equal(formatTtl(10_800), '3 小时');
-  assert.equal(formatTtl(2_700), '45 分钟');
-  assert.equal(formatTtl(86_400), '1 天');
-  assert.equal(formatTtl(90), '90 秒');
+  assert.equal(formatTtl(10_800), '3 hours');
+  assert.equal(formatTtl(2_700), '45 minutes');
+  assert.equal(formatTtl(86_400), '1 day');
+  assert.equal(formatTtl(90), '90 seconds');
 });
