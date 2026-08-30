@@ -238,3 +238,36 @@ Verified the 3 previously-unexercised §5.5 test items (bad-param errors, jq-les
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Install OpenCode CLI, close last §5.5 cross-agent test gap
+
+**Date**: 2026-08-30
+**Task**: Install OpenCode CLI, close last §5.5 cross-agent test gap
+**Branch**: `feat/seedance-video-skills`
+
+### Summary
+
+Installed OpenCode CLI (pnpm add -g opencode-ai, manual postinstall since pnpm blocks postinstall scripts by default) and verified seedance-short-drama + ofox-video-core work correctly under it. Key finding: OpenCode discovers skills from ~/.claude/skills/ (and ~/.agents/skills/, project-local .claude/skills/), confirmed via 'opencode debug skill' -- no OpenCode-specific install location needed. Symlinked both skills there; 'opencode run' with no OFOX_API_KEY set correctly loaded both SKILL.md files via natural-language trigger, read pricing.md, ran the check subcommand, computed the same $3.60 cost estimate Codex CLI produced independently, and stopped cleanly asking for the missing key and script text -- $0 cost, no real API call. This closes the last open item from the prior MVP test-coverage task: all 3 target agents (Claude Code, Codex CLI, OpenCode) are now verified for the 4 shipped scenario skills, with zero bugs found across both sessions.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d1e6a08` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
