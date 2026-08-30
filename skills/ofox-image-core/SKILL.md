@@ -48,6 +48,22 @@ happened" recovery path if a request goes wrong mid-flight.
   the conversation. A missing key means "can't call the paid API yet," not
   "stop talking to me."
 
+## Which model
+
+`bash references/ofox-image.sh models` lists every image model Ofox serves and
+its per-output-token price. No API key needed — `GET /v1/models` is public.
+
+`--model` is required and has no default on purpose: these models differ
+roughly 4x in price with no obvious winner, so defaulting would silently pick
+a price on the user's behalf. (Its sibling `ofox-video-core` does default,
+because every scenario built on it targets Seedance 2.5 specifically.)
+
+Three models are documented in depth in `references/api-params.md` and
+`references/pricing.md` — `openai/gpt-image-2`,
+`google/gemini-3.1-flash-image`, `bailian/qwen-image-3.0-pro`. The rest work
+too; what isn't documented is which `--size`/`--quality` values each accepts,
+because the API doesn't publish that for image models.
+
 ## Availability check
 
 Before the first call in a session, verify the environment:

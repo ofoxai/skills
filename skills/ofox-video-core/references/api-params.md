@@ -13,11 +13,11 @@ Seedance 2.5) before it ever calls the API.
 
 | Field | Type | Required | `ofox-video.sh` flag | Notes |
 |---|---|---|---|---|
-| `model` | string | yes | `--model` | Default `bytedance/seedance-2.5`. Also valid: `bytedance/seedance-2.0`, `alibaba/wan-2.7`, others per the live model list. |
+| `model` | string | yes | `--model` | Default `bytedance/seedance-2.5`. Run `ofox-video.sh models` for the live list with each model's limits and base price — 8 video models at last check. |
 | `prompt` | string | yes | `--prompt` | Text description of the video. |
-| `duration` | integer | no | `--duration` | Seconds. Seedance 2.5 supports 4–30, any integer. Other models may have different ranges — the script only enforces 4–30 when `model` is exactly `bytedance/seedance-2.5`. |
-| `resolution` | string | no | `--resolution` | One of `480p` `720p` `1080p` `1K` `2K` `4K`. |
-| `aspect_ratio` | string | no | `--aspect-ratio` | One of `16:9` `9:16` `1:1` `4:3` `3:4` `3:2` `2:3` `21:9` `9:21` `adaptive`. **`bytedance/seedance-2.5` image-to-video requires `adaptive`** — see below, the script forces this for you and prints a notice when it does. |
+| `duration` | integer | no | `--duration` | Seconds, any integer in the chosen model's range. The script enforces each model's real range (Seedance 2.5 4–30, Wan 2.x 2–15, HappyHorse 3–15, Seedance 2.0* 4–15), read from the live model list. |
+| `resolution` | string | no | `--resolution` | Validated per model. Seedance 2.5: `480p` `720p` `1080p`. Seedance 2.0: also `4k` (lowercase, as the API reports it). Wan 2.x / HappyHorse: `720p` `1080p` only. No video model advertises `1K` or `2K` — an earlier version of this table listed them in error. |
+| `aspect_ratio` | string | no | `--aspect-ratio` | Validated per model. Seedance 2.5: `21:9` `16:9` `4:3` `1:1` `3:4` `9:16` `adaptive`. Seedance 2.0*: `16:9` `9:16` `1:1` `adaptive`. Wan 2.x / HappyHorse: `16:9` `9:16` `1:1`. `3:2`, `2:3` and `9:21` are supported by **no** video model — an earlier version of this table listed them in error, and they were passing client-side validation only to be rejected by the API. **`bytedance/seedance-2.5` image-to-video requires `adaptive`** — see below, the script forces this for you and prints a notice when it does. |
 | `size` | string | no | `--size` | `WIDTHxHEIGHT` (e.g. `1280x720`) — alternative to `resolution`. Don't send both unless you've confirmed the model accepts it; prefer `resolution` for Seedance 2.5. |
 | `generate_audio` | boolean | no | `--generate-audio true\|false` | Default `true` server-side. |
 | `seed` | integer | no | `--seed` | Deterministic generation. |
@@ -31,6 +31,47 @@ Seedance 2.5) before it ever calls the API.
 its keys win over anything the flags set), so it's the escape hatch for any
 field not exposed as a dedicated flag. It must be valid JSON; the script
 checks that with `jq` before submitting.
+
+## The model list (`GET /v1/models`)
+
+Public, keyless and free — verified by calling it with `OFOX_API_KEY` unset
+(HTTP 200). `ofox-video.sh` fetches it to validate parameters against the model
+the caller actually picked, and exposes it as `ofox-video.sh models`.
+
+Each entry carries what the script needs:
+
+```json
+{
+  "id": "bytedance/seedance-2.5",
+  "is_deprecated": false,
+  "pricing": { "output_video_per_second": "0.11" },
+  "supported_endpoints": ["/v1/videos"],
+  "video_attributes": {
+    "modes": ["t2v", "i2v", "v2v"],
+    "resolutions": ["480p", "720p", "1080p"],
+    "default_resolution": "720p",
+    "min_duration_seconds": 4,
+    "max_duration_seconds": 30,
+    "supports_audio": true,
+    "aspect_ratios": ["21:9","16:9","4:3","1:1","3:4","9:16","adaptive"]
+  }
+}
+```
+
+**`pricing.output_video_per_second` is not a quote.** It is not consistently
+the cheapest tier or the default-resolution tier: `seedance-2.5` reports
+`0.11`, which is its 480p rate even though its `default_resolution` is 720p
+(really $0.24/s); `seedance-2.0-mini` reports `0.04`, which *is* its 720p rate.
+Use it to rank models by rough cost, never to tell a user what they will pay —
+that comes from the per-resolution tables in `pricing.md`.
+
+Caching: fresh cache (24h, `${XDG_CACHE_HOME:-$HOME/.cache}/ofox/models.json`)
+→ live fetch → stale cache → bundled `references/models-snapshot.json` → no
+per-model check at all. Every fallback below "live" prints a NOTE to stderr.
+A model id missing from a **live** list is a local error; missing from a
+**snapshot** it is passed through to the API, because the snapshot may simply
+predate the model. `OFOX_SKIP_MODEL_VALIDATION=1` turns the per-model checks
+off. Regenerate the snapshot with `bash references/refresh-snapshot.sh`.
 
 ## Image-to-video example (first frame only)
 

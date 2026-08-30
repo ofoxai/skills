@@ -45,6 +45,26 @@ report the exact cost. Scenario skills (`seedance-short-drama`,
   the conversation. A missing key means "can't call the paid API yet," not
   "stop talking to me."
 
+## Which model, and what it costs
+
+`bash references/ofox-video.sh models` lists every video model Ofox serves with
+its real duration range, resolutions, modes and base per-second price. It needs
+**no API key** — `GET /v1/models` is public — so it is safe to run before the
+user has signed up, and it costs nothing.
+
+Worth knowing before quoting a price: at 720p text-to-video the ladder runs
+`seedance-2.0-mini` $0.04/s → `wan-2.7` $0.10/s → `seedance-2.5` $0.24/s. When
+a user is going to generate several takes and keep one, drafting on a cheap
+model and rendering the keeper on `seedance-2.5` costs a fraction of drafting
+everything on 2.5. Say so when it's relevant — but don't switch models on
+someone's behalf, since the model changes the look, not just the price.
+
+Parameter limits differ per model and the script enforces the real ones
+(`wan-*` is 2-15s and 720p/1080p only; `seedance-2.5` is 4-30s and the only one
+with `21:9`/`4:3`/`3:4`). The limits come from the live model list, cached for
+24 hours, falling back to a bundled snapshot when offline — a fallback is
+always announced on stderr, never silent.
+
 ## Availability check
 
 Before the first call in a session, verify the environment:
@@ -69,14 +89,16 @@ are present — it makes no network call. Handle each failure mode plainly:
 ## Invoking the script
 
 ```bash
+bash references/ofox-video.sh models
 bash references/ofox-video.sh generate --prompt "..." [OPTIONS]
 bash references/ofox-video.sh poll JOB_ID [--out-dir DIR]
 ```
 
-`generate` builds the request, validates parameters client-side (rejecting
-bad `resolution`/`aspect_ratio`/`duration` combinations before any network
-call), submits it, polls to a terminal state, downloads the video into
-`--out-dir` (default: the current directory), and prints:
+`generate` builds the request, validates parameters client-side against the
+chosen model's real limits (rejecting a bad `resolution`/`aspect_ratio`/
+`duration` before any network call), submits it, polls to a terminal state,
+downloads the video into `--out-dir` (default: the current directory), and
+prints:
 
 ```
 STATUS completed

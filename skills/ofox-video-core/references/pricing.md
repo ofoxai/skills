@@ -1,4 +1,44 @@
-# Seedance 2.5 pricing
+# Video pricing
+
+Two things live here: the Seedance 2.5 tables the scenario skills quote from,
+and the cross-model ladder that matters when someone is generating several
+takes to keep one.
+
+## The cheap-to-expensive ladder
+
+Text-to-video, per second, cheapest first. Each rate was read off that model's
+own page on 2026-08-30; `—` means the model does not offer that resolution at
+all. For the live base rate and current limits, run `ofox-video.sh models`.
+
+| Model | 480p | 720p | 1080p | 4k | Duration | Notes |
+|---|---|---|---|---|---|---|
+| `bytedance/seedance-2.0-mini` | $0.02 | $0.04 | — | — | 4-15s | cheapest by far; drafts |
+| `bytedance/seedance-2.0-fast` | $0.042 | $0.091 | — | — | 4-15s | |
+| `bytedance/seedance-2.0` | $0.063 | $0.15 | $0.31 | $1.24 | 4-15s | only model offering `4k` |
+| `alibaba/wan-2.7` | — | $0.10 | $0.15 | — | 2-15s | 3 aspect ratios only |
+| `bytedance/seedance-2.5` | $0.11 | $0.24 | $0.48 | — | 4-30s | best quality, longest, most aspect ratios |
+| `alibaba/happyhorse-1.1` | — | $0.13 | $0.17 | — | 3-15s | lip-sync oriented |
+
+Video-to-video costs more than text-to-video on every model that offers it
+(e.g. Seedance 2.0: $0.081 / $0.18 / $0.41 / $1.53; 2.0-fast: $0.05 / $0.11;
+2.5: $0.14 / $0.30 / $0.568). Several pages quote a discounted rate — Seedance
+2.0 is showing 10% off, 2.0-fast 30% off, 2.5's 1080p is a time-limited $0.48
+against a $0.60 list — so a promo ending is a real reason a quote can drift.
+
+Read the gaps carefully: at 720p, `seedance-2.0-mini` is **6x cheaper** than
+`seedance-2.5`. Five 4-second drafts cost $0.80 on mini versus $4.80 on 2.5.
+When someone is going to generate several and keep one, drafting cheap and
+rendering the keeper on 2.5 turns a $5 experiment into a $1 one.
+
+Two cautions:
+
+- **Don't switch models on a user's behalf.** A different model is a different
+  look, not just a different price. Offer the ladder, let them choose.
+- **`output_video_per_second` from the models endpoint is not a quote.** For
+  `seedance-2.5` it reports `0.11` — the 480p rate — while its default
+  resolution is 720p at $0.24/s. Rank with it; quote from the tables here.
+
+## Seedance 2.5 pricing
 
 Source: `https://ofox.ai/models/bytedance/seedance-2.5` (verified
 2026-08-29). Prices, especially the "time-limited" 1080p rate, can change —

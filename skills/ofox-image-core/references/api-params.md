@@ -17,7 +17,7 @@ body directly, always base64-encoded (no URL option, ever).
 
 | Field | Type | Required | `ofox-image.sh` flag | Notes |
 |---|---|---|---|---|
-| `model` | string | yes | `--model` | `openai/gpt-image-2`, `google/gemini-3.1-flash-image` (this is "Nano Banana 2" — use this exact model id string, **not** `-preview`; the model catalog page's URL slug differs from the actual API model id), `bailian/qwen-image-3.0-pro`. |
+| `model` | string | yes | `--model` | Run `ofox-image.sh models` for the live list — 14 image models at last check, and the script accepts any of them. Documented in depth here: `openai/gpt-image-2`, `google/gemini-3.1-flash-image` (this is "Nano Banana 2" — use this exact model id string, **not** `-preview`; the model catalog page's URL slug differs from the actual API model id), `bailian/qwen-image-3.0-pro`. Others work but their size/quality support is not documented here. |
 | `prompt` | string | yes | `--prompt` | Text description of the image. |
 | `quality` | string | yes per doc | `--quality` | One of `auto`/`low`/`medium`/`high`/`standard`/`hd`. Not every value is confirmed to apply to every model — the script requires you to pass one explicitly rather than guessing a safe default. |
 | `n` | integer | no | `--n` | 1-10, server default 1. **`google/gemini-3.1-flash-image` does not support `n` at all — passing it (even `n: 1`) errors.** The script rejects `--n` client-side whenever the effective model is Gemini, and also rejects an `n` key set via `--extra-json` for that model. |
@@ -169,3 +169,30 @@ option to fall back on if a network call's outcome is ambiguous. If a
 the only way to find out what happened is to check
 `https://app.ofox.ai`'s usage/billing history — there is nothing to poll
 by id.
+
+## The model list (`GET /v1/models`)
+
+Public, keyless and free. `ofox-image.sh` uses it to check `--model`, and
+exposes it as `ofox-image.sh models`.
+
+**It does not describe image-model capabilities.** Unlike video models, which
+carry a `video_attributes` object with real resolution/duration/aspect-ratio
+limits, image entries have no `image_attributes` equivalent, and their
+`supported_parameters` list is LLM-shaped (`temperature`, `top_p`,
+`max_tokens`, `stop`, `response_format`) rather than the `size`/`quality`/
+`background` this endpoint actually takes. So only the model **id** is
+validated dynamically here; `--size`, `--quality`, `--output-format` and
+`--background` stay hardcoded from the docs. Don't assume symmetry with
+`ofox-video-core` — this was checked, and it isn't there.
+
+What each entry does give us: `id`, `aliases`, `is_deprecated`,
+`supported_endpoints` (so a video model passed to `--model` is caught with
+that reason), and `pricing.output_image`.
+
+Caching and fallback behave exactly as in `ofox-video-core`: fresh cache (24h,
+`${XDG_CACHE_HOME:-$HOME/.cache}/ofox/models.json`) → live fetch → stale cache
+→ bundled `references/models-snapshot.json` → no check. Every fallback below
+"live" prints a NOTE to stderr. An id missing from a **live** list is rejected
+locally; missing from a **snapshot** it is passed to the API, since the
+snapshot may predate the model. `OFOX_SKIP_MODEL_VALIDATION=1` disables the
+check. Regenerate the snapshot with `bash references/refresh-snapshot.sh`.
