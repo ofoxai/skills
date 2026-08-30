@@ -4,6 +4,13 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.1.1 — cost guidance uses the script's own estimate
+
+`ofox-video.sh` now prints a cost estimate before submitting, read from live
+rates. This skill's guidance no longer tells the agent to compute one by hand
+from a table that can go stale — relay the printed figure, and if it says the
+estimate is unavailable, say that rather than substituting a number.
+
 ## 1.1.0 — jobs are pinned to the byteplus upstream
 
 **Behavior change, inherited from ofox-video-core 1.4.0.** Jobs now go to the

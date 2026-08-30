@@ -1,42 +1,78 @@
 # Video pricing
 
-Two things live here: the Seedance 2.5 tables the scenario skills quote from,
-and the cross-model ladder that matters when someone is generating several
-takes to keep one.
+**The script does not read this file.** `ofox-video.sh` fetches live per-second
+rates from the catalog endpoint and prints an estimate before it submits
+anything. What lives here is the explanation — which model is cheap, why that
+matters, and what to watch out for — plus a dated snapshot for reading offline.
+
+For current numbers:
+
+```bash
+bash references/ofox-video.sh providers                      # seedance-2.5
+bash references/ofox-video.sh providers bytedance/seedance-2.0-mini
+```
+
+That reads `GET /v2/models/catalog/{owner}/{slug}?include=provider_price`,
+which is public and needs no API key, and prints every upstream's full
+resolution x mode price matrix.
 
 ## The cheap-to-expensive ladder
 
-Text-to-video, per second, cheapest first. Each rate was read off that model's
-own page on 2026-08-30; `—` means the model does not offer that resolution at
-all. For the live base rate and current limits, run `ofox-video.sh models`.
+Text-to-video, per second, cheapest first. **Snapshot as of 2026-08-30** — treat
+the shape as durable and the digits as stale until checked. Several of these
+are promotional (Seedance 2.0 at 10% off, 2.0-fast at 30%, 2.5's 1080p a
+time-limited $0.48 against a $0.60 list), so a promo ending is a real reason a
+number moves.
 
-| Model | 480p | 720p | 1080p | 4k | Duration | Notes |
-|---|---|---|---|---|---|---|
-| `bytedance/seedance-2.0-mini` | $0.02 | $0.04 | — | — | 4-15s | cheapest by far; drafts |
-| `bytedance/seedance-2.0-fast` | $0.042 | $0.091 | — | — | 4-15s | |
-| `bytedance/seedance-2.0` | $0.063 | $0.15 | $0.31 | $1.24 | 4-15s | only model offering `4k` |
-| `alibaba/wan-2.7` | — | $0.10 | $0.15 | — | 2-15s | 3 aspect ratios only |
-| `bytedance/seedance-2.5` | $0.11 | $0.24 | $0.48 | — | 4-30s | best quality, longest, most aspect ratios |
-| `alibaba/happyhorse-1.1` | — | $0.13 | $0.17 | — | 3-15s | lip-sync oriented |
+| Model | 480p | 720p | 1080p | 4k | Duration |
+|---|---|---|---|---|---|
+| `bytedance/seedance-2.0-mini` | $0.02 | $0.04 | — | — | 4-15s |
+| `bytedance/seedance-2.0-fast` | $0.042 | $0.091 | — | — | 4-15s |
+| `bytedance/seedance-2.0` | $0.063 | $0.15 | $0.31 | $1.24 | 4-15s |
+| `alibaba/wan-2.7` | — | $0.10 | $0.15 | — | 2-15s |
+| `bytedance/seedance-2.5` | $0.11 | $0.24 | $0.48 | — | 4-30s |
+| `alibaba/happyhorse-1.1` | — | $0.13 | $0.17 | — | 3-15s |
 
-Video-to-video costs more than text-to-video on every model that offers it
-(e.g. Seedance 2.0: $0.081 / $0.18 / $0.41 / $1.53; 2.0-fast: $0.05 / $0.11;
-2.5: $0.14 / $0.30 / $0.568). Several pages quote a discounted rate — Seedance
-2.0 is showing 10% off, 2.0-fast 30% off, 2.5's 1080p is a time-limited $0.48
-against a $0.60 list — so a promo ending is a real reason a quote can drift.
+**Why this table matters even though the script doesn't read it:** at 720p,
+`seedance-2.0-mini` is 6x cheaper than `seedance-2.5`. Five 4-second drafts
+cost $0.80 on mini versus $4.80 on 2.5. When someone will generate several and
+keep one, drafting cheap and rendering the keeper on 2.5 turns a $5 experiment
+into a $1 one. That is the whole argument for `batch`, and it survives any
+repricing.
 
-Read the gaps carefully: at 720p, `seedance-2.0-mini` is **6x cheaper** than
-`seedance-2.5`. Five 4-second drafts cost $0.80 on mini versus $4.80 on 2.5.
-When someone is going to generate several and keep one, drafting cheap and
-rendering the keeper on 2.5 turns a $5 experiment into a $1 one.
-
-Two cautions:
+Two things to keep straight:
 
 - **Don't switch models on a user's behalf.** A different model is a different
   look, not just a different price. Offer the ladder, let them choose.
-- **`output_video_per_second` from the models endpoint is not a quote.** For
-  `seedance-2.5` it reports `0.11` — the 480p rate — while its default
-  resolution is 720p at $0.24/s. Rank with it; quote from the tables here.
+- **Image-to-video bills at t2v rates.** The v2v tier applies only when a
+  *video* is the input. Verified by a real i2v run billing 4s x $0.11 at 480p.
+
+Video-to-video costs more everywhere it is offered — Seedance 2.5:
+$0.14 / $0.30 / $0.568 for 480p / 720p / 1080p.
+
+## Provider does not change the price
+
+Seedance is served by two upstreams (`byteplus`, `volcengine`) and their price
+matrices were identical when measured, tier for tier. Pinning one is a region
+and moderation decision, never a cost one — see `api-params.md`. The estimate
+reads the pinned provider's own card anyway, so if that ever stops being true
+the number follows automatically.
+
+## How the estimate is produced
+
+Order of preference: fresh catalog cache (24h) -> live fetch -> stale cache ->
+bundled `pricing-snapshot.json` -> **no estimate at all**.
+
+That last rung is deliberate. If no verified rate can be had, the script says
+the estimate is unavailable and proceeds — it never prints a number it cannot
+back up, because a wrong estimate is worse than no estimate when someone acts
+on it before spending. Regenerate the bundled snapshot with
+`bash references/refresh-snapshot.sh`.
+
+**Never quote `output_video_per_second` from `GET /v1/models`.** It is not
+consistently the cheapest tier or the default tier: for `seedance-2.5` it
+reports the 480p rate ($0.11) while the model defaults to 720p ($0.24), which
+would understate a default job by more than half.
 
 ## Seedance 2.5 pricing
 

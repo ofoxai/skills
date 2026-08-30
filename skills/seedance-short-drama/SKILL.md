@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Generate a single realistic-human, dialogue-driven short-drama shot from a script or scene description using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (character appearance, quoted dialogue, scene-cut timing cues), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative) or for anything not involving people/dialogue.
 license: MIT
-version: "1.1.0"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -150,14 +150,15 @@ let Ofox choose. Pricing is identical either way. See
 
 ## Cost estimate — show this before generating
 
-Compute the estimate with the formula and per-second rates in
-[`../ofox-video-core/references/pricing.md`](../ofox-video-core/references/pricing.md)
-(`estimated_cost = duration_seconds * price_per_second(resolution, t2v)` — this
-skill only ever uses text-to-video, so the t2v column applies). Example at
-this skill's defaults: 10 seconds at 720p ($0.24/s t2v) ≈ **$2.40**. Show the
-user the estimate for their actual chosen duration/resolution before calling
-`generate`, and remind them the real number comes from `VIDEO_COST` after
-the job completes (see below) — the estimate may differ slightly.
+The script prints its own estimate on stderr before it submits anything, read
+from live per-second rates — so you no longer need to compute one by hand or
+quote a table that may have gone stale. Relay what it prints. If it says the
+estimate is unavailable, say that rather than substituting a number of your own.
+
+For rough planning before a call, the ladder and a dated snapshot are in
+[`../ofox-video-core/references/pricing.md`](../ofox-video-core/references/pricing.md),
+and `ofox-video.sh providers` prints live rates with no API key. The real
+number is always `VIDEO_COST` from the completed job.
 
 ## Generating
 

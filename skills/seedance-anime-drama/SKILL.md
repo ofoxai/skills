@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Turn a novel/script excerpt into an anime- or manga-style storyboard shot using the Ofox image and video APIs — generates one character reference image with ofox-image-core, then reuses that exact same image as `--frame-first-image` across every shot of that character via ofox-video-core, for real visual consistency instead of relying on repeated text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime/manga styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.1.0"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -230,18 +230,15 @@ Whatever the exact number turns out to be, it is paid **once per
 character** — generating N shots of the same character does not repeat this
 cost.
 
-**Step 2 (video) — paid once per shot.** Use
-[`ofox-video-core/references/pricing.md`](../ofox-video-core/references/pricing.md)'s
-formula:
-
-```
-estimated_cost = duration_seconds * price_per_second(resolution, t2v)
-```
-
-The t2v column applies — image-to-video via `--frame-first-image` still
-bills at t2v rates; v2v pricing only applies when a *video* (not an image)
-is the input, which this skill never does. Example at this skill's
-suggested defaults: 8 seconds at 720p ($0.24/s) ≈ **$1.92 per shot**.
+**Step 2 (video) — paid once per shot.** `ofox-video.sh` prints its own
+estimate on stderr before submitting, read from live per-second rates, so
+relay that rather than computing one by hand. It already accounts for the
+right tier: image-to-video via `--frame-first-image` bills at **t2v** rates,
+and v2v pricing applies only when a *video* (not an image) is the input,
+which this skill never does. At this skill's suggested defaults that lands
+around **$1.92 per shot** (8 seconds at 720p), but take the printed figure
+over this one — and if it says the estimate is unavailable, say so instead
+of substituting a number.
 
 **Put both in front of the user before generating anything**, broken out
 rather than blended into one number, e.g.: "1 character reference image

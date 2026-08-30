@@ -4,6 +4,37 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.5.0 — cost estimates come from the live catalog, not a hardcoded table
+
+The estimate shown before someone spends money was built from a 15-line `case`
+of prices hand-copied off model pages two days earlier. It would have gone
+wrong silently on the next repricing — and several of those rates are
+promotional right now (Seedance 2.0 at 10% off, 2.0-fast at 30%, 2.5's 1080p a
+time-limited $0.48 against a $0.60 list), so "the next repricing" is not
+hypothetical. A wrong estimate is worse than no estimate.
+
+- Rates now come from `provider_cards[].pricing.video_pricing.tiers[]` on the
+  public, keyless catalog endpoint, via the same cache added in 1.4.0. Fallback
+  ladder: fresh cache -> live -> stale cache -> bundled `pricing-snapshot.json`
+  -> **no estimate**. That last rung is deliberate: the script never prints a
+  number it cannot back up, and never blocks a run over pricing.
+- **`generate` now estimates too**, not just `batch`. On stderr, so the
+  `KEY VALUE` stdout contract is untouched.
+- The resolution used for an estimate defaults to the model's own
+  `default_resolution` instead of an assumed 720p.
+- Image-to-video is priced at the **t2v** tier; only a video input moves it to
+  v2v. (Confirmed earlier by a real i2v run billing 4s x $0.11 at 480p.)
+- When a provider is pinned, the estimate reads that provider's own card.
+  Prices matched across upstreams when measured, but that was an observation,
+  not a contract — now the number follows if it ever stops being true.
+- `references/pricing.md` no longer presents itself as the runtime source. It
+  keeps the cheap-vs-expensive ladder (the argument for `batch` survives any
+  repricing) as a dated snapshot, and points at `providers` for live numbers.
+- `refresh-snapshot.sh` now regenerates the pricing snapshot as well.
+
+Tests: `references/test/pricing.test.sh`, 14 cases, free by construction —
+estimates print before anything is submitted.
+
 ## 1.4.0 — pin Seedance to the byteplus upstream
 
 **Behavior change.** Seedance jobs now go to the `byteplus` upstream by

@@ -38,3 +38,29 @@ jq --arg date "$(date -u +%Y-%m-%d)" '{
 
 printf 'wrote %s (%s video models, %s bytes)\n' \
   "$OUT" "$(jq '.data | length' "$OUT")" "$(wc -c < "$OUT" | tr -d ' ')"
+
+# --- pricing snapshot -------------------------------------------------------
+# Offline fallback for cost estimates. Same deal as the model list: the script
+# reads the live catalog first and only falls back to this. Per-resolution
+# tiers, because the models endpoint's single headline rate is not quotable.
+PRICE_OUT="$SCRIPT_DIR/pricing-snapshot.json"
+price_tmp="$(mktemp)"
+trap 'rm -f "$tmp" "$price_tmp"' EXIT
+
+echo '{"models":[]}' > "$price_tmp"
+for model in $(jq -r '.data[].id' "$OUT"); do
+  card="$(curl -fsS --max-time 20 \
+    "${API_BASE%/v1}/v2/models/catalog/$model?include=provider_price" 2>/dev/null)" || continue
+  printf '%s' "$card" | jq -e '(.provider_cards | length) > 0' >/dev/null 2>&1 || continue
+  jq --arg id "$model" --argjson card "$(printf '%s' "$card" | jq -c '{provider_cards: [.provider_cards[] | {provider_type, pricing: {video_pricing: .pricing.video_pricing}}]}')" \
+    '.models += [{id: $id} + $card]' "$price_tmp" > "$price_tmp.next" && mv "$price_tmp.next" "$price_tmp"
+done
+
+jq --arg date "$(date -u +%Y-%m-%d)" '{
+  _snapshot_note: "Offline fallback for cost estimates only. ofox-video.sh reads the live catalog (GET /v2/models/catalog/...?include=provider_price, public, no API key) and only falls back here. Regenerate with: references/refresh-snapshot.sh",
+  _snapshot_date: $date,
+  models: .models
+}' "$price_tmp" > "$PRICE_OUT"
+
+printf 'wrote %s (%s models priced, %s bytes)\n' \
+  "$PRICE_OUT" "$(jq '.models | length' "$PRICE_OUT")" "$(wc -c < "$PRICE_OUT" | tr -d ' ')"

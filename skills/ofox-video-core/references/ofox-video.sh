@@ -98,6 +98,7 @@ DEFAULT_POLL_INTERVAL=6
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_SNAPSHOT="$SCRIPT_DIR/models-snapshot.json"
+PRICING_SNAPSHOT="$SCRIPT_DIR/pricing-snapshot.json"
 MODELS_CACHE_TTL="${OFOX_MODELS_TTL:-86400}" # 24h
 
 # Fallback only. Per-model limits come from GET /v1/models; these unions of
@@ -915,6 +916,16 @@ cmd_generate() {
 
   # --- create the job (exactly one create call per invocation) ---
 
+  # Say what this will cost before spending anything. i2v bills at t2v rates —
+  # only a video input moves it to the v2v tier.
+  local est_mode="t2v"
+  if printf '%s' "$extra_json" | jq -e '.input_references // [] | map(select(.type == "video")) | length > 0' >/dev/null 2>&1; then
+    est_mode="v2v"
+  fi
+  if [ -n "$duration" ]; then
+    print_estimate "$model" "${resolution:-}" "$est_mode" "$provider" "$duration" 1
+  fi
+
   local provider_label="auto (Ofox weighted)"
   [ -n "$provider" ] && provider_label="$provider"
   echo "Submitting job to Ofox (model=$model, provider=$provider_label)..." >&2
@@ -992,7 +1003,7 @@ cmd_generate() {
 MAX_TAKES=10
 
 cmd_batch() {
-  local takes="" seed_given="" prompt_seen=""
+  local takes="" seed_given="" prompt_seen="" batch_provider=""
   local passthrough=() out_dir="$PWD" duration="" resolution="" model="$DEFAULT_MODEL"
   local sheet="auto"
   local key val
@@ -1022,6 +1033,7 @@ cmd_batch() {
         fi
         val="$2"
         case "$key" in
+          --provider) batch_provider="$val" ;;
           --seed) seed_given="$val" ;;
           --prompt) prompt_seen="1" ;;
           --out-dir) out_dir="$val" ;;
@@ -1066,19 +1078,8 @@ cmd_batch() {
 
   # --- estimate before spending ---
 
-  local est_note=""
   if [ -n "$duration" ]; then
-    local rate=""
-    rate="$(batch_rate_for "$model" "${resolution:-}")"
-    if [ -n "$rate" ]; then
-      est_note="$(awk -v d="$duration" -v n="$takes" -v r="$rate" \
-        'BEGIN { printf "~$%.2f for %d takes (%ds x $%s/s x %d)", d*n*r, n, d, r, n }')"
-    fi
-  fi
-  if [ -n "$est_note" ]; then
-    echo "Estimated cost: $est_note. Actual billing is reported per take below." >&2
-  else
-    echo "Estimated cost: unavailable for this model/resolution combination — see references/pricing.md. Actual billing is reported per take below." >&2
+    print_estimate "$model" "${resolution:-}" "t2v" "${batch_provider:-}" "$duration" "$takes"
   fi
 
   # --- run the takes, one real job each ---
@@ -1149,33 +1150,76 @@ EOF_TAKE
   return 0
 }
 
-batch_rate_for() {
-  # $1 = model, $2 = resolution. Prints a per-second rate for the estimate, or
-  # nothing when we do not have a confirmed figure. Deliberately conservative:
-  # these are the rates in references/pricing.md, read off each model's page.
-  # The models endpoint's own headline rate is NOT usable here — for
-  # seedance-2.5 it reports the 480p rate while defaulting to 720p.
-  local m="$1" r="${2:-}"
-  [ -z "$r" ] && r="720p" # every video model's default_resolution today
-  case "$m:$r" in
-    bytedance/seedance-2.5:480p) echo "0.11" ;;
-    bytedance/seedance-2.5:720p) echo "0.24" ;;
-    bytedance/seedance-2.5:1080p) echo "0.48" ;;
-    bytedance/seedance-2.0-mini:480p) echo "0.02" ;;
-    bytedance/seedance-2.0-mini:720p) echo "0.04" ;;
-    bytedance/seedance-2.0-fast:480p) echo "0.042" ;;
-    bytedance/seedance-2.0-fast:720p) echo "0.091" ;;
-    bytedance/seedance-2.0:480p) echo "0.063" ;;
-    bytedance/seedance-2.0:720p) echo "0.15" ;;
-    bytedance/seedance-2.0:1080p) echo "0.31" ;;
-    bytedance/seedance-2.0:4k) echo "1.24" ;;
-    alibaba/wan-2.6:720p|alibaba/wan-2.7:720p) echo "0.10" ;;
-    alibaba/wan-2.6:1080p|alibaba/wan-2.7:1080p) echo "0.15" ;;
-    alibaba/happyhorse-1.0:720p|alibaba/happyhorse-1.1:720p) echo "0.13" ;;
-    alibaba/happyhorse-1.0:1080p|alibaba/happyhorse-1.1:1080p) echo "0.17" ;;
-    *) echo "" ;;
-  esac
+rate_for() {
+  # $1 = model, $2 = resolution (may be empty), $3 = mode (t2v|v2v),
+  # $4 = pinned provider (may be empty).
+  #
+  # Prints a per-second rate, or nothing when we cannot establish one. Never
+  # guesses: an estimate we can't back up is worse than no estimate, because
+  # the user acts on it before spending.
+  #
+  # Source is the catalog's per-resolution tier matrix. The models endpoint's
+  # single output_video_per_second is NOT usable here — for seedance-2.5 it
+  # reports the 480p rate while the model defaults to 720p, i.e. half the
+  # real number.
+  local model="$1" res="${2:-}" mode="${3:-t2v}" want_provider="${4:-}"
+  local f
+
+  if [ -z "$res" ]; then
+    # Fall back to whatever the API itself would default to.
+    if load_models 2>/dev/null; then
+      local entry
+      entry="$(model_entry "$model")"
+      [ -n "$entry" ] && res="$(entry_num "$entry" '.video_attributes.default_resolution')"
+    fi
+    [ -z "$res" ] && return 1
+  fi
+
+  f="$(load_catalog "$model" 2>/dev/null)" || f=""
+  if [ -z "$f" ] || [ ! -f "$f" ]; then
+    f="$PRICING_SNAPSHOT"
+    [ -f "$f" ] || return 1
+  fi
+
+  # Prefer the pinned provider's own card: prices happen to match across
+  # providers today, but that is an observation, not a contract.
+  local price
+  price="$(jq -r --arg m "$model" --arg r "$res" --arg t "$mode" --arg p "$want_provider" '
+    (.provider_cards // (.models[]? | select(.id == $m) | .provider_cards) // [])
+    | (if ($p != "" and any(.[]; .provider_type == $p))
+       then map(select(.provider_type == $p)) else . end)
+    | first(.[].pricing.video_pricing.tiers[]?
+        | select(.resolution == $r and ((.input_type // "t2v") == $t))
+        | .price)
+    // empty' "$f" 2>/dev/null)"
+
+  [ -n "$price" ] || return 1
+  printf '%s' "$price"
 }
+
+estimate_note() {
+  # $1 = model, $2 = resolution, $3 = mode, $4 = provider, $5 = duration,
+  # $6 = takes. Prints a human-readable estimate, or nothing.
+  local rate
+  rate="$(rate_for "$1" "$2" "$3" "$4")" || return 1
+  [ -n "$rate" ] || return 1
+  awk -v d="$5" -v n="$6" -v r="$rate" 'BEGIN {
+    if (n > 1) printf "~$%.2f for %d takes (%ds x $%s/s x %d)", d*n*r, n, d, r, n;
+    else printf "~$%.2f (%ds x $%s/s)", d*r, d, r
+  }'
+}
+
+print_estimate() {
+  # $1..$6 as estimate_note. Always says something, on stderr, before spending.
+  local note
+  note="$(estimate_note "$@" 2>/dev/null)" || note=""
+  if [ -n "$note" ]; then
+    echo "Estimated cost: $note. Actual billing is reported below, from the job's own usage." >&2
+  else
+    echo "Estimated cost: unavailable for this model/resolution combination (no verified rate on hand — run 'ofox-video.sh providers $1'). Actual billing is reported below." >&2
+  fi
+}
+
 
 make_contact_sheet() {
   # $1 = out dir, $2.. = video paths. Prints the sheet path on stdout when it

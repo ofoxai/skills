@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Generate a clean, catalog-style e-commerce product video from a real product photo (or, less reliably, a text description) using the Ofox video API (Seedance 2.5) — writes a plain-background, literal-accuracy prompt (precise product description, simple turntable/orbit motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.1.0"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -185,16 +185,15 @@ let Ofox choose. Pricing is identical either way. See
 
 ## Cost estimate — show this before generating
 
-Compute the estimate with the formula and per-second rates in
-[`../ofox-video-core/references/pricing.md`](../ofox-video-core/references/pricing.md)
-(`estimated_cost = duration_seconds * price_per_second(resolution, mode)`).
-This skill's image-to-video path via `--frame-first-image` still uses
-text-to-video (t2v) pricing — v2v pricing only applies when a *video* is
-supplied as input, which this skill doesn't do. Worked example at this
-skill's defaults: 5 seconds at 720p ($0.24/s t2v) ≈ **$1.20**. Show the user
-the estimate for their actual chosen duration/resolution before calling
-`generate`, and remind them the real number comes from `VIDEO_COST` after
-the job completes — the estimate may differ slightly.
+The script prints its own estimate on stderr before it submits anything, read
+from live per-second rates — so you no longer need to compute one by hand or
+quote a table that may have gone stale. Relay what it prints. If it says the
+estimate is unavailable, say that rather than substituting a number of your own.
+
+For rough planning before a call, the ladder and a dated snapshot are in
+[`../ofox-video-core/references/pricing.md`](../ofox-video-core/references/pricing.md),
+and `ofox-video.sh providers` prints live rates with no API key. The real
+number is always `VIDEO_COST` from the completed job.
 
 ## Generating
 
