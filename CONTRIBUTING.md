@@ -34,17 +34,33 @@ A skill name is lowercase kebab-case and matches its directory name, the
      The agent decides whether to load the skill from this alone — make the
      triggers concrete, not vague.>
    license: MIT
+   version: "1.0.0"   # top-level: this is the one ClawHub's scanner reads
    homepage: https://github.com/ofoxai/skills/tree/main/skills/<name>
    metadata:
      author: ofoxai
-     version: "1.0.0"   # semver; bump on every published change
+     version: "1.0.0"   # same value; semver, bump on every published change
      openclaw:
        requires:
-         env: [ENV_VAR_ONE]    # every env var the skill's script(s) read, direct or transitive
+         env: [ENV_VAR_ONE]    # every REQUIRED env var, direct or transitive
          bins: [tool-one]      # every CLI tool the skill's script(s) call, direct or transitive
+       primaryEnv: ENV_VAR_ONE # the one a user must set first, if there is one
+       envVars:                # human-readable, including OPTIONAL vars
+         - name: ENV_VAR_ONE
+           required: true
+           description: <what it is and where to get it>
+       emoji: "🧰"
+       homepage: https://github.com/ofoxai/skills/tree/main/skills/<name>
    ---
    ```
-   - `homepage` always points at the skill's own directory in this repo
+   - **`version` appears twice on purpose.** ClawHub's publish scanner reads the
+     top-level `version`; its docs never mention `metadata.version`. Keep both
+     in sync and bump both together. (Verified against the live ClawHub skill
+     format spec — note the CLI itself takes the *published* version from
+     `--version` or the registry's next patch, so the frontmatter value is for
+     the format's sake, not what drives a publish.)
+   - **`homepage` also appears twice on purpose**, for the same reason: ClawHub
+     reads `metadata.openclaw.homepage`, other consumers read the top-level one.
+     Both point at the skill's own directory in this repo
      (`https://github.com/ofoxai/skills/tree/main/skills/<name>`) — required
      for every skill, new or existing.
    - `metadata.openclaw.requires.env`/`requires.bins` must list every
@@ -55,6 +71,12 @@ A skill name is lowercase kebab-case and matches its directory name, the
      A missing entry here is a metadata/reality mismatch — treat it as a bug.
      If a skill genuinely needs no env vars or no extra bins, omit that key
      rather than declaring an empty list.
+   - `requires.env` means **required**. A variable that merely unlocks a better
+     path belongs in `envVars` with `required: false`, not in `requires.env` —
+     e.g. `cloudflare-drop` deploys a preview without `CLOUDFLARE_API_TOKEN`
+     and a permanent site with it, so it declares no required env at all.
+   - `envVars` descriptions are read by installers and shown to a user who has
+     to go get the value. Say what it is and where to get it, not just its name.
 3. **Safety contract up front.** If the skill touches anything sensitive
    (secrets, local file paths, credentials, destructive ops), state the
    non-negotiable discipline near the top — what the agent must never do. See
@@ -81,8 +103,20 @@ A skill name is lowercase kebab-case and matches its directory name, the
 2. Add the skill to the right grouping in `skills.sh.json` (create a new
    grouping if no existing one fits).
 3. Add a row to the **Skills** table in `README.md`.
-4. Test the recipes on a real machine; confirm the availability check works.
-5. Open a PR. Releasing is merging to `main` + a tag if the change is
+4. Start a `skills/<name>/CHANGELOG.md`. Every skill has one; every published
+   version gets an entry saying what changed and, when behavior a caller could
+   depend on moved, what to do about it.
+5. Test the recipes on a real machine; confirm the availability check works.
+   Anything with a script gets `bash -n` and `shellcheck -S warning` clean at
+   minimum, plus tests under `references/test/` that a reader can run — see
+   `ofox-video-core` and `cloudflare-drop` for the two shapes (bash and node).
+   Tests for a skill that calls a paid API must be free by construction: point
+   the API base somewhere unroutable so a case that passes validation dies on
+   connect rather than spending someone's credits.
+6. Run `npx clawhub skill publish ./skills/<name> --owner ofoxai --dry-run`.
+   It reports the packaged file count, which is the cheapest way to catch a
+   `references/` file that won't ship or a stray file that will.
+7. Open a PR. Releasing is merging to `main` + a tag if the change is
    user-visible.
 
 ## Versioning

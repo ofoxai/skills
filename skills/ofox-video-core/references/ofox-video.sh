@@ -13,7 +13,13 @@
 #   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
 #
 # generate OPTIONS:
-#   --model NAME              default: bytedance/seedance-2.5
+#   --model NAME              default: bytedance/seedance-2.5. This skill has a
+#                               default because every scenario built on it
+#                               targets Seedance 2.5 specifically; the sibling
+#                               ofox-image-core deliberately has none, because
+#                               its models differ ~4x in price with no obvious
+#                               winner. Run 'models' to see the alternatives —
+#                               seedance-2.0-mini is ~5x cheaper for drafts.
 #   --prompt TEXT             required
 #   --duration N               seconds. Validated against the chosen model's
 #                               own range (Seedance 2.5: 4-30, Wan 2.x: 2-15,

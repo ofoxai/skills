@@ -9,7 +9,6 @@ metadata:
   version: "2.2.0"
   openclaw:
     requires:
-      env: []
       bins: [node, npx]
     envVars:
       - name: CLOUDFLARE_API_TOKEN

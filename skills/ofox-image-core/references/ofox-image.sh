@@ -21,10 +21,19 @@
 #   ofox-image.sh generate --prompt "..." --model NAME --quality VAL [OPTIONS]
 #
 # generate OPTIONS:
-#   --model NAME        required. One of:
-#                          openai/gpt-image-2
-#                          google/gemini-3.1-flash-image
-#                          bailian/qwen-image-3.0-pro
+#   --model NAME              required — no default, on purpose. The image
+#                               models differ roughly 4x in price
+#                               (mai-image-2.5-flash to mai-image-2.5-pro) with
+#                               no obvious default winner, so picking one for
+#                               you would silently pick a price. Contrast
+#                               ofox-video-core, which does default, because
+#                               every scenario there targets Seedance 2.5.
+#                               Run 'models' to list them. Documented in depth
+#                               here: openai/gpt-image-2,
+#                               google/gemini-3.1-flash-image,
+#                               bailian/qwen-image-3.0-pro. Every other image
+#                               model Ofox serves also works; only their
+#                               size/quality support is undocumented here.
 #   --prompt TEXT        required.
 #   --quality VAL        required (documented as required by the API).
 #                          One of: auto low medium high standard hd

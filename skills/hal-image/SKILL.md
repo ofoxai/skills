@@ -9,7 +9,6 @@ metadata:
   version: "1.1.0"
   openclaw:
     requires:
-      env: []
       bins: [magick, oxipng]
     emoji: "🏞️"
     homepage: https://github.com/ofoxai/skills/tree/main/skills/hal-image

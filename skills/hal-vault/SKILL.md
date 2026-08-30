@@ -9,7 +9,6 @@ metadata:
   version: "1.1.0"
   openclaw:
     requires:
-      env: []
       bins: [hal-vault]
     envVars:
       - name: HAL_VAULT_DIR

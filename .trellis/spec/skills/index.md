@@ -57,6 +57,17 @@ bar restated as a checklist, not a separate standard):
       change, `metadata.openclaw.requires.env`/`requires.bins` listing every
       env var/CLI tool the skill's script(s) actually need (direct or
       transitive via a delegated-to skill).
+- [ ] The ClawHub-specific duplicates are present and in sync: a **top-level**
+      `version` (the scanner reads this one, not `metadata.version`) and
+      **`metadata.openclaw.homepage`** (it reads this one, not the top-level
+      `homepage`). Plus `primaryEnv`/`envVars` with human-readable
+      descriptions when the skill needs any variable at all — `requires.env`
+      is for *required* vars only; an optional one goes in `envVars` with
+      `required: false`. See `CONTRIBUTING.md` for the full template.
+- [ ] `skills/<name>/CHANGELOG.md` has an entry for this version, and it says
+      what a caller has to do if behavior moved.
+- [ ] `npx clawhub skill publish ./skills/<name> --owner ofoxai --dry-run`
+      reports ok, and its `fileCount` matches what should actually ship.
 - [ ] Safety contract stated near the top if the skill touches secrets/keys.
 - [ ] Every command in the skill has actually been run on a real machine —
       `bash -n` and (if available) `shellcheck` for shell scripts is the
