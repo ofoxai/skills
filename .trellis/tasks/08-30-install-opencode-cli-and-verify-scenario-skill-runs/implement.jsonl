@@ -1,0 +1,1 @@
+{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "If OpenCode surfaces a real skill-loading gotcha (not just a missing local install), it follows the same documentation pattern as prior gotchas here."}
