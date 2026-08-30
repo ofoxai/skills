@@ -199,21 +199,64 @@ delegated.
 
 ## Acceptance Criteria
 
-- [ ] All three validation defects fixed and each proven by a test case that
-      fails against the old hardcoded table and passes now, with no network
-      call (e.g. `--model alibaba/wan-2.7 --duration 30` now exits 1 locally)
-- [ ] `/v1/models` fetch works keyless; cache hit, cache expiry, and
-      network-failure-fallback paths each exercised and observed
-- [ ] `npx clawhub skill publish --dry-run` clean on the 4 scenario skills,
-      output captured
-- [ ] Zero CJK characters anywhere under `skills/`
-- [ ] `bash -n` + `shellcheck -S warning` still silent on both scripts
-- [ ] `batch --takes N` produces N downloaded files plus an accurate cost
-      summary built from real `usage.video_cost` values
-- [ ] Contact sheet renders when `ffmpeg` + `montage` are present, and is
-      skipped with a clear reason when either is missing (both paths tested)
-- [ ] `README.md` / `skills.sh.json` / on-disk skills still in exact sync
-- [ ] `CONTRIBUTING.md` reflects every new repo-wide requirement
+- [x] All three validation defects fixed, each proven by a test case that fails
+      against the old hardcoded table and passes now, with no network call
+      (`--model alibaba/wan-2.7 --duration 30` now exits 1 locally). A **fourth**
+      defect was found during the work and fixed the same way: `ofox-image.sh`
+      hardcoded three models and locally rejected the eleven others the API
+      serves.
+- [x] `/v1/models` fetch works keyless; cache hit, cache expiry and
+      network-failure-fallback paths each exercised and observed (video 36/36,
+      image 18/18)
+- [x] `npx clawhub skill publish --dry-run` clean on the 4 scenario skills,
+      plus both cores and cloudflare-drop. Output captured — see the
+      "Verification" section below.
+- [x] Zero CJK characters anywhere under `skills/`
+- [x] `bash -n` + `shellcheck -S warning` silent on both scripts and all tests
+- [x] `batch --takes N` produces N downloaded files plus an accurate cost
+      summary built from real `usage.video_cost` values — verified live: 3
+      takes, $0.24 billed, exactly matching the estimate
+- [x] Contact sheet renders when `ffmpeg` is present and is skipped with a
+      clear reason when absent (both paths tested). Implemented with ffmpeg's
+      own `tile`/`vstack` filters, so ImageMagick is not a dependency at all —
+      simpler than the plan assumed.
+- [x] `README.md` / `skills.sh.json` / on-disk skills still in exact sync
+- [x] `CONTRIBUTING.md` reflects every new repo-wide requirement
+
+## Verification (final state)
+
+| Check | Result |
+|---|---|
+| `ofox-video-core` validation tests | 36/36 |
+| `ofox-video-core` batch tests | 21/21 |
+| `ofox-image-core` validation tests | 18/18 |
+| `cloudflare-drop` suite | 57/57 |
+| `shellcheck -S warning` (all scripts + tests) | zero warnings |
+| CJK under `skills/` | zero |
+| frontmatter + CHANGELOG checks | 9/9 |
+| `clawhub skill publish --dry-run` | ok on all 7 tried |
+| Live paid verification | $0.24, matched estimate exactly |
+
+## Findings that changed the plan
+
+1. **Three of the plan's "publish gate" items were not required.** ClawHub's
+   format defines neither `_meta.json` nor `llms-install.md` (required file set
+   is just `SKILL.md`), and the skills.sh schema is `additionalProperties:
+   false` with no `package.json` reference. Dropped, with the evidence in
+   `research/publish-gate-reality-check.md`.
+2. **A fourth defect surfaced**: `ofox-image.sh`'s hardcoded three-model list.
+3. **The image API has no capability metadata** — no `image_attributes`
+   counterpart to `video_attributes` — so the two scripts are deliberately
+   asymmetric. Checked, not assumed.
+4. **ClawHub's CLI ignores frontmatter `version`**, deriving the published
+   version from `--version` or the registry. The field is carried because the
+   format documents it, not because it drives a publish.
+5. **A live run found a real defect the tests hadn't**: the contact sheet was
+   reported as a relative path while `VIDEO_PATH` was absolute, violating the
+   repo's own rule. Fixed, and now covered by a test that calls with a relative
+   `--out-dir` and asserts an absolute result.
+6. **No ImageMagick needed**: ffmpeg's `tile`/`vstack` filters do the whole
+   contact sheet, which makes the fail-open path a single-dependency check.
 
 ## Definition of Done
 
@@ -225,7 +268,7 @@ delegated.
 
 ## Out of Scope
 
-- Stage 3 (multi-model fallback) — its own task
+- Stage 3 (multi-model fallback) — its own task, not started here
 - Pushing to GitHub, merging to main, PRs against external repos
 - Actually publishing to npm / skills.sh / LobeHub / ClawHub
 - `_meta.json`, `llms-install.md`, root `package.json` (nothing reads them)
