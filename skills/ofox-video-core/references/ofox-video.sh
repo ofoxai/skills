@@ -8,15 +8,22 @@
 #
 # Usage:
 #   ofox-video.sh check
+#   ofox-video.sh models
 #   ofox-video.sh generate --prompt "..." [OPTIONS]
 #   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
 #
 # generate OPTIONS:
 #   --model NAME              default: bytedance/seedance-2.5
 #   --prompt TEXT             required
-#   --duration N               seconds (Seedance 2.5: 4-30)
-#   --resolution VAL            480p | 720p | 1080p | 1K | 2K | 4K
-#   --aspect-ratio VAL          16:9 | 9:16 | 1:1 | 4:3 | 3:4 | 3:2 | 2:3 | 21:9 | 9:21 | adaptive
+#   --duration N               seconds. Validated against the chosen model's
+#                               own range (Seedance 2.5: 4-30, Wan 2.x: 2-15,
+#                               HappyHorse: 3-15, Seedance 2.0*: 4-15).
+#   --resolution VAL            validated per model, e.g. 480p | 720p | 1080p
+#                               for Seedance 2.5; 720p | 1080p for Wan 2.x.
+#                               Run 'ofox-video.sh models' to see each one.
+#   --aspect-ratio VAL          validated per model, e.g. 21:9 | 16:9 | 4:3 |
+#                               1:1 | 3:4 | 9:16 | adaptive for Seedance 2.5;
+#                               16:9 | 9:16 | 1:1 for Wan 2.x.
 #   --size WxH                  e.g. 1280x720 (alternative to --resolution)
 #   --generate-audio true|false default: true (server-side default)
 #   --seed N
@@ -71,8 +78,20 @@ DEFAULT_MODEL="bytedance/seedance-2.5"
 DEFAULT_MAX_WAIT=540
 DEFAULT_POLL_INTERVAL=6
 
-VALID_RESOLUTIONS="480p 720p 1080p 1K 2K 4K"
-VALID_ASPECT_RATIOS="16:9 9:16 1:1 4:3 3:4 3:2 2:3 21:9 9:21 adaptive"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODELS_SNAPSHOT="$SCRIPT_DIR/models-snapshot.json"
+MODELS_CACHE_TTL="${OFOX_MODELS_TTL:-86400}" # 24h
+
+# Fallback only. Per-model limits come from GET /v1/models; these unions of
+# every video model's advertised values are used when that list is
+# unavailable, so a valid request is never blocked by a missing model list.
+VALID_RESOLUTIONS="480p 720p 1080p 4k"
+VALID_ASPECT_RATIOS="21:9 16:9 4:3 1:1 3:4 9:16 adaptive"
+
+# Set by load_models(): the file holding the model list, and where it came
+# from ("live" | "cache" | "stale-cache" | "snapshot").
+MODELS_FILE=""
+MODELS_SOURCE=""
 
 # ---------------------------------------------------------------------------
 # small helpers
@@ -85,6 +104,106 @@ list_contains() {
     [ "$item" = "$needle" ] && return 0
   done
   return 1
+}
+
+# ---------------------------------------------------------------------------
+# model list: per-model limits instead of one hardcoded table
+#
+# GET /v1/models is a public, keyless, free endpoint that reports each model's
+# real duration range, resolutions, aspect ratios and modes. Validating against
+# it means a bad combination is caught locally with the model's own legal
+# values, instead of costing a round trip to be told "invalid_request" — and
+# it keeps working when Ofox adds a model or changes a limit.
+#
+# Order of preference: fresh cache -> live fetch -> stale cache -> bundled
+# snapshot. If all of those fail we validate against the unions above and say
+# so: a missing model list must never block a request that would have worked
+# (CONTRIBUTING rule 6, fail open).
+# ---------------------------------------------------------------------------
+
+file_age_seconds() {
+  # Portable mtime age. BSD stat (macOS) and GNU stat (Linux) disagree on
+  # flags, so try both rather than assuming a platform.
+  local f="$1" mtime now
+  mtime="$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null)" || return 1
+  [ -n "$mtime" ] || return 1
+  now="$(date +%s)"
+  echo $((now - mtime))
+}
+
+load_models() {
+  # Idempotent: the list is fetched at most once per invocation.
+  [ -n "$MODELS_FILE" ] && return 0
+
+  local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/ofox"
+  local cache_file="$cache_dir/models.json"
+  local age
+
+  if [ -f "$cache_file" ]; then
+    age="$(file_age_seconds "$cache_file")" || age=""
+    if [ -n "$age" ] && [ "$age" -lt "$MODELS_CACHE_TTL" ]; then
+      MODELS_FILE="$cache_file"
+      MODELS_SOURCE="cache"
+      return 0
+    fi
+  fi
+
+  # No Authorization header: this endpoint is public, and sending the key
+  # where it isn't needed is a habit worth not having.
+  local tmp
+  mkdir -p "$cache_dir" 2>/dev/null
+  tmp="$(mktemp "${TMPDIR:-/tmp}/ofox-models.XXXXXX")" || tmp=""
+  if [ -n "$tmp" ] &&
+    curl -fsS --max-time 10 "$API_BASE/models" -o "$tmp" 2>/dev/null &&
+    jq -e '(.data | length) > 0' "$tmp" >/dev/null 2>&1; then
+    if mv -f "$tmp" "$cache_file" 2>/dev/null; then
+      MODELS_FILE="$cache_file"
+    else
+      MODELS_FILE="$tmp" # cache dir unwritable; use it for this run only
+    fi
+    MODELS_SOURCE="live"
+    return 0
+  fi
+  [ -n "$tmp" ] && rm -f "$tmp"
+
+  if [ -f "$cache_file" ]; then
+    MODELS_FILE="$cache_file"
+    MODELS_SOURCE="stale-cache"
+    echo "NOTE: could not refresh the model list from $API_BASE/models; using the cached copy at $cache_file." >&2
+    return 0
+  fi
+
+  if [ -f "$MODELS_SNAPSHOT" ]; then
+    MODELS_FILE="$MODELS_SNAPSHOT"
+    MODELS_SOURCE="snapshot"
+    local snap_date
+    snap_date="$(jq -r '._snapshot_date // "unknown date"' "$MODELS_SNAPSHOT" 2>/dev/null)"
+    echo "NOTE: could not reach $API_BASE/models; validating against the bundled snapshot ($snap_date). A model added since then may be rejected here — set OFOX_SKIP_MODEL_VALIDATION=1 to skip per-model checks." >&2
+    return 0
+  fi
+
+  MODELS_SOURCE="none"
+  echo "NOTE: no model list available (fetch failed, no cache, no bundled snapshot). Falling back to generic parameter checks; the API will have the final say." >&2
+  return 1
+}
+
+model_entry() {
+  # $1 = model id (or one of its aliases). Prints that model's whole entry as
+  # compact JSON, or nothing if the list doesn't have it.
+  [ -n "$MODELS_FILE" ] || return 1
+  jq -c --arg m "$1" \
+    'first(.data[] | select(.id == $m or ((.aliases // []) | index($m)) != null)) // empty' \
+    "$MODELS_FILE" 2>/dev/null
+}
+
+entry_list() {
+  # $1 = entry JSON, $2 = jq path into it. Prints a space-separated list.
+  printf '%s' "$1" | jq -r "($2 // []) | join(\" \")" 2>/dev/null
+}
+
+entry_num() {
+  # $1 = entry JSON, $2 = jq path. Prints a number, or nothing if absent/null.
+  printf '%s' "$1" | jq -r "($2 // empty) | tostring" 2>/dev/null
 }
 
 resolve_image_ref() {
@@ -137,6 +256,7 @@ usage() {
 ofox-video.sh — Ofox video generation API client (create, poll, download).
 
   ofox-video.sh check
+  ofox-video.sh models
   ofox-video.sh generate --prompt "..." [OPTIONS]
   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
 
@@ -188,6 +308,38 @@ cmd_check() {
     echo "OK: curl, jq, and OFOX_API_KEY are all present."
   fi
   return "$ok"
+}
+
+cmd_models() {
+  # Lists the video models with their real limits and per-second base price.
+  # Needs no API key — GET /v1/models is public — so it is safe to run before
+  # a user has signed up, and it costs nothing.
+  check_curl_jq || return 2
+  load_models || true
+  if [ -z "$MODELS_FILE" ]; then
+    echo "ERROR: could not obtain a model list (no network, no cache, no bundled snapshot)." >&2
+    return 3
+  fi
+
+  echo "Video models (source: $MODELS_SOURCE)"
+  echo
+  jq -r '
+    ["MODEL", "BASE $/s", "RESOLUTIONS", "DURATION", "MODES"],
+    (.data[]
+      | select((.supported_endpoints // []) | index("/v1/videos"))
+      | [ .id + (if .is_deprecated then " (deprecated)" else "" end),
+          (.pricing.output_video_per_second // "-"),
+          ((.video_attributes.resolutions // []) | join(",")),
+          ((.video_attributes.min_duration_seconds | tostring) + "-" +
+           (.video_attributes.max_duration_seconds | tostring) + "s"),
+          ((.video_attributes.modes // []) | join(",")) ])
+    | @tsv' "$MODELS_FILE" | column -t -s "$(printf '\t')"
+
+  echo
+  echo "Base \$/s is the model's headline rate, not a quote: it is not always the"
+  echo "cheapest tier or the default-resolution tier. For an actual estimate use"
+  echo "the per-resolution table in references/pricing.md."
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -332,21 +484,70 @@ cmd_generate() {
         return 1
         ;;
     esac
-    if [ "$model" = "bytedance/seedance-2.5" ]; then
-      if [ "$duration" -lt 4 ] || [ "$duration" -gt 30 ]; then
-        echo "ERROR: --duration must be between 4 and 30 for bytedance/seedance-2.5 (got $duration)." >&2
+  fi
+
+  # Per-model limits from the live model list, with the generic unions as the
+  # fallback. Everything here happens before any create call.
+  local entry="" ok_resolutions="$VALID_RESOLUTIONS" ok_aspects="$VALID_ASPECT_RATIOS"
+  local min_dur="" max_dur="" ok_modes=""
+
+  if [ "${OFOX_SKIP_MODEL_VALIDATION:-}" != "1" ] && load_models; then
+    entry="$(model_entry "$model")"
+
+    if [ -z "$entry" ]; then
+      # An id the list doesn't have. When the list is current, that's a real
+      # error worth catching locally. When we're reading a bundled snapshot,
+      # the model may simply be newer than the file — warn and let the API
+      # decide rather than blocking a request that would have worked.
+      if [ "$MODELS_SOURCE" = "snapshot" ] || [ "$MODELS_SOURCE" = "stale-cache" ]; then
+        echo "NOTE: '$model' is not in the $MODELS_SOURCE model list, which may just be out of date. Skipping per-model checks; the API will validate it." >&2
+      else
+        echo "ERROR: --model '$model' is not in the Ofox model list. Run 'ofox-video.sh models' to see what is available." >&2
         return 1
+      fi
+    elif [ -z "$(entry_num "$entry" '.video_attributes')" ] &&
+      ! printf '%s' "$entry" | jq -e '(.supported_endpoints // []) | index("/v1/videos")' >/dev/null 2>&1; then
+      echo "ERROR: --model '$model' exists but does not support video generation (/v1/videos). Run 'ofox-video.sh models' to see the video models." >&2
+      return 1
+    else
+      local v_res v_asp v_min v_max v_modes
+      v_res="$(entry_list "$entry" '.video_attributes.resolutions')"
+      v_asp="$(entry_list "$entry" '.video_attributes.aspect_ratios')"
+      v_min="$(entry_num "$entry" '.video_attributes.min_duration_seconds')"
+      v_max="$(entry_num "$entry" '.video_attributes.max_duration_seconds')"
+      v_modes="$(entry_list "$entry" '.video_attributes.modes')"
+      [ -n "$v_res" ] && ok_resolutions="$v_res"
+      [ -n "$v_asp" ] && ok_aspects="$v_asp"
+      [ -n "$v_min" ] && min_dur="$v_min"
+      [ -n "$v_max" ] && max_dur="$v_max"
+      [ -n "$v_modes" ] && ok_modes="$v_modes"
+
+      if printf '%s' "$entry" | jq -e '.is_deprecated == true' >/dev/null 2>&1; then
+        echo "NOTE: '$model' is marked deprecated by Ofox. It still runs for now; consider moving to a current model." >&2
       fi
     fi
   fi
 
-  if [ -n "$resolution" ] && ! list_contains "$resolution" "$VALID_RESOLUTIONS"; then
-    echo "ERROR: --resolution '$resolution' is not supported. Valid values: $VALID_RESOLUTIONS" >&2
+  if [ -n "$duration" ] && [ -n "$min_dur" ] && [ -n "$max_dur" ]; then
+    if [ "$duration" -lt "$min_dur" ] || [ "$duration" -gt "$max_dur" ]; then
+      echo "ERROR: --duration must be between $min_dur and $max_dur for $model (got $duration)." >&2
+      return 1
+    fi
+  fi
+
+  if [ -n "$resolution" ] && ! list_contains "$resolution" "$ok_resolutions"; then
+    echo "ERROR: --resolution '$resolution' is not supported by $model. Valid values: $ok_resolutions" >&2
     return 1
   fi
 
-  if [ -n "$aspect_ratio" ] && ! list_contains "$aspect_ratio" "$VALID_ASPECT_RATIOS"; then
-    echo "ERROR: --aspect-ratio '$aspect_ratio' is not supported. Valid values: $VALID_ASPECT_RATIOS" >&2
+  if [ -n "$aspect_ratio" ] && ! list_contains "$aspect_ratio" "$ok_aspects"; then
+    echo "ERROR: --aspect-ratio '$aspect_ratio' is not supported by $model. Valid values: $ok_aspects" >&2
+    return 1
+  fi
+
+  if [ -n "$ok_modes" ] && { [ -n "$frame_first" ] || [ -n "$frame_last" ]; } &&
+    ! list_contains "i2v" "$ok_modes"; then
+    echo "ERROR: $model does not support image-to-video (frame images). It supports: $ok_modes" >&2
     return 1
   fi
 
@@ -775,6 +976,10 @@ main() {
   case "$mode" in
     check)
       cmd_check
+      return $?
+      ;;
+    models)
+      cmd_models
       return $?
       ;;
     generate)
