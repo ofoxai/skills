@@ -23,7 +23,7 @@ Seedance 2.5) before it ever calls the API.
 | `seed` | integer | no | `--seed` | Deterministic generation. |
 | `frame_images` | array | no | `--frame-first-image URL\|PATH`, `--frame-last-image URL\|PATH` | Image-to-video via first/last frame. Accepts a remote URL (used as-is) or a local readable file path (auto base64-encoded into a `data:image/<ext>;base64,...` URI). The script builds the `{type, image_url, frame_type}` objects for you — pass either or both flags. |
 | `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. |
-| `real_person` | boolean | no | `--real-person true\|false` | Default `false`. Enables real-person reference preprocessing. |
+| `real_person` | boolean | no | `--real-person true\|false` | Default `false`. Routes an **authorized** real-person reference image through Ofox's privacy-preserving preprocessing, which is otherwise refused by the upstream. Ofox documents this for `bytedance/seedance-2.0`; **not confirmed for 2.5** — see the real-person section below. |
 | `callback_url` | string | no | `--callback-url` | Must be `https://` and must not point to a private network. |
 | `provider` | object | no | `--provider SLUG` | Pins the upstream that serves the job. **Defaults to `byteplus` for `bytedance/seedance-*`** — see below. `--provider auto` sends no pin. `provider.options.<slug>` passthrough is not exposed as a flag; use `--extra-json`. |
 
@@ -227,11 +227,44 @@ script), and **always** also prints `error.message` when present, labeled
 | 429 | `rate_limited` | Poll too frequently, or upstream rate limit. |
 | 502 | `upstream_error` / `route_error` | Provider-side failure. |
 | 500 | `internal_error` | Platform-side failure. |
+| 400 | `input_moderation_failed` | The **input** image/video was rejected before generation — most often a real person's face. Distinct from `output_moderation_failed` below: this happens at submission, so nothing was generated and nothing was billed. |
 | n/a (seen on a terminal `failed` job, not a create-time HTTP error) | `output_moderation_failed` | The generated **output** failed a post-generation content check — happens *after* the job ran, not at submission, so it cannot be caught by client-side validation. Verified: the response's `usage` field is `null`/absent, so **this job is not billed**. Safe to retry with a brand-new `generate` call using a different prompt/reference — that's a new request, not a resubmission of the failed one. |
 
 `real_person: true` image validation failures (checked when Ofox fetches
 the reference image, not by this script): `bad_data_uri`, `download_failed`,
 `unreachable`, `not_image`, `too_large`.
+
+### Real-person reference images are refused by seedance-2.5 image-to-video
+
+**Verified against the real API 2026-08-30.** Feeding a frame containing a
+photoreal human into `bytedance/seedance-2.5` image-to-video returns:
+
+```
+HTTP 400  error.code: input_moderation_failed
+Upstream message: The request failed because the input image 'content[1]'
+may contain real person.
+```
+
+Nothing is generated and nothing is billed. This is a **submission-time**
+rejection, unlike `output_moderation_failed` which happens after a job has
+already run.
+
+What this means in practice:
+
+- Any workflow that carries a photoreal human between shots (chaining a
+  short-drama sequence, reusing a live-action character reference) hits this
+  wall on Seedance 2.5.
+- Non-photoreal references are unaffected — illustration, anime, product
+  shots, landscapes. This is why `seedance-anime-drama`, which reuses an
+  anime character sheet as a first frame, works fine.
+- `real_person: true` exists precisely for authorized real-person references
+  and routes them through Ofox's privacy-preserving preprocessing. Ofox
+  documents that path for `bytedance/seedance-2.0`. **Whether it lifts this
+  restriction on 2.5 has not been tested here** — do not assume it does
+  without a real call.
+
+The script maps `input_moderation_failed` to this explanation and names both
+options rather than leaving a bare error code.
 
 ## The no-resubmit rule
 

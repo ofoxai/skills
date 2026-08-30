@@ -13,7 +13,9 @@
 #   ofox-video.sh generate --prompt "..." [OPTIONS]
 #   ofox-video.sh batch --prompt "..." --takes N [OPTIONS]
 #   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
+#   ofox-video.sh chain --shot "..." --shot "..." [OPTIONS]
 #   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]  (local, no API call)
+#   ofox-video.sh last-frame VIDEO [--out-dir DIR]                (local, no API call)
 #
 # generate OPTIONS:
 #   --model NAME              default: bytedance/seedance-2.5. This skill has a
@@ -358,7 +360,9 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh generate --prompt "..." [OPTIONS]
   ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [OPTIONS]
   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
+  ofox-video.sh chain --shot "..." --shot "..." [--shots-file FILE] [--no-concat] [OPTIONS]
   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]
+  ofox-video.sh last-frame VIDEO [--out-dir DIR]
 
 Seedance jobs are pinned to the byteplus upstream by default; override with
 --provider volcengine, or --provider auto to let Ofox route by weight. Run
@@ -501,6 +505,12 @@ print_error_message() {
   case "$code" in
     invalid_request)
       echo "  invalid_request: a required field is missing or a parameter value is invalid. Re-check model, prompt, duration, resolution, aspect_ratio." >&2 ;;
+    input_moderation_failed)
+      echo "  input_moderation_failed: the INPUT image or video was rejected before generation, most often because it contains a real person's face." >&2
+      echo "    bytedance/seedance-2.5 image-to-video rejects real-person reference images outright. Options:" >&2
+      echo "    1. Use a non-photoreal reference (illustration, anime, product, landscape) — those pass." >&2
+      echo "    2. Use --real-person true, which routes through Ofox's privacy-preserving preprocessing for AUTHORIZED real-person references. Ofox documents this for bytedance/seedance-2.0; it is not confirmed for 2.5." >&2
+      echo "    Nothing was generated, so this call was not billed." >&2 ;;
     invalid_provider_type)
       echo "  invalid_provider_type: the provider slug sent is not one Ofox recognises. Run 'ofox-video.sh providers MODEL' for the valid ones, or pass --provider auto to let Ofox choose." >&2 ;;
     provider_type_unavailable)
@@ -1284,6 +1294,314 @@ make_contact_sheet() {
   return 0
 }
 
+extract_last_frame() {
+  # $1 = video, $2 = destination png. Grabs a frame slightly BEFORE the end
+  # rather than the literal final one: trailing frames are often a fade or a
+  # black frame, which would make the next shot open on nothing.
+  local video="$1" dest="$2" dur seek
+
+  dur="$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \
+    "$video" 2>/dev/null)" || dur=""
+
+  if [ -n "$dur" ]; then
+    seek="$(awk -v d="$dur" 'BEGIN { t = d - 0.1; if (t < 0) t = 0; printf "%.3f", t }')"
+    if ffmpeg -nostdin -loglevel error -ss "$seek" -i "$video" \
+      -frames:v 1 -y "$dest" 2>/dev/null && [ -s "$dest" ]; then
+      return 0
+    fi
+  fi
+
+  # Fall back to the true last frame if seeking didn't land one.
+  if ffmpeg -nostdin -loglevel error -sseof -0.5 -i "$video" \
+    -update 1 -frames:v 1 -y "$dest" 2>/dev/null && [ -s "$dest" ]; then
+    return 0
+  fi
+  return 1
+}
+
+cmd_last_frame() {
+  # Pull the closing frame out of a clip. No API call, no key, no cost —
+  # useful on its own for feeding a frame into a later generate.
+  local video="" out_dir=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --out-dir)
+        [ $# -lt 2 ] && { echo "ERROR: --out-dir requires a value." >&2; return 1; }
+        out_dir="$2"; shift 2
+        ;;
+      -*)
+        echo "ERROR: unknown option '$1' for last-frame." >&2
+        return 1
+        ;;
+      *)
+        video="$1"; shift
+        ;;
+    esac
+  done
+
+  if [ -z "$video" ]; then
+    echo "ERROR: give a video file. Usage: ofox-video.sh last-frame VIDEO [--out-dir DIR]" >&2
+    return 1
+  fi
+  if [ ! -r "$video" ]; then
+    echo "ERROR: cannot read '$video'." >&2
+    return 1
+  fi
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ERROR: ffmpeg is required to extract a frame." >&2
+    echo "  macOS: brew install ffmpeg   Debian/Ubuntu: sudo apt-get install ffmpeg" >&2
+    return 2
+  fi
+
+  [ -z "$out_dir" ] && out_dir="$(dirname "$video")"
+  mkdir -p "$out_dir" 2>/dev/null
+  local abs_dir base dest
+  abs_dir="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_dir="$out_dir"
+  base="$(basename "$video")"
+  dest="${abs_dir%/}/${base%.*}-lastframe.png"
+
+  if ! extract_last_frame "$video" "$dest"; then
+    echo "ERROR: could not extract a frame from '$video'." >&2
+    return 3
+  fi
+  echo "LAST_FRAME $dest"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# chain: N shots, each opening on the previous shot's closing frame
+#
+# One job is one continuous take, so a multi-shot sequence means multiple jobs
+# — and separate jobs share nothing, so the character, set and lighting drift
+# between them. Feeding shot N-1's last frame in as shot N's first frame is the
+# lever this API gives you against that.
+#
+# Same house rules as batch: estimate before spending, one job at a time via
+# cmd_generate (no-resubmit holds for free), stop on first failure, report real
+# per-job cost.
+# ---------------------------------------------------------------------------
+
+MAX_SHOTS=10
+
+cmd_chain() {
+  local shots=() shots_file="" out_dir="$PWD" duration="" resolution=""
+  local model="$DEFAULT_MODEL" concat="auto" aspect=""
+  local passthrough=() key val
+
+  while [ $# -gt 0 ]; do
+    key="$1"
+    case "$key" in
+      --shot)
+        [ $# -lt 2 ] && { echo "ERROR: --shot requires a value." >&2; return 1; }
+        shots+=("$2"); shift 2; continue
+        ;;
+      --shots-file)
+        [ $# -lt 2 ] && { echo "ERROR: --shots-file requires a value." >&2; return 1; }
+        shots_file="$2"; shift 2; continue
+        ;;
+      --no-concat)
+        concat="never"; shift; continue
+        ;;
+      --print-payload)
+        passthrough+=("$key"); shift; continue
+        ;;
+      *)
+        if [ $# -lt 2 ]; then
+          echo "ERROR: $key requires a value." >&2
+          return 1
+        fi
+        val="$2"
+        case "$key" in
+          --out-dir) out_dir="$val" ;;
+          --duration) duration="$val" ;;
+          --resolution) resolution="$val" ;;
+          --model) model="$val" ;;
+          --aspect-ratio) aspect="$val" ;;
+        esac
+        passthrough+=("$key" "$val")
+        shift 2
+        ;;
+    esac
+  done
+
+  if [ -n "$shots_file" ]; then
+    if [ ! -r "$shots_file" ]; then
+      echo "ERROR: cannot read --shots-file '$shots_file'." >&2
+      return 1
+    fi
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        ''|'#'*) continue ;;
+      esac
+      shots+=("$line")
+    done < "$shots_file"
+  fi
+
+  if [ "${#shots[@]}" -eq 0 ]; then
+    echo "ERROR: give at least one --shot, or a --shots-file with one prompt per line." >&2
+    return 1
+  fi
+  if [ "${#shots[@]}" -gt "$MAX_SHOTS" ]; then
+    echo "ERROR: chain is capped at $MAX_SHOTS shots (got ${#shots[@]}) — each shot is a separately billed job." >&2
+    return 1
+  fi
+
+  # Chaining is impossible without frame extraction, and finding that out
+  # after paying for shot 1 would be the wrong time.
+  if ! command -v ffmpeg >/dev/null 2>&1 && [ "${#shots[@]}" -gt 1 ]; then
+    echo "ERROR: chain needs ffmpeg to carry each shot's closing frame into the next." >&2
+    echo "  macOS: brew install ffmpeg   Debian/Ubuntu: sudo apt-get install ffmpeg" >&2
+    echo "  Without it, generate each shot separately with 'generate' instead." >&2
+    return 2
+  fi
+
+  local n=${#shots[@]}
+  echo "Chaining $n shots. Each shot after the first opens on the previous shot's closing frame." >&2
+  if [ "$n" -gt 1 ]; then
+    case "$model" in
+      bytedance/seedance-2.5)
+        if [ -n "$aspect" ]; then
+          echo "NOTE: --aspect-ratio $aspect applies to shot 1 only. Shots 2+ are image-to-video, which $model requires to be 'adaptive' — they inherit their framing from the fed frame, so the sequence stays dimensionally consistent." >&2
+        else
+          echo "NOTE: shots 2+ are image-to-video and inherit their framing from the fed frame, so the sequence stays dimensionally consistent." >&2
+        fi
+        ;;
+    esac
+  fi
+
+  if [ -n "$duration" ]; then
+    print_estimate "$model" "${resolution:-}" "t2v" "" "$duration" "$n"
+  fi
+
+  mkdir -p "$out_dir" 2>/dev/null
+  local abs_out
+  abs_out="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_out="$out_dir"
+
+  local i=1 rc=0 stopped="" prev_frame=""
+  local paths=() costs=() ids=() out line
+  while [ "$i" -le "$n" ]; do
+    echo "" >&2
+    echo "--- shot $i/$n ---" >&2
+
+    local args=("${passthrough[@]}" --prompt "${shots[$((i - 1))]}" --out-dir "$abs_out")
+    [ -n "$prev_frame" ] && args+=(--frame-first-image "$prev_frame")
+
+    out="$(cmd_generate "${args[@]}")"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      echo "" >&2
+      echo "Stopping the chain: shot $i failed (exit $rc), so shots $i..$n were NOT submitted." >&2
+      echo "Shots already generated are kept and listed below." >&2
+      stopped="1"
+      break
+    fi
+
+    local shot_path=""
+    while IFS= read -r line; do
+      case "$line" in
+        "VIDEO_PATH "*) shot_path="${line#VIDEO_PATH }"; paths+=("$shot_path") ;;
+        "VIDEO_COST "*) costs+=("${line#VIDEO_COST }") ;;
+        "JOB_ID "*) ids+=("${line#JOB_ID }") ;;
+      esac
+    done <<EOF_SHOT
+$out
+EOF_SHOT
+
+    if [ "$i" -lt "$n" ]; then
+      if [ -z "$shot_path" ]; then
+        echo "Stopping the chain: shot $i reported no video path, so there is no frame to carry forward." >&2
+        stopped="1"
+        rc=3
+        break
+      fi
+      prev_frame="${abs_out%/}/chain-frame-$i.png"
+      if ! extract_last_frame "$shot_path" "$prev_frame"; then
+        echo "Stopping the chain: could not extract a closing frame from shot $i." >&2
+        echo "The shots generated so far are kept and listed below." >&2
+        stopped="1"
+        rc=3
+        break
+      fi
+      echo "Carrying shot $i's closing frame into shot $((i + 1)): $prev_frame" >&2
+    fi
+    i=$((i + 1))
+  done
+
+  local done_count=${#paths[@]}
+  if [ "$done_count" -eq 0 ]; then
+    echo "ERROR: no shots completed." >&2
+    return "${rc:-3}"
+  fi
+
+  local joined=""
+  if [ "$concat" != "never" ] && [ "$done_count" -gt 1 ]; then
+    joined="$(concat_clips "$abs_out" "${paths[@]}")" || joined=""
+  fi
+
+  local total per
+  total="$(printf '%s\n' "${costs[@]}" | awk '{ s += $1 } END { printf "%.10f", s }')"
+  per="$(awk -v t="$total" -v n="$done_count" 'BEGIN { printf "%.10f", (n ? t/n : 0) }')"
+
+  echo "STATUS chain_completed"
+  echo "SHOTS_REQUESTED $n"
+  echo "SHOTS_COMPLETED $done_count"
+  local idx=0
+  while [ "$idx" -lt "$done_count" ]; do
+    echo "SHOT $((idx + 1)) ${ids[$idx]:-unknown} ${costs[$idx]:-unknown} ${paths[$idx]}"
+    idx=$((idx + 1))
+  done
+  [ -n "$joined" ] && echo "JOINED $joined"
+  echo "CHAIN_COST_TOTAL $total"
+  echo "CHAIN_COST_PER_SHOT $per"
+
+  [ -n "$stopped" ] && return 3
+  return 0
+}
+
+concat_clips() {
+  # $1 = out dir, $2.. = clips in order. Prints the joined file path.
+  # Fail open: losing the join must never cost the clips already paid for.
+  local out_dir="$1"
+  shift
+  local clips=("$@")
+
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "NOTE: skipping the join — ffmpeg is not installed. The shots above are unaffected." >&2
+    return 1
+  fi
+
+  local listfile stamp joined clip
+  listfile="$(mktemp)" || return 1
+  for clip in "${clips[@]}"; do
+    # The concat demuxer needs escaped single quotes in paths.
+    printf "file '%s'\n" "$(printf '%s' "$clip" | sed "s/'/'\\\\''/g")" >> "$listfile"
+  done
+
+  stamp="$(date +%Y%m%d%H%M%S)"
+  joined="${out_dir%/}/chain-joined-${stamp}.mp4"
+  if ffmpeg -nostdin -loglevel error -f concat -safe 0 -i "$listfile" \
+    -c copy -y "$joined" 2>/dev/null && [ -s "$joined" ]; then
+    rm -f "$listfile"
+    printf '%s' "$joined"
+    return 0
+  fi
+
+  # Stream copy fails when the clips differ in codec/params; re-encode once.
+  if ffmpeg -nostdin -loglevel error -f concat -safe 0 -i "$listfile" \
+    -c:v libx264 -preset veryfast -pix_fmt yuv420p -y "$joined" 2>/dev/null &&
+    [ -s "$joined" ]; then
+    rm -f "$listfile"
+    echo "NOTE: the shots needed re-encoding to join (their codecs differed)." >&2
+    printf '%s' "$joined"
+    return 0
+  fi
+
+  rm -f "$listfile" "$joined"
+  echo "NOTE: could not join the shots into one file; they are all listed above and playable individually." >&2
+  return 1
+}
+
 cmd_contact_sheet() {
   # Build a contact sheet from videos already on disk. No API call, no cost —
   # useful for re-tiling takes you already paid for, or for comparing clips
@@ -1580,6 +1898,16 @@ main() {
     contact-sheet)
       shift
       cmd_contact_sheet "$@"
+      return $?
+      ;;
+    chain)
+      shift
+      cmd_chain "$@"
+      return $?
+      ;;
+    last-frame)
+      shift
+      cmd_last_frame "$@"
       return $?
       ;;
     poll)

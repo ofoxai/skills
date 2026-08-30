@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.5.0"
+version: "1.6.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.5.0"
+  version: "1.6.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -64,6 +64,67 @@ Parameter limits differ per model and the script enforces the real ones
 with `21:9`/`4:3`/`3:4`). The limits come from the live model list, cached for
 24 hours, falling back to a bundled snapshot when offline — a fallback is
 always announced on stderr, never silent.
+
+## Multi-shot sequences (`chain`)
+
+One job is one continuous take, so a sequence means several jobs — and
+separate jobs share nothing, so the set, lighting and framing drift between
+them. `chain` carries each shot's closing frame into the next one as its
+opening frame:
+
+```bash
+bash references/ofox-video.sh chain \
+  --shot "a white cup on a dark table, steam rising, static camera" \
+  --shot "the camera pushes in slowly toward the same cup" \
+  --duration 4 --resolution 480p
+```
+
+Or `--shots-file shots.txt`, one prompt per line (blank lines and `#`
+comments ignored). Capped at 10 shots per run.
+
+**Verified behavior**: shot 2 opens on very nearly the exact frame it was
+fed — cup position and scale, window frame, table grain, light direction all
+carried over — and then follows its own prompt from there. This is real
+continuity, not just matched framing. Brightness can shift slightly across a
+seam.
+
+What it does:
+
+- Estimates the whole sequence before spending, then reports real per-shot
+  cost from each job's `usage.video_cost`.
+- **Stops on the first failure.** Shots already generated are kept, downloaded
+  and listed with their real cost; the remaining shots are never submitted.
+- Joins the finished shots into one file with ffmpeg (`--no-concat` to skip),
+  re-encoding only if the clips' codecs differ. Fails open: no join, never a
+  lost shot.
+- Shot 1 takes a normal `--aspect-ratio`. Shots 2+ are image-to-video, which
+  Seedance 2.5 requires to be `adaptive`, so they inherit framing from the fed
+  frame — which is what keeps the sequence dimensionally consistent.
+
+`chain` needs `ffmpeg`, and checks for it **before** submitting anything, so
+a missing dependency never costs a paid shot.
+
+### The one hard limit: no real people
+
+**Seedance 2.5 image-to-video rejects reference frames containing a real
+person** — `HTTP 400 / input_moderation_failed`, "may contain real person".
+Nothing is generated and nothing is billed, but the chain stops there.
+
+So chaining works for products, landscapes, illustration and anime, and
+**does not work for live-action human sequences** on this model. That is why
+`seedance-anime-drama` can reuse a character sheet across shots while a
+short-drama sequence cannot. `--real-person true` exists for authorized
+real-person references and Ofox documents it for `bytedance/seedance-2.0`;
+whether it lifts the restriction on 2.5 is untested here — don't promise it.
+
+### Extracting a frame on its own
+
+```bash
+bash references/ofox-video.sh last-frame clip.mp4 [--out-dir DIR]
+```
+
+No API call, no key, no cost. Grabs a frame just before the end (the literal
+final frame is often a fade), for feeding into a later `generate` by hand.
 
 ## Generating several takes (`batch`)
 

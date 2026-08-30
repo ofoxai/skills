@@ -4,6 +4,48 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.6.0 — `chain`: multi-shot sequences with real visual continuity
+
+One job is one take, so a sequence meant several jobs that shared nothing and
+drifted apart. `chain` feeds each shot's closing frame into the next as its
+opening frame.
+
+**Verified with a real paid run, which is the only way this could be settled.**
+Shot 2 opened on very nearly the exact frame it was fed — cup position and
+scale, window frame, table grain, light direction all carried over — then
+followed its own prompt. Real continuity, not just matched framing. Brightness
+shifts slightly across a seam.
+
+- `chain --shot "..." --shot "..."`, or `--shots-file` with one prompt per
+  line (blank lines and `#` comments skipped). Capped at 10 shots.
+- Estimates the sequence up front; reports real per-shot cost and the total.
+- **Stops on first failure**, keeping and reporting completed shots.
+- Joins finished shots into one file (`--no-concat` to skip), re-encoding only
+  when codecs differ. Fails open — no join, never a lost shot.
+- Requires ffmpeg and **checks before submitting anything**, so a missing
+  dependency can't cost a paid shot.
+- New `last-frame VIDEO` subcommand: pull a clip's closing frame. No API call,
+  no key, no cost. Grabs just before the end, since the literal last frame is
+  often a fade.
+
+### Found by the same run: real-person references are refused
+
+`bytedance/seedance-2.5` image-to-video rejects a reference frame containing a
+real person — `HTTP 400 / input_moderation_failed`, "may contain real person".
+Nothing generated, nothing billed. So chaining works for products, landscapes,
+illustration and anime, and **not** for live-action human sequences on this
+model. This is also why `seedance-anime-drama` can reuse a character sheet
+while a short-drama sequence cannot.
+
+`input_moderation_failed` is now mapped (it previously fell through as
+"unrecognized error code") and names both options: a non-photoreal reference,
+or `--real-person true` — which Ofox documents for `bytedance/seedance-2.0`
+and which is **untested on 2.5**, so the message says so rather than implying
+a fix.
+
+Tests: `references/test/chain.test.sh`, 18 cases, free by construction —
+frame extraction is verified against a locally synthesized clip.
+
 ## 1.5.0 — cost estimates come from the live catalog, not a hardcoded table
 
 The estimate shown before someone spends money was built from a 15-line `case`

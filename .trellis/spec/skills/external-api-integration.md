@@ -446,3 +446,69 @@ are different confirmations — do not let one launder the other.
   request body" testable without sending anything, and is genuinely useful for
   debugging. Safe here because the API key travels in a header, never the body
   — confirm that before adding one elsewhere.
+
+## Gotcha: an input can be refused for what it depicts, not just how it's formed
+
+**Discovered**: 2026-08-31, first real run of `ofox-video.sh chain`.
+
+Feeding a frame containing a photoreal human into `bytedance/seedance-2.5`
+image-to-video returns, at submission time:
+
+```
+HTTP 400  error.code: input_moderation_failed
+Upstream message: The request failed because the input image 'content[1]'
+may contain real person.
+```
+
+Nothing is generated and nothing is billed.
+
+Two things made this invisible to reasoning:
+
+1. **It is a content check, not a format check.** Every documented reference-
+   image failure mode up to that point was structural — `bad_data_uri`,
+   `download_failed`, `unreachable`, `not_image`, `too_large`. A valid,
+   readable, correctly-encoded image can still be refused for its *subject*.
+2. **The same mechanism already worked elsewhere.** `seedance-anime-drama`
+   reuses a character reference across shots via `--frame-first-image` and
+   has always worked — because an anime character sheet is not a photoreal
+   person. The mechanism was proven; the content class was the variable, and
+   nobody had varied it.
+
+**The lesson**: when a feature's proven mechanism meets a new *kind* of input,
+that is a new test, not a covered case. "We already do image-to-video" did not
+mean "we can do image-to-video with this image".
+
+**Distinguish the two moderation codes** — they behave differently and want
+different advice:
+
+| | `input_moderation_failed` | `output_moderation_failed` |
+|---|---|---|
+| When | at submission | after the job ran |
+| Billed | no (nothing generated) | no (`usage` is null) |
+| Fix | change the input, or `real_person: true` | change the prompt, or retry on the other upstream |
+
+**Related, and deliberately left unverified**: `real_person: true` exists for
+authorized real-person references and routes them through Ofox's
+privacy-preserving preprocessing. Ofox documents that path for
+`bytedance/seedance-2.0`. Whether it lifts the restriction on **2.5** was not
+tested — so the script's error message names it as an option while saying it
+is unconfirmed for 2.5. Naming an untested workaround as though it were a
+known fix is the same mistake as inventing an error code.
+
+## Pattern: check a hard dependency before the first paid call, not at the point of use
+
+`chain` needs ffmpeg to carry a frame between shots. The naive placement is at
+the point of use — after shot 1 has already been generated and paid for, when
+there is a video to extract from. Then a missing ffmpeg costs a real shot and
+delivers nothing usable.
+
+It checks at argument-validation time instead, before any submission, and
+refuses with an install hint plus a suggestion to use `generate` per shot
+instead. Generalisation: **for any multi-step paid flow, verify every local
+prerequisite for step N before paying for step 1.** The cost of the check is
+a `command -v`; the cost of skipping it is someone's money.
+
+The inverse also holds and is worth keeping straight: a dependency that is
+merely an *enhancement* (the contact sheet, the concat join) must fail open
+and never cost anyone their results. The distinction is whether the flow can
+still deliver what was paid for without it.
