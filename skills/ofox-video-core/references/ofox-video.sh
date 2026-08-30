@@ -10,7 +10,9 @@
 #   ofox-video.sh check
 #   ofox-video.sh models
 #   ofox-video.sh generate --prompt "..." [OPTIONS]
+#   ofox-video.sh batch --prompt "..." --takes N [OPTIONS]
 #   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
+#   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]  (local, no API call)
 #
 # generate OPTIONS:
 #   --model NAME              default: bytedance/seedance-2.5. This skill has a
@@ -264,7 +266,9 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh check
   ofox-video.sh models
   ofox-video.sh generate --prompt "..." [OPTIONS]
+  ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [OPTIONS]
   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
+  ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]
 
 Run with no arguments for this message. See the top of this file, or
 skills/ofox-video-core/SKILL.md and references/api-params.md, for the full
@@ -754,6 +758,314 @@ cmd_generate() {
 }
 
 # ---------------------------------------------------------------------------
+# batch: N takes of one prompt, real per-take billing, optional contact sheet
+#
+# Generating several takes and keeping one is how this actually gets used, and
+# it is the thing nobody prices honestly. So: estimate before spending, report
+# what each take really cost from its own usage.video_cost, and total it.
+#
+# Every take is its own job, submitted one at a time through the same
+# cmd_generate path a single generate uses. That keeps the no-resubmit rule
+# intact for free — nothing here can re-POST a request that already exists —
+# and it means a take benefits from every validation and error mapping the
+# single-shot path already has. It is slower than firing N creates at once;
+# that is the trade, and it is the right way round when each retry costs money.
+#
+# A take that fails STOPS the run. Whatever broke take 2 will almost certainly
+# break takes 3..N, and continuing would spend real money to collect identical
+# failures.
+# ---------------------------------------------------------------------------
+
+MAX_TAKES=10
+
+cmd_batch() {
+  local takes="" seed_given="" prompt_seen=""
+  local passthrough=() out_dir="$PWD" duration="" resolution="" model="$DEFAULT_MODEL"
+  local sheet="auto"
+  local key val
+
+  while [ $# -gt 0 ]; do
+    key="$1"
+    case "$key" in
+      --takes)
+        [ $# -lt 2 ] && { echo "ERROR: --takes requires a value." >&2; return 1; }
+        takes="$2"; shift 2; continue
+        ;;
+      --contact-sheet)
+        sheet="always"; shift; continue
+        ;;
+      --no-contact-sheet)
+        sheet="never"; shift; continue
+        ;;
+      *)
+        if [ $# -lt 2 ]; then
+          echo "ERROR: $key requires a value." >&2
+          return 1
+        fi
+        val="$2"
+        case "$key" in
+          --seed) seed_given="$val" ;;
+          --prompt) prompt_seen="1" ;;
+          --out-dir) out_dir="$val" ;;
+          --duration) duration="$val" ;;
+          --resolution) resolution="$val" ;;
+          --model) model="$val" ;;
+        esac
+        passthrough+=("$key" "$val")
+        shift 2
+        ;;
+    esac
+  done
+
+  # --- batch-specific validation (no network calls yet) ---
+
+  if [ -z "$takes" ]; then
+    echo "ERROR: --takes is required for batch (how many takes to generate). Use 'generate' for a single one." >&2
+    return 1
+  fi
+  case "$takes" in
+    ''|*[!0-9]*)
+      echo "ERROR: --takes must be a positive integer (got '$takes')." >&2
+      return 1
+      ;;
+  esac
+  if [ "$takes" -lt 1 ]; then
+    echo "ERROR: --takes must be at least 1 (got $takes)." >&2
+    return 1
+  fi
+  if [ "$takes" -gt "$MAX_TAKES" ]; then
+    echo "ERROR: --takes is capped at $MAX_TAKES here (got $takes) — this spends real money per take. Run it again if you genuinely want more." >&2
+    return 1
+  fi
+  if [ -z "$prompt_seen" ]; then
+    echo "ERROR: --prompt is required." >&2
+    return 1
+  fi
+
+  if [ -n "$seed_given" ] && [ "$takes" -gt 1 ]; then
+    echo "NOTE: --seed $seed_given is fixed, so all $takes takes may come back identical — and you would be billed for each. Drop --seed to let them vary." >&2
+  fi
+
+  # --- estimate before spending ---
+
+  local est_note=""
+  if [ -n "$duration" ]; then
+    local rate=""
+    rate="$(batch_rate_for "$model" "${resolution:-}")"
+    if [ -n "$rate" ]; then
+      est_note="$(awk -v d="$duration" -v n="$takes" -v r="$rate" \
+        'BEGIN { printf "~$%.2f for %d takes (%ds x $%s/s x %d)", d*n*r, n, d, r, n }')"
+    fi
+  fi
+  if [ -n "$est_note" ]; then
+    echo "Estimated cost: $est_note. Actual billing is reported per take below." >&2
+  else
+    echo "Estimated cost: unavailable for this model/resolution combination — see references/pricing.md. Actual billing is reported per take below." >&2
+  fi
+
+  # --- run the takes, one real job each ---
+
+  local i=1 rc=0 stopped=""
+  local paths=() costs=() ids=()
+  local out line
+  while [ "$i" -le "$takes" ]; do
+    echo "" >&2
+    echo "--- take $i/$takes ---" >&2
+    out="$(cmd_generate "${passthrough[@]}")"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      echo "" >&2
+      echo "Stopping the batch: take $i failed (exit $rc), so takes $((i))..$takes were NOT submitted." >&2
+      echo "Whatever failed here would almost certainly fail for the rest, and each attempt costs money." >&2
+      stopped="1"
+      break
+    fi
+    while IFS= read -r line; do
+      case "$line" in
+        "VIDEO_PATH "*) paths+=("${line#VIDEO_PATH }") ;;
+        "VIDEO_COST "*) costs+=("${line#VIDEO_COST }") ;;
+        "JOB_ID "*) ids+=("${line#JOB_ID }") ;;
+      esac
+    done <<EOF_TAKE
+$out
+EOF_TAKE
+    i=$((i + 1))
+  done
+
+  local done_count=${#paths[@]}
+  if [ "$done_count" -eq 0 ]; then
+    echo "ERROR: no takes completed." >&2
+    return "${rc:-3}"
+  fi
+
+  # --- contact sheet (optional, fail open) ---
+
+  local sheet_path=""
+  if [ "$sheet" != "never" ]; then
+    sheet_path="$(make_contact_sheet "$out_dir" "${paths[@]}")" || sheet_path=""
+  fi
+
+  # --- report: real billing, never the estimate ---
+
+  local total
+  total="$(printf '%s\n' "${costs[@]}" | awk '{ s += $1 } END { printf "%.10f", s }')"
+  local per
+  per="$(awk -v t="$total" -v n="$done_count" 'BEGIN { printf "%.10f", (n ? t/n : 0) }')"
+
+  echo "STATUS batch_completed"
+  echo "TAKES_REQUESTED $takes"
+  echo "TAKES_COMPLETED $done_count"
+  local idx=0
+  while [ "$idx" -lt "$done_count" ]; do
+    echo "TAKE $((idx + 1)) ${ids[$idx]:-unknown} ${costs[$idx]:-unknown} ${paths[$idx]}"
+    idx=$((idx + 1))
+  done
+  [ -n "$sheet_path" ] && echo "CONTACT_SHEET $sheet_path"
+  echo "BATCH_COST_TOTAL $total"
+  echo "BATCH_COST_PER_TAKE $per"
+  echo "" >&2
+  echo "That is \$$total for $done_count takes. If one of them is usable, that is your real" >&2
+  echo "cost per usable clip — the number worth comparing across models and settings." >&2
+
+  [ -n "$stopped" ] && return 3
+  return 0
+}
+
+batch_rate_for() {
+  # $1 = model, $2 = resolution. Prints a per-second rate for the estimate, or
+  # nothing when we do not have a confirmed figure. Deliberately conservative:
+  # these are the rates in references/pricing.md, read off each model's page.
+  # The models endpoint's own headline rate is NOT usable here — for
+  # seedance-2.5 it reports the 480p rate while defaulting to 720p.
+  local m="$1" r="${2:-}"
+  [ -z "$r" ] && r="720p" # every video model's default_resolution today
+  case "$m:$r" in
+    bytedance/seedance-2.5:480p) echo "0.11" ;;
+    bytedance/seedance-2.5:720p) echo "0.24" ;;
+    bytedance/seedance-2.5:1080p) echo "0.48" ;;
+    bytedance/seedance-2.0-mini:480p) echo "0.02" ;;
+    bytedance/seedance-2.0-mini:720p) echo "0.04" ;;
+    bytedance/seedance-2.0-fast:480p) echo "0.042" ;;
+    bytedance/seedance-2.0-fast:720p) echo "0.091" ;;
+    bytedance/seedance-2.0:480p) echo "0.063" ;;
+    bytedance/seedance-2.0:720p) echo "0.15" ;;
+    bytedance/seedance-2.0:1080p) echo "0.31" ;;
+    bytedance/seedance-2.0:4k) echo "1.24" ;;
+    alibaba/wan-2.6:720p|alibaba/wan-2.7:720p) echo "0.10" ;;
+    alibaba/wan-2.6:1080p|alibaba/wan-2.7:1080p) echo "0.15" ;;
+    alibaba/happyhorse-1.0:720p|alibaba/happyhorse-1.1:720p) echo "0.13" ;;
+    alibaba/happyhorse-1.0:1080p|alibaba/happyhorse-1.1:1080p) echo "0.17" ;;
+    *) echo "" ;;
+  esac
+}
+
+make_contact_sheet() {
+  # $1 = out dir, $2.. = video paths. Prints the sheet path on stdout when it
+  # makes one. Fail open, loudly: a missing ffmpeg costs you the sheet, never
+  # the videos you already paid for.
+  local out_dir="$1"
+  shift
+  local videos=("$@")
+
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "NOTE: skipping the contact sheet — ffmpeg is not installed. The videos above are unaffected." >&2
+    echo "  macOS: brew install ffmpeg   Debian/Ubuntu: sudo apt-get install ffmpeg" >&2
+    return 1
+  fi
+
+  local tmpdir rows=() v row i=0
+  tmpdir="$(mktemp -d)" || return 1
+
+  for v in "${videos[@]}"; do
+    row="$tmpdir/row_$i.png"
+    # Three frames per take (roughly first / middle / last) tiled into a strip.
+    # -frames:v 1 keeps it to a single output image.
+    if ffmpeg -nostdin -loglevel error -i "$v"       -vf "select='eq(n\,0)+gte(t\,0.45*duration)*lt(prev_t\,0.45*duration)+gte(t\,0.9*duration)*lt(prev_t\,0.9*duration)',scale=320:-2,tile=3x1"       -frames:v 1 -y "$row" 2>/dev/null && [ -s "$row" ]; then
+      rows+=("$row")
+    else
+      # Fall back to plain time-sampling if the select filter finds nothing.
+      if ffmpeg -nostdin -loglevel error -i "$v"         -vf "fps=1,scale=320:-2,tile=3x1" -frames:v 1 -y "$row" 2>/dev/null && [ -s "$row" ]; then
+        rows+=("$row")
+      fi
+    fi
+    i=$((i + 1))
+  done
+
+  if [ "${#rows[@]}" -eq 0 ]; then
+    echo "NOTE: could not extract frames for the contact sheet; the videos themselves are fine." >&2
+    rm -rf "$tmpdir"
+    return 1
+  fi
+
+  # Report an absolute path, never the relative one the caller happened to
+  # pass — a path the reader has to resolve against an unstated working
+  # directory is not an answer (see .trellis/spec/skills/index.md).
+  local sheet stamp abs_dir
+  stamp="$(date +%Y%m%d%H%M%S)"
+  abs_dir="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_dir="$out_dir"
+  sheet="${abs_dir%/}/contact-sheet-${stamp}.png"
+  if [ "${#rows[@]}" -eq 1 ]; then
+    cp "${rows[0]}" "$sheet" || return 1
+  else
+    local args=() n=${#rows[@]}
+    for row in "${rows[@]}"; do args+=(-i "$row"); done
+    if ! ffmpeg -nostdin -loglevel error "${args[@]}"       -filter_complex "vstack=inputs=$n" -y "$sheet" 2>/dev/null; then
+      echo "NOTE: extracted the frames but could not stack them into one sheet; the videos are fine." >&2
+      rm -rf "$tmpdir"
+      return 1
+    fi
+  fi
+
+  rm -rf "$tmpdir"
+  [ -s "$sheet" ] || return 1
+  printf '%s' "$sheet"
+  return 0
+}
+
+cmd_contact_sheet() {
+  # Build a contact sheet from videos already on disk. No API call, no cost —
+  # useful for re-tiling takes you already paid for, or for comparing clips
+  # that came from separate runs.
+  local out_dir="" videos=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --out-dir)
+        [ $# -lt 2 ] && { echo "ERROR: --out-dir requires a value." >&2; return 1; }
+        out_dir="$2"; shift 2
+        ;;
+      -*)
+        echo "ERROR: unknown option '$1' for contact-sheet." >&2
+        return 1
+        ;;
+      *)
+        videos+=("$1"); shift
+        ;;
+    esac
+  done
+
+  if [ "${#videos[@]}" -eq 0 ]; then
+    echo "ERROR: give at least one video file. Usage: ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]" >&2
+    return 1
+  fi
+  local v
+  for v in "${videos[@]}"; do
+    if [ ! -r "$v" ]; then
+      echo "ERROR: cannot read '$v'." >&2
+      return 1
+    fi
+  done
+  if [ -z "$out_dir" ]; then
+    out_dir="$(dirname "${videos[0]}")"
+  fi
+  mkdir -p "$out_dir" 2>/dev/null
+
+  local sheet
+  sheet="$(make_contact_sheet "$out_dir" "${videos[@]}")" || return 3
+  echo "CONTACT_SHEET $sheet"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # poll: resume polling / download for an existing job id (no create call)
 # ---------------------------------------------------------------------------
 
@@ -991,6 +1303,16 @@ main() {
     generate)
       shift
       cmd_generate "$@"
+      return $?
+      ;;
+    batch)
+      shift
+      cmd_batch "$@"
+      return $?
+      ;;
+    contact-sheet)
+      shift
+      cmd_contact_sheet "$@"
       return $?
       ;;
     poll)

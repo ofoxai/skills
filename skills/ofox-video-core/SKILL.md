@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.2.0"
+version: "1.3.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.3.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -64,6 +64,67 @@ Parameter limits differ per model and the script enforces the real ones
 with `21:9`/`4:3`/`3:4`). The limits come from the live model list, cached for
 24 hours, falling back to a bundled snapshot when offline — a fallback is
 always announced on stderr, never silent.
+
+## Generating several takes (`batch`)
+
+Video generation is a slot machine: you generate several, keep one. `batch`
+makes that one command, and — the part nobody else does — tells you what it
+actually cost.
+
+```bash
+bash references/ofox-video.sh batch --prompt "..." --takes 3 [OPTIONS]
+```
+
+Every option `generate` takes works here. What `batch` adds:
+
+- **An estimate before it spends anything**, and a real total afterward built
+  from each job's own `usage.video_cost` — never from the estimate.
+- **`BATCH_COST_PER_TAKE`**, which is the number that matters: if one take in
+  three is usable, your real cost per usable clip is the total, not the
+  per-take price. That is the figure worth comparing across models.
+- **A contact sheet** (`--no-contact-sheet` to skip): three frames from each
+  take, tiled one row per take, so a human can pick a winner from one image
+  instead of opening N files. Needs `ffmpeg`; without it the sheet is skipped
+  with a reason and the videos are untouched.
+- **A stop on first failure.** If take 2 fails, takes 3..N are not submitted.
+  Whatever broke it will almost certainly break the rest, and each attempt is
+  real money.
+- **A warning if you pass `--seed`**, since a fixed seed means you may be
+  paying N times for N identical clips.
+
+Takes run one at a time, each as its own job through the same path a single
+`generate` uses. That is slower than firing N creates at once, and it is the
+right trade: the no-resubmit rule stays intact for free, and nothing here can
+double-bill a request that already exists.
+
+`--takes` is capped at 10 per run.
+
+### The pattern worth suggesting
+
+Draft cheap, render the keeper expensive:
+
+```bash
+# 5 drafts at 480p on the cheapest model — about $0.40
+bash references/ofox-video.sh batch --prompt "..." --takes 5 \
+  --model bytedance/seedance-2.0-mini --resolution 480p --duration 4
+
+# then the winner, on the good model
+bash references/ofox-video.sh generate --prompt "<the one that worked>" \
+  --model bytedance/seedance-2.5 --resolution 1080p --duration 4
+```
+
+The same five drafts on `seedance-2.5` at 720p would be $4.80. Offer the
+ladder — but let the user choose the model, since a different model is a
+different look, not just a different price.
+
+### Re-tiling videos you already have
+
+```bash
+bash references/ofox-video.sh contact-sheet clip1.mp4 clip2.mp4 [--out-dir DIR]
+```
+
+No API call, no key, no cost. Useful for comparing takes from separate runs,
+or rebuilding a sheet you skipped.
 
 ## Availability check
 
@@ -223,6 +284,10 @@ when `error.code` itself is absent or unrecognized.
 | `3` | The API rejected the request, or the job ended `failed`/`cancelled`/`expired`. The mapped message explains why (see `references/api-params.md` for the full error-code table). Includes `output_moderation_failed` — a **post-generation** failure (the job ran, its output failed a content check afterward), **not billed** (no `usage` field on the response), safe to fix by submitting a new `generate` call with a different prompt/reference — that's a new request, not a resubmission of the failed one. |
 | `4` | Timed out waiting for a terminal state. The job is still running — `poll JOB_ID`, do not `generate` again. |
 | `5` | Ambiguous network failure on create — no HTTP response received. Do not auto-retry; check the dashboard first. |
+
+`batch` returns `3` when it stopped early: the takes that did complete are
+still downloaded and still listed with their real cost, so a partial run is
+reported honestly rather than discarded.
 | `6` | `--out-dir` could not be created or entered (bad path, permissions) — a local filesystem problem, not an API problem. If this happened during `generate`, the job itself is unaffected (already created or still running server-side); do not re-run `generate`. Fix `--out-dir` and re-run `poll JOB_ID --out-dir <a writable directory>`. |
 
 ## For scenario skills built on this
