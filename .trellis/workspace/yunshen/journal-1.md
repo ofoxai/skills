@@ -304,3 +304,83 @@ Built the second of the two planned repo types from the source task doc -- a cas
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Harden and re-test shipped skills (publish gate, quality, gacha)
+
+**Date**: 2026-08-30
+**Task**: 08-30-harden-and-re-test-shipped-skills-publish-gate-quality-polish-differentiator-features
+**Branch**: `feat/seedance-video-skills`
+
+### Summary
+
+Audited the 9 shipped skills against the source plan and found the repo was in
+better shape than expected on process (frontmatter, §5.5 coverage, shellcheck)
+and worse than expected on substance: four real defects, all from the same root
+cause of hardcoding an external API's valid values. Three in ofox-video.sh
+(aspect ratios that no model accepts passing local validation; duration checked
+for exactly one of eight models; a resolution list wrong in both directions),
+one in ofox-image.sh (a hardcoded three-model list that locally rejected the
+eleven other models the API serves).
+
+The unlock was discovering GET /v1/models is public, keyless and free — each
+video model publishes its real limits in a video_attributes object. Validation
+is now driven by it, with a cache/live/stale/snapshot/fail-open ladder where
+every fallback is announced. Also built stage 2 of the gacha chain: batch
+--takes N with real per-take billing from usage.video_cost, a stop-on-first-
+failure rule so a broken run can't burn the remaining takes, and an ffmpeg-only
+contact sheet (tile/vstack filters — no ImageMagick dependency).
+
+Three of the plan doc's publish-gate items turned out not to exist: ClawHub's
+format defines neither _meta.json nor llms-install.md, and skills.sh's schema
+has no package.json field. Dropped with evidence rather than built. The three
+frontmatter fields ClawHub actually reads were all missing, and are now added.
+
+### Main Changes
+
+| Area | Change |
+|---|---|
+| `ofox-video-core` | v1.2.0 per-model validation + `models`; v1.3.0 `batch`/`contact-sheet` |
+| `ofox-image-core` | v1.1.0 dynamic model check, 14 models usable instead of 3 |
+| All 9 skills | ClawHub frontmatter (top-level version, openclaw.homepage, envVars) |
+| `cloudflare-drop` | v2.2.0 Chinese countdown copy → English (CONTRIBUTING rule 1) |
+| Standards | CONTRIBUTING + spec updated; CHANGELOG for all 9 skills |
+| Spec | Model-endpoint pattern + 4 new gotchas in external-api-integration.md |
+
+### Git Commits
+
+| Hash | Message |
+|---|---|
+| `32cc769` | fix(ofox-video-core): validate parameters per model |
+| `133fade` | fix(ofox-image-core): check --model against the live model list |
+| `d2827b7` | feat(skills): declare the frontmatter fields ClawHub actually reads |
+| `5888358` | fix(cloudflare-drop): render countdown copy in English |
+| `d3d9552` | docs(skills): CHANGELOG for every skill + standards |
+| `36d68e7` | docs(ofox): bring reference docs in line with per-model validation |
+| `e995ffb` | feat(ofox-video-core): batch takes with real billing + contact sheet |
+| `6cd6287` | docs(spec): record the model-endpoint pattern and four gotchas |
+
+### Testing
+
+- [OK] ofox-video-core validation: 36/36
+- [OK] ofox-video-core batch: 21/21
+- [OK] ofox-image-core validation: 18/18
+- [OK] cloudflare-drop: 57/57
+- [OK] shellcheck -S warning: zero warnings across all scripts and tests
+- [OK] zero CJK under skills/; README + skills.sh.json in sync; 9/9 frontmatter
+- [OK] clawhub skill publish --dry-run: ok on all 7 tried
+- [OK] Live paid: 3 takes, $0.24 billed, matched the estimate exactly. That run
+      also exercised the no-resubmit rule for real (two curl 35 poll failures,
+      script retried the poll, never the create).
+
+### Status
+
+[OK] **Completed** (stages 1 and 2; stage 3 deliberately deferred)
+
+### Next Steps
+
+- Stage 3: multi-model fallback (`--fallback-models`) as its own task — it
+  touches the no-resubmit rule and deserves isolated testing
+- Four-directory publish is still blocked on the same prerequisite as before:
+  nothing is pushed. `feat/seedance-video-skills` now carries 10+ commits
+  unmerged to main.
