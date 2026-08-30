@@ -41,7 +41,7 @@ Before writing a new skill or extending an existing one:
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [External API Integration](./external-api-integration.md) | No-resubmit-on-timeout rule, and why to distrust "always present" claims in third-party API docs for optional/derived response fields | Filled |
+| [External API Integration](./external-api-integration.md) | No-resubmit-on-timeout rule; why to distrust "always present" claims in third-party API docs; reading a live capability endpoint instead of hardcoding a validation table (with the cache/fallback/fail-open ladder to copy); why a catalog price field usually isn't quotable; why sibling endpoints may not expose symmetric metadata; why a publish CLI may ignore your frontmatter version | Filled |
 
 ## Quality Check
 

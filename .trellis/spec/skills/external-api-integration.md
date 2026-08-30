@@ -263,3 +263,108 @@ this machine (macOS) and can differ by OS/kernel/config — the general
 lesson (large values must never be passed as command-line arguments; route
 them through a file instead) is the reusable part and applies to any shell
 script in this repo, not just Ofox integrations.
+
+## Pattern: prefer a live capability endpoint over a hardcoded validation table
+
+**Discovered**: 2026-08-30, while auditing `ofox-video.sh` against the real API.
+
+`ofox-video.sh` hardcoded one global table of valid resolutions, aspect
+ratios, and a single model's duration range. Checked against
+`GET /v1/models`, it was wrong three ways at once:
+
+- it accepted `3:2`, `2:3` and `9:21`, which **no** video model supports —
+  those passed client-side validation and then cost a round trip to come back
+  as a generic `invalid_request`;
+- it range-checked `duration` only when the model was literally
+  `bytedance/seedance-2.5`, leaving the other seven models unchecked despite
+  every one having a different range;
+- it accepted `1K`/`2K` (supported by nothing) while rejecting `4k` (which
+  `seedance-2.0` does support, lowercase in the API).
+
+`ofox-image.sh` had the same class of bug from the other direction: a
+hardcoded list of three models locally rejected the eleven others the API
+actually serves.
+
+**The lesson**: a hardcoded table of an external API's valid values is a
+copy of a fact you don't own. It is wrong the day the provider adds a model
+and can be wrong on the day you write it. When the provider exposes the
+values programmatically, read them.
+
+**What made it viable here**: `GET https://api.ofox.ai/v1/models` is public,
+needs no API key (verified by calling it with `OFOX_API_KEY` unset — HTTP
+200), and is free. Each entry carries a `video_attributes` object with real
+`modes`/`resolutions`/`min_duration_seconds`/`max_duration_seconds`/
+`aspect_ratios`. Check for this kind of endpoint before hand-maintaining a
+table.
+
+**The shape to copy** (both Ofox scripts implement it):
+
+1. fresh cache (24h, `${XDG_CACHE_HOME:-$HOME/.cache}/<vendor>/`) → live
+   fetch → stale cache → bundled snapshot → **no check at all**;
+2. every fallback below "live" prints a NOTE to stderr — never silent;
+3. the last rung is fail-open, per `CONTRIBUTING.md` rule 6: a missing
+   capability list must never block a request that would have worked;
+4. an unknown id is a local error against a **live** list, but is passed
+   through to the API when only a **snapshot** is available — the snapshot
+   may simply predate the model, and blocking would be worse than a wasted
+   round trip;
+5. an env escape hatch (`OFOX_SKIP_MODEL_VALIDATION=1`) for when the client
+   is wrong and the user knows better;
+6. a `refresh-snapshot.sh` next to the bundled snapshot, so regenerating it
+   is one command rather than an archaeology exercise.
+
+**Duplicated on purpose**: the fetch/cache/fallback logic is copied between
+`ofox-video-core` and `ofox-image-core` rather than shared. Each skill must
+work when installed alone, so a file shared across skill directories is not
+an option (`CONTRIBUTING.md` rule 7). Note it in a comment so the next
+reader doesn't "fix" it.
+
+## Gotcha: a price field in a capability endpoint may not be a price you can quote
+
+`/v1/models` reports `pricing.output_video_per_second`. It reads like the
+number to quote. It is not:
+
+- `bytedance/seedance-2.5` reports `0.11` — its **480p** rate — while its own
+  `default_resolution` is `720p`, which really costs $0.24/s. Quoting the
+  field would understate a default-resolution job by more than half.
+- `bytedance/seedance-2.0-mini` reports `0.04`, which **is** its 720p rate.
+
+So the field isn't consistently the cheapest tier *or* the default tier. It
+is fine for ranking models by rough cost; it must never be turned into a
+number shown to a user. Per-resolution tables (from each model's own page,
+in `references/pricing.md`) are the quotable source. The same caution
+applies to any single-number price in a catalog endpoint for a product whose
+real price is a matrix.
+
+## Gotcha: don't assume two endpoints of the same API expose symmetric metadata
+
+The Ofox video models carry a rich `video_attributes` object. The obvious
+next step — do the same for image models — does not work: image entries have
+**no `image_attributes` equivalent**, and their `supported_parameters` list
+is LLM-shaped (`temperature`, `top_p`, `max_tokens`, `stop`,
+`response_format`) rather than the `size`/`quality`/`background` the images
+endpoint actually accepts.
+
+So `ofox-image.sh` validates only the model **id** dynamically and keeps
+`--size`/`--quality`/`--output-format`/`--background` hardcoded from the
+docs. This asymmetry is checked, not assumed, and is recorded in that
+skill's `references/api-params.md` so nobody "fixes" it into a bug later.
+
+**General form**: when a provider gives you good metadata on one endpoint,
+verify it exists on the sibling endpoint before designing around it. Parity
+is an assumption, not a guarantee.
+
+## Gotcha: a publish CLI may ignore the version in your frontmatter
+
+ClawHub's skill-format docs list `version` as a top-level frontmatter field,
+so it's natural to assume the publish CLI reads it. Running
+`npx clawhub skill publish <dir> --dry-run --json` shows otherwise: every
+skill reported `"version": "1.0.0"` with `"latestVersion": null`, because
+the CLI derives the published version from `--version` or the registry's
+next patch — not from the file.
+
+Carry the field anyway (the format documents it, and the server may surface
+it), but don't claim a version problem is "fixed" because frontmatter now
+has one. `--dry-run --json` is cheap and answers what the tool actually
+does; its `fileCount` is also the quickest way to confirm a `references/`
+file will really ship and that strays (`.DS_Store`) won't.
