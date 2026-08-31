@@ -401,9 +401,15 @@ each take yourself.
 ## Where the file lands
 
 Always pass `--out-dir`. Without it the script writes to the current working
-directory, which is usually the user's project root, and the filename is a
-bare job id. Pick something sensible (`./out`, or wherever the user asked) and
-relay the absolute `VIDEO_PATH` the script prints, on its own line.
+directory, which is usually the user's project root. Pick something sensible
+(`./out`, or wherever the user asked) and relay the absolute `VIDEO_PATH` the
+script prints, on its own line.
+
+Pass `--name` too. You know what the shot is — you just wrote the prompt for
+it — so name the file after the scene rather than leaving the script to guess
+from the prompt's opening words, which describe the setting and the lighting.
+The clip lands as `<name>-<short job id>.mp4` with a `.json` sidecar beside
+it holding the full job id, the prompt and the real cost.
 
 ## Running the script
 
@@ -428,6 +434,7 @@ bash ../ofox-image-core/references/ofox-image.sh generate \
 # Step 2 — once per shot, reusing the SAME IMAGE_PATH printed by Step 1
 bash ../ofox-video-core/references/ofox-video.sh generate \
   --prompt "The girl stands on a rooftop at sunset, wind blowing through her hair, she looks toward the horizon and says, \"I'm not going back.\" Medium shot, slow push-in, modern theatrical-anime style, cel-shaded" \
+  --name "rooftop confession shot 1" \
   --frame-first-image "/absolute/path/to/assets/ofox_image_20260829_1234.png" \
   --duration 8 \
   --resolution 720p

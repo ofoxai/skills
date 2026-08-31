@@ -342,7 +342,7 @@ are present — it makes no network call. Handle each failure mode plainly:
 bash references/ofox-video.sh models
 bash references/ofox-video.sh generate --dry-run --prompt "..." [OPTIONS]
 bash references/ofox-video.sh generate --prompt "..." [OPTIONS]
-bash references/ofox-video.sh poll JOB_ID [--out-dir DIR]
+bash references/ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT]
 ```
 
 `generate` builds the request, validates parameters client-side against the
@@ -355,9 +355,40 @@ prints:
 STATUS completed
 JOB_ID <id>
 VIDEO_PATH <path/to/file.mp4>
+SIDECAR_PATH <path/to/file.json>
 VIDEO_SECONDS <billed seconds>
 VIDEO_COST <exact cost from usage.video_cost>
 ```
+
+## Name the output file
+
+Pass `--name` with a short description of what the clip actually is:
+
+```bash
+bash references/ofox-video.sh generate --prompt "..." --name "convenience store breakup"
+```
+
+The file lands as `convenience-store-breakup-d12c2787.mp4` instead of a bare
+job id, with a `convenience-store-breakup-d12c2787.json` sidecar beside it.
+
+Without `--name` the slug is derived from the prompt, so a `poll JOB_ID` run
+in a fresh shell still produces something readable. That fallback is a
+consolation prize, not the goal: prompts open on setting and lighting, so the
+derived name usually describes the room rather than the scene. **A scenario
+skill always knows the better name — pass it.**
+
+The 8-hex suffix keeps two runs of the same prompt from overwriting each
+other. It is not a way back to the job: the API has no list endpoint, so a
+short id cannot be expanded. The sidecar carries the full `job_id`, the
+prompt, the real cost, and — on the `generate` path only — the `request` as
+submitted, which is the only place `resolution` and `aspect_ratio` are
+recorded, because the poll response echoes neither. That makes a sidecar
+written by `generate` enough to re-render the same shot at a different
+resolution. Full field table in
+[`references/api-params.md`](references/api-params.md).
+
+A sidecar that cannot be written is a warning, never a failed download — the
+video is what the user paid for.
 
 Download source: `mirror_urls` (CDN-signed, persistent) when present,
 falling back to `unsigned_urls` (documented as temporary, may expire within

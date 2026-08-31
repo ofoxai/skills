@@ -13,7 +13,7 @@
 #   ofox-video.sh generate --prompt "..." [OPTIONS]
 #   ofox-video.sh create --prompt "..." [OPTIONS]  (submit only, no waiting)
 #   ofox-video.sh batch --prompt "..." --takes N [OPTIONS]
-#   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
+#   ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS]
 #   ofox-video.sh chain --shot "..." --shot "..." [OPTIONS]
 #   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]  (local, no API call)
 #   ofox-video.sh last-frame VIDEO [--out-dir DIR]                (local, no API call)
@@ -49,6 +49,13 @@
 #                               to quote a price to someone before spending.
 #   --print-payload             dump the request body to stderr before sending
 #                               (the API key is in a header, not the body)
+#   --name TEXT                 short, human-readable name for the output file,
+#                               e.g. "convenience store breakup". The file lands
+#                               as <name>-<short job id>.mp4 with a matching
+#                               .json sidecar. Without it the name is derived
+#                               from the prompt, which still beats a bare job id
+#                               but reads worse — a caller that knows what the
+#                               shot is should say so. Sanitized before use.
 #   --size WxH                  e.g. 1280x720 (alternative to --resolution)
 #   --generate-audio true|false default: true (server-side default)
 #   --seed N
@@ -374,10 +381,15 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh create   --prompt "..." [OPTIONS]   (submit only, returns a job id)
          add --dry-run to any of generate/batch/chain to price it without spending
   ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [OPTIONS]
-  ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
+  ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS]
   ofox-video.sh chain --shot "..." --shot "..." [--shots-file FILE] [--no-concat] [OPTIONS]
   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]
   ofox-video.sh last-frame VIDEO [--out-dir DIR]
+
+Downloads are named <slug>-<short job id>.<ext>, where the slug comes from
+--name or, without it, from the prompt. Each video gets a .json sidecar
+holding the full job id, the prompt and the cost — the short id in the
+filename cannot be expanded back on its own.
 
 Seedance jobs are pinned to the byteplus upstream by default; override with
 --provider volcengine, or --provider auto to let Ofox route by weight. Run

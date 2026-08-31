@@ -244,6 +244,55 @@ On `completed`:
 | `usage.video_seconds` | Billed duration. **Measured**: for a v2v job with a 4s input and a 4s output this was `4`, not `8` — the input video's duration is *not* added on top. (An earlier version of this table claimed it was; that claim was never measured and is wrong for this case.) The v2v *rate* still applies, which is where the extra cost comes from. |
 | `usage.video_cost` | Actual cost, a string with 10 decimal places. The script prints this exactly — never estimate or invent a number here. |
 
+## Output filenames and the metadata sidecar
+
+A completed download is written as `<slug>-<short job id>.<ext>`, plus a
+`.json` sidecar with the same stem.
+
+The slug comes from `--name` when the caller gives one, and otherwise from
+the job's own `prompt`. The prompt is in every poll response, which is what
+makes a bare `poll JOB_ID` in a fresh shell produce a readable name rather
+than falling back to the raw id. `--name` is the better source whenever the
+caller knows what the shot actually is — a prompt opens on setting and
+lighting, so a prompt-derived slug tends to describe the room rather than the
+scene.
+
+Both sources are treated as untrusted path input: whitespace collapses to a
+dash, control characters and characters illegal on Windows filesystems are
+removed, non-alphanumeric runs are trimmed off both ends, and the result is
+capped at 40 codepoints — sliced in `jq`, which cuts by codepoint, so CJK text
+is never split mid-character regardless of locale.
+
+The short id is 8 hex characters. It exists to keep two runs of the same
+prompt from overwriting each other, **not** as a way back to the job: there is
+no list endpoint to expand a prefix against, so a truncated id cannot be
+resolved. That is what the sidecar is for.
+
+| Sidecar field | Source |
+|---|---|
+| `job_id` | Full id, the handle for `poll` and for reconciling against app.ofox.ai. |
+| `status`, `model`, `prompt`, `created_at`, `updated_at` | The poll response. |
+| `video_seconds`, `video_cost` | `usage.*` — the real bill, not an estimate. |
+| `video_file` | Basename of the video this sidecar describes. |
+| `name` | The `--name` given, when there was one. |
+| `request` | The create payload as submitted. **Only on the generate path.** |
+
+That last row is the one worth knowing: the poll response reports the model
+and prompt but **not `resolution` or `aspect_ratio`** — they are echoed
+nowhere. So they reach the sidecar only through the create payload, which
+means only `generate` records them; a bare `poll JOB_ID` writes the response
+half and omits `request` rather than guessing. Re-rendering a shot at a
+different resolution therefore works from a sidecar written by `generate`,
+and needs the missing parameters supplied by hand from one written by `poll`.
+
+`frame_images` is replaced by a `frame_images_count` — a resolved
+`--frame-first-image` is a base64 data URI that can exceed a megabyte, and
+that does not belong in a metadata file.
+
+A sidecar that would be unparseable is discarded with a warning instead of
+being left next to the video: a file that looks like a record but isn't is
+worse than no file. The video is never failed over a sidecar problem.
+
 ## Error codes (`error.code`) and `error.message`
 
 `error.message` free text is not a stable contract to branch logic on — the

@@ -306,9 +306,15 @@ each take yourself.
 ## Where the file lands
 
 Always pass `--out-dir`. Without it the script writes to the current working
-directory, which is usually the user's project root, and the filename is a
-bare job id. Pick something sensible (`./out`, or wherever the user asked) and
-relay the absolute `VIDEO_PATH` the script prints, on its own line.
+directory, which is usually the user's project root. Pick something sensible
+(`./out`, or wherever the user asked) and relay the absolute `VIDEO_PATH` the
+script prints, on its own line.
+
+Pass `--name` too. You know what the shot is — you just wrote the prompt for
+it — so name the file after the scene rather than leaving the script to guess
+from the prompt's opening words, which describe the setting and the lighting.
+The clip lands as `<name>-<short job id>.mp4` with a `.json` sidecar beside
+it holding the full job id, the prompt and the real cost.
 
 ## Running the script
 
@@ -322,6 +328,7 @@ from the repo root it is `skills/ofox-video-core/references/ofox-video.sh`.
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate \
   --prompt "<the ad-creative prompt built above>" \
+  --name "<short spot name, e.g. perfume bottle hero ad>" \
   --duration 10 \
   --resolution 1080p \
   --aspect-ratio 16:9
