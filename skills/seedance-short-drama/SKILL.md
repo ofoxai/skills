@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Generate a single realistic-human, dialogue-driven short-drama shot from a script or scene description using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (character appearance, quoted dialogue, scene-cut timing cues), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative) or for anything not involving people/dialogue.
 license: MIT
-version: "1.2.0"
+version: "1.3.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.3.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -71,6 +71,22 @@ from repeating the same character description word for word.
 
 Don't try to cram an entire multi-scene script into one call; ask the user
 which single scene/shot to render if the request spans more than one.
+
+
+## Prompt language follows the audio
+
+Audio is generated on by default, and the model speaks **whatever language the
+prompt is written in**. So keep quoted dialogue in the user's own language —
+if they give you Chinese lines, put Chinese in the prompt. Translating them to
+match the English examples in this file produces an English-dubbed clip, and
+the user only finds out after paying for it.
+
+The rest of the prompt (setting, camera, lighting) can be English regardless;
+it is the quoted speech that determines the spoken language.
+
+The "2-3 spoken words per second" budget below is calibrated for English. For
+Chinese and Japanese, count characters rather than words and budget roughly
+5-6 characters per second.
 
 ## Writing a good short-drama prompt
 
@@ -157,17 +173,68 @@ Pass `--provider volcengine` for the mainland platform, or `--provider auto` to
 let Ofox choose. Pricing is identical either way. See
 `ofox-video-core/references/api-params.md` for the detail.
 
-## Cost estimate — show this before generating
+## Cost: quote it, get a yes, then spend it
 
-The script prints its own estimate on stderr before it submits anything, read
-from live per-second rates — so you no longer need to compute one by hand or
-quote a table that may have gone stale. Relay what it prints. If it says the
-estimate is unavailable, say that rather than substituting a number of your own.
+Never submit a paid job without the user having seen the number first. The
+script makes that possible with `--dry-run`, which validates everything and
+prints the estimate **without sending a request**:
 
-For rough planning before a call, the ladder and a dated snapshot are in
-[`../ofox-video-core/references/pricing.md`](../ofox-video-core/references/pricing.md),
-and `ofox-video.sh providers` prints live rates with no API key. The real
-number is always `VIDEO_COST` from the completed job.
+```bash
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+  --prompt "..." --duration 15 --resolution 720p --out-dir ./out
+```
+
+Relay the `Estimated cost:` line it prints, wait for a yes, then re-run the
+identical command with `--dry-run` removed.
+
+The estimate a *real* run prints comes microseconds before the request goes
+out, so it is not something you can relay in time — that is what `--dry-run`
+is for. Every run prints exactly one `Estimated cost:` line, including when it
+can't compute one (it says why). Relay whatever you get; never invent a number.
+
+Afterwards, the **actual** bill is `VIDEO_COST` from the finished job, read
+from `usage.video_cost`. Report it as money (`$3.60`), not as the raw
+ten-decimal string. An estimate is never a bill.
+
+## Several takes to choose from
+
+Video generation is a slot machine — most takes go in the bin. When the user
+wants options rather than one clip, use `batch` instead of running `generate`
+repeatedly:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh batch --dry-run \
+  --prompt "..." --takes 4 --duration 8 --resolution 480p --out-dir ./out
+```
+
+It prices the whole batch up front, stops on the first failure instead of
+burning the remaining takes, and produces a contact sheet — three frames per
+take, one row each — so the user picks from one image instead of opening N
+files.
+
+**Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`.** If one take in four
+is usable, that clip cost the whole total; the per-take figure understates it
+by 4x.
+
+Worth offering when the user is exploring: draft cheap on
+`bytedance/seedance-2.0-mini` at 480p, then render the winner on
+`bytedance/seedance-2.5`. Four 8-second drafts cost about $0.64 on mini versus
+$7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
+different model is a different look, not just a different price.
+
+## Where the file lands
+
+Always pass `--out-dir`. Without it the script writes to the current working
+directory, which is usually the user's project root, and the filename is a
+bare job id. Pick something sensible (`./out`, or wherever the user asked) and
+relay the absolute `VIDEO_PATH` the script prints, on its own line.
+
+## Running the script
+
+Paths in the examples above are written relative to **this skill's own
+directory** (`skills/<this-skill>/`), which is where `../ofox-video-core/...`
+resolves from. If you are running from somewhere else, adjust accordingly —
+from the repo root it is `skills/ofox-video-core/references/ofox-video.sh`.
 
 ## Generating
 

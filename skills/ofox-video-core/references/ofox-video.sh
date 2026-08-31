@@ -42,6 +42,10 @@
 #                               settable via OFOX_VIDEO_PROVIDER. Pricing is
 #                               identical across upstreams — this is a region
 #                               and moderation choice, not a cost one.
+#   --dry-run                   validate, resolve the provider, build the
+#                               payload and print the cost estimate, then stop
+#                               WITHOUT submitting. Nothing is billed. Use this
+#                               to quote a price to someone before spending.
 #   --print-payload             dump the request body to stderr before sending
 #                               (the API key is in a header, not the body)
 #   --size WxH                  e.g. 1280x720 (alternative to --resolution)
@@ -358,6 +362,7 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh models
   ofox-video.sh providers [MODEL]
   ofox-video.sh generate --prompt "..." [OPTIONS]
+         add --dry-run to any of generate/batch/chain to price it without spending
   ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [OPTIONS]
   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
   ofox-video.sh chain --shot "..." --shot "..." [--shots-file FILE] [--no-concat] [OPTIONS]
@@ -586,6 +591,7 @@ cmd_generate() {
   local provider=""
   local provider_explicit=""
   local print_payload=""
+  local dry_run=""
   local prompt=""
   local duration=""
   local resolution=""
@@ -608,6 +614,11 @@ cmd_generate() {
     case "$key" in
       --print-payload)
         print_payload=1
+        shift
+        continue
+        ;;
+      --dry-run)
+        dry_run=1
         shift
         continue
         ;;
@@ -940,12 +951,27 @@ cmd_generate() {
       >/dev/null 2>&1; then
     est_mode="v2v"
   fi
-  if [ -n "$duration" ]; then
-    print_estimate "$model" "${resolution:-}" "$est_mode" "$provider" "$duration" 1
-  fi
+  print_estimate "$model" "${resolution:-}" "$est_mode" "$provider" "$duration" 1
 
   local provider_label="auto (Ofox weighted)"
   [ -n "$provider" ] && provider_label="$provider"
+
+  if [ -n "$dry_run" ]; then
+    # Everything above already ran: arguments parsed, parameters validated
+    # against the model, provider resolved, payload built, price quoted.
+    # Nothing below runs, so nothing is submitted and nothing is billed. This
+    # is what turns "quote before spending" into an instruction an agent can
+    # actually follow.
+    echo "DRY RUN — nothing was submitted and nothing was billed." >&2
+    echo "Re-run without --dry-run to generate." >&2
+    echo "STATUS dry_run"
+    echo "MODEL $model"
+    echo "PROVIDER $provider_label"
+    [ -n "$duration" ] && echo "DURATION $duration"
+    [ -n "$resolution" ] && echo "RESOLUTION $resolution"
+    return 0
+  fi
+
   echo "Submitting job to Ofox (model=$model, provider=$provider_label)..." >&2
   # payload can itself now be well over 1MB (a resolved frame image is
   # inlined into it above) — pass it to curl via `--data-binary @file`, not
@@ -1021,7 +1047,7 @@ cmd_generate() {
 MAX_TAKES=10
 
 cmd_batch() {
-  local takes="" seed_given="" prompt_seen="" batch_provider=""
+  local takes="" seed_given="" prompt_seen="" batch_provider="" batch_dry=""
   local passthrough=() out_dir="$PWD" duration="" resolution="" model="$DEFAULT_MODEL"
   local sheet="auto"
   local key val
@@ -1043,6 +1069,9 @@ cmd_batch() {
         # Valueless flags have to be forwarded without consuming the next
         # argument, or they eat whatever follows them.
         passthrough+=("$key"); shift; continue
+        ;;
+      --dry-run)
+        batch_dry=1; shift; continue
         ;;
       *)
         if [ $# -lt 2 ]; then
@@ -1096,8 +1125,19 @@ cmd_batch() {
 
   # --- estimate before spending ---
 
-  if [ -n "$duration" ]; then
-    print_estimate "$model" "${resolution:-}" "t2v" "${batch_provider:-}" "$duration" "$takes"
+  print_estimate "$model" "${resolution:-}" "t2v" "${batch_provider:-}" "$duration" "$takes"
+
+  if [ -n "$batch_dry" ]; then
+    # Validate one take through the real path so a bad parameter is caught
+    # here rather than after the first one is paid for, then stop.
+    if ! cmd_generate "${passthrough[@]}" --dry-run >/dev/null; then
+      return 1
+    fi
+    echo "DRY RUN — $takes takes would be submitted, one at a time. Nothing was billed." >&2
+    echo "Re-run without --dry-run to generate." >&2
+    echo "STATUS dry_run"
+    echo "TAKES_REQUESTED $takes"
+    return 0
   fi
 
   # --- run the takes, one real job each ---
@@ -1161,8 +1201,11 @@ EOF_TAKE
   echo "BATCH_COST_TOTAL $total"
   echo "BATCH_COST_PER_TAKE $per"
   echo "" >&2
-  echo "That is \$$total for $done_count takes. If one of them is usable, that is your real" >&2
-  echo "cost per usable clip — the number worth comparing across models and settings." >&2
+  local total_h
+  total_h="$(awk -v t="$total" 'BEGIN { printf "%.2f", t }')"
+  echo "That is \$$total_h for $done_count takes. If only one of them is usable, \$$total_h IS your" >&2
+  echo "cost for that one clip — not the per-take figure. That total is the number worth" >&2
+  echo "comparing across models and settings." >&2
 
   [ -n "$stopped" ] && return 3
   return 0
@@ -1228,8 +1271,18 @@ estimate_note() {
 }
 
 print_estimate() {
-  # $1..$6 as estimate_note. Always says something, on stderr, before spending.
+  # $1 = model, $2 = resolution, $3 = mode, $4 = provider, $5 = duration,
+  # $6 = count.
+  #
+  # ALWAYS prints exactly one "Estimated cost:" line. Silence is the one
+  # outcome a calling agent cannot relay to a user — it can repeat a number,
+  # and it can repeat "unavailable", but it cannot notice the absence of a
+  # line it was never told to expect.
   local note
+  if [ -z "${5:-}" ]; then
+    echo "Estimated cost: unavailable — no --duration given, so there is nothing to multiply the per-second rate by. Pass --duration to get a quote up front." >&2
+    return 0
+  fi
   note="$(estimate_note "$@" 2>/dev/null)" || note=""
   if [ -n "$note" ]; then
     echo "Estimated cost: $note. Actual billing is reported below, from the job's own usage." >&2
@@ -1393,7 +1446,7 @@ MAX_SHOTS=10
 
 cmd_chain() {
   local shots=() shots_file="" out_dir="$PWD" duration="" resolution=""
-  local model="$DEFAULT_MODEL" concat="auto" aspect=""
+  local model="$DEFAULT_MODEL" concat="auto" aspect="" chain_dry=""
   local passthrough=() key val
 
   while [ $# -gt 0 ]; do
@@ -1409,6 +1462,9 @@ cmd_chain() {
         ;;
       --no-concat)
         concat="never"; shift; continue
+        ;;
+      --dry-run)
+        chain_dry=1; shift; continue
         ;;
       --print-payload)
         passthrough+=("$key"); shift; continue
@@ -1478,8 +1534,17 @@ cmd_chain() {
     esac
   fi
 
-  if [ -n "$duration" ]; then
-    print_estimate "$model" "${resolution:-}" "t2v" "" "$duration" "$n"
+  print_estimate "$model" "${resolution:-}" "t2v" "" "$duration" "$n"
+
+  if [ -n "$chain_dry" ]; then
+    if ! cmd_generate "${passthrough[@]}" --prompt "${shots[0]}" --dry-run >/dev/null; then
+      return 1
+    fi
+    echo "DRY RUN — $n shots would be submitted in sequence. Nothing was billed." >&2
+    echo "Re-run without --dry-run to generate." >&2
+    echo "STATUS dry_run"
+    echo "SHOTS_REQUESTED $n"
+    return 0
   fi
 
   mkdir -p "$out_dir" 2>/dev/null

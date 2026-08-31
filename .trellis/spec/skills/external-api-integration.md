@@ -553,3 +553,58 @@ Billing claims are worth the same skepticism as error codes: they are
 load-bearing (someone budgets against them), cheap to verify (one small job
 prints `usage` in full), and easy to get subtly wrong from prose alone.
 
+## Pattern: an instruction the tool cannot execute is a defect, not a wording problem
+
+Found 2026-08-31 by giving a sub-agent nothing but the SKILL.md files and
+asking it to role-play delivering a video to a user.
+
+The scenario skills said: "the script prints its own estimate before it submits
+anything — relay what it prints." True line by line, and impossible to follow:
+the estimate printed five lines above `curl -X POST`, with no pause and no
+dry-run anywhere in the script. By the time an agent could relay that number,
+the job existed and was billable.
+
+Worse, this was a **regression introduced while improving the same feature**.
+The scenario skills used to tell the agent to compute an estimate by hand from
+a price table. Replacing that with "relay what the script prints" fixed a
+staleness problem and silently created a timing one, because nobody asked
+*when* the script prints it.
+
+**The lesson**: when documentation tells an agent to do something with a
+tool's output, check that the output exists at a point where the instruction
+can still be acted on. "Relay X before Y" requires X to be available before Y
+happens — an obvious-sounding property that is easy to lose when you change
+where X comes from.
+
+### Silence is the one output an agent cannot relay
+
+The same review found `print_estimate` wrapped in `if [ -n "$duration" ]`, so
+omitting a duration produced no estimate line at all. The docs covered the
+"unavailable" case but not the absent one.
+
+An agent can repeat a number. It can repeat "unavailable". It cannot notice
+the absence of a line it was never told to expect — and it has no way to
+distinguish "the tool said nothing" from "the tool said nothing because
+everything is fine". **Any diagnostic an agent is instructed to relay must
+print on every path**, including the failure paths, saying why when it has
+nothing useful.
+
+### Role-playing the consumer is a cheap way to find this class of bug
+
+None of this was reachable from the test suite, which drives the script
+through its flags and asserts on exit codes. These are defects in the
+*instructions*, and the only way to exercise instructions is to have something
+follow them with nothing else to go on.
+
+Giving a sub-agent the skill files and no other context — explicitly barred
+from spending money — surfaced eight issues in one pass, five of them real
+defects. Worth repeating whenever the agent-facing documentation changes
+materially. Two mechanical checks that came out of it and are worth running
+directly:
+
+- `grep -c` the scenario skills for capabilities the core skill added. A
+  feature documented only in the core is invisible to an agent that loaded
+  just the scenario skill (`batch` was missing from all four).
+- `grep -c -- --out-dir` in any skill whose script writes files. Absent, an
+  agent copies the example and drops output into the user's project root.
+

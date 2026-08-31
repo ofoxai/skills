@@ -4,6 +4,26 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.3.0 — quote before spending, and stop littering the user's repo
+
+Rewrites the cost and delivery guidance around `ofox-video-core` 1.7.0's new
+`--dry-run`. Previously this skill told the agent to relay an estimate that
+the script only prints once the job is already billable — following it
+literally billed the user with no warning.
+
+- Cost flow is now: `--dry-run` to quote, wait for a yes, re-run without it.
+- **`--out-dir` in every example.** This skill never mentioned it, and the
+  script defaults to the current directory — so an agent copying an example
+  dropped a bare-UUID mp4 into the user's project root.
+- **`batch` is documented here now.** "Give me a few to choose from" is a
+  normal request, and this skill previously offered no path to it but running
+  `generate` repeatedly: no batch total, no contact sheet, no stop-on-failure.
+  Includes the draft-cheap-then-render-expensive ladder.
+- Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`.
+- Report costs as money, not as the raw ten-decimal string.
+- States how the relative script path resolves, instead of leaving it to the
+  core skill's documentation.
+
 ## 1.2.0 — multi-shot ad sequences
 
 Documents `ofox-video-core` 1.6.0's `chain` for beat sequences (establishing →

@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.2.0"
+version: "1.3.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.3.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -178,17 +178,68 @@ around a human model can't be chained, while product and environment shots
 can. Each shot is a separately billed job; the run estimates the total before
 spending.
 
-## Cost estimate — show this before generating
+## Cost: quote it, get a yes, then spend it
 
-The script prints its own estimate on stderr before it submits anything, read
-from live per-second rates — so you no longer need to compute one by hand or
-quote a table that may have gone stale. Relay what it prints. If it says the
-estimate is unavailable, say that rather than substituting a number of your own.
+Never submit a paid job without the user having seen the number first. The
+script makes that possible with `--dry-run`, which validates everything and
+prints the estimate **without sending a request**:
 
-For rough planning before a call, the ladder and a dated snapshot are in
-[`../ofox-video-core/references/pricing.md`](../ofox-video-core/references/pricing.md),
-and `ofox-video.sh providers` prints live rates with no API key. The real
-number is always `VIDEO_COST` from the completed job.
+```bash
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+  --prompt "..." --duration 15 --resolution 720p --out-dir ./out
+```
+
+Relay the `Estimated cost:` line it prints, wait for a yes, then re-run the
+identical command with `--dry-run` removed.
+
+The estimate a *real* run prints comes microseconds before the request goes
+out, so it is not something you can relay in time — that is what `--dry-run`
+is for. Every run prints exactly one `Estimated cost:` line, including when it
+can't compute one (it says why). Relay whatever you get; never invent a number.
+
+Afterwards, the **actual** bill is `VIDEO_COST` from the finished job, read
+from `usage.video_cost`. Report it as money (`$3.60`), not as the raw
+ten-decimal string. An estimate is never a bill.
+
+## Several takes to choose from
+
+Video generation is a slot machine — most takes go in the bin. When the user
+wants options rather than one clip, use `batch` instead of running `generate`
+repeatedly:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh batch --dry-run \
+  --prompt "..." --takes 4 --duration 8 --resolution 480p --out-dir ./out
+```
+
+It prices the whole batch up front, stops on the first failure instead of
+burning the remaining takes, and produces a contact sheet — three frames per
+take, one row each — so the user picks from one image instead of opening N
+files.
+
+**Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`.** If one take in four
+is usable, that clip cost the whole total; the per-take figure understates it
+by 4x.
+
+Worth offering when the user is exploring: draft cheap on
+`bytedance/seedance-2.0-mini` at 480p, then render the winner on
+`bytedance/seedance-2.5`. Four 8-second drafts cost about $0.64 on mini versus
+$7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
+different model is a different look, not just a different price.
+
+## Where the file lands
+
+Always pass `--out-dir`. Without it the script writes to the current working
+directory, which is usually the user's project root, and the filename is a
+bare job id. Pick something sensible (`./out`, or wherever the user asked) and
+relay the absolute `VIDEO_PATH` the script prints, on its own line.
+
+## Running the script
+
+Paths in the examples above are written relative to **this skill's own
+directory** (`skills/<this-skill>/`), which is where `../ofox-video-core/...`
+resolves from. If you are running from somewhere else, adjust accordingly —
+from the repo root it is `skills/ofox-video-core/references/ofox-video.sh`.
 
 ## Generating
 

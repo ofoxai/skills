@@ -4,6 +4,38 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.7.0 — `--dry-run`, so a price can be quoted before it is spent
+
+A sub-agent given only the SKILL.md files, asked to role-play delivering a
+video, found that the documentation asked for something the script could not
+do. The scenario skills said to relay the estimate the script prints — but
+that estimate is printed five lines before `curl -X POST`, so by the time an
+agent could relay it, the job existed and was billable. There was no
+`--dry-run` anywhere in the script. Following the docs literally meant billing
+someone without warning.
+
+- **`--dry-run` on `generate`, `batch` and `chain`.** Parses arguments,
+  validates every parameter against the model, resolves the upstream, builds
+  the payload, prints the estimate — then stops. Nothing submitted, nothing
+  billed, exit 0. A bad parameter now costs a message instead of a job.
+- **An `Estimated cost:` line always prints.** It used to be wrapped in
+  `if [ -n "$duration" ]`, so omitting `--duration` produced complete silence.
+  Silence is the one outcome an agent cannot relay: it can repeat a number and
+  it can repeat "unavailable", but it cannot notice a line it was never told
+  to expect. Missing duration now says so explicitly.
+- **Human-facing lines round to 2 decimals.** The batch summary read
+  "That is $0.6400000000 for 4 takes" — a line written for a person, carrying
+  ten decimals. `VIDEO_COST` and `BATCH_COST_TOTAL` keep the exact API string,
+  because those are the machine contract and the billing record.
+- **`BATCH_COST_PER_TAKE` guidance rewritten.** It called that field "the
+  number that matters" and then said the number that matters is the total —
+  two different fields in one sentence. `BATCH_COST_TOTAL` is what to quote:
+  if one take in four is usable, that clip cost the whole total, and the
+  per-take figure understates it 4x.
+
+Tests: `references/test/dryrun.test.sh`, 19 cases, free by construction —
+`--dry-run` makes no network call at all.
+
 ## 1.6.1 — fix: video-to-video was quoted at the text-to-video rate
 
 The estimate added in 1.5.0 detected v2v by looking for `type == "video"` in
