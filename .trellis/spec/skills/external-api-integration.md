@@ -679,3 +679,71 @@ Two things make the repeat worth it:
 Keep the reviewer uninformed about prior findings. Telling it what was fixed
 turns an independent check into confirmation of what you already believe.
 
+
+## Pattern: the capability that removes the adoption blocker has to be in the README
+
+Found 2026-08-31 by role-playing the actual first customer — a non-programmer
+with no account, no API key, and an explicit fear of an accidental bill —
+starting from the README rather than from SKILL.md.
+
+`--dry-run`, `models` and `providers` all worked with no API key. Someone
+deciding whether this tool is worth signing up for could have priced their
+whole job for free, before registering. **That is the single best answer to
+their one stated objection, and nothing told them it existed:**
+
+- the README mentioned it zero times
+- the core SKILL.md had a whole section on it, framed as "quote before
+  spending" — reading as a polite step for people who already have a key,
+  never stating that no key is required
+- the availability-check guidance implied the opposite order: run `check`,
+  and when it fails, go get a key. An agent following that pushes the user to
+  a signup form in the first minute.
+- the one accurate statement was a comment in the shell source, which neither
+  the user nor the agent ever reads
+
+**The lesson**: when a capability answers the exact objection that stops
+people adopting, its placement is a product decision, not a documentation
+detail. It belongs where the blocked reader is standing — for a repo, that is
+the README, above the install instructions.
+
+The general test: for each reason someone might not adopt this, ask whether
+the answer is reachable *before* they hit the blocker. An answer that only
+appears after signup cannot address a hesitation about signing up.
+
+## Gotcha: a summary view that leads with the wrong number
+
+`models` printed `pricing.output_video_per_second` as the headline rate. For
+`bytedance/seedance-2.5` that is **$0.11** — the 480p tier — while the skill
+defaults to **720p at $0.24**. The role-play persona did exactly what a person
+does: multiplied the first big number by their duration, and was 118% under.
+
+`pricing.md` already carried an explicit warning never to quote that field. So
+the repo *knew* it misled, wrote that down, and still made it the largest and
+first number a new user encountered. A footnote under a table does not undo a
+number printed above it.
+
+**Two rules that generalise:**
+
+1. **A summary column must show the value for the default path**, not a
+   headline that happens to be adjacent. If the default is 720p, show the 720p
+   rate; if a single number can't be right for every row, label the column
+   with what it is (`$/s AT DEFAULT`) instead of leaving it ambiguous.
+2. **A warning in a different document does not neutralise a misleading
+   display.** If you find yourself writing "never quote field X" somewhere,
+   check whether anything you ship is displaying field X prominently — that
+   note is evidence of a display bug, not a substitute for fixing it.
+
+## Gotcha: reporting presence as though it were validity
+
+`check` printed `OK: curl, jq, and OFOX_API_KEY are all present.` for an
+obviously fake key. The wording was accurate — *present*, not *valid* — but a
+new user reads "OK" as "I'm set up", then hits an auth failure on their first
+real request having just been told the environment was fine.
+
+Not a money risk (a rejected request isn't billed) but a confidence one, and
+it lands at the worst moment: their first attempt.
+
+Where a check genuinely cannot verify something, **say what it did not
+check**, in the success message rather than in the docs. The fix here was one
+sentence: the key is present, this makes no network call, a typo'd key passes
+here and fails on the first real request.

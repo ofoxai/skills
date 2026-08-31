@@ -4,6 +4,17 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.5.0 — tell people they can get a price without signing up
+
+- New section: `models`, `providers` and `--dry-run` all work with no API key,
+  so quote the job first and point at signup second. Opening with "go get an
+  API key" asks someone to register before they know what it costs.
+- New troubleshooting entry for
+  `bash: ../ofox-video-core/…: No such file or directory` — it means the core
+  skill isn't installed alongside this one, not that anything is broken. That
+  raw error names neither the missing skill nor the fix, and a non-programmer
+  reads it as "this is broken".
+
 ## 1.4.0 — exit codes, timeouts, contact sheets, and showing the prompt
 
 Follow-up to `ofox-video-core` 1.8.0, closing gaps a second role-play review

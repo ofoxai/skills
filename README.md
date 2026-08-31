@@ -7,6 +7,45 @@ contracts, real-tool recipes, no leaking of secrets or local paths).
 Skills work with Claude Code, Cursor, Copilot, and 70+ other agents via
 [skills.sh](https://skills.sh).
 
+## The video skills cost real money — here's how to check before you commit
+
+The four `seedance-*` skills call [Ofox](https://ofox.ai)'s video API, which
+bills per second of generated video. A 15-second 720p clip runs about
+**$3.60**; a 4-second 480p draft is about **$0.44**, and there are cheaper
+models. Generation is a slot machine — you often want several takes and keep
+one — so the per-clip figure is not the whole cost.
+
+**You can price any of this with no account and no API key.** Install, then:
+
+```
+bash ~/.claude/skills/ofox-video-core/references/ofox-video.sh \
+  generate --dry-run --prompt "two people arguing in a kitchen" \
+  --duration 15 --resolution 720p
+# Estimated cost: ~$3.60 (15s x $0.24/s)
+# DRY RUN — nothing was submitted and nothing was billed.
+```
+
+`--dry-run` validates everything and quotes the price without sending a
+request. `ofox-video.sh models` and `ofox-video.sh providers` likewise need no
+key. Decide whether it's worth it, *then* sign up.
+
+When you are ready: get a key at [app.ofox.ai](https://app.ofox.ai)
+(Settings → API Keys → Create New Key, shown once), then
+
+```
+export OFOX_API_KEY=your_key_here
+```
+
+Already running Codex / Claude Code / Cline with an Ofox key configured? The
+same `OFOX_API_KEY` works — no new key needed.
+
+**Prerequisites**: `curl` and `jq`. `curl` is usually preinstalled; `jq` often
+isn't (`brew install jq` on macOS, `apt-get install jq` on Debian/Ubuntu). The
+skills check for both and tell you what's missing.
+
+`hal-vault`, `hal-image` and `cloudflare-drop` don't touch the Ofox API and
+cost nothing to run.
+
 ## Install
 
 Install everything:
@@ -15,7 +54,21 @@ Install everything:
 npx skills add ofoxai/skills
 ```
 
-Or a single skill, optionally scoped to one agent with `--agent`:
+**For the `seedance-*` skills, install the whole repo rather than a single
+skill.** Each scenario skill delegates execution to `ofox-video-core` (and
+`seedance-anime-drama` also to `ofox-image-core`), referencing it by a
+relative path that only resolves when both are installed side by side. There
+is no dependency field in the skills.sh manifest format to declare that with,
+so installing one on its own can leave you with:
+
+```
+bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
+```
+
+That means the core skill is missing, not that the skill is broken — install
+the repo and it resolves.
+
+Single-skill installs, optionally scoped to one agent with `--agent`:
 
 ```
 npx skills add ofoxai/skills@<skill-name> --agent claude-code
@@ -24,27 +77,19 @@ npx skills add ofoxai/skills@<skill-name> --agent opencode
 npx skills add ofoxai/skills@<skill-name> --agent '*'   # all supported agents
 ```
 
-This pattern applies to every skill name below. The four user-facing
-scenario skills are the ones most people install directly:
+The four user-facing scenario skills:
 
 - `seedance-short-drama`
 - `seedance-ad-creative`
 - `seedance-product-video`
 - `seedance-anime-drama`
 
-Already running Codex / Claude Code / Cline with an Ofox key configured?
-Installing one of these skills doesn't need a new key — the same
-`OFOX_API_KEY` generates video/images immediately.
+`ofox-video-core` and `ofox-image-core` are the library skills they build on.
+You don't invoke these directly for a normal request, but they do need to be
+present — see the note above.
 
-`ofox-video-core` and `ofox-image-core` are the library skills the four
-above build on: a scenario skill pulls in the one(s) it needs
-automatically, so you typically don't install these two standalone unless
-you're calling the Ofox API directly with custom parameters.
-
-The same `--agent`-scoped install pattern also works for the two
-pre-existing standalone skills — `hal-vault`, `hal-image` — and
-`cloudflare-drop`, none of which touch `OFOX_API_KEY` (they don't call the
-Ofox API at all).
+The same `--agent`-scoped pattern works for `hal-vault`, `hal-image` and
+`cloudflare-drop`.
 
 ## Skills
 

@@ -4,6 +4,35 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.9.0 — surface the keyless price check; stop leading with a misleading rate
+
+A third role-play review, this time as a non-programmer with no Ofox account,
+no API key, and an explicit fear of an accidental bill — starting at the
+README rather than at SKILL.md.
+
+Its main finding was not a bug: **the strongest thing this repo can offer that
+reader already worked, and nothing told them it existed.** `--dry-run`,
+`models` and `providers` all run with no API key, so a job can be priced
+before signing up. The docs never said so; the *Availability check* section
+implied the opposite order (check first, then go get a key), which sends
+someone to a signup form before they know whether this costs $0.44 or $7.20.
+The one accurate statement lived in a source comment nobody reads.
+
+- `SKILL.md` leads with the keyless price check and says to quote first,
+  point at signup second.
+- `check` now separates *present* from *valid*: it makes no network call, so a
+  typo'd key passes it and fails on the first real request. It says that. And
+  when no key is set, it names the three commands that still work rather than
+  dead-ending.
+- **`models` shows each model's default-resolution rate**, labelled with that
+  resolution. It printed `pricing.output_video_per_second` — for
+  `seedance-2.5` that is the 480p rate ($0.11) while the model defaults to
+  720p ($0.24). The reviewer's persona multiplied the first big number by 15
+  and was off by 118%. `pricing.md` already warned never to quote that field,
+  so the repo knew it misled and showed it anyway.
+
+Tests: `references/test/newuser.test.sh`, 22 cases, all free.
+
 ## 1.8.0 — `create`, and fixes for three defects 1.7.0 introduced
 
 A second role-play review — a sub-agent given only the SKILL.md files and told

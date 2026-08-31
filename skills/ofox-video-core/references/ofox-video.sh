@@ -422,9 +422,21 @@ cmd_check() {
   # which is the wrong advice for a missing key.
   local ok=0
   check_curl_jq || ok=2
-  check_api_key || ok=2
+  if ! check_api_key; then
+    ok=2
+    # Not having a key is not a dead end: pricing works without one, and
+    # that is exactly what someone deciding whether to sign up wants.
+    echo "" >&2
+    echo "You can still price a job before signing up — these need no key:" >&2
+    echo "  $0 models" >&2
+    echo "  $0 providers" >&2
+    echo "  $0 generate --dry-run --prompt \"...\" --duration 15 --resolution 720p" >&2
+  fi
   if [ "$ok" -eq 0 ]; then
     echo "OK: curl, jq, and OFOX_API_KEY are all present."
+    echo "Note: the key is present but has NOT been verified against the API — this"
+    echo "check makes no network call. A typo'd key passes here and fails on the"
+    echo "first real request."
   fi
   return "$ok"
 }
@@ -487,22 +499,41 @@ cmd_models() {
 
   echo "Video models (source: $MODELS_SOURCE)"
   echo
-  jq -r '
-    ["MODEL", "BASE $/s", "RESOLUTIONS", "DURATION", "MODES"],
-    (.data[]
-      | select((.supported_endpoints // []) | index("/v1/videos"))
-      | [ .id + (if .is_deprecated then " (deprecated)" else "" end),
-          (.pricing.output_video_per_second // "-"),
-          ((.video_attributes.resolutions // []) | join(",")),
-          ((.video_attributes.min_duration_seconds | tostring) + "-" +
-           (.video_attributes.max_duration_seconds | tostring) + "s"),
-          ((.video_attributes.modes // []) | join(",")) ])
-    | @tsv' "$MODELS_FILE" | column -t -s "$(printf '\t')"
+
+  # Show the rate a caller would actually be charged: the model's own default
+  # resolution, text-to-video. The headline pricing.output_video_per_second is
+  # deliberately NOT shown — for seedance-2.5 it reports the 480p rate ($0.11)
+  # while the model defaults to 720p ($0.24), and a reader multiplying the
+  # first big number they see by their duration is off by 118%.
+  local rows="" mid mdefault mrate
+  while IFS=$'\t' read -r mid mdefault mrest; do
+    [ -z "$mid" ] && continue
+    mrate="$(rate_for "$mid" "$mdefault" "t2v" "" 2>/dev/null)" || mrate=""
+    [ -z "$mrate" ] && mrate="?"
+    rows="$rows$mid\t$mrate\t$mdefault\t$mrest\n"
+  done <<EOF_MODELS
+$(jq -r '
+    .data[]
+    | select((.supported_endpoints // []) | index("/v1/videos"))
+    | [ .id + (if .is_deprecated then " (deprecated)" else "" end),
+        (.video_attributes.default_resolution // "720p"),
+        ((.video_attributes.resolutions // []) | join(",")) + "\t" +
+        ((.video_attributes.min_duration_seconds | tostring) + "-" +
+         (.video_attributes.max_duration_seconds | tostring) + "s") + "\t" +
+        ((.video_attributes.modes // []) | join(",")) ]
+    | @tsv' "$MODELS_FILE")
+EOF_MODELS
+
+  {
+    printf 'MODEL\t$/s AT DEFAULT\tDEFAULT RES\tALL RESOLUTIONS\tDURATION\tMODES\n'
+    printf '%b' "$rows"
+  } | column -t -s "$(printf '\t')"
 
   echo
-  echo "Base \$/s is the model's headline rate, not a quote: it is not always the"
-  echo "cheapest tier or the default-resolution tier. For an actual estimate use"
-  echo "the per-resolution table in references/pricing.md."
+  echo "The rate shown is for each model's own default resolution, text-to-video —"
+  echo "what you pay if you don't pass --resolution. Other resolutions cost more or"
+  echo "less; run 'ofox-video.sh providers MODEL' for the full matrix, or check a"
+  echo "price for a specific job with 'generate --dry-run' (no API key needed)."
   return 0
 }
 

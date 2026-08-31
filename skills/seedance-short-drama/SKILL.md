@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Generate a single realistic-human, dialogue-driven short-drama shot from a script or scene description using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (character appearance, quoted dialogue, scene-cut timing cues), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative) or for anything not involving people/dialogue.
 license: MIT
-version: "1.4.0"
+version: "1.5.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.4.0"
+  version: "1.5.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -231,6 +231,36 @@ Worth offering when the user is exploring: draft cheap on
 $7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
 different model is a different look, not just a different price.
 
+
+
+## Pricing a job with no API key
+
+**No API key needed** to find out what something costs. All three of these
+work with `OFOX_API_KEY` unset:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh models      # models and rates
+bash ../ofox-video-core/references/ofox-video.sh providers   # full price matrix
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+  --prompt "..." --duration 15 --resolution 720p             # a real quote
+```
+
+So when a user hasn't signed up yet, **quote the job first and let them decide
+whether it's worth registering.** Don't open by sending them to a signup form
+— price it, show them the number, then point at
+[app.ofox.ai](https://app.ofox.ai) if they want to proceed.
+
+## If the script isn't found
+
+```
+bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
+```
+
+This means `ofox-video-core` isn't installed alongside this skill — not that
+anything is broken. This skill delegates all execution to it and reaches it by
+relative path. Fix: `npx skills add ofoxai/skills` (the whole repo). Say that
+plainly rather than relaying the raw path error, which names neither the
+missing skill nor the fix.
 
 ## Before you spend: show the prompt, not just the price
 
