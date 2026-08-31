@@ -95,6 +95,15 @@ A skill name is lowercase kebab-case and matches its directory name, the
 7. **Self-contained.** No links into private repos or local-only paths. A
    `references/` doc is for depth the agent loads only when needed; the
    `SKILL.md` must be usable on its own.
+8. **No `$0` sequence in a `SKILL.md`.** A skill body is expanded with
+   shell-style substitution when it loads, and `$0` is replaced by the
+   invocation's arguments. Sub-dollar prices are where this bites: `$0.64`
+   renders as the user's own prompt text followed by `.64`. Every other
+   figure (`$1.92`, `$7.20`) is unaffected — only `$0` is. Write those
+   amounts a way that has no `$0` in it (`64 cents`, `4 cents/s`) and keep
+   the number itself identical. This matters most in exactly the skills that
+   quote prices, whose whole job is not to misstate one. `references/*.md`
+   are read as files rather than expanded, so they are unaffected.
 
 ## Adding a skill
 

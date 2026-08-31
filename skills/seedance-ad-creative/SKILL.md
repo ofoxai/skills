@@ -237,7 +237,7 @@ get a reusable handle.
 
 Worth offering when the user is exploring: draft cheap on
 `bytedance/seedance-2.0-mini` at 480p, then render the winner on
-`bytedance/seedance-2.5`. Four 8-second drafts cost about $0.64 on mini versus
+`bytedance/seedance-2.5`. Four 8-second drafts cost about 64 cents on mini versus
 $7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
 different model is a different look, not just a different price.
 

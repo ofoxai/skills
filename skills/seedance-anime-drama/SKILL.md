@@ -296,7 +296,7 @@ against a real invoice (see `ofox-image-core/references/pricing.md`). Relay
 that figure, the same way you relay `VIDEO_COST`.
 
 For a `google/gemini-3.1-flash-image` reference sheet, observed calls land
-around **$0.067** each — the output token count barely moves with prompt
+around **6.7 cents** each — the output token count barely moves with prompt
 length, so that is a good planning number rather than a coincidence. It is
 paid **once per character**: generating N shots of that character does not
 repeat it.
@@ -329,7 +329,7 @@ from `usage.video_cost`. Report it as money (`$1.92`), not as the raw
 ten-decimal string. An estimate is never a bill.
 
 **Put both steps in front of the user before generating anything**, e.g.:
-"1 character reference image (~$0.07, one-off) + 3 shots at 8s/720p (~$1.92
+"1 character reference image (~7 cents, one-off) + 3 shots at 8s/720p (~$1.92
 each) = ~$5.83 total." Breaking it out is what shows them the image cost does
 not scale with shot count.
 
@@ -385,7 +385,7 @@ get a reusable handle.
 
 Worth offering when the user is exploring: draft cheap on
 `bytedance/seedance-2.0-mini` at 480p, then render the winner on
-`bytedance/seedance-2.5`. Four 8-second drafts cost about $0.64 on mini versus
+`bytedance/seedance-2.5`. Four 8-second drafts cost about 64 cents on mini versus
 $7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
 different model is a different look, not just a different price.
 

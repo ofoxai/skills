@@ -53,7 +53,7 @@ its real duration range, resolutions, modes and base per-second price. It needs
 user has signed up, and it costs nothing.
 
 Worth knowing before quoting a price: at 720p text-to-video the ladder runs
-`seedance-2.0-mini` $0.04/s → `wan-2.7` $0.10/s → `seedance-2.5` $0.24/s. When
+`seedance-2.0-mini` 4 cents/s → `wan-2.7` 10 cents/s → `seedance-2.5` 24 cents/s. When
 a user is going to generate several takes and keep one, drafting on a cheap
 model and rendering the keeper on `seedance-2.5` costs a fraction of drafting
 everything on 2.5. Say so when it's relevant — but don't switch models on
@@ -173,7 +173,7 @@ double-bill a request that already exists.
 Draft cheap, render the keeper expensive:
 
 ```bash
-# 5 drafts at 480p on the cheapest model — about $0.40
+# 5 drafts at 480p on the cheapest model — about 40 cents
 bash references/ofox-video.sh batch --prompt "..." --takes 5 \
   --model bytedance/seedance-2.0-mini --resolution 480p --duration 4
 
@@ -249,7 +249,7 @@ That flow is the one to follow whenever real money is involved:
 ```bash
 # 1. price it
 bash references/ofox-video.sh generate --dry-run --prompt "..." --duration 15 --resolution 720p
-#    -> Estimated cost: ~$3.60 (15s x $0.24/s)...
+#    -> Estimated cost: ~$3.60 (15s x 24 cents/s)...
 #    -> DRY RUN — nothing was submitted and nothing was billed.
 
 # 2. tell the user the number, get a yes
@@ -312,7 +312,7 @@ deciding whether to register.
 
 **When a user has no key, quote first and point at signup second.** Opening
 with "go get an API key" sends someone to a form before they know whether the
-thing is worth $0.44 or $7.20. Run the dry run, show them the number, then
+thing is worth 44 cents or $7.20. Run the dry run, show them the number, then
 point at [app.ofox.ai](https://app.ofox.ai) if they want to proceed.
 
 ## Availability check
