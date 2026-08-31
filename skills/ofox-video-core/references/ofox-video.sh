@@ -2032,12 +2032,10 @@ poll_and_download() {
             if [ -z "$request_json" ]; then
               request_json=$(load_request_handoff "$out_dir" "$job_id") || request_json=""
             fi
+            # download_result clears the handoff itself, and only once a
+            # sidecar has actually been written — see the note there.
             download_result "$job_id" "$body" "$out_dir" "$name_hint" "$request_json"
-            local dl_rc=$?
-            # Only after the sidecar is safely written: clearing earlier
-            # would leave a failed download with nothing to retry from.
-            [ "$dl_rc" -eq 0 ] && clear_request_handoff "$out_dir" "$job_id"
-            return "$dl_rc"
+            return $?
             ;;
           failed|cancelled|expired)
             echo "ERROR: job $job_id ended with status '$status'." >&2
@@ -2367,6 +2365,15 @@ download_result() {
   for sidecar in "${sidecars[@]}"; do
     echo "SIDECAR_PATH $sidecar"
   done
+
+  # The handoff has served its purpose only once its contents are on disk in
+  # a sidecar. Tying cleanup to this function merely returning would delete
+  # it even when write_sidecar failed — that failure is a warning, not an
+  # error, so the caller cannot tell the difference — and the record would be
+  # gone for good, with no way to rebuild it.
+  if [ "${#sidecars[@]}" -gt 0 ]; then
+    clear_request_handoff "$out_dir" "$job_id"
+  fi
   echo "VIDEO_SECONDS $seconds"
   echo "VIDEO_COST $cost"
   return 0
