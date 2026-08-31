@@ -384,3 +384,62 @@ frontmatter fields ClawHub actually reads were all missing, and are now added.
 - Four-directory publish is still blocked on the same prerequisite as before:
   nothing is pushed. `feat/seedance-video-skills` now carries 10+ commits
   unmerged to main.
+
+
+## Session 10: 让产物可辨认、可复现、可信任：命名、seed、成本与四个使用中暴露的缺陷
+
+**Date**: 2026-08-31
+**Task**: 让产物可辨认、可复现、可信任：命名、seed、成本与四个使用中暴露的缺陷
+**Branch**: `feat/seedance-video-skills`
+
+### Summary
+
+本轮全部问题来自真实使用，没有一个是读代码读出来的。
+
+1) 命名与 sidecar：下载文件名从裸 job id 改为 <slug>-<短id>，slug 取自 --name 或 job 自带的 prompt（所以裸跑 poll 也不退化）。API 无 list 接口，短 id 不可反查，故用同名 .json sidecar 承载完整 job id、prompt 与真实花费。
+
+2) 可复现：seed 此前从不落盘（服务端选、响应不回传），create+poll 两进程间 request 也会丢。改为客户端 roll seed 并输出，create 把 payload 留在 out-dir 的点文件里交给 poll。
+
+3) 图片成本：用户从 app.ofox.ai 提供的账单 0.06723950 与 input*pricing.input + output*pricing.output_image 逐位吻合，坐实了此前 20 倍歧义——图片 output tokens 全按 output_image 计。ofox-image-core 现在输出 IMAGE_COST。实现中发现 /v1/models 与 /v2/catalog 对同一费率用不同键名（prompt/completion vs input/output）。
+
+4) 四个使用缺陷：设定集被当首帧（skill 指引本身有问题）、/bin/zsh.xx 被参数插值吃掉 9 处、计费请求全无超时（--max-wait 因此可被静默突破）、旧冗余文件。
+
+5) 测试补齐时逮到两个崩溃：bash 3.2 下展开空数组会终止脚本——sidecar 全失败时会在付费下载后崩溃、成本永不报出（我引入的）；chain 仅传 --shot 时同样崩溃（既有）。
+
+方法论教训：两次误判 bug 未修好，一次因为在 zsh 下 source 了 bash 脚本，一次因为把「文件不存在」当成「被删除」而没先断言它存在过。测试现在全部带前置断言，并在 macOS 默认 /bin/bash 3.2 下运行。
+
+验证：12 个测试文件 248 项断言全过；真实付费 3 条视频 + 2 张图，合计约 3.21 美元。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8ebe485` | (see git log) |
+| `256c85d` | (see git log) |
+| `b5c5036` | (see git log) |
+| `a45cb5a` | (see git log) |
+| `830ebb8` | (see git log) |
+| `4971301` | (see git log) |
+| `e8b5edc` | (see git log) |
+| `b68d5bf` | (see git log) |
+| `298c622` | (see git log) |
+| `0bee796` | (see git log) |
+| `a3fc11a` | (see git log) |
+| `5d761f6` | (see git log) |
+| `5b8029e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

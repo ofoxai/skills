@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 9
-- **Last Active**: 2026-08-30
+- **Total Sessions**: 10
+- **Last Active**: 2026-08-31
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~306 | Active |
+| `journal-1.md` | ~445 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 10 | 2026-08-31 | 让产物可辨认、可复现、可信任：命名、seed、成本与四个使用中暴露的缺陷 | `8ebe485`, `256c85d`, `b5c5036`, `a45cb5a`, `830ebb8`, `4971301`, `e8b5edc`, `b68d5bf`, `298c622`, `0bee796`, `a3fc11a`, `5d761f6`, `5b8029e` | `feat/seedance-video-skills` |
 | 9 | 2026-08-30 | Scaffold awesome-seedance-2.5 collection repo (local-only) | `36a071b` | `feat/seedance-video-skills` |
 | 8 | 2026-08-30 | Install OpenCode CLI, close last §5.5 cross-agent test gap | `d1e6a08` | `feat/seedance-video-skills` |
 | 7 | 2026-08-30 | Close §5.5 test-matrix gap for 4 scenario skills | `0e33ce8` | `feat/seedance-video-skills` |
