@@ -2,3 +2,6 @@
 node_modules/
 .env
 test-output/
+
+# Personal planning notes — never commit (contains growth strategy)
+2026-*_GitHub*.md

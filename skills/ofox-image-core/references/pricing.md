@@ -63,7 +63,7 @@ Result:
 
 ```
 STATUS completed
-IMAGE_PATH /Users/yunshen/code/skills/test-output/ofox_image_20260829213234_6584.png
+IMAGE_PATH /path/to/your/project/test-output/ofox_image_20260829213234_6584.png
 MODEL google/gemini-3.1-flash-image
 SIZE 512x512
 QUALITY low
