@@ -1050,13 +1050,19 @@ cmd_generate() {
     # a caller with a short tool timeout can never end up in the one genuinely
     # bad state: job created and billable, id never printed. Wait separately
     # with `poll`, as many short calls as it takes.
+    # Absolute, because the whole point of create is that the *next* call
+    # happens separately — possibly from a different working directory. A
+    # relative path here would hand the caller a poll command that silently
+    # downloads somewhere else, or fails.
+    local abs_out
+    abs_out="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_out="$out_dir"
     echo "STATUS submitted"
     echo "JOB_ID $job_id"
     echo "POLLING_URL $polling_url"
-    echo "OUT_DIR $out_dir"
+    echo "OUT_DIR $abs_out"
     echo "" >&2
     echo "Submitted, not waiting. Download it with:" >&2
-    echo "  $0 poll $job_id --out-dir $out_dir" >&2
+    echo "  $0 poll $job_id --out-dir $abs_out" >&2
     echo "The job is billable from now on whether or not you poll for it." >&2
     return 0
   fi

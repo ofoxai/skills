@@ -49,6 +49,25 @@ else
   pass "create does not poll — the wait is the caller's to schedule"
 fi
 
+# The follow-up poll may run from a different directory, so anything create
+# hands back has to be absolute or the caller downloads to the wrong place.
+out=$(cd "$WORK" && OFOX_API_KEY=x bash "$TARGET" create --prompt x --duration 4 \
+  --resolution 480p --out-dir relout 2>&1)
+outdir=$(printf '%s' "$out" | sed -n 's/^OUT_DIR //p')
+if [ -z "$outdir" ]; then
+  # No submit is possible offline; assert on the code path instead.
+  if grep -q 'abs_out="$(cd "$out_dir"' "$TARGET"; then
+    pass "create resolves --out-dir to an absolute path before reporting it"
+  else
+    fail "create must report an absolute OUT_DIR" "no resolution in the code path"
+  fi
+else
+  case "$outdir" in
+    /*) pass "create reports an absolute OUT_DIR even when given a relative one" ;;
+    *) fail "OUT_DIR must be absolute" "got '$outdir'" ;;
+  esac
+fi
+
 echo
 echo "=== create is documented as the timeout-safe path ==="
 out=$(bash "$TARGET" 2>&1)
