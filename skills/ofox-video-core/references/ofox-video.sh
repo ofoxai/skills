@@ -13,7 +13,7 @@
 #   ofox-video.sh generate --prompt "..." [OPTIONS]
 #   ofox-video.sh create --prompt "..." [OPTIONS]  (submit only, no waiting)
 #   ofox-video.sh batch --prompt "..." --takes N [OPTIONS]
-#   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
+#   ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS]
 #   ofox-video.sh chain --shot "..." --shot "..." [OPTIONS]
 #   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]  (local, no API call)
 #   ofox-video.sh last-frame VIDEO [--out-dir DIR]                (local, no API call)
@@ -49,6 +49,13 @@
 #                               to quote a price to someone before spending.
 #   --print-payload             dump the request body to stderr before sending
 #                               (the API key is in a header, not the body)
+#   --name TEXT                 short, human-readable name for the output file,
+#                               e.g. "convenience store breakup". The file lands
+#                               as <name>-<short job id>.mp4 with a matching
+#                               .json sidecar. Without it the name is derived
+#                               from the prompt, which still beats a bare job id
+#                               but reads worse — a caller that knows what the
+#                               shot is should say so. Sanitized before use.
 #   --size WxH                  e.g. 1280x720 (alternative to --resolution)
 #   --generate-audio true|false default: true (server-side default)
 #   --seed N
@@ -102,6 +109,33 @@ GET_KEY_URL="https://app.ofox.ai"
 DEFAULT_MODEL="bytedance/seedance-2.5"
 DEFAULT_MAX_WAIT=540
 DEFAULT_POLL_INTERVAL=6
+
+# Cap for the readable part of an output filename, counted in Unicode
+# codepoints (not bytes). 40 CJK characters is 120 UTF-8 bytes, which leaves
+# the whole name — slug, '-', 8 hex of job id, extension — far below the
+# 255-byte limit every filesystem this runs on enforces. Latin text needs the
+# headroom more than CJK does: 24 was enough for a Chinese scene name but cut
+# "convenience-store-breakup" mid-word.
+SLUG_MAX_CHARS=40
+
+# Network timeouts. Only the model-list fetches had any, which left every
+# call that actually costs money able to hang forever on a stalled
+# connection — and made --max-wait a promise the poll loop could not keep,
+# since elapsed only advances once curl returns.
+#
+# CREATE_MAX_TIME is generous: a create normally answers in seconds, and
+# timing one out lands in the ambiguous "no response, cannot tell whether it
+# was billed" path (exit 5). That path exists and is handled correctly;
+# hanging indefinitely helps no one and is not safer.
+#
+# Downloads deliberately get no overall limit — a large file is legitimately
+# slow — and are guarded against stalls instead: abort if throughput stays
+# under DOWNLOAD_MIN_BYTES/s for DOWNLOAD_STALL_SECONDS.
+CONNECT_TIMEOUT=15
+CREATE_MAX_TIME=120
+POLL_MAX_TIME=60
+DOWNLOAD_MIN_BYTES=512
+DOWNLOAD_STALL_SECONDS=60
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_SNAPSHOT="$SCRIPT_DIR/models-snapshot.json"
@@ -366,10 +400,15 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh create   --prompt "..." [OPTIONS]   (submit only, returns a job id)
          add --dry-run to any of generate/batch/chain to price it without spending
   ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [OPTIONS]
-  ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
+  ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS]
   ofox-video.sh chain --shot "..." --shot "..." [--shots-file FILE] [--no-concat] [OPTIONS]
   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]
   ofox-video.sh last-frame VIDEO [--out-dir DIR]
+
+Downloads are named <slug>-<short job id>.<ext>, where the slug comes from
+--name or, without it, from the prompt. Each video gets a .json sidecar
+holding the full job id, the prompt and the cost — the short id in the
+filename cannot be expanded back on its own.
 
 Seedance jobs are pinned to the byteplus upstream by default; override with
 --provider volcengine, or --provider auto to let Ofox route by weight. Run
@@ -642,6 +681,7 @@ cmd_generate() {
   local real_person=""
   local callback_url=""
   local extra_json=""
+  local name_hint=""
   local out_dir="$PWD"
   local max_wait="$DEFAULT_MAX_WAIT"
   local poll_interval="$DEFAULT_POLL_INTERVAL"
@@ -662,7 +702,7 @@ cmd_generate() {
         ;;
     esac
     case "$key" in
-      --model|--prompt|--duration|--resolution|--aspect-ratio|--size|--generate-audio|--seed|--provider|--frame-first-image|--frame-last-image|--real-person|--callback-url|--extra-json|--out-dir|--max-wait|--poll-interval)
+      --model|--prompt|--duration|--resolution|--aspect-ratio|--size|--generate-audio|--seed|--provider|--frame-first-image|--frame-last-image|--real-person|--callback-url|--extra-json|--name|--out-dir|--max-wait|--poll-interval)
         if [ $# -lt 2 ]; then
           echo "ERROR: $key requires a value." >&2
           return 1
@@ -690,6 +730,7 @@ cmd_generate() {
       --real-person) real_person="$val" ;;
       --callback-url) callback_url="$val" ;;
       --extra-json) extra_json="$val" ;;
+      --name) name_hint="$val" ;;
       --out-dir) out_dir="$val" ;;
       --max-wait) max_wait="$val" ;;
       --poll-interval) poll_interval="$val" ;;
@@ -921,6 +962,16 @@ cmd_generate() {
 
   # --- build the request payload ---
 
+  # Roll a seed when the caller didn't pick one, exactly as batch already
+  # does for its takes. Without this the server picks a seed and reports it
+  # nowhere — the poll response carries no seed field — so a clip could never
+  # be reproduced, not even to re-render the same shot at a higher
+  # resolution. Choosing it here costs nothing (it is random either way) and
+  # makes every job repeatable.
+  if [ -z "$seed" ]; then
+    seed=$(( (RANDOM << 15 | RANDOM) & 0x7FFFFFFF ))
+  fi
+
   local payload='{}'
   payload=$(printf '%s' "$payload" | jq --arg v "$model" '.model=$v')
   payload=$(printf '%s' "$payload" | jq --arg v "$prompt" '.prompt=$v')
@@ -1037,6 +1088,7 @@ cmd_generate() {
   printf '%s' "$payload" >"$tmp_payload"
   tmp_body=$(mktemp)
   http_code=$(curl -sS -o "$tmp_body" -w '%{http_code}' \
+    --connect-timeout "$CONNECT_TIMEOUT" --max-time "$CREATE_MAX_TIME" \
     -X POST "$API_BASE/videos" \
     -H "Authorization: Bearer $OFOX_API_KEY" \
     -H "Content-Type: application/json" \
@@ -1087,18 +1139,37 @@ cmd_generate() {
     # downloads somewhere else, or fails.
     local abs_out
     abs_out="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_out="$out_dir"
+
+    # Hand the follow-up poll the half of the record the API will not give it:
+    # the response echoes neither resolution, aspect ratio nor seed, so
+    # without this the sidecar written by `poll` is missing exactly the
+    # fields needed to re-render the shot. A dotfile keyed by job id, so
+    # concurrent creates cannot collide and a user browsing out-dir does not
+    # see scratch state next to their videos.
+    save_request_handoff "$payload" "$abs_out" "$job_id"
+
     echo "STATUS submitted"
     echo "JOB_ID $job_id"
+    echo "SEED $seed"
     echo "POLLING_URL $polling_url"
     echo "OUT_DIR $abs_out"
     echo "" >&2
     echo "Submitted, not waiting. Download it with:" >&2
-    echo "  $0 poll $job_id --out-dir $abs_out" >&2
+    # Carry --name into the suggested command: the follow-up poll is a
+    # separate process that would otherwise fall back to naming the file from
+    # the prompt, quietly losing the name the caller chose here.
+    if [ -n "$name_hint" ]; then
+      echo "  $0 poll $job_id --out-dir $abs_out --name \"$name_hint\"" >&2
+    else
+      echo "  $0 poll $job_id --out-dir $abs_out" >&2
+    fi
     echo "The job is billable from now on whether or not you poll for it." >&2
     return 0
   fi
 
-  poll_and_download "$job_id" "$polling_url" "$out_dir" "$max_wait" "$poll_interval"
+  echo "SEED $seed"
+  poll_and_download "$job_id" "$polling_url" "$out_dir" "$max_wait" "$poll_interval" \
+    "$name_hint" "$payload"
   return $?
 }
 
@@ -1215,7 +1286,7 @@ cmd_batch() {
     # reasonably relay the last one — the per-take figure this skill spends
     # two documents telling people not to quote. Errors still surface.
     local inner_err
-    if ! inner_err="$(cmd_generate "${passthrough[@]}" --dry-run 2>&1 >/dev/null)"; then
+    if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --dry-run 2>&1 >/dev/null)"; then
       printf '%s\n' "$inner_err" >&2
       return 1
     fi
@@ -1239,7 +1310,7 @@ cmd_batch() {
     # "take 3 was the good one, render that properly" is impossible — you can
     # only reroll and hope. With it, the seed is a handle: the same prompt and
     # seed on a better model reproduces that take.
-    local take_args=("${passthrough[@]}") take_seed=""
+    local take_args=(${passthrough[@]+"${passthrough[@]}"}) take_seed=""
     if [ -z "$seed_given" ]; then
       take_seed=$(( (RANDOM << 15 | RANDOM) & 0x7FFFFFFF ))
       take_args+=(--seed "$take_seed")
@@ -1284,7 +1355,7 @@ EOF_TAKE
   # --- report: real billing, never the estimate ---
 
   local total
-  total="$(printf '%s\n' "${costs[@]}" | awk '{ s += $1 } END { printf "%.10f", s }')"
+  total="$(printf '%s\n' ${costs[@]+"${costs[@]}"} | awk '{ s += $1 } END { printf "%.10f", s }')"
   local per
   per="$(awk -v t="$total" -v n="$done_count" 'BEGIN { printf "%.10f", (n ? t/n : 0) }')"
 
@@ -1563,6 +1634,7 @@ MAX_SHOTS=10
 cmd_chain() {
   local shots=() shots_file="" out_dir="$PWD" duration="" resolution=""
   local model="$DEFAULT_MODEL" concat="auto" aspect="" chain_dry=""
+  local chain_name=""
   local passthrough=() key val
 
   while [ $# -gt 0 ]; do
@@ -1597,6 +1669,7 @@ cmd_chain() {
           --resolution) resolution="$val" ;;
           --model) model="$val" ;;
           --aspect-ratio) aspect="$val" ;;
+          --name) chain_name="$val" ;;
         esac
         passthrough+=("$key" "$val")
         shift 2
@@ -1655,7 +1728,7 @@ cmd_chain() {
 
   if [ -n "$chain_dry" ]; then
     local inner_err
-    if ! inner_err="$(cmd_generate "${passthrough[@]}" --prompt "${shots[0]}" --dry-run 2>&1 >/dev/null)"; then
+    if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --prompt "${shots[0]}" --dry-run 2>&1 >/dev/null)"; then
       printf '%s\n' "$inner_err" >&2
       return 1
     fi
@@ -1676,7 +1749,13 @@ cmd_chain() {
     echo "" >&2
     echo "--- shot $i/$n ---" >&2
 
-    local args=("${passthrough[@]}" --prompt "${shots[$((i - 1))]}" --out-dir "$abs_out")
+    local args=(${passthrough[@]+"${passthrough[@]}"} --prompt "${shots[$((i - 1))]}" --out-dir "$abs_out")
+    # A chain's shots are meant to be watched — and concatenated — in order,
+    # so when the caller named the chain, number the shots inside that name.
+    # Without it every shot would share one slug and differ only by job id,
+    # losing the ordering. This --name comes after passthrough's copy, and
+    # generate's parser takes the last occurrence.
+    [ -n "$chain_name" ] && args+=(--name "${chain_name}-shot${i}")
     [ -n "$prev_frame" ] && args+=(--frame-first-image "$prev_frame")
 
     out="$(cmd_generate "${args[@]}")"
@@ -1732,7 +1811,7 @@ EOF_SHOT
   fi
 
   local total per
-  total="$(printf '%s\n' "${costs[@]}" | awk '{ s += $1 } END { printf "%.10f", s }')"
+  total="$(printf '%s\n' ${costs[@]+"${costs[@]}"} | awk '{ s += $1 } END { printf "%.10f", s }')"
   per="$(awk -v t="$total" -v n="$done_count" 'BEGIN { printf "%.10f", (n ? t/n : 0) }')"
 
   echo "STATUS chain_completed"
@@ -1854,12 +1933,13 @@ cmd_poll() {
   local out_dir="$PWD"
   local max_wait="$DEFAULT_MAX_WAIT"
   local poll_interval="$DEFAULT_POLL_INTERVAL"
+  local name_hint=""
   local key val
 
   while [ $# -gt 0 ]; do
     key="$1"
     case "$key" in
-      --out-dir|--max-wait|--poll-interval)
+      --out-dir|--max-wait|--poll-interval|--name)
         if [ $# -lt 2 ]; then
           echo "ERROR: $key requires a value." >&2
           return 1
@@ -1876,12 +1956,16 @@ cmd_poll() {
       --out-dir) out_dir="$val" ;;
       --max-wait) max_wait="$val" ;;
       --poll-interval) poll_interval="$val" ;;
+      --name) name_hint="$val" ;;
     esac
   done
 
   if ! check_api_key; then return 2; fi
 
-  poll_and_download "$job_id" "$API_BASE/videos/$job_id" "$out_dir" "$max_wait" "$poll_interval"
+  # No request payload to pass: a poll knows only what the response reports,
+  # so the sidecar it writes omits the resolution/aspect-ratio half.
+  poll_and_download "$job_id" "$API_BASE/videos/$job_id" "$out_dir" "$max_wait" \
+    "$poll_interval" "$name_hint"
   return $?
 }
 
@@ -1891,7 +1975,15 @@ cmd_poll() {
 
 poll_and_download() {
   local job_id="$1" polling_url="$2" out_dir="$3" max_wait="$4" poll_interval="$5"
-  local elapsed=0 tmp_body http_code curl_rc body status
+  # Both optional; only the generate path has them to give. See
+  # download_result() and write_sidecar().
+  local name_hint="${6:-}" request_json="${7:-}"
+  # Wall clock, not a tally of sleeps. Each poll request can now itself burn
+  # up to POLL_MAX_TIME before returning, so counting only poll_interval per
+  # iteration would let a run of slow or timing-out requests overshoot
+  # --max-wait by minutes while believing it was well inside it.
+  local poll_started elapsed=0 tmp_body http_code curl_rc body status
+  poll_started=$(date +%s)
   local out_dir_input="$out_dir"
 
   mkdir -p "$out_dir" 2>/dev/null
@@ -1914,6 +2006,7 @@ poll_and_download() {
   while [ "$elapsed" -lt "$max_wait" ]; do
     tmp_body=$(mktemp)
     http_code=$(curl -sS -o "$tmp_body" -w '%{http_code}' \
+      --connect-timeout "$CONNECT_TIMEOUT" --max-time "$POLL_MAX_TIME" \
       -H "Authorization: Bearer $OFOX_API_KEY" \
       "$polling_url")
     curl_rc=$?
@@ -1923,7 +2016,7 @@ poll_and_download() {
     if [ "$curl_rc" -ne 0 ]; then
       echo "WARN: poll request failed (curl exit $curl_rc). Retrying the POLL (not create) in ${poll_interval}s..." >&2
       sleep "$poll_interval"
-      elapsed=$((elapsed + poll_interval))
+      elapsed=$(( $(date +%s) - poll_started ))
       continue
     fi
 
@@ -1932,7 +2025,16 @@ poll_and_download() {
         status=$(printf '%s' "$body" | jq -r '.status // empty')
         case "$status" in
           completed)
-            download_result "$job_id" "$body" "$out_dir"
+            # A poll invoked on its own has no payload of its own; pick up
+            # the one create left behind, if this is the out-dir it left it
+            # in. Nothing here is fatal — a missing handoff just means the
+            # sidecar omits its request half.
+            if [ -z "$request_json" ]; then
+              request_json=$(load_request_handoff "$out_dir" "$job_id") || request_json=""
+            fi
+            # download_result clears the handoff itself, and only once a
+            # sidecar has actually been written — see the note there.
+            download_result "$job_id" "$body" "$out_dir" "$name_hint" "$request_json"
             return $?
             ;;
           failed|cancelled|expired)
@@ -1953,24 +2055,24 @@ poll_and_download() {
             ;;
           pending|queued|in_progress)
             sleep "$poll_interval"
-            elapsed=$((elapsed + poll_interval))
+            elapsed=$(( $(date +%s) - poll_started ))
             ;;
           *)
             echo "WARN: unrecognized status '$status' in poll response, continuing to poll..." >&2
             sleep "$poll_interval"
-            elapsed=$((elapsed + poll_interval))
+            elapsed=$(( $(date +%s) - poll_started ))
             ;;
         esac
         ;;
       429)
         echo "WARN: rate limited while polling. Backing off ${poll_interval}s (retrying the poll, not create)..." >&2
         sleep "$poll_interval"
-        elapsed=$((elapsed + poll_interval))
+        elapsed=$(( $(date +%s) - poll_started ))
         ;;
       5??)
         echo "WARN: upstream error (HTTP $http_code) while polling. Retrying the poll (not create) in ${poll_interval}s..." >&2
         sleep "$poll_interval"
-        elapsed=$((elapsed + poll_interval))
+        elapsed=$(( $(date +%s) - poll_started ))
         ;;
       *)
         print_api_error "poll" "$http_code" "$body"
@@ -1986,8 +2088,186 @@ poll_and_download() {
   return 4
 }
 
+# Build the readable part of an output filename.
+#
+# Priority: an explicit --name from the caller, then the job's own prompt.
+# The prompt is present in every poll response, so a bare `poll JOB_ID` in a
+# fresh shell — with no memory of what was generated — still produces a
+# meaningful name instead of degrading to a raw job id. Prints nothing when
+# there is no usable source, which is the caller's signal to fall back to the
+# job id.
+#
+# Slicing happens in jq, not bash. jq slices by codepoint and is
+# locale-independent, so a CJK prompt can never be cut mid-character the way
+# `cut -b` would, and the result doesn't change under LC_ALL=C. jq is already
+# a hard dependency of this script, so this costs no new requirement.
+#
+# Both sources are untrusted text that becomes part of a path: a --name comes
+# from a calling skill, and a prompt comes from whoever wrote it. Path
+# separators, characters illegal on Windows filesystems, and control
+# characters are stripped, then any non-alphanumeric run is trimmed off both
+# ends, so '../../etc/passwd' cannot survive as anything traversable, nothing
+# turns into a hidden file or a leading-dash pseudo-flag, and a name never
+# trails a stray comma or full stop where the slice happened to land. Han
+# characters count as alphanumeric here, so CJK text survives while CJK
+# punctuation is trimmed.
+build_output_slug() {
+  local name_hint="$1" prompt="$2" raw=""
+
+  if [ -n "$name_hint" ]; then
+    raw="$name_hint"
+  else
+    raw="$prompt"
+  fi
+  [ -z "$raw" ] && return 0
+
+  # Order matters twice over. Whitespace is collapsed to a dash *before*
+  # control characters are stripped, because tab and newline are both: strip
+  # them first and "line one\nline two" glues into "line onelinetwo" instead
+  # of separating into words. And the slice comes before the final trim,
+  # because the slice itself can land on a separator and leave a trailing
+  # dash.
+  #
+  # Control characters are matched with the POSIX class [[:cntrl:]], never
+  # with a backslash-u codepoint range. jq's regex engine (Oniguruma) reads a
+  # backslash-u escape inside a *pattern* as the literal letters u, 0, 0, ...,
+  # which collapses such a range into the ASCII range 0-u: it silently deletes
+  # most letters and digits while leaving the real control characters in
+  # place, the exact opposite of the intent. Verified: "A dim convenience
+  # store" came back as "  v ".
+  jq -rn --arg s "$raw" --argjson max "$SLUG_MAX_CHARS" '
+    $s
+    | gsub("\\s+"; "-")
+    | gsub("[[:cntrl:]]"; "")
+    | gsub("[/\\\\:*?\"<>|]"; "")
+    | gsub("-+"; "-")
+    | . as $full
+    | $full[0:$max] as $cut
+    | (if ($full | length) > $max
+       then (($cut | rindex("-")) // -1) as $ix
+            | (if $ix > ($max / 2) then $cut[0:$ix] else $cut end)
+       else $cut end)
+    | sub("^[^[:alnum:]]+"; "")
+    | sub("[^[:alnum:]]+$"; "")
+  '
+}
+
+# Strip the request payload down to something safe to store.
+#
+# A resolved --frame-first-image lands in the payload as a base64 data URI
+# that can exceed a megabyte on its own. Record that frames were used, never
+# the bytes. Idempotent, so running it over an already-compacted payload is
+# harmless.
+compact_request_json() {
+  printf '%s' "$1" | jq -c '
+    (if (.frame_images | type) == "array"
+     then {frame_images_count: (.frame_images | length)}
+     else {} end) as $f
+    | del(.frame_images) + $f' 2>/dev/null
+}
+
+# Path of the create -> poll handoff file for one job.
+#
+# `create` and `poll` are deliberately separate processes (that is what keeps
+# a short tool timeout from stranding a billable job), which means the create
+# payload cannot reach the poll by any in-memory route. The API is no help
+# either: its response echoes neither resolution, aspect ratio nor seed. So
+# create leaves the payload on disk and poll picks it up.
+#
+# Dotfile, keyed by job id: out-dir is a directory the user browses, and two
+# concurrent creates must not overwrite each other's handoff.
+request_handoff_path() {
+  printf '%s/.ofox-request-%s.json' "${1%/}" "$2"
+}
+
+save_request_handoff() {
+  local payload="$1" out_dir="$2" job_id="$3" compact path
+  compact=$(compact_request_json "$payload") || return 1
+  [ -z "$compact" ] && return 1
+  path=$(request_handoff_path "$out_dir" "$job_id")
+  printf '%s' "$compact" >"$path" 2>/dev/null || return 1
+  return 0
+}
+
+# Prints the stored payload, or nothing. Absence is normal, not an error:
+# polling a job created on another machine, into a different --out-dir, or by
+# a plain `generate` leaves no handoff, and the sidecar simply omits its
+# request half — exactly the behaviour before handoffs existed.
+load_request_handoff() {
+  local path
+  path=$(request_handoff_path "$1" "$2")
+  [ -r "$path" ] || return 1
+  jq -e . "$path" >/dev/null 2>&1 || return 1
+  cat "$path"
+}
+
+clear_request_handoff() {
+  rm -f "$(request_handoff_path "$1" "$2")" 2>/dev/null
+  return 0
+}
+
+# Write the metadata sidecar that sits next to a downloaded video.
+#
+# It carries what the filename cannot: the full job id (the short prefix in
+# the name can't be expanded back, since the API has no list endpoint), the
+# prompt, and the request as submitted — enough to re-render the same shot at
+# a different resolution without reconstructing anything by hand.
+#
+# Note the split: the poll response reports model, prompt, seconds and cost,
+# but *not* resolution or aspect ratio — those are echoed nowhere, so they
+# only reach the sidecar through the create payload, which means only the
+# generate path records them. A bare `poll JOB_ID` writes the response half
+# and omits `request` rather than guessing.
+#
+# Returns nonzero without leaving a partial file if anything goes wrong; the
+# caller treats that as a warning, never as a failed download.
+write_sidecar() {
+  local body="$1" video_path="$2" sidecar_path="$3" name_hint="$4" request_json="$5"
+  local req="null" tmp rc
+
+  if [ -n "$request_json" ]; then
+    req=$(compact_request_json "$request_json") || req="null"
+    [ -z "$req" ] && req="null"
+  fi
+
+  tmp=$(mktemp) || return 1
+  printf '%s' "$body" | jq \
+    --arg video "$(basename "$video_path")" \
+    --arg name "$name_hint" \
+    --argjson request "$req" '
+    {
+      job_id: .id,
+      status: .status,
+      model: .model,
+      prompt: .prompt,
+      video_seconds: (.usage.video_seconds // null),
+      video_cost: (.usage.video_cost // null),
+      created_at: .created_at,
+      updated_at: .updated_at,
+      video_file: $video
+    }
+    | (if $name != "" then .name = $name else . end)
+    | (if $request != null then .request = $request else . end)
+  ' >"$tmp" 2>/dev/null
+  rc=$?
+
+  # Only publish a sidecar that is actually parseable — a truncated or empty
+  # one is worse than none, because it looks like a record and isn't.
+  if [ "$rc" -ne 0 ] || ! jq -e . "$tmp" >/dev/null 2>&1; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  mv "$tmp" "$sidecar_path" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  return 0
+}
+
 download_result() {
   local job_id="$1" body="$2" out_dir="$3"
+  # Optional. name_hint is the caller's --name; request_json is the create
+  # payload as actually submitted, which only the generate path has. A bare
+  # `poll JOB_ID` passes neither, and everything below degrades cleanly.
+  local name_hint="${4:-}" request_json="${5:-}"
   local urls=() url
 
   # Prefer mirror_urls (CDN-signed, persistent) when present. In practice,
@@ -2025,7 +2305,28 @@ download_result() {
   cost=$(printf '%s' "$body" | jq -r '.usage.video_cost // "unknown"')
   seconds=$(printf '%s' "$body" | jq -r '.usage.video_seconds // "unknown"')
 
-  local i=0 count=${#urls[@]} paths=() ext fname outpath
+  # The readable stem of every file this job produces. The job's own prompt
+  # comes from the response, so this works identically whether the caller is
+  # 'generate' (which knows what it asked for) or a bare 'poll JOB_ID' in a
+  # fresh shell (which knows nothing). A short job-id suffix keeps two runs of
+  # the same prompt from overwriting each other and keeps the file traceable
+  # back to the job.
+  local prompt slug base
+  prompt=$(printf '%s' "$body" | jq -r '.prompt // empty')
+  slug=$(build_output_slug "$name_hint" "$prompt")
+  if [ -n "$slug" ]; then
+    base="${slug}-${job_id:0:8}"
+  else
+    base="$job_id"
+  fi
+
+  # Note the ${arr[@]+"${arr[@]}"} form used on these arrays below: bash 3.2,
+  # which is what /bin/bash still is on macOS, treats an empty array as unset,
+  # so a plain "${arr[@]}" under `set -u` aborts the script. That mattered
+  # here: if every sidecar write failed, expanding an empty sidecars killed
+  # the run right after a paid download, printing VIDEO_PATH but never
+  # VIDEO_COST — a successful, billed generation looking like a failure.
+  local i=0 count=${#urls[@]} paths=() sidecars=() ext fname outpath sidecar
 
   for url in "${urls[@]}"; do
     i=$((i + 1))
@@ -2035,16 +2336,31 @@ download_result() {
       *) ext="mp4" ;;
     esac
     if [ "$count" -gt 1 ]; then
-      fname="${job_id}_${i}.${ext}"
+      fname="${base}_${i}.${ext}"
     else
-      fname="${job_id}.${ext}"
+      fname="${base}.${ext}"
     fi
     outpath="${out_dir%/}/${fname}"
-    if ! curl -fsSL "$url" -o "$outpath"; then
+    if ! curl -fsSL --connect-timeout "$CONNECT_TIMEOUT" \
+         --speed-limit "$DOWNLOAD_MIN_BYTES" --speed-time "$DOWNLOAD_STALL_SECONDS" \
+         "$url" -o "$outpath"; then
       echo "ERROR: failed to download from: $url" >&2
       return 3
     fi
     paths+=("$outpath")
+
+    # Sidecar: the short id in the filename is not enough to poll or reconcile
+    # this job later (the API has no list endpoint to expand a prefix
+    # against), so the full id lives here along with everything needed to
+    # re-render the same shot at a different resolution.
+    sidecar="${outpath%.*}.json"
+    if write_sidecar "$body" "$outpath" "$sidecar" "$name_hint" "$request_json"; then
+      sidecars+=("$sidecar")
+    else
+      # A missing sidecar must never cost the user the video they just paid
+      # for; the mp4 is on disk and every field below is still printed.
+      echo "WARN: could not write metadata sidecar next to $outpath." >&2
+    fi
   done
 
   echo "STATUS completed"
@@ -2052,6 +2368,18 @@ download_result() {
   for outpath in "${paths[@]}"; do
     echo "VIDEO_PATH $outpath"
   done
+  for sidecar in ${sidecars[@]+"${sidecars[@]}"}; do
+    echo "SIDECAR_PATH $sidecar"
+  done
+
+  # The handoff has served its purpose only once its contents are on disk in
+  # a sidecar. Tying cleanup to this function merely returning would delete
+  # it even when write_sidecar failed — that failure is a warning, not an
+  # error, so the caller cannot tell the difference — and the record would be
+  # gone for good, with no way to rebuild it.
+  if [ "${#sidecars[@]}" -gt 0 ]; then
+    clear_request_handoff "$out_dir" "$job_id"
+  fi
   echo "VIDEO_SECONDS $seconds"
   echo "VIDEO_COST $cost"
   return 0

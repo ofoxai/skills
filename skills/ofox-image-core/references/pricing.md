@@ -5,7 +5,7 @@ Source: `https://ofox.ai/models/google/gemini-3.1-flash-image` (verified
 against the live model page before quoting a number you intend to hold
 someone to.
 
-## Do not compute a per-image dollar figure from the rates below alone
+## The rate that applies — settled against a real invoice
 
 The model page states, for `google/gemini-3.1-flash-image` ("Nano Banana
 2"):
@@ -16,15 +16,23 @@ The model page states, for `google/gemini-3.1-flash-image` ("Nano Banana
 | Output tokens | $3 / M tokens |
 | Output image | $60 / M (units unclear from the page alone) |
 
-The third row ("output image $60/M") is ambiguous as documented — it likely
-prices the image-token portion of `usage.output_tokens` at a different
-per-token rate than ordinary text output tokens, rather than being a flat
-per-image price, but the model page's phrasing does not make this precise
-enough to turn into a formula with confidence. **Do not hardcode a guessed
-per-image dollar figure from this phrasing** — the same discipline
-`ofox-video-core/references/pricing.md` applied to its own rate table
-(compute from a real response, don't trust a documentation page's wording
-alone).
+The third row ("output image $60/M") used to be the open question: it could
+have priced the image portion of `usage.output_tokens` at $60/M, or those
+tokens could have billed as ordinary output at $3/M — a 20x spread.
+
+**A real invoice line settled it on 2026-08-31.** A call reporting
+`input_tokens=79, output_tokens=1120` was billed **$0.06723950**, matching
+the $60/M reading to eight decimal places:
+
+```
+79 * 0.0000005  +  1120 * 0.00006
+= 0.0000395     +  0.0672
+= 0.06723950                       <- the invoice, digit for digit
+```
+
+So: **an image response's output tokens bill entirely at `output_image`, and
+the `output` ($3/M) row does not enter into it.** The $3/M rate belongs to
+this model's text-generation endpoint, not to `/v1/images/generations`.
 
 ## What to do instead
 
@@ -40,13 +48,17 @@ Every real response from `POST /v1/images/generations` includes a real
 }
 ```
 
-`ofox-image.sh` prints these three counts directly
-(`USAGE_INPUT_TOKENS`/`USAGE_OUTPUT_TOKENS`/`USAGE_TOTAL_TOKENS`). The real
-per-image cost depends on actual token usage; see below for a verified
-example once one exists — compute it by cross-referencing these real counts
-against the documented $/M token rates above (and, if it turns out to
-matter, the correct interpretation of the "$60/M output image" row), not by
-plugging a documentation-derived guess into a formula ahead of time.
+`ofox-image.sh` prints these three counts and, since the rate question was
+settled, an `IMAGE_COST` line computed from them. It reads the rates from the
+model list rather than hardcoding them, so a model with different pricing
+gets its own figure. When no rates are available (offline, or a model missing
+from the list) it prints no cost and says why — the token counts are always
+exact, a computed cost is only as good as the rate table behind it.
+
+**Key-name trap**: the two endpoints that publish rates disagree on spelling.
+`/v2/models/catalog` calls them `input`/`output`; `/v1/models` — the list the
+script actually loads — calls them `prompt`/`completion`. `output_image` is
+spelled the same in both. Code reading either source must accept both.
 
 ## Verified real example
 
@@ -83,41 +95,35 @@ point here is just that the token counts above are for a 1024x1024 image in
 practice, not a 512x512 one, even though every field in the response said
 otherwise.
 
-**Cost — two possible interpretations, neither confirmed against a real
-balance/billing-history check**:
+**Cost**, using the formula confirmed on 2026-08-31:
+`8 * 0.0000005 + 1120 * 0.00006` = **$0.06720400**. (When this example was
+first written the rate question was open and this was recorded as "either
+~$0.0034 or ~$0.067"; the invoice check confirmed the higher reading.)
 
-Using the documented rates (input $0.5/M tokens, output tokens $3/M,
-output image $60/M):
-
-- Input: `8 / 1,000,000 * $0.5` = ~$0.000004 (negligible either way).
-- **(a) If the 1120 output tokens bill as ordinary output tokens at
-  $3/M**: `1120 / 1,000,000 * $3` = **~$0.0034** total.
-- **(b) If the 1120 output tokens bill as "output image" tokens at
-  $60/M**: `1120 / 1,000,000 * $60` = **~$0.067** total.
-
-That's roughly a 20x spread between the two interpretations, and the
-response has **no `usage.total_cost`-equivalent field** (unlike the video
-API's job responses) to settle it directly. This has **not** been resolved
-against ground truth — nobody has checked the actual balance change for
-this specific call in the Ofox console. Do not treat either (a) or (b) as
-certain; whoever needs a firm dollar figure (e.g. for a scenario skill's
-own cost estimate to a user) should check the real balance/billing history
-at `https://app.ofox.ai` for this call before quoting one number with
-confidence.
-
-## Cost formula (still not fully resolved)
+## Cost formula (confirmed)
 
 ```
-actual_cost = input_cost + f(usage.output_tokens, rate_table)
+cost = usage.input_tokens  * pricing.input/prompt
+     + usage.output_tokens * pricing.output_image
 ```
 
-where `f` is one of:
+Both rates come from the model list, per model — never hardcode them, and
+never fall back to a guess when they are missing. `ofox-image.sh` implements
+this in `image_cost_for()` and prints the result as `IMAGE_COST`.
 
-- `output_tokens / 1e6 * $3`  (interpretation a — plain output-token rate)
-- `output_tokens / 1e6 * $60` (interpretation b — "output image" rate)
+### Evidence
 
-Which of the two `f` applies is exactly the open question above. Until a
-real balance/billing-history check confirms one, `ofox-image.sh` reports
-only the raw `usage` token counts (see `SKILL.md`) and does **not** print a
-computed dollar figure — printing one would mean picking a and b
-arbitrarily and presenting a guess as fact.
+| Date | input | output | Computed | Invoice |
+|---|---|---|---|---|
+| 2026-08-31 | 79 | 1120 | 0.06723950 | **$0.06723950** |
+| 2026-08-31 | 51 | 1120 | 0.06722550 | (same batch, not itemised separately) |
+| 2026-08-29 | 8 | 1120 | 0.06720400 | (not checked at the time) |
+
+The 2026-08-31 row is the one that carries the argument: an exact eight-
+decimal match is not a coincidence between two readings 20x apart.
+
+Ofox exposes **no billing endpoint** — `/v1/usage`, `/v1/billing`,
+`/v1/credits`, `/v1/account`, `/v1/balance` and their `/v2` equivalents all
+answer 404. The invoice figure above came from the console at
+`https://app.ofox.ai`. That is why the cost has to be computed client-side
+from rates and token counts: there is nothing to query.

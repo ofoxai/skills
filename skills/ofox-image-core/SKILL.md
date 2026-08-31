@@ -1,6 +1,6 @@
 ---
 name: ofox-image-core
-description: Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
+description: Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
 license: MIT
 version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
@@ -124,8 +124,8 @@ call if combined with that model, even `--n 1`), `--output-format`
 `extra_body.provider.type` for `openai/gpt-image-2`), `--out-dir` (default:
 current directory), `--out-name` (bare filename, no extension, no path
 separators — default: a timestamp-based name). Full parameter reference:
-`references/api-params.md`. Token-rate pricing notes (no guessed per-image
-dollar figure): `references/pricing.md`.
+`references/api-params.md`. The cost formula and the invoice it was verified
+against: `references/pricing.md`.
 
 **Always state the full `IMAGE_PATH` as its own standalone line in your
 reply to the user** — not folded into a sentence or buried mid-paragraph,
@@ -219,7 +219,7 @@ script's `print_api_error` if/when a new one is confirmed by a real call.
 
 | Exit | Meaning |
 |---|---|
-| `0` | Success — image(s) decoded and saved, usage token counts printed. |
+| `0` | Success — image(s) decoded and saved, usage token counts and `IMAGE_COST` printed. |
 | `1` | Usage/parameter validation error — no network call was made. Fix the flag and retry `generate` freely. |
 | `2` | Environment error — `curl`/`jq`/`OFOX_API_KEY` missing. Fix the environment, no request was attempted. |
 | `3` | The API rejected the request, or the response body couldn't be parsed into a usable image (see `references/api-params.md` for the one confirmed `error.type`; everything else is surfaced via the raw upstream message). |

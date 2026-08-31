@@ -253,10 +253,15 @@ Each `TAKE` line carries `seed=N`. That seed is the handle for "take 3 was the
 good one": re-run the same prompt with that seed on a better model or higher
 resolution to reproduce that take rather than rolling a new one.
 
+A single `generate` prints a `SEED` line too, and records it in the clip's
+`.json` sidecar along with the resolution and aspect ratio. So "that one was
+good, give me it at 1080p" works off one clip — you do not need a batch to
+get a reusable handle.
+
 
 Worth offering when the user is exploring: draft cheap on
 `bytedance/seedance-2.0-mini` at 480p, then render the winner on
-`bytedance/seedance-2.5`. Four 8-second drafts cost about $0.64 on mini versus
+`bytedance/seedance-2.5`. Four 8-second drafts cost about 64 cents on mini versus
 $7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
 different model is a different look, not just a different price.
 
@@ -330,9 +335,15 @@ each take yourself.
 ## Where the file lands
 
 Always pass `--out-dir`. Without it the script writes to the current working
-directory, which is usually the user's project root, and the filename is a
-bare job id. Pick something sensible (`./out`, or wherever the user asked) and
-relay the absolute `VIDEO_PATH` the script prints, on its own line.
+directory, which is usually the user's project root. Pick something sensible
+(`./out`, or wherever the user asked) and relay the absolute `VIDEO_PATH` the
+script prints, on its own line.
+
+Pass `--name` too. You know what the shot is — you just wrote the prompt for
+it — so name the file after the scene rather than leaving the script to guess
+from the prompt's opening words, which describe the setting and the lighting.
+The clip lands as `<name>-<short job id>.mp4` with a `.json` sidecar beside
+it holding the full job id, the prompt and the real cost.
 
 ## Running the script
 
@@ -349,6 +360,7 @@ remote URL when one is available):
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate \
   --prompt "<the product-video prompt built above>" \
+  --name "<short product name, e.g. sneaker turntable>" \
   --frame-first-image "<local path or URL to the product photo>" \
   --duration 5 \
   --resolution 720p \

@@ -53,7 +53,7 @@ its real duration range, resolutions, modes and base per-second price. It needs
 user has signed up, and it costs nothing.
 
 Worth knowing before quoting a price: at 720p text-to-video the ladder runs
-`seedance-2.0-mini` $0.04/s → `wan-2.7` $0.10/s → `seedance-2.5` $0.24/s. When
+`seedance-2.0-mini` 4 cents/s → `wan-2.7` 10 cents/s → `seedance-2.5` 24 cents/s. When
 a user is going to generate several takes and keep one, drafting on a cheap
 model and rendering the keeper on `seedance-2.5` costs a fraction of drafting
 everything on 2.5. Say so when it's relevant — but don't switch models on
@@ -173,7 +173,7 @@ double-bill a request that already exists.
 Draft cheap, render the keeper expensive:
 
 ```bash
-# 5 drafts at 480p on the cheapest model — about $0.40
+# 5 drafts at 480p on the cheapest model — about 40 cents
 bash references/ofox-video.sh batch --prompt "..." --takes 5 \
   --model bytedance/seedance-2.0-mini --resolution 480p --duration 4
 
@@ -249,7 +249,7 @@ That flow is the one to follow whenever real money is involved:
 ```bash
 # 1. price it
 bash references/ofox-video.sh generate --dry-run --prompt "..." --duration 15 --resolution 720p
-#    -> Estimated cost: ~$3.60 (15s x $0.24/s)...
+#    -> Estimated cost: ~$3.60 (15s x 24 cents/s)...
 #    -> DRY RUN — nothing was submitted and nothing was billed.
 
 # 2. tell the user the number, get a yes
@@ -312,7 +312,7 @@ deciding whether to register.
 
 **When a user has no key, quote first and point at signup second.** Opening
 with "go get an API key" sends someone to a form before they know whether the
-thing is worth $0.44 or $7.20. Run the dry run, show them the number, then
+thing is worth 44 cents or $7.20. Run the dry run, show them the number, then
 point at [app.ofox.ai](https://app.ofox.ai) if they want to proceed.
 
 ## Availability check
@@ -342,7 +342,7 @@ are present — it makes no network call. Handle each failure mode plainly:
 bash references/ofox-video.sh models
 bash references/ofox-video.sh generate --dry-run --prompt "..." [OPTIONS]
 bash references/ofox-video.sh generate --prompt "..." [OPTIONS]
-bash references/ofox-video.sh poll JOB_ID [--out-dir DIR]
+bash references/ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT]
 ```
 
 `generate` builds the request, validates parameters client-side against the
@@ -355,9 +355,56 @@ prints:
 STATUS completed
 JOB_ID <id>
 VIDEO_PATH <path/to/file.mp4>
+SIDECAR_PATH <path/to/file.json>
 VIDEO_SECONDS <billed seconds>
 VIDEO_COST <exact cost from usage.video_cost>
 ```
+
+## Name the output file
+
+Pass `--name` with a short description of what the clip actually is:
+
+```bash
+bash references/ofox-video.sh generate --prompt "..." --name "convenience store breakup"
+```
+
+The file lands as `convenience-store-breakup-d12c2787.mp4` instead of a bare
+job id, with a `convenience-store-breakup-d12c2787.json` sidecar beside it.
+
+Without `--name` the slug is derived from the prompt, so a `poll JOB_ID` run
+in a fresh shell still produces something readable. That fallback is a
+consolation prize, not the goal: prompts open on setting and lighting, so the
+derived name usually describes the room rather than the scene. **A scenario
+skill always knows the better name — pass it.**
+
+The 8-hex suffix keeps two runs of the same prompt from overwriting each
+other. It is not a way back to the job: the API has no list endpoint, so a
+short id cannot be expanded. The sidecar carries the full `job_id`, the
+prompt, the real cost, and the `request` as submitted — the only place
+`resolution`, `aspect_ratio` and `seed` are recorded, since the poll response
+echoes none of them. Full field table in
+[`references/api-params.md`](references/api-params.md).
+
+## Reproducing a shot
+
+Every job now has a seed: without `--seed` the script rolls one, sends it,
+and prints it as `SEED <n>`. Before, the server picked a seed and reported it
+nowhere, so nothing could be regenerated — only re-rolled.
+
+That seed and the rest of the request land in the sidecar, so re-rendering
+the same shot at a higher resolution is a matter of reading it back:
+
+```bash
+jq -r '.request | "--prompt \(.prompt|@sh) --seed \(.seed) --aspect-ratio \(.aspect_ratio)"' out/my-shot-3e830902.json
+```
+
+`create` + `poll` keeps this intact across the two processes by leaving the
+payload in `<out-dir>/.ofox-request-<job id>.json` for the poll to pick up
+and clean away. Poll into a different `--out-dir` and the handoff is simply
+not found — the sidecar omits `request`, nothing fails.
+
+A sidecar that cannot be written is a warning, never a failed download — the
+video is what the user paid for.
 
 Download source: `mirror_urls` (CDN-signed, persistent) when present,
 falling back to `unsigned_urls` (documented as temporary, may expire within
