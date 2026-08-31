@@ -103,6 +103,12 @@ DEFAULT_MODEL="bytedance/seedance-2.5"
 DEFAULT_MAX_WAIT=540
 DEFAULT_POLL_INTERVAL=6
 
+# Cap for the readable part of an output filename, counted in Unicode
+# codepoints (not bytes). 24 CJK characters is 72 UTF-8 bytes, which leaves
+# the whole name — slug, '-', 8 hex of job id, extension — far below the
+# 255-byte limit every filesystem this runs on enforces.
+SLUG_MAX_CHARS=24
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_SNAPSHOT="$SCRIPT_DIR/models-snapshot.json"
 PRICING_SNAPSHOT="$SCRIPT_DIR/pricing-snapshot.json"
@@ -1984,6 +1990,62 @@ poll_and_download() {
   echo "  $0 poll $job_id" >&2
   echo "Do NOT re-run 'generate' for the same request — that creates a duplicate, separately billed job." >&2
   return 4
+}
+
+# Build the readable part of an output filename.
+#
+# Priority: an explicit --name from the caller, then the job's own prompt.
+# The prompt is present in every poll response, so a bare `poll JOB_ID` in a
+# fresh shell — with no memory of what was generated — still produces a
+# meaningful name instead of degrading to a raw job id. Prints nothing when
+# there is no usable source, which is the caller's signal to fall back to the
+# job id.
+#
+# Slicing happens in jq, not bash. jq slices by codepoint and is
+# locale-independent, so a CJK prompt can never be cut mid-character the way
+# `cut -b` would, and the result doesn't change under LC_ALL=C. jq is already
+# a hard dependency of this script, so this costs no new requirement.
+#
+# Both sources are untrusted text that becomes part of a path: a --name comes
+# from a calling skill, and a prompt comes from whoever wrote it. Path
+# separators, characters illegal on Windows filesystems, and control
+# characters are stripped, then leading dots and dashes are removed, so
+# '../../etc/passwd' cannot survive as anything traversable and nothing turns
+# into a hidden file or a leading-dash pseudo-flag.
+build_output_slug() {
+  local name_hint="$1" prompt="$2" raw=""
+
+  if [ -n "$name_hint" ]; then
+    raw="$name_hint"
+  else
+    raw="$prompt"
+  fi
+  [ -z "$raw" ] && return 0
+
+  # Order matters twice over. Whitespace is collapsed to a dash *before*
+  # control characters are stripped, because tab and newline are both: strip
+  # them first and "line one\nline two" glues into "line onelinetwo" instead
+  # of separating into words. And the slice comes before the final trim,
+  # because the slice itself can land on a separator and leave a trailing
+  # dash.
+  #
+  # Control characters are matched with the POSIX class [[:cntrl:]], never
+  # with a backslash-u codepoint range. jq's regex engine (Oniguruma) reads a
+  # backslash-u escape inside a *pattern* as the literal letters u, 0, 0, ...,
+  # which collapses such a range into the ASCII range 0-u: it silently deletes
+  # most letters and digits while leaving the real control characters in
+  # place, the exact opposite of the intent. Verified: "A dim convenience
+  # store" came back as "  v ".
+  jq -rn --arg s "$raw" --argjson max "$SLUG_MAX_CHARS" '
+    $s
+    | gsub("\\s+"; "-")
+    | gsub("[[:cntrl:]]"; "")
+    | gsub("[/\\\\:*?\"<>|]"; "")
+    | gsub("-+"; "-")
+    | .[0:$max]
+    | sub("^[-.]+"; "")
+    | sub("[-.]+$"; "")
+  '
 }
 
 download_result() {
