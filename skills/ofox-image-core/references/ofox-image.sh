@@ -100,6 +100,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_SNAPSHOT="$SCRIPT_DIR/models-snapshot.json"
 MODELS_CACHE_TTL="${OFOX_MODELS_TTL:-86400}" # 24h
 
+# Network timeouts for the one call that costs money. Only the model-list
+# fetch had any, leaving generate able to hang forever on a stalled
+# connection. Generous, because image generation is synchronous — the whole
+# render happens inside this one request, so a short limit would kill valid
+# slow jobs. Timing out lands in the ambiguous exit-5 path ("no response, no
+# job id, check billing history"), which is already handled; hanging
+# indefinitely is not the safer alternative.
+CONNECT_TIMEOUT=15
+GENERATE_MAX_TIME=300
+
 # The models this skill's docs and pricing notes cover in depth. It is NOT a
 # whitelist — --model is checked against the live model list (see load_models),
 # so any image model Ofox offers works. This is only what gets named in help
@@ -622,6 +632,7 @@ cmd_generate() {
   local tmp_body http_code curl_rc body
   tmp_body=$(mktemp)
   http_code=$(curl -sS -o "$tmp_body" -w '%{http_code}' \
+    --connect-timeout "$CONNECT_TIMEOUT" --max-time "$GENERATE_MAX_TIME" \
     -X POST "$API_BASE/images/generations" \
     -H "Authorization: Bearer $OFOX_API_KEY" \
     -H "Content-Type: application/json" \

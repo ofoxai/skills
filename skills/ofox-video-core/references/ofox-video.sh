@@ -118,6 +118,25 @@ DEFAULT_POLL_INTERVAL=6
 # "convenience-store-breakup" mid-word.
 SLUG_MAX_CHARS=40
 
+# Network timeouts. Only the model-list fetches had any, which left every
+# call that actually costs money able to hang forever on a stalled
+# connection — and made --max-wait a promise the poll loop could not keep,
+# since elapsed only advances once curl returns.
+#
+# CREATE_MAX_TIME is generous: a create normally answers in seconds, and
+# timing one out lands in the ambiguous "no response, cannot tell whether it
+# was billed" path (exit 5). That path exists and is handled correctly;
+# hanging indefinitely helps no one and is not safer.
+#
+# Downloads deliberately get no overall limit — a large file is legitimately
+# slow — and are guarded against stalls instead: abort if throughput stays
+# under DOWNLOAD_MIN_BYTES/s for DOWNLOAD_STALL_SECONDS.
+CONNECT_TIMEOUT=15
+CREATE_MAX_TIME=120
+POLL_MAX_TIME=60
+DOWNLOAD_MIN_BYTES=512
+DOWNLOAD_STALL_SECONDS=60
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_SNAPSHOT="$SCRIPT_DIR/models-snapshot.json"
 PRICING_SNAPSHOT="$SCRIPT_DIR/pricing-snapshot.json"
@@ -1069,6 +1088,7 @@ cmd_generate() {
   printf '%s' "$payload" >"$tmp_payload"
   tmp_body=$(mktemp)
   http_code=$(curl -sS -o "$tmp_body" -w '%{http_code}' \
+    --connect-timeout "$CONNECT_TIMEOUT" --max-time "$CREATE_MAX_TIME" \
     -X POST "$API_BASE/videos" \
     -H "Authorization: Bearer $OFOX_API_KEY" \
     -H "Content-Type: application/json" \
@@ -1958,7 +1978,12 @@ poll_and_download() {
   # Both optional; only the generate path has them to give. See
   # download_result() and write_sidecar().
   local name_hint="${6:-}" request_json="${7:-}"
-  local elapsed=0 tmp_body http_code curl_rc body status
+  # Wall clock, not a tally of sleeps. Each poll request can now itself burn
+  # up to POLL_MAX_TIME before returning, so counting only poll_interval per
+  # iteration would let a run of slow or timing-out requests overshoot
+  # --max-wait by minutes while believing it was well inside it.
+  local poll_started elapsed=0 tmp_body http_code curl_rc body status
+  poll_started=$(date +%s)
   local out_dir_input="$out_dir"
 
   mkdir -p "$out_dir" 2>/dev/null
@@ -1981,6 +2006,7 @@ poll_and_download() {
   while [ "$elapsed" -lt "$max_wait" ]; do
     tmp_body=$(mktemp)
     http_code=$(curl -sS -o "$tmp_body" -w '%{http_code}' \
+      --connect-timeout "$CONNECT_TIMEOUT" --max-time "$POLL_MAX_TIME" \
       -H "Authorization: Bearer $OFOX_API_KEY" \
       "$polling_url")
     curl_rc=$?
@@ -1990,7 +2016,7 @@ poll_and_download() {
     if [ "$curl_rc" -ne 0 ]; then
       echo "WARN: poll request failed (curl exit $curl_rc). Retrying the POLL (not create) in ${poll_interval}s..." >&2
       sleep "$poll_interval"
-      elapsed=$((elapsed + poll_interval))
+      elapsed=$(( $(date +%s) - poll_started ))
       continue
     fi
 
@@ -2031,24 +2057,24 @@ poll_and_download() {
             ;;
           pending|queued|in_progress)
             sleep "$poll_interval"
-            elapsed=$((elapsed + poll_interval))
+            elapsed=$(( $(date +%s) - poll_started ))
             ;;
           *)
             echo "WARN: unrecognized status '$status' in poll response, continuing to poll..." >&2
             sleep "$poll_interval"
-            elapsed=$((elapsed + poll_interval))
+            elapsed=$(( $(date +%s) - poll_started ))
             ;;
         esac
         ;;
       429)
         echo "WARN: rate limited while polling. Backing off ${poll_interval}s (retrying the poll, not create)..." >&2
         sleep "$poll_interval"
-        elapsed=$((elapsed + poll_interval))
+        elapsed=$(( $(date +%s) - poll_started ))
         ;;
       5??)
         echo "WARN: upstream error (HTTP $http_code) while polling. Retrying the poll (not create) in ${poll_interval}s..." >&2
         sleep "$poll_interval"
-        elapsed=$((elapsed + poll_interval))
+        elapsed=$(( $(date +%s) - poll_started ))
         ;;
       *)
         print_api_error "poll" "$http_code" "$body"
@@ -2311,7 +2337,9 @@ download_result() {
       fname="${base}.${ext}"
     fi
     outpath="${out_dir%/}/${fname}"
-    if ! curl -fsSL "$url" -o "$outpath"; then
+    if ! curl -fsSL --connect-timeout "$CONNECT_TIMEOUT" \
+         --speed-limit "$DOWNLOAD_MIN_BYTES" --speed-time "$DOWNLOAD_STALL_SECONDS" \
+         "$url" -o "$outpath"; then
       echo "ERROR: failed to download from: $url" >&2
       return 3
     fi
