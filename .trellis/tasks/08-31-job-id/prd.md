@@ -31,9 +31,10 @@
 * 每个视频旁边写一个同名 `.json` sidecar，记录完整 job id / prompt / model / 参数 / 实际花费
 * 新增 `--name` 参数，供场景 skill 传入短名
 * 四条路径（generate / poll / batch / chain）命名风格一致
-* sanitize：去除 `/ \ : * ? " < > |`、控制字符，空白折叠为 `-`，去掉首尾 `-` 和 `.`
-* slug 按 **字节** 截断（CJK 在 UTF-8 占 3 字节），上限 48 字节，
-  保证总文件名远低于文件系统 255 字节上限
+* sanitize：空白折叠为 `-` → 剥除控制字符 → 去除 `/ \ : * ? " < > |` → 首尾裁剪非字母数字
+  （顺序不可换：制表符/换行既是空白又是控制字符，先剥会把相邻词粘连）
+* slug 按 **Unicode 码点** 截断（在 jq 里切片，与 locale 无关，天然不切断 UTF-8），
+  上限 40 码点；截断时回退到最近的词边界，避免切出半个英文单词
 * 保留非 ASCII：中文 prompt 出中文名，英文 prompt 出英文名，跟随用户语言
 * 单 job 多 URL 时沿用现有 `_${i}` 后缀约定
 
@@ -61,7 +62,7 @@
 单点改造 `download_result()`，新增一个 `build_output_slug()` 辅助函数：
 
 ```
-slug = --name(sanitized)  ||  .prompt 前 48 字节(sanitized)  ||  ""
+slug = --name(sanitized)  ||  .prompt 前 40 码点(sanitized, 回退词边界)  ||  ""
 short = job_id 前 8 位
 fname = slug ? "${slug}-${short}.${ext}" : "${job_id}.${ext}"
 sidecar = "${fname%.*}.json"
@@ -120,5 +121,6 @@ sidecar = "${fname%.*}.json"
 ## Technical Notes
 
 * 中文 slug 在 macOS/APFS、Linux、Windows(NTFS) 上均合法（UTF-8）
-* 按字节截断必须对齐 UTF-8 边界，否则产生半个字符的乱码
+* 最初设计按字节截断，实现时改为在 jq 里按码点切片——jq 是硬依赖且切片与 locale 无关，
+  从构造上就不可能切出半个字符，比在 bash 里对齐 UTF-8 边界干净得多
 * `--name` 是路径注入面：必须先 sanitize 再拼接，不能信任调用方
