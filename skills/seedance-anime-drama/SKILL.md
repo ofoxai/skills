@@ -124,7 +124,7 @@ image prompt and every shot's video prompt), so the character image and
 every shot stay visually consistent with each other, not just internally
 consistent shot-to-shot.
 
-## Step 1: generate ONE character reference image
+## Step 1: generate the image the shot will actually start from
 
 Extracting the character description is **this skill's calling agent's own
 reasoning to do — not something a script performs**. Read the user's
@@ -136,8 +136,47 @@ covering:
 - clothing (exact garments, colors)
 - distinguishing features (scars, accessories, eye color, etc.)
 
-Combine that description with the chosen art-style descriptor (Step 0) into
-a text-to-image prompt, then call:
+### Two different images, do not confuse them
+
+`--frame-first-image` is the **literal first frame of the video**, not a
+style hint. That makes the classic "character reference sheet" the wrong
+thing to feed it:
+
+| Image | What it is for | Prompt shape |
+|---|---|---|
+| **Character sheet** | Locking a design, showing the user, keeping one character consistent across shots that cut to unrelated setups | multi-view, labels, plain background |
+| **Opening frame** | The frame the shot animates away from | one in-scene illustration, no text, no panels |
+
+Asking for a "character reference sheet" gets you exactly that: a real
+multi-panel sheet with front/side/back views, an expression row, a palette
+swatch and printed labels — and models will happily invent a name and letter
+it across the top. Fed to `--frame-first-image`, the clip opens on that
+grid of thumbnails and text and animates out of it. **Verified on a real
+run**: a sheet generated from the wording above came back with four views,
+three expressions, a colour palette and the caption "HANA TANAKA", and had
+to be thrown away and regenerated as a single in-scene image.
+
+So pick by what you need:
+
+**Generating one shot** (the common case) — you need an opening frame. Skip
+the sheet: with a single shot there is no second shot to stay consistent
+with, so the sheet buys nothing and costs an opening frame.
+
+```bash
+bash ../ofox-image-core/references/ofox-image.sh generate \
+  --model google/gemini-3.1-flash-image \
+  --prompt "<character description>, <the shot's opening moment: setting, pose, camera angle>, <anime/manga style descriptor>, cinematic composition, no text, no panels, single illustration" \
+  --quality standard \
+  --out-dir <a directory for this project's generated assets>
+```
+
+The `no text, no panels, single illustration` tail is what keeps the model
+from drifting back into sheet mode — it is not optional padding.
+
+**Generating several shots of one character** — generate the sheet as well,
+once, and show it to the user to confirm the design. Then write each shot's
+own opening frame using the **same character description word for word**, so
+every shot inherits one design.
 
 ```bash
 bash ../ofox-image-core/references/ofox-image.sh generate \
@@ -147,6 +186,14 @@ bash ../ofox-image-core/references/ofox-image.sh generate \
   --out-dir <a directory for this project's generated assets>
 ```
 
+### The opening frame decides the output's shape
+
+`bytedance/seedance-2.5` forces `aspect_ratio: adaptive` whenever an image is
+attached, so the clip comes out at **the reference image's** aspect ratio,
+whatever `--aspect-ratio` says. If the delivery needs a specific ratio
+(9:16 for social, say), crop or pad the image before Step 2 — there is no
+flag that fixes it afterwards.
+
 `google/gemini-3.1-flash-image` is the recommended default for this step —
 no strong reason to use `openai/gpt-image-2` or `bailian/qwen-image-3.0-pro`
 unless the user asks for one of those specifically. Per `ofox-image-core`'s
@@ -155,16 +202,21 @@ to always actually generate at its native 1024x1024 resolution and just
 echoes back the requested size — don't promise the user a specific output
 size, and don't fight this if you do pass `--size`.
 
-Take the printed `IMAGE_PATH` (an absolute path). **Show it to the user as
-its own standalone line, and explicitly say it will be reused for every
-shot featuring this character.** This file is the artifact the rest of the
-skill depends on.
+Take the printed `IMAGE_PATH` (an absolute path) and **show it to the user
+as its own standalone line** — say whether it is the shot's opening frame or
+a design sheet, since those get used differently. `ofox-image.sh` also prints
+`IMAGE_COST`; relay it the same way you relay a video's cost.
+
+Show the image to the user before spending on the shot. A wrong opening
+frame is cheap to notice here and expensive to notice after the video is
+paid for — a sheet that slipped through, an invented caption, a character
+who is not who they pictured.
 
 If the story needs more than one character, repeat Step 1 once per
 character who needs their own reference image — see "Multiple characters in
 one shot" below for the v1 scoping limit on this.
 
-## Step 2: generate each shot, reusing the SAME character image
+## Step 2: generate each shot from its opening frame
 
 **Reuse the identical `IMAGE_PATH` from Step 1 across every shot of that
 character.** Do not regenerate the character image per shot, and do not
