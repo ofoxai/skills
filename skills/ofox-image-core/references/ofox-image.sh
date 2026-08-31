@@ -241,6 +241,48 @@ model_entry() {
     "$MODELS_FILE" 2>/dev/null
 }
 
+# Compute what one image generation actually cost.
+#
+# The image endpoint returns no cost of its own (unlike the video API's
+# usage.video_cost), and the platform exposes no billing endpoint to look it
+# up afterwards — every /v1/usage, /v1/billing, /v1/credits, /v1/account
+# variant answers 404. So the only honest figure is one computed here from
+# the published rates and the response's own token counts.
+#
+# The formula, verified to eight decimal places against a real invoice line
+# of $0.06723950 for a call reporting input_tokens=79, output_tokens=1120:
+#
+#   cost = input_tokens * pricing.input + output_tokens * pricing.output_image
+#
+# That is the finding worth keeping: an image response's output tokens bill
+# entirely at the `output_image` rate ($60/M for Gemini), and the `output`
+# rate ($3/M) does not enter into it. Reading the model page alone left those
+# two readings 20x apart; the invoice settled it.
+#
+# Prints nothing and returns nonzero when the rates aren't available, so the
+# caller says so rather than quoting a guess.
+image_cost_for() {
+  # $1 = model id, $2 = input tokens, $3 = output tokens
+  local model="$1" in_tok="$2" out_tok="$3" entry
+  case "$in_tok$out_tok" in
+    *[!0-9]*|'') return 1 ;;
+  esac
+  entry="$(model_entry "$model")" || return 1
+  [ -n "$entry" ] || return 1
+
+  # The two endpoints that publish rates disagree on key names for the same
+  # numbers: /v2/models/catalog calls them input/output, while /v1/models —
+  # the list this script actually loads — calls them prompt/completion.
+  # output_image is spelled the same in both. Accept either spelling rather
+  # than depending on which source filled MODELS_FILE.
+  printf '%s' "$entry" | jq -er --argjson i "$in_tok" --argjson o "$out_tok" '
+    ((.pricing.input // .pricing.prompt) // empty | tonumber) as $ri
+    | (.pricing.output_image // empty | tonumber) as $ro
+    | ($i * $ri + $o * $ro)
+    | . * 100000000 | round / 100000000
+    | tostring' 2>/dev/null
+}
+
 infer_extension() {
   # $1 = the --output-format value the caller requested (may be empty).
   # The documented response shape has no format/output_format field of its
@@ -337,8 +379,9 @@ cmd_models() {
     | @tsv' "$MODELS_FILE" | column -t -s "$(printf '\t')"
 
   echo
-  echo "Prices are per output image token, not per image — see references/pricing.md"
-  echo "for how that turns into a cost. This skill documents these in depth:"
+  echo "Prices are per output image token, not per image. 'generate' turns that"
+  echo "into an IMAGE_COST line for you; references/pricing.md has the formula"
+  echo "and the invoice it was verified against. This skill documents these in depth:"
   echo "  $DOCUMENTED_MODELS"
   echo "Others work but their size/quality support is not documented here."
   return 0
@@ -654,8 +697,21 @@ cmd_generate() {
   echo "USAGE_INPUT_TOKENS $input_tokens"
   echo "USAGE_OUTPUT_TOKENS $output_tokens"
   echo "USAGE_TOTAL_TOKENS $total_tokens"
-  echo "See references/pricing.md before quoting a dollar cost — no verified" >&2
-  echo "per-token dollar rate has been confirmed against a real response yet." >&2
+
+  # Needs the model list for the rates; it may not have loaded (offline, no
+  # cache). Report the cost when it can be computed, and say why not when it
+  # can't — never split the difference with an approximation.
+  local image_cost=""
+  load_models >/dev/null 2>&1 || true
+  image_cost="$(image_cost_for "$resp_model" "$input_tokens" "$output_tokens")" || image_cost=""
+  if [ -n "$image_cost" ]; then
+    echo "IMAGE_COST $image_cost"
+  else
+    echo "NOTE: could not compute a cost — no published rates available for" >&2
+    echo "'$resp_model' (offline, or the model is missing from the list)." >&2
+    echo "The token counts above are exact; see references/pricing.md for the" >&2
+    echo "formula to apply by hand." >&2
+  fi
   return 0
 }
 
