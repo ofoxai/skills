@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.7.0"
+version: "1.8.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.7.0"
+  version: "1.8.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -140,6 +140,11 @@ Every option `generate` takes works here. What `batch` adds:
 
 - **An estimate before it spends anything**, and a real total afterward built
   from each job's own `usage.video_cost` — never from the estimate.
+- **Every take reports its seed** (`TAKE 3 <job-id> seed=1852049 <cost> <path>`).
+  This is what makes "take 3 was the good one" actionable: the takes differ
+  only by seed, so re-running the same prompt with that seed on a better model
+  or a higher resolution reproduces that take rather than rolling a new one.
+  Without the seed there is no way back to a specific take, only a reroll.
 - **`BATCH_COST_TOTAL` is the number to quote**, not `BATCH_COST_PER_TAKE`.
   Gacha means most takes go in the bin: if one take in three is usable, that
   clip cost you the whole total, because you paid for the two you threw away.
@@ -189,6 +194,48 @@ bash references/ofox-video.sh contact-sheet clip1.mp4 clip2.mp4 [--out-dir DIR]
 
 No API call, no key, no cost. Useful for comparing takes from separate runs,
 or rebuilding a sheet you skipped.
+
+## How long this blocks, and why that matters
+
+`generate` waits for the job: it polls until the video is ready, up to
+`--max-wait` seconds (default **540**, i.e. nine minutes). A 4-second 480p clip
+usually lands in one to three minutes; longer and higher-resolution jobs take
+longer.
+
+**That is longer than most agent tool calls allow by default.** Claude Code's
+Bash tool defaults to a 120-second timeout and caps at 600. If your tool call
+dies while `generate` is still polling, you land in the one genuinely bad
+state: the job was created and is billable, and its id was never printed, so
+you cannot poll for it and cannot tell the user where their video went.
+
+Two ways to stay out of that, in order of preference:
+
+**1. Submit and wait separately.** `create` does the submit and returns
+immediately — seconds, not minutes — printing the job id. Then poll in
+however many short calls it takes:
+
+```bash
+bash references/ofox-video.sh create --prompt "..." --duration 15 --out-dir ./out
+# -> STATUS submitted
+#    JOB_ID 7b41f0c9-...
+#    POLLING_URL https://api.ofox.ai/v1/videos/7b41f0c9-...
+
+bash references/ofox-video.sh poll 7b41f0c9-... --out-dir ./out
+```
+
+The job id exists on disk in your transcript the moment it is created, so no
+timeout can strand it. This is the right shape whenever you cannot raise your
+own tool timeout.
+
+**2. Raise the timeout for the call.** If your harness lets you set a
+per-call timeout, give `generate` at least `--max-wait` plus a margin.
+
+**`batch` needs this attention most.** Its takes run one at a time, so its
+worst case is `takes x max-wait` — four takes at the default is 36 minutes,
+which exceeds what any single Bash tool call can be given. Either lower
+`--max-wait` (a 4-second draft rarely needs 540s; 240 is generous), or run
+`create` per take and poll them yourself. Tell the user roughly how long it
+will take before starting.
 
 ## Quote the price before you spend it
 

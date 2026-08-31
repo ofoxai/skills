@@ -4,6 +4,53 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.8.0 — `create`, and fixes for three defects 1.7.0 introduced
+
+A second role-play review — a sub-agent given only the SKILL.md files and told
+nothing about the previous round — confirmed 1.7.0's fixes landed (it read the
+dry-run flow out of the docs unprompted) and found twelve more issues. Three
+were introduced by 1.7.0 itself.
+
+**The timeout trap (the worst one).** `generate` blocks for up to
+`--max-wait` seconds, default 540. Claude Code's Bash tool defaults to 120 and
+caps at 600. A tool call dying mid-poll lands in the one state that actually
+costs someone something: job created and billable, id never printed, no way to
+recover it. `batch --takes 4` is worse — 36 minutes worst case, more than any
+single tool call can be given — and 1.7.0 had just finished recommending
+`batch` in all four scenario skills.
+
+- **New `create` subcommand**: submits and returns the job id in seconds, no
+  polling. `poll` already existed, so `create` → `poll` → `poll` is now a
+  path that no short timeout can strand. `generate` is unchanged for callers
+  that can wait.
+- Documents the real duration expectations, the `takes x max-wait` arithmetic
+  for `batch`, and lowering `--max-wait` for short drafts.
+
+**Introduced by 1.7.0, now fixed:**
+
+- `batch --dry-run` printed **two** `Estimated cost:` lines — the second was
+  the inner validation call leaking its own per-take figure, which is exactly
+  the number two documents tell you not to quote, right after promising
+  "exactly one line". Inner stderr is now captured and only surfaced on error.
+- Dry runs said "Actual billing is reported below" with nothing below.
+- `--dry-run` required `OFOX_API_KEY` despite sending no authenticated
+  request, so someone without a key could not even be quoted a price —
+  against this repo's own fail-open rule.
+
+**Pre-existing, also fixed:**
+
+- `check` exited **1** on a missing key while the exit-code table defines 1 as
+  "fix the flag and retry freely" and 2 as an environment error. Now exits 2.
+- `--dry-run` did not validate `--out-dir`, so a bad path passed the free
+  check and then cost a real job before failing with exit 6. Now resolved and
+  checked during the dry run.
+- **`batch` now assigns and prints a seed per take.** Takes differed only by a
+  seed the API picked and never disclosed, which made "render take 3 properly"
+  impossible — the workflow both SKILL.md files recommend. The `TAKE` line
+  carries `seed=N`, and the summary shows the command to re-render one.
+
+Tests: `references/test/create.test.sh`, 16 cases, free by construction.
+
 ## 1.7.0 — `--dry-run`, so a price can be quoted before it is spent
 
 A sub-agent given only the SKILL.md files, asked to role-play delivering a

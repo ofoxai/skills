@@ -4,6 +4,26 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.4.0 — exit codes, timeouts, contact sheets, and showing the prompt
+
+Follow-up to `ofox-video-core` 1.8.0, closing gaps a second role-play review
+found in this skill specifically:
+
+- **Exit codes are listed here now.** This skill pointed at
+  `references/api-params.md` for them; that file only has the `error.code`
+  table, so an agent looking up exit 6 found nothing where it was sent.
+- **Timeout guidance.** `generate` can block nine minutes, longer than a
+  default agent tool call allows. Names `create` + `poll` as the way out, and
+  the `takes x max-wait` arithmetic for `batch`.
+- **Duration expectations**, so the wait isn't silent for the user.
+- **Hand over the `CONTACT_SHEET` path.** In a batch flow it is the artifact
+  the user looks at first, and this skill never said to give it to them.
+- **Per-take seeds** are now reported by `batch`, which makes "take 3 was the
+  good one, render it properly" a real command instead of a reroll.
+- **Show the prompt, not just the price.** The user is paying for the prompt;
+  a clip that costs exactly what was quoted and shows a character they never
+  pictured is still a wasted job.
+
 ## 1.3.0 — quote before spending, and stop littering the user's repo
 
 Rewrites the cost and delivery guidance around `ofox-video-core` 1.7.0's new

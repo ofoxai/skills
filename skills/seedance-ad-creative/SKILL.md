@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.3.0"
+version: "1.4.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.3.0"
+  version: "1.4.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -221,11 +221,57 @@ files.
 is usable, that clip cost the whole total; the per-take figure understates it
 by 4x.
 
+Hand the user the `CONTACT_SHEET` path on its own line, the same way you hand
+over a video — in this flow it is the artifact they actually look at first,
+since it is how they pick. Then list the individual take paths beneath it.
+
+Each `TAKE` line carries `seed=N`. That seed is the handle for "take 3 was the
+good one": re-run the same prompt with that seed on a better model or higher
+resolution to reproduce that take rather than rolling a new one.
+
+
 Worth offering when the user is exploring: draft cheap on
 `bytedance/seedance-2.0-mini` at 480p, then render the winner on
 `bytedance/seedance-2.5`. Four 8-second drafts cost about $0.64 on mini versus
 $7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
 different model is a different look, not just a different price.
+
+
+## Before you spend: show the prompt, not just the price
+
+The user is paying for **the prompt** — what the characters look like, how the
+camera moves, whether their lines survived word for word. The price is the
+smaller half of what they are agreeing to.
+
+So put both in front of them: the prompt you built, and the `--dry-run`
+estimate. A clip that costs exactly what you quoted and shows a character the
+user never pictured is still a wasted job.
+
+## Exit codes worth knowing
+
+Full table in [`../ofox-video-core/SKILL.md`](../ofox-video-core/SKILL.md) —
+the ones that come up:
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `1` | Parameter rejected locally, no network call, nothing billed | Fix the flag and retry freely |
+| `2` | Environment problem — `curl`/`jq` missing, or no `OFOX_API_KEY` | Ask the user to fix it; `check` reports the same |
+| `3` | API rejected it, or the job ended failed/cancelled/expired | Read the mapped message; a rejected create was not billed |
+| `4` | Timed out waiting — **the job is still running and billable** | `poll JOB_ID`, never re-run `generate` |
+| `5` | Ambiguous network failure on create | Do not retry blindly; check https://app.ofox.ai first |
+| `6` | `--out-dir` unusable | Fix the path; if it happened after a create, `poll JOB_ID` instead of regenerating |
+
+## How long to tell the user it will take
+
+`generate` blocks while it polls, up to `--max-wait` (default 540s). A short
+480p draft is usually one to three minutes; longer or higher-resolution jobs
+take longer. Say so before starting, so the wait isn't silent.
+
+If your tool call can't stay open that long, use `create` (submits and returns
+a job id in seconds) followed by `poll`, instead of `generate`. That way a
+timeout can never strand a job whose id you never saw. For `batch`, the worst
+case is `takes x max-wait` — lower `--max-wait` for drafts, or create and poll
+each take yourself.
 
 ## Where the file lands
 

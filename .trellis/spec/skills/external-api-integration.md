@@ -608,3 +608,74 @@ directly:
 - `grep -c -- --out-dir` in any skill whose script writes files. Absent, an
   agent copies the example and drops output into the user's project root.
 
+## Gotcha: a long-blocking command collides with the caller's timeout, and the collision costs money
+
+`generate` polls until the job finishes, up to `--max-wait` (default 540s).
+Claude Code's Bash tool defaults to a **120-second** timeout and caps at 600.
+So the default configuration of the caller cannot outlast the default
+configuration of the script.
+
+When the tool call dies mid-poll, the result is the worst state this API has:
+the job was created and is billable, and **its id was never printed**, so
+there is nothing to `poll` and nothing to tell the user. The docs described
+that state accurately and never named the action that avoids it.
+
+**Why it went unnoticed for four tasks**: every real run in this project was
+made with a manually raised timeout. The author's own invocations never
+exercised the default path, so the trap was invisible from the inside. When
+you set a non-default option every single time you use your own tool, that
+option is where a bug will hide.
+
+**The fix that generalises**: separate *submit* from *wait*. A `create`
+subcommand that returns the job id in seconds means no timeout can strand a
+job whose handle was never emitted; `poll` then runs in as many short calls as
+needed. Offer the one-shot convenience too, but do not make it the only path.
+
+**Multiply before you recommend**: `batch` runs takes serially, so its worst
+case is `takes x max-wait` — four takes at the default is 36 minutes, beyond
+any single tool call's ceiling. A feature can be individually fine and
+collectively impossible; check the product, not just the unit.
+
+## Pattern: fixing a documentation defect is a code change, and can regress like one
+
+Three defects in this round were introduced by the previous round's fix:
+
+- A `--dry-run` added so a price could be quoted before spending required an
+  API key, so someone without a key still could not get a quote.
+- Its estimate line kept the wording "Actual billing is reported below" —
+  false under dry run, where nothing follows.
+- `batch --dry-run` reused `generate --dry-run` for validation and let its
+  narration through, printing **two** estimate lines. The second was the
+  per-take figure the same commit's docs told readers never to quote, right
+  after promising "exactly one line".
+
+All three come from one habit: changing behavior and checking the new path,
+without re-reading the surrounding text and adjacent paths as a whole. The
+third is the sharpest — a promise and its violation were added in the same
+commit, and the suite passed because each was tested separately.
+
+**Practical check**: after adding a mode (dry-run, verbose, offline), grep the
+docs for absolute claims about the output ("always prints", "exactly one",
+"reported below") and re-verify each one *in the new mode*. Those claims are
+where a new mode quietly turns documentation into fiction.
+
+## Pattern: re-run the consumer role-play after fixing what it found
+
+The first role-play review found eight defects. Fixing them introduced three
+new ones. A second review — same setup, deliberately told nothing about the
+first round — confirmed the original eight were gone (it read the new flow out
+of the docs unprompted, which is the evidence the fix landed) and found twelve
+more, including the timeout trap that four rounds of direct work had missed.
+
+Two things make the repeat worth it:
+
+1. **It verifies the fix from the consumer's position**, not the author's. "It
+   reads the dry-run flow out of the docs without being told" is a stronger
+   signal than any assertion about the docs' content.
+2. **A fix changes the surface**, so the next review is not a re-run of the
+   same test. The second pass found defects that only existed because of the
+   first pass's fixes.
+
+Keep the reviewer uninformed about prior findings. Telling it what was fixed
+turns an independent check into confirmation of what you already believe.
+
