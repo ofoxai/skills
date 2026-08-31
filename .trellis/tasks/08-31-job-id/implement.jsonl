@@ -1,0 +1,4 @@
+{"file": "CONTRIBUTING.md", "reason": "本仓库强制的 skill 质量门槛：English-only 文档、frontmatter 形状、safety contract、命令必须真机实测。本次要改 core 脚本 + 4 个 SKILL.md，全部受它约束。"}
+{"file": ".trellis/spec/skills/index.md", "reason": "skills 层作者约定，并明确指出 backend/frontend spec 层不适用本仓库；含 ofox-video-core 作为「计费 API + 轮询」参考实现的指引。"}
+{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "计费 API 的 create/poll/download 契约。本次改动正好落在 download_result() 这条路径上，必须不破坏「只重试读、绝不重提交 create」的规则。"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "download_result() 被 generate/poll/batch/chain 四条路径共用，slug 与 sidecar 逻辑必须单点实现，不能在四处复制。"}
