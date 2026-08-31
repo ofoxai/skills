@@ -1,0 +1,2 @@
+{"file": "CONTRIBUTING.md", "reason": "本仓库质量门槛；合并不得削弱其中任何约束（含本分支新加的 $0 序列规则）。"}
+{"file": ".trellis/spec/skills/index.md", "reason": "skills 层约定，用于确认合并后目录结构与约定仍一致。"}
