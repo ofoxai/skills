@@ -943,6 +943,16 @@ cmd_generate() {
 
   # --- build the request payload ---
 
+  # Roll a seed when the caller didn't pick one, exactly as batch already
+  # does for its takes. Without this the server picks a seed and reports it
+  # nowhere — the poll response carries no seed field — so a clip could never
+  # be reproduced, not even to re-render the same shot at a higher
+  # resolution. Choosing it here costs nothing (it is random either way) and
+  # makes every job repeatable.
+  if [ -z "$seed" ]; then
+    seed=$(( (RANDOM << 15 | RANDOM) & 0x7FFFFFFF ))
+  fi
+
   local payload='{}'
   payload=$(printf '%s' "$payload" | jq --arg v "$model" '.model=$v')
   payload=$(printf '%s' "$payload" | jq --arg v "$prompt" '.prompt=$v')
@@ -1109,8 +1119,18 @@ cmd_generate() {
     # downloads somewhere else, or fails.
     local abs_out
     abs_out="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_out="$out_dir"
+
+    # Hand the follow-up poll the half of the record the API will not give it:
+    # the response echoes neither resolution, aspect ratio nor seed, so
+    # without this the sidecar written by `poll` is missing exactly the
+    # fields needed to re-render the shot. A dotfile keyed by job id, so
+    # concurrent creates cannot collide and a user browsing out-dir does not
+    # see scratch state next to their videos.
+    save_request_handoff "$payload" "$abs_out" "$job_id"
+
     echo "STATUS submitted"
     echo "JOB_ID $job_id"
+    echo "SEED $seed"
     echo "POLLING_URL $polling_url"
     echo "OUT_DIR $abs_out"
     echo "" >&2
@@ -1127,6 +1147,7 @@ cmd_generate() {
     return 0
   fi
 
+  echo "SEED $seed"
   poll_and_download "$job_id" "$polling_url" "$out_dir" "$max_wait" "$poll_interval" \
     "$name_hint" "$payload"
   return $?
@@ -1978,8 +1999,19 @@ poll_and_download() {
         status=$(printf '%s' "$body" | jq -r '.status // empty')
         case "$status" in
           completed)
+            # A poll invoked on its own has no payload of its own; pick up
+            # the one create left behind, if this is the out-dir it left it
+            # in. Nothing here is fatal — a missing handoff just means the
+            # sidecar omits its request half.
+            if [ -z "$request_json" ]; then
+              request_json=$(load_request_handoff "$out_dir" "$job_id") || request_json=""
+            fi
             download_result "$job_id" "$body" "$out_dir" "$name_hint" "$request_json"
-            return $?
+            local dl_rc=$?
+            # Only after the sidecar is safely written: clearing earlier
+            # would leave a failed download with nothing to retry from.
+            [ "$dl_rc" -eq 0 ] && clear_request_handoff "$out_dir" "$job_id"
+            return "$dl_rc"
             ;;
           failed|cancelled|expired)
             echo "ERROR: job $job_id ended with status '$status'." >&2
@@ -2096,6 +2128,60 @@ build_output_slug() {
   '
 }
 
+# Strip the request payload down to something safe to store.
+#
+# A resolved --frame-first-image lands in the payload as a base64 data URI
+# that can exceed a megabyte on its own. Record that frames were used, never
+# the bytes. Idempotent, so running it over an already-compacted payload is
+# harmless.
+compact_request_json() {
+  printf '%s' "$1" | jq -c '
+    (if (.frame_images | type) == "array"
+     then {frame_images_count: (.frame_images | length)}
+     else {} end) as $f
+    | del(.frame_images) + $f' 2>/dev/null
+}
+
+# Path of the create -> poll handoff file for one job.
+#
+# `create` and `poll` are deliberately separate processes (that is what keeps
+# a short tool timeout from stranding a billable job), which means the create
+# payload cannot reach the poll by any in-memory route. The API is no help
+# either: its response echoes neither resolution, aspect ratio nor seed. So
+# create leaves the payload on disk and poll picks it up.
+#
+# Dotfile, keyed by job id: out-dir is a directory the user browses, and two
+# concurrent creates must not overwrite each other's handoff.
+request_handoff_path() {
+  printf '%s/.ofox-request-%s.json' "${1%/}" "$2"
+}
+
+save_request_handoff() {
+  local payload="$1" out_dir="$2" job_id="$3" compact path
+  compact=$(compact_request_json "$payload") || return 1
+  [ -z "$compact" ] && return 1
+  path=$(request_handoff_path "$out_dir" "$job_id")
+  printf '%s' "$compact" >"$path" 2>/dev/null || return 1
+  return 0
+}
+
+# Prints the stored payload, or nothing. Absence is normal, not an error:
+# polling a job created on another machine, into a different --out-dir, or by
+# a plain `generate` leaves no handoff, and the sidecar simply omits its
+# request half — exactly the behaviour before handoffs existed.
+load_request_handoff() {
+  local path
+  path=$(request_handoff_path "$1" "$2")
+  [ -r "$path" ] || return 1
+  jq -e . "$path" >/dev/null 2>&1 || return 1
+  cat "$path"
+}
+
+clear_request_handoff() {
+  rm -f "$(request_handoff_path "$1" "$2")" 2>/dev/null
+  return 0
+}
+
 # Write the metadata sidecar that sits next to a downloaded video.
 #
 # It carries what the filename cannot: the full job id (the short prefix in
@@ -2116,14 +2202,7 @@ write_sidecar() {
   local req="null" tmp rc
 
   if [ -n "$request_json" ]; then
-    # A resolved --frame-first-image lands in the payload as a base64 data
-    # URI that can exceed a megabyte on its own. Record that frames were
-    # used, never the bytes.
-    req=$(printf '%s' "$request_json" | jq -c '
-      (if (.frame_images | type) == "array"
-       then {frame_images_count: (.frame_images | length)}
-       else {} end) as $f
-      | del(.frame_images) + $f' 2>/dev/null) || req="null"
+    req=$(compact_request_json "$request_json") || req="null"
     [ -z "$req" ] && req="null"
   fi
 
