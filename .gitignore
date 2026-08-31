@@ -5,3 +5,14 @@ test-output/
 
 # Personal planning notes — never commit (contains growth strategy)
 2026-*_GitHub*.md
+
+# Local development workflow — deliberately not published.
+# This is a public skills repo; the Trellis tooling, its task PRDs and the
+# per-developer journals are how the work gets done here, not part of what
+# ships. AGENTS.md goes with them: it is only a pointer into .trellis/, so
+# publishing it without those directories would ship a dead link.
+# Note these were tracked before, so untracking them stops future commits
+# but does not remove them from history already pushed.
+.claude/
+.trellis/
+AGENTS.md

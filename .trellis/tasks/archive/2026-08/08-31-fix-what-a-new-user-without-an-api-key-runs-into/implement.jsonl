@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/skills/index.md", "reason": "Repo quality bar: CHANGELOG entries, version bumps, README/skills.sh.json consistency."}
-{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "Holds the fail-open principle and the rule that a diagnostic an agent must relay has to print on every path — both bear on check's wording and on documenting the keyless quote path."}
-{"file": ".trellis/tasks/08-31-fix-what-a-new-user-without-an-api-key-runs-into/prd.md", "reason": "The four findings with measured evidence and the design decision for each."}

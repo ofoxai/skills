@@ -1,1 +1,0 @@
-{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "Verify the corrected billing claim replaces the unmeasured one, and that no new claim about v2v behavior is asserted beyond what the single real run actually settled."}

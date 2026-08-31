@@ -1,5 +1,0 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
-{"file": "CONTRIBUTING.md", "reason": "Repo's mandatory quality bar for every skill: English-only, frontmatter shape, safety contract, fail-open rule, real-machine-tested commands"}
-{"file": "skills/cloudflare-drop/SKILL.md", "reason": "Closest in-repo precedent for a skill wrapping a real external API/CLI call, honest success/failure reporting, versioned frontmatter"}
-{"file": ".trellis/tasks/08-29-seedance2-5-skills/research/ofox-video-api.md", "reason": "Ofox video API reference: auth, create/poll endpoints, params, error codes, Seedance 2.5 pricing"}
-{"file": ".trellis/tasks/08-29-seedance2-5-skills/research/skill-authoring-patterns.md", "reason": "Synthesized patterns to follow: repo conventions, cloudflare-drop precedent, key-check-once + no-resubmit-on-timeout rules from external reference"}

@@ -1,3 +1,0 @@
-{"file": "CONTRIBUTING.md", "reason": "验收口径：文档 English-only、示例命令真机验证过、safety contract 未被削弱。"}
-{"file": ".trellis/spec/skills/index.md", "reason": "确认改动符合 skills 层约定，且 --name 在 core 与场景 skill 之间的委派形状正确。"}
-{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "重点复核计费安全契约未被回归：新增的命名/sidecar 代码不得引入任何重提交 create 的路径。"}

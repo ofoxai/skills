@@ -1,2 +1,0 @@
-{"file": "CONTRIBUTING.md", "reason": "本仓库强制的质量门槛，测试文件同样受 English-only 与真机实测约束。"}
-{"file": ".trellis/spec/skills/index.md", "reason": "skills 层作者约定；确认测试放置位置与既有 8 个套件的形态一致。"}

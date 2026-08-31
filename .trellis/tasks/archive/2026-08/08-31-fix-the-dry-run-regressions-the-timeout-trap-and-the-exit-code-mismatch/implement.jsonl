@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "Holds the no-resubmit rule (which the new create subcommand must honor), the fail-open principle that --dry-run currently violates by requiring a key, and the rule that any diagnostic an agent must relay has to print on every path."}
-{"file": ".trellis/spec/skills/index.md", "reason": "Quality bar: CHANGELOG entries, version bumps, absolute paths."}
-{"file": ".trellis/tasks/08-31-fix-the-dry-run-regressions-the-timeout-trap-and-the-exit-code-mismatch/prd.md", "reason": "The twelve findings with measured evidence, and the design decisions for each."}

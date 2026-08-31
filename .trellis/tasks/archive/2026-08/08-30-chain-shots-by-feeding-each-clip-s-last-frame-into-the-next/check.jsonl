@@ -1,2 +1,0 @@
-{"file": ".trellis/spec/skills/index.md", "reason": "Verify Quality Check items still pass, especially that every artifact path reported is absolute and a CHANGELOG entry exists."}
-{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "Verify no-resubmit is honored per shot, ffmpeg stays optional and fails open, and any new gotcha found during the real run is recorded here rather than left in task notes."}

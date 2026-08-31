@@ -1,2 +1,0 @@
-{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "Verify create honors no-resubmit, dry-run fails open without a key, and every estimate path still prints exactly one relayable line."}
-{"file": ".trellis/spec/skills/index.md", "reason": "Verify CHANGELOG entries and version bumps for every touched skill."}

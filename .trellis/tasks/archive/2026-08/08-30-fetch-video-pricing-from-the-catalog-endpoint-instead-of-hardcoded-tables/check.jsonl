@@ -1,2 +1,0 @@
-{"file": ".trellis/spec/skills/index.md", "reason": "Verify the Quality Check list still passes after the change, including a CHANGELOG entry for the new version."}
-{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "Verify the fallback ladder is followed and fails open — a price that cannot be verified must result in no estimate, never a guessed or stale one presented as current."}

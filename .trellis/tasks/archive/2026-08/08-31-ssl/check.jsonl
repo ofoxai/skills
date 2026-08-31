@@ -1,2 +1,0 @@
-{"file": "CONTRIBUTING.md", "reason": "验收：文档 English-only、示例真机验证、价格表达不再含 $0 序列。"}
-{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "重点复核 C 项：create 超时后是否仍落到 exit 5 的「不可判断、不要盲目重试」路径，而不是变成自动重提交。"}

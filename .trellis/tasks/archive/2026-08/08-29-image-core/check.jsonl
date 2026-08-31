@@ -1,4 +1,0 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
-{"file": "CONTRIBUTING.md", "reason": "Quality bar to check against"}
-{"file": ".trellis/spec/skills/index.md", "reason": "Verify absolute-path reporting and delegation-ready structure"}
-{"file": ".trellis/tasks/08-29-image-core/research/ofox-images-api.md", "reason": "Verify param names, response shape, and pricing claims against this reference"}

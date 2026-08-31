@@ -1,2 +1,0 @@
-{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "This bug IS the failure mode already recorded there — inferring an API's shape from prose instead of a real call. Read it before fixing, and check whether the existing entry needs sharpening now that it has recurred."}
-{"file": ".trellis/spec/skills/index.md", "reason": "Skill-authoring bar: CHANGELOG entry and version bump required for a shipped behavior fix."}
