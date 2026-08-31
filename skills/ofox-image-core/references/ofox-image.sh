@@ -17,7 +17,6 @@
 # Usage:
 #   ofox-image.sh check
 #   ofox-image.sh models
-  ofox-image.sh models
 #   ofox-image.sh generate --prompt "..." --model NAME --quality VAL [OPTIONS]
 #
 # generate OPTIONS:
