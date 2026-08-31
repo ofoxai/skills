@@ -1,0 +1,4 @@
+{"file": "CONTRIBUTING.md", "reason": "本仓库强制的 skill 质量门槛：English-only 文档、safety contract、命令必须真机实测。"}
+{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "计费 API 的 create/poll 契约。本次改动直接动 create 与 poll 的交接，必须不破坏「只重试读、绝不重提交 create」的规则。"}
+{"file": ".trellis/spec/skills/index.md", "reason": "skills 层作者约定与 ofox-video-core 的委派形状。"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "seed 的 roll 逻辑 batch 里已有一份，必须复用同一表达式而不是复制第二份实现。"}

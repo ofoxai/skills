@@ -224,6 +224,11 @@ Each `TAKE` line carries `seed=N`. That seed is the handle for "take 3 was the
 good one": re-run the same prompt with that seed on a better model or higher
 resolution to reproduce that take rather than rolling a new one.
 
+A single `generate` prints a `SEED` line too, and records it in the clip's
+`.json` sidecar along with the resolution and aspect ratio. So "that one was
+good, give me it at 1080p" works off one clip — you do not need a batch to
+get a reusable handle.
+
 
 Worth offering when the user is exploring: draft cheap on
 `bytedance/seedance-2.0-mini` at 480p, then render the winner on

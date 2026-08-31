@@ -380,12 +380,28 @@ skill always knows the better name — pass it.**
 The 8-hex suffix keeps two runs of the same prompt from overwriting each
 other. It is not a way back to the job: the API has no list endpoint, so a
 short id cannot be expanded. The sidecar carries the full `job_id`, the
-prompt, the real cost, and — on the `generate` path only — the `request` as
-submitted, which is the only place `resolution` and `aspect_ratio` are
-recorded, because the poll response echoes neither. That makes a sidecar
-written by `generate` enough to re-render the same shot at a different
-resolution. Full field table in
+prompt, the real cost, and the `request` as submitted — the only place
+`resolution`, `aspect_ratio` and `seed` are recorded, since the poll response
+echoes none of them. Full field table in
 [`references/api-params.md`](references/api-params.md).
+
+## Reproducing a shot
+
+Every job now has a seed: without `--seed` the script rolls one, sends it,
+and prints it as `SEED <n>`. Before, the server picked a seed and reported it
+nowhere, so nothing could be regenerated — only re-rolled.
+
+That seed and the rest of the request land in the sidecar, so re-rendering
+the same shot at a higher resolution is a matter of reading it back:
+
+```bash
+jq -r '.request | "--prompt \(.prompt|@sh) --seed \(.seed) --aspect-ratio \(.aspect_ratio)"' out/my-shot-3e830902.json
+```
+
+`create` + `poll` keeps this intact across the two processes by leaving the
+payload in `<out-dir>/.ofox-request-<job id>.json` for the poll to pick up
+and clean away. Poll into a different `--out-dir` and the handoff is simply
+not found — the sidecar omits `request`, nothing fails.
 
 A sidecar that cannot be written is a warning, never a failed download — the
 video is what the user paid for.

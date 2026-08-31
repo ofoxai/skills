@@ -277,13 +277,34 @@ resolved. That is what the sidecar is for.
 | `name` | The `--name` given, when there was one. |
 | `request` | The create payload as submitted. **Only on the generate path.** |
 
-That last row is the one worth knowing: the poll response reports the model
-and prompt but **not `resolution` or `aspect_ratio`** — they are echoed
-nowhere. So they reach the sidecar only through the create payload, which
-means only `generate` records them; a bare `poll JOB_ID` writes the response
-half and omits `request` rather than guessing. Re-rendering a shot at a
-different resolution therefore works from a sidecar written by `generate`,
-and needs the missing parameters supplied by hand from one written by `poll`.
+That last row is the one worth knowing. The poll response reports the model
+and prompt but **not `resolution`, `aspect_ratio` or `seed`** — they are
+echoed nowhere, so they reach the sidecar only through the create payload.
+
+`generate` has that payload in hand. `create` does not hand it to the
+`poll` that follows, because they are separate processes on purpose — that
+separation is what stops a short tool timeout from stranding a billable job.
+So `create` writes the compacted payload to `<out-dir>/.ofox-request-<job
+id>.json`, and `poll` reads it, folds it into the sidecar, and deletes it
+once the sidecar is safely written (not before — a failed download would
+otherwise have nothing to retry from).
+
+A missing handoff is normal, not an error: polling from a different
+`--out-dir`, from another machine, or a job someone else created leaves
+none, and the sidecar simply omits `request`, exactly as it did before
+handoffs existed.
+
+### Seed
+
+Without `--seed` the script used to send none, leaving the server to pick one
+and report it nowhere — so nothing generated could be reproduced. `generate`
+and `create` now roll a seed when the caller doesn't supply one (the same way
+`batch` always has), send it, and print it as a `SEED <n>` line. It is
+random either way; choosing it client-side is what makes it recordable.
+
+Between the seed and the handoff, a sidecar written by `generate`, or by
+`create` + `poll` into the same `--out-dir`, holds everything needed to
+re-render the same shot at a different resolution.
 
 `frame_images` is replaced by a `frame_images_count` — a resolved
 `--frame-first-image` is a base64 data URI that can exceed a megabyte, and

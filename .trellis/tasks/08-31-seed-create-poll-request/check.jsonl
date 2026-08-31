@@ -1,0 +1,2 @@
+{"file": "CONTRIBUTING.md", "reason": "验收口径：文档 English-only、示例命令真机验证过。"}
+{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "重点复核 create/poll 交接改动没有引入任何重提交 create 的路径，以及点文件清理不会吃掉尚未下载的任务信息。"}
