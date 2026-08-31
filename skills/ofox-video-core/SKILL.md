@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.6.1"
+version: "1.9.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.6.1"
+  version: "1.9.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -140,9 +140,17 @@ Every option `generate` takes works here. What `batch` adds:
 
 - **An estimate before it spends anything**, and a real total afterward built
   from each job's own `usage.video_cost` — never from the estimate.
-- **`BATCH_COST_PER_TAKE`**, which is the number that matters: if one take in
-  three is usable, your real cost per usable clip is the total, not the
-  per-take price. That is the figure worth comparing across models.
+- **Every take reports its seed** (`TAKE 3 <job-id> seed=1852049 <cost> <path>`).
+  This is what makes "take 3 was the good one" actionable: the takes differ
+  only by seed, so re-running the same prompt with that seed on a better model
+  or a higher resolution reproduces that take rather than rolling a new one.
+  Without the seed there is no way back to a specific take, only a reroll.
+- **`BATCH_COST_TOTAL` is the number to quote**, not `BATCH_COST_PER_TAKE`.
+  Gacha means most takes go in the bin: if one take in three is usable, that
+  clip cost you the whole total, because you paid for the two you threw away.
+  `BATCH_COST_PER_TAKE` is just the total divided by the count — useful for
+  sanity-checking the bill, misleading as a cost-per-usable-clip figure. The
+  total is what compares meaningfully across models and settings.
 - **A contact sheet** (`--no-contact-sheet` to skip): three frames from each
   take, tiled one row per take, so a human can pick a winner from one image
   instead of opening N files. Needs `ffmpeg`; without it the sheet is skipped
@@ -187,6 +195,80 @@ bash references/ofox-video.sh contact-sheet clip1.mp4 clip2.mp4 [--out-dir DIR]
 No API call, no key, no cost. Useful for comparing takes from separate runs,
 or rebuilding a sheet you skipped.
 
+## How long this blocks, and why that matters
+
+`generate` waits for the job: it polls until the video is ready, up to
+`--max-wait` seconds (default **540**, i.e. nine minutes). A 4-second 480p clip
+usually lands in one to three minutes; longer and higher-resolution jobs take
+longer.
+
+**That is longer than most agent tool calls allow by default.** Claude Code's
+Bash tool defaults to a 120-second timeout and caps at 600. If your tool call
+dies while `generate` is still polling, you land in the one genuinely bad
+state: the job was created and is billable, and its id was never printed, so
+you cannot poll for it and cannot tell the user where their video went.
+
+Two ways to stay out of that, in order of preference:
+
+**1. Submit and wait separately.** `create` does the submit and returns
+immediately — seconds, not minutes — printing the job id. Then poll in
+however many short calls it takes:
+
+```bash
+bash references/ofox-video.sh create --prompt "..." --duration 15 --out-dir ./out
+# -> STATUS submitted
+#    JOB_ID 7b41f0c9-...
+#    POLLING_URL https://api.ofox.ai/v1/videos/7b41f0c9-...
+
+bash references/ofox-video.sh poll 7b41f0c9-... --out-dir ./out
+```
+
+The job id exists on disk in your transcript the moment it is created, so no
+timeout can strand it. This is the right shape whenever you cannot raise your
+own tool timeout.
+
+**2. Raise the timeout for the call.** If your harness lets you set a
+per-call timeout, give `generate` at least `--max-wait` plus a margin.
+
+**`batch` needs this attention most.** Its takes run one at a time, so its
+worst case is `takes x max-wait` — four takes at the default is 36 minutes,
+which exceeds what any single Bash tool call can be given. Either lower
+`--max-wait` (a 4-second draft rarely needs 540s; 240 is generous), or run
+`create` per take and poll them yourself. Tell the user roughly how long it
+will take before starting.
+
+## Quote the price before you spend it
+
+`generate`, `batch` and `chain` all take **`--dry-run`**: they parse arguments,
+validate every parameter against the chosen model, resolve the upstream, build
+the payload and print the cost estimate — then stop. No request is sent and
+nothing is billed.
+
+That flow is the one to follow whenever real money is involved:
+
+```bash
+# 1. price it
+bash references/ofox-video.sh generate --dry-run --prompt "..." --duration 15 --resolution 720p
+#    -> Estimated cost: ~$3.60 (15s x $0.24/s)...
+#    -> DRY RUN — nothing was submitted and nothing was billed.
+
+# 2. tell the user the number, get a yes
+
+# 3. run the identical command without --dry-run
+```
+
+**Do not skip step 2.** The estimate a real run prints appears microseconds
+before the request goes out — by the time you could relay it, the job exists
+and is billable. `--dry-run` is what makes quoting-then-confirming possible.
+
+A dry run also catches a bad parameter for free, so an invalid combination
+costs a message instead of a job.
+
+Every run prints exactly one `Estimated cost:` line, including when it cannot
+compute one — it says why (no `--duration`, or no verified rate for that
+model/resolution). Relay whichever line you get; never substitute a number of
+your own, and never present an estimate as the bill.
+
 ## Which upstream serves the job
 
 Seedance is served by two upstreams, and by default Ofox picks one by weight —
@@ -221,6 +303,18 @@ If a job fails `output_moderation_failed`, retrying on the other upstream is a
 real fix and is worth offering: the rejected job was never billed, and a retry
 is a new request, not a resubmission.
 
+## No key? You can still get a price
+
+`models`, `providers` and any `--dry-run` all work with `OFOX_API_KEY` unset.
+They hit public endpoints or make no request at all, so someone who has not
+signed up can price a job, compare resolutions, and cost out a batch before
+deciding whether to register.
+
+**When a user has no key, quote first and point at signup second.** Opening
+with "go get an API key" sends someone to a form before they know whether the
+thing is worth $0.44 or $7.20. Run the dry run, show them the number, then
+point at [app.ofox.ai](https://app.ofox.ai) if they want to proceed.
+
 ## Availability check
 
 Before the first call in a session, verify the environment:
@@ -246,6 +340,7 @@ are present — it makes no network call. Handle each failure mode plainly:
 
 ```bash
 bash references/ofox-video.sh models
+bash references/ofox-video.sh generate --dry-run --prompt "..." [OPTIONS]
 bash references/ofox-video.sh generate --prompt "..." [OPTIONS]
 bash references/ofox-video.sh poll JOB_ID [--out-dir DIR]
 ```

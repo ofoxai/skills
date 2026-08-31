@@ -4,6 +4,114 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.9.0 — surface the keyless price check; stop leading with a misleading rate
+
+A third role-play review, this time as a non-programmer with no Ofox account,
+no API key, and an explicit fear of an accidental bill — starting at the
+README rather than at SKILL.md.
+
+Its main finding was not a bug: **the strongest thing this repo can offer that
+reader already worked, and nothing told them it existed.** `--dry-run`,
+`models` and `providers` all run with no API key, so a job can be priced
+before signing up. The docs never said so; the *Availability check* section
+implied the opposite order (check first, then go get a key), which sends
+someone to a signup form before they know whether this costs $0.44 or $7.20.
+The one accurate statement lived in a source comment nobody reads.
+
+- `SKILL.md` leads with the keyless price check and says to quote first,
+  point at signup second.
+- `check` now separates *present* from *valid*: it makes no network call, so a
+  typo'd key passes it and fails on the first real request. It says that. And
+  when no key is set, it names the three commands that still work rather than
+  dead-ending.
+- **`models` shows each model's default-resolution rate**, labelled with that
+  resolution. It printed `pricing.output_video_per_second` — for
+  `seedance-2.5` that is the 480p rate ($0.11) while the model defaults to
+  720p ($0.24). The reviewer's persona multiplied the first big number by 15
+  and was off by 118%. `pricing.md` already warned never to quote that field,
+  so the repo knew it misled and showed it anyway.
+
+Tests: `references/test/newuser.test.sh`, 22 cases, all free.
+
+## 1.8.0 — `create`, and fixes for three defects 1.7.0 introduced
+
+A second role-play review — a sub-agent given only the SKILL.md files and told
+nothing about the previous round — confirmed 1.7.0's fixes landed (it read the
+dry-run flow out of the docs unprompted) and found twelve more issues. Three
+were introduced by 1.7.0 itself.
+
+**The timeout trap (the worst one).** `generate` blocks for up to
+`--max-wait` seconds, default 540. Claude Code's Bash tool defaults to 120 and
+caps at 600. A tool call dying mid-poll lands in the one state that actually
+costs someone something: job created and billable, id never printed, no way to
+recover it. `batch --takes 4` is worse — 36 minutes worst case, more than any
+single tool call can be given — and 1.7.0 had just finished recommending
+`batch` in all four scenario skills.
+
+- **New `create` subcommand**: submits and returns the job id in seconds, no
+  polling. `poll` already existed, so `create` → `poll` → `poll` is now a
+  path that no short timeout can strand. `generate` is unchanged for callers
+  that can wait.
+- Documents the real duration expectations, the `takes x max-wait` arithmetic
+  for `batch`, and lowering `--max-wait` for short drafts.
+
+**Introduced by 1.7.0, now fixed:**
+
+- `batch --dry-run` printed **two** `Estimated cost:` lines — the second was
+  the inner validation call leaking its own per-take figure, which is exactly
+  the number two documents tell you not to quote, right after promising
+  "exactly one line". Inner stderr is now captured and only surfaced on error.
+- Dry runs said "Actual billing is reported below" with nothing below.
+- `--dry-run` required `OFOX_API_KEY` despite sending no authenticated
+  request, so someone without a key could not even be quoted a price —
+  against this repo's own fail-open rule.
+
+**Pre-existing, also fixed:**
+
+- `check` exited **1** on a missing key while the exit-code table defines 1 as
+  "fix the flag and retry freely" and 2 as an environment error. Now exits 2.
+- `--dry-run` did not validate `--out-dir`, so a bad path passed the free
+  check and then cost a real job before failing with exit 6. Now resolved and
+  checked during the dry run.
+- **`batch` now assigns and prints a seed per take.** Takes differed only by a
+  seed the API picked and never disclosed, which made "render take 3 properly"
+  impossible — the workflow both SKILL.md files recommend. The `TAKE` line
+  carries `seed=N`, and the summary shows the command to re-render one.
+
+Tests: `references/test/create.test.sh`, 16 cases, free by construction.
+
+## 1.7.0 — `--dry-run`, so a price can be quoted before it is spent
+
+A sub-agent given only the SKILL.md files, asked to role-play delivering a
+video, found that the documentation asked for something the script could not
+do. The scenario skills said to relay the estimate the script prints — but
+that estimate is printed five lines before `curl -X POST`, so by the time an
+agent could relay it, the job existed and was billable. There was no
+`--dry-run` anywhere in the script. Following the docs literally meant billing
+someone without warning.
+
+- **`--dry-run` on `generate`, `batch` and `chain`.** Parses arguments,
+  validates every parameter against the model, resolves the upstream, builds
+  the payload, prints the estimate — then stops. Nothing submitted, nothing
+  billed, exit 0. A bad parameter now costs a message instead of a job.
+- **An `Estimated cost:` line always prints.** It used to be wrapped in
+  `if [ -n "$duration" ]`, so omitting `--duration` produced complete silence.
+  Silence is the one outcome an agent cannot relay: it can repeat a number and
+  it can repeat "unavailable", but it cannot notice a line it was never told
+  to expect. Missing duration now says so explicitly.
+- **Human-facing lines round to 2 decimals.** The batch summary read
+  "That is $0.6400000000 for 4 takes" — a line written for a person, carrying
+  ten decimals. `VIDEO_COST` and `BATCH_COST_TOTAL` keep the exact API string,
+  because those are the machine contract and the billing record.
+- **`BATCH_COST_PER_TAKE` guidance rewritten.** It called that field "the
+  number that matters" and then said the number that matters is the total —
+  two different fields in one sentence. `BATCH_COST_TOTAL` is what to quote:
+  if one take in four is usable, that clip cost the whole total, and the
+  per-take figure understates it 4x.
+
+Tests: `references/test/dryrun.test.sh`, 19 cases, free by construction —
+`--dry-run` makes no network call at all.
+
 ## 1.6.1 — fix: video-to-video was quoted at the text-to-video rate
 
 The estimate added in 1.5.0 detected v2v by looking for `type == "video"` in

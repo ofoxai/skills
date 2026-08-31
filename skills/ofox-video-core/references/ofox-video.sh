@@ -11,6 +11,7 @@
 #   ofox-video.sh models
 #   ofox-video.sh providers [MODEL]   (local/public, no API key)
 #   ofox-video.sh generate --prompt "..." [OPTIONS]
+#   ofox-video.sh create --prompt "..." [OPTIONS]  (submit only, no waiting)
 #   ofox-video.sh batch --prompt "..." --takes N [OPTIONS]
 #   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
 #   ofox-video.sh chain --shot "..." --shot "..." [OPTIONS]
@@ -42,6 +43,10 @@
 #                               settable via OFOX_VIDEO_PROVIDER. Pricing is
 #                               identical across upstreams — this is a region
 #                               and moderation choice, not a cost one.
+#   --dry-run                   validate, resolve the provider, build the
+#                               payload and print the cost estimate, then stop
+#                               WITHOUT submitting. Nothing is billed. Use this
+#                               to quote a price to someone before spending.
 #   --print-payload             dump the request body to stderr before sending
 #                               (the API key is in a header, not the body)
 #   --size WxH                  e.g. 1280x720 (alternative to --resolution)
@@ -358,6 +363,8 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh models
   ofox-video.sh providers [MODEL]
   ofox-video.sh generate --prompt "..." [OPTIONS]
+  ofox-video.sh create   --prompt "..." [OPTIONS]   (submit only, returns a job id)
+         add --dry-run to any of generate/batch/chain to price it without spending
   ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [OPTIONS]
   ofox-video.sh poll JOB_ID [--out-dir DIR] [--max-wait SECONDS] [--poll-interval SECONDS]
   ofox-video.sh chain --shot "..." --shot "..." [--shots-file FILE] [--no-concat] [OPTIONS]
@@ -409,11 +416,27 @@ check_api_key() {
 }
 
 cmd_check() {
+  # Exits 2, not 1. This subcommand exists to diagnose the environment, and 2
+  # is what the exit-code table means by an environment error. Returning 1
+  # would tell a caller following that table to "fix the flag and retry",
+  # which is the wrong advice for a missing key.
   local ok=0
-  check_curl_jq || ok=1
-  check_api_key || ok=1
+  check_curl_jq || ok=2
+  if ! check_api_key; then
+    ok=2
+    # Not having a key is not a dead end: pricing works without one, and
+    # that is exactly what someone deciding whether to sign up wants.
+    echo "" >&2
+    echo "You can still price a job before signing up — these need no key:" >&2
+    echo "  $0 models" >&2
+    echo "  $0 providers" >&2
+    echo "  $0 generate --dry-run --prompt \"...\" --duration 15 --resolution 720p" >&2
+  fi
   if [ "$ok" -eq 0 ]; then
     echo "OK: curl, jq, and OFOX_API_KEY are all present."
+    echo "Note: the key is present but has NOT been verified against the API — this"
+    echo "check makes no network call. A typo'd key passes here and fails on the"
+    echo "first real request."
   fi
   return "$ok"
 }
@@ -476,22 +499,41 @@ cmd_models() {
 
   echo "Video models (source: $MODELS_SOURCE)"
   echo
-  jq -r '
-    ["MODEL", "BASE $/s", "RESOLUTIONS", "DURATION", "MODES"],
-    (.data[]
-      | select((.supported_endpoints // []) | index("/v1/videos"))
-      | [ .id + (if .is_deprecated then " (deprecated)" else "" end),
-          (.pricing.output_video_per_second // "-"),
-          ((.video_attributes.resolutions // []) | join(",")),
-          ((.video_attributes.min_duration_seconds | tostring) + "-" +
-           (.video_attributes.max_duration_seconds | tostring) + "s"),
-          ((.video_attributes.modes // []) | join(",")) ])
-    | @tsv' "$MODELS_FILE" | column -t -s "$(printf '\t')"
+
+  # Show the rate a caller would actually be charged: the model's own default
+  # resolution, text-to-video. The headline pricing.output_video_per_second is
+  # deliberately NOT shown — for seedance-2.5 it reports the 480p rate ($0.11)
+  # while the model defaults to 720p ($0.24), and a reader multiplying the
+  # first big number they see by their duration is off by 118%.
+  local rows="" mid mdefault mrate
+  while IFS=$'\t' read -r mid mdefault mrest; do
+    [ -z "$mid" ] && continue
+    mrate="$(rate_for "$mid" "$mdefault" "t2v" "" 2>/dev/null)" || mrate=""
+    [ -z "$mrate" ] && mrate="?"
+    rows="$rows$mid\t$mrate\t$mdefault\t$mrest\n"
+  done <<EOF_MODELS
+$(jq -r '
+    .data[]
+    | select((.supported_endpoints // []) | index("/v1/videos"))
+    | [ .id + (if .is_deprecated then " (deprecated)" else "" end),
+        (.video_attributes.default_resolution // "720p"),
+        ((.video_attributes.resolutions // []) | join(",")) + "\t" +
+        ((.video_attributes.min_duration_seconds | tostring) + "-" +
+         (.video_attributes.max_duration_seconds | tostring) + "s") + "\t" +
+        ((.video_attributes.modes // []) | join(",")) ]
+    | @tsv' "$MODELS_FILE")
+EOF_MODELS
+
+  {
+    printf 'MODEL\t$/s AT DEFAULT\tDEFAULT RES\tALL RESOLUTIONS\tDURATION\tMODES\n'
+    printf '%b' "$rows"
+  } | column -t -s "$(printf '\t')"
 
   echo
-  echo "Base \$/s is the model's headline rate, not a quote: it is not always the"
-  echo "cheapest tier or the default-resolution tier. For an actual estimate use"
-  echo "the per-resolution table in references/pricing.md."
+  echo "The rate shown is for each model's own default resolution, text-to-video —"
+  echo "what you pay if you don't pass --resolution. Other resolutions cost more or"
+  echo "less; run 'ofox-video.sh providers MODEL' for the full matrix, or check a"
+  echo "price for a specific job with 'generate --dry-run' (no API key needed)."
   return 0
 }
 
@@ -586,6 +628,8 @@ cmd_generate() {
   local provider=""
   local provider_explicit=""
   local print_payload=""
+  local dry_run=""
+  local submit_only="${OFOX_SUBMIT_ONLY:-}"
   local prompt=""
   local duration=""
   local resolution=""
@@ -608,6 +652,11 @@ cmd_generate() {
     case "$key" in
       --print-payload)
         print_payload=1
+        shift
+        continue
+        ;;
+      --dry-run)
+        dry_run=1
         shift
         continue
         ;;
@@ -836,7 +885,24 @@ cmd_generate() {
       ;;
   esac
 
-  if ! check_api_key; then return 2; fi
+  # A dry run sends no authenticated request, so it must not demand a key:
+  # quoting a price is exactly what someone does *before* signing up, and the
+  # repo's rule is to guide a keyless user rather than dead-end them.
+  if [ -n "$dry_run" ]; then
+    DRY_RUN_ACTIVE=1
+  else
+    if ! check_api_key; then return 2; fi
+  fi
+
+  # --out-dir is resolved here, under dry run too. A path that can't be
+  # created is a free thing to catch — discovering it after a job is paid for
+  # (exit 6) is the outcome a dry run exists to prevent.
+  local dry_out_input="$out_dir"
+  mkdir -p "$out_dir" 2>/dev/null
+  if [ -z "$(cd "$out_dir" 2>/dev/null && pwd)" ]; then
+    echo "ERROR: --out-dir '$dry_out_input' could not be created or entered (bad path or missing permissions)." >&2
+    return 6
+  fi
 
   # --- bytedance/seedance-2.5 image-to-video requires aspect_ratio=adaptive ---
   # Verified against the real API (see the seedance-2.5-image-to-video
@@ -940,12 +1006,27 @@ cmd_generate() {
       >/dev/null 2>&1; then
     est_mode="v2v"
   fi
-  if [ -n "$duration" ]; then
-    print_estimate "$model" "${resolution:-}" "$est_mode" "$provider" "$duration" 1
-  fi
+  print_estimate "$model" "${resolution:-}" "$est_mode" "$provider" "$duration" 1
 
   local provider_label="auto (Ofox weighted)"
   [ -n "$provider" ] && provider_label="$provider"
+
+  if [ -n "$dry_run" ]; then
+    # Everything above already ran: arguments parsed, parameters validated
+    # against the model, provider resolved, payload built, price quoted.
+    # Nothing below runs, so nothing is submitted and nothing is billed. This
+    # is what turns "quote before spending" into an instruction an agent can
+    # actually follow.
+    echo "DRY RUN — nothing was submitted and nothing was billed." >&2
+    echo "Re-run without --dry-run to generate." >&2
+    echo "STATUS dry_run"
+    echo "MODEL $model"
+    echo "PROVIDER $provider_label"
+    [ -n "$duration" ] && echo "DURATION $duration"
+    [ -n "$resolution" ] && echo "RESOLUTION $resolution"
+    return 0
+  fi
+
   echo "Submitting job to Ofox (model=$model, provider=$provider_label)..." >&2
   # payload can itself now be well over 1MB (a resolved frame image is
   # inlined into it above) — pass it to curl via `--data-binary @file`, not
@@ -995,6 +1076,28 @@ cmd_generate() {
   echo "If this times out before the job finishes, do NOT re-run 'generate' for the same request." >&2
   echo "Instead run: $0 poll $job_id" >&2
 
+  if [ -n "$submit_only" ]; then
+    # Submit-and-return. The whole point is that this finishes in seconds, so
+    # a caller with a short tool timeout can never end up in the one genuinely
+    # bad state: job created and billable, id never printed. Wait separately
+    # with `poll`, as many short calls as it takes.
+    # Absolute, because the whole point of create is that the *next* call
+    # happens separately — possibly from a different working directory. A
+    # relative path here would hand the caller a poll command that silently
+    # downloads somewhere else, or fails.
+    local abs_out
+    abs_out="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_out="$out_dir"
+    echo "STATUS submitted"
+    echo "JOB_ID $job_id"
+    echo "POLLING_URL $polling_url"
+    echo "OUT_DIR $abs_out"
+    echo "" >&2
+    echo "Submitted, not waiting. Download it with:" >&2
+    echo "  $0 poll $job_id --out-dir $abs_out" >&2
+    echo "The job is billable from now on whether or not you poll for it." >&2
+    return 0
+  fi
+
   poll_and_download "$job_id" "$polling_url" "$out_dir" "$max_wait" "$poll_interval"
   return $?
 }
@@ -1021,7 +1124,7 @@ cmd_generate() {
 MAX_TAKES=10
 
 cmd_batch() {
-  local takes="" seed_given="" prompt_seen="" batch_provider=""
+  local takes="" seed_given="" prompt_seen="" batch_provider="" batch_dry=""
   local passthrough=() out_dir="$PWD" duration="" resolution="" model="$DEFAULT_MODEL"
   local sheet="auto"
   local key val
@@ -1043,6 +1146,9 @@ cmd_batch() {
         # Valueless flags have to be forwarded without consuming the next
         # argument, or they eat whatever follows them.
         passthrough+=("$key"); shift; continue
+        ;;
+      --dry-run)
+        batch_dry=1; shift; continue
         ;;
       *)
         if [ $# -lt 2 ]; then
@@ -1096,19 +1202,51 @@ cmd_batch() {
 
   # --- estimate before spending ---
 
-  if [ -n "$duration" ]; then
-    print_estimate "$model" "${resolution:-}" "t2v" "${batch_provider:-}" "$duration" "$takes"
+  [ -n "$batch_dry" ] && DRY_RUN_ACTIVE=1
+  print_estimate "$model" "${resolution:-}" "t2v" "${batch_provider:-}" "$duration" "$takes"
+
+  if [ -n "$batch_dry" ]; then
+    # Validate one take through the real path so a bad parameter is caught
+    # here rather than after the first one is paid for, then stop.
+    #
+    # Capture the inner call's stderr instead of letting it through: it prints
+    # its own single-take estimate, and a caller told "there is exactly one
+    # Estimated cost line, relay it" would otherwise see two and quite
+    # reasonably relay the last one — the per-take figure this skill spends
+    # two documents telling people not to quote. Errors still surface.
+    local inner_err
+    if ! inner_err="$(cmd_generate "${passthrough[@]}" --dry-run 2>&1 >/dev/null)"; then
+      printf '%s\n' "$inner_err" >&2
+      return 1
+    fi
+    echo "DRY RUN — $takes takes would be submitted, one at a time. Nothing was billed." >&2
+    echo "Re-run without --dry-run to generate." >&2
+    echo "STATUS dry_run"
+    echo "TAKES_REQUESTED $takes"
+    return 0
   fi
 
   # --- run the takes, one real job each ---
 
   local i=1 rc=0 stopped=""
-  local paths=() costs=() ids=()
+  local paths=() costs=() ids=() seeds=()
   local out line
   while [ "$i" -le "$takes" ]; do
     echo "" >&2
     echo "--- take $i/$takes ---" >&2
-    out="$(cmd_generate "${passthrough[@]}")"
+    # Give each take an explicit seed when the caller didn't pick one. Without
+    # this, takes differ only by a seed the API chose and never told us, so
+    # "take 3 was the good one, render that properly" is impossible — you can
+    # only reroll and hope. With it, the seed is a handle: the same prompt and
+    # seed on a better model reproduces that take.
+    local take_args=("${passthrough[@]}") take_seed=""
+    if [ -z "$seed_given" ]; then
+      take_seed=$(( (RANDOM << 15 | RANDOM) & 0x7FFFFFFF ))
+      take_args+=(--seed "$take_seed")
+    else
+      take_seed="$seed_given"
+    fi
+    out="$(cmd_generate "${take_args[@]}")"
     rc=$?
     if [ "$rc" -ne 0 ]; then
       echo "" >&2
@@ -1126,6 +1264,7 @@ cmd_batch() {
     done <<EOF_TAKE
 $out
 EOF_TAKE
+    seeds+=("$take_seed")
     i=$((i + 1))
   done
 
@@ -1154,15 +1293,23 @@ EOF_TAKE
   echo "TAKES_COMPLETED $done_count"
   local idx=0
   while [ "$idx" -lt "$done_count" ]; do
-    echo "TAKE $((idx + 1)) ${ids[$idx]:-unknown} ${costs[$idx]:-unknown} ${paths[$idx]}"
+    echo "TAKE $((idx + 1)) ${ids[$idx]:-unknown} seed=${seeds[$idx]:-unknown} ${costs[$idx]:-unknown} ${paths[$idx]}"
     idx=$((idx + 1))
   done
   [ -n "$sheet_path" ] && echo "CONTACT_SHEET $sheet_path"
   echo "BATCH_COST_TOTAL $total"
   echo "BATCH_COST_PER_TAKE $per"
   echo "" >&2
-  echo "That is \$$total for $done_count takes. If one of them is usable, that is your real" >&2
-  echo "cost per usable clip — the number worth comparing across models and settings." >&2
+  local total_h
+  total_h="$(awk -v t="$total" 'BEGIN { printf "%.2f", t }')"
+  echo "" >&2
+  echo "Each take carries its seed. To re-render one properly, reuse its seed with the" >&2
+  echo "same prompt on the model you actually want:" >&2
+  echo "  $0 generate --prompt \"<same prompt>\" --seed <that take's seed> --model bytedance/seedance-2.5 --resolution 1080p" >&2
+  echo "" >&2
+  echo "That is \$$total_h for $done_count takes. If only one of them is usable, \$$total_h IS your" >&2
+  echo "cost for that one clip — not the per-take figure. That total is the number worth" >&2
+  echo "comparing across models and settings." >&2
 
   [ -n "$stopped" ] && return 3
   return 0
@@ -1227,14 +1374,36 @@ estimate_note() {
   }'
 }
 
+# Set to 1 by any subcommand running under --dry-run, so shared helpers can
+# tell the difference between "about to spend" and "just quoting".
+DRY_RUN_ACTIVE=""
+
 print_estimate() {
-  # $1..$6 as estimate_note. Always says something, on stderr, before spending.
+  # $1 = model, $2 = resolution, $3 = mode, $4 = provider, $5 = duration,
+  # $6 = count.
+  #
+  # ALWAYS prints exactly one "Estimated cost:" line. Silence is the one
+  # outcome a calling agent cannot relay to a user — it can repeat a number,
+  # and it can repeat "unavailable", but it cannot notice the absence of a
+  # line it was never told to expect.
   local note
+  if [ -z "${5:-}" ]; then
+    echo "Estimated cost: unavailable — no --duration given, so there is nothing to multiply the per-second rate by. Pass --duration to get a quote up front." >&2
+    return 0
+  fi
   note="$(estimate_note "$@" 2>/dev/null)" || note=""
   if [ -n "$note" ]; then
-    echo "Estimated cost: $note. Actual billing is reported below, from the job's own usage." >&2
+    if [ -n "$DRY_RUN_ACTIVE" ]; then
+      echo "Estimated cost: $note. This is an estimate — the actual figure comes from the job's own usage once it runs." >&2
+    else
+      echo "Estimated cost: $note. Actual billing is reported below, from the job's own usage." >&2
+    fi
   else
-    echo "Estimated cost: unavailable for this model/resolution combination (no verified rate on hand — run 'ofox-video.sh providers $1'). Actual billing is reported below." >&2
+    if [ -n "$DRY_RUN_ACTIVE" ]; then
+      echo "Estimated cost: unavailable for this model/resolution combination (no verified rate on hand — run 'ofox-video.sh providers $1')." >&2
+    else
+      echo "Estimated cost: unavailable for this model/resolution combination (no verified rate on hand — run 'ofox-video.sh providers $1'). Actual billing is reported below." >&2
+    fi
   fi
 }
 
@@ -1393,7 +1562,7 @@ MAX_SHOTS=10
 
 cmd_chain() {
   local shots=() shots_file="" out_dir="$PWD" duration="" resolution=""
-  local model="$DEFAULT_MODEL" concat="auto" aspect=""
+  local model="$DEFAULT_MODEL" concat="auto" aspect="" chain_dry=""
   local passthrough=() key val
 
   while [ $# -gt 0 ]; do
@@ -1409,6 +1578,9 @@ cmd_chain() {
         ;;
       --no-concat)
         concat="never"; shift; continue
+        ;;
+      --dry-run)
+        chain_dry=1; shift; continue
         ;;
       --print-payload)
         passthrough+=("$key"); shift; continue
@@ -1478,8 +1650,20 @@ cmd_chain() {
     esac
   fi
 
-  if [ -n "$duration" ]; then
-    print_estimate "$model" "${resolution:-}" "t2v" "" "$duration" "$n"
+  [ -n "$chain_dry" ] && DRY_RUN_ACTIVE=1
+  print_estimate "$model" "${resolution:-}" "t2v" "" "$duration" "$n"
+
+  if [ -n "$chain_dry" ]; then
+    local inner_err
+    if ! inner_err="$(cmd_generate "${passthrough[@]}" --prompt "${shots[0]}" --dry-run 2>&1 >/dev/null)"; then
+      printf '%s\n' "$inner_err" >&2
+      return 1
+    fi
+    echo "DRY RUN — $n shots would be submitted in sequence. Nothing was billed." >&2
+    echo "Re-run without --dry-run to generate." >&2
+    echo "STATUS dry_run"
+    echo "SHOTS_REQUESTED $n"
+    return 0
   fi
 
   mkdir -p "$out_dir" 2>/dev/null
@@ -1896,6 +2080,12 @@ main() {
     generate)
       shift
       cmd_generate "$@"
+      return $?
+      ;;
+    create)
+      # Same as generate, minus the waiting. See cmd_generate's submit_only.
+      shift
+      OFOX_SUBMIT_ONLY=1 cmd_generate "$@"
       return $?
       ;;
     batch)

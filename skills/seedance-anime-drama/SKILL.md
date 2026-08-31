@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Turn a novel/script excerpt into an anime- or manga-style storyboard shot using the Ofox image and video APIs — generates one character reference image with ofox-image-core, then reuses that exact same image as `--frame-first-image` across every shot of that character via ofox-video-core, for real visual consistency instead of relying on repeated text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime/manga styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.2.0"
+version: "1.5.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.5.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -232,38 +232,185 @@ Pass `--provider volcengine` for the mainland platform, or `--provider auto` to
 let Ofox choose. Pricing is identical either way. See
 `ofox-video-core/references/api-params.md` for the detail.
 
-## Cost estimate — show this before calling either API
+## Cost: quote it, get a yes, then spend it
 
-Two separate costs, paid at different rates as noted:
+This skill spends money in **two** places, at different rates, and they scale
+differently — so break them out rather than blending them into one number.
 
 **Step 1 (image) — paid once per character, not once per shot.**
-`ofox-image-core/references/pricing.md` does not have a single confirmed
+`ofox-image-core/references/pricing.md` has no single confirmed
 dollar-per-image figure: the model page's "$60/M output image" rate is
 ambiguous as documented, and a real test call left roughly a 20x spread
-between the two possible interpretations, unresolved against actual
-billing history. Present this honestly rather than inventing a number: "a
-character reference image costs a small amount — likely well under $0.10
-based on observed token counts, but not a firm, confirmed figure yet."
-Whatever the exact number turns out to be, it is paid **once per
-character** — generating N shots of the same character does not repeat this
-cost.
+between the two possible readings, unresolved against actual billing history.
+Say so honestly instead of inventing a number: "a character reference image
+costs a small amount — likely well under $0.10 based on observed token counts,
+but not a firm figure yet." Whatever it turns out to be, it is paid **once per
+character**; generating N shots of that character does not repeat it.
 
-**Step 2 (video) — paid once per shot.** `ofox-video.sh` prints its own
-estimate on stderr before submitting, read from live per-second rates, so
-relay that rather than computing one by hand. It already accounts for the
-right tier: image-to-video via `--frame-first-image` bills at **t2v** rates,
-and v2v pricing applies only when a *video* (not an image) is the input,
-which this skill never does. At this skill's suggested defaults that lands
-around **$1.92 per shot** (8 seconds at 720p), but take the printed figure
-over this one — and if it says the estimate is unavailable, say so instead
-of substituting a number.
+**Step 2 (video) — paid once per shot**, and this half you can quote exactly.
 
-**Put both in front of the user before generating anything**, broken out
-rather than blended into one number, e.g.: "1 character reference image
-(likely a few cents, unconfirmed exact figure) + 3 shots at 8s/720p
-(≈$1.92 each) ≈ ~$5.76 for the video plus a small one-time image cost." The
-point of breaking it out is so the user sees the image cost does not scale
-with shot count.
+Never submit a paid job without the user having seen the number first. The
+script makes that possible with `--dry-run`, which validates everything and
+prints the estimate **without sending a request**:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+  --prompt "..." --duration 15 --resolution 720p --out-dir ./out
+```
+
+Relay the `Estimated cost:` line it prints, wait for a yes, then re-run the
+identical command with `--dry-run` removed.
+
+The estimate a *real* run prints comes microseconds before the request goes
+out, so it is not something you can relay in time — that is what `--dry-run`
+is for. Every run prints exactly one `Estimated cost:` line, including when it
+can't compute one (it says why). Relay whatever you get; never invent a number.
+
+Image-to-video via `--frame-first-image` bills at **t2v** rates — v2v pricing
+applies only when a *video* is the input, which this skill never does. The
+script already picks the right tier.
+
+Afterwards, the **actual** bill is `VIDEO_COST` from the finished job, read
+from `usage.video_cost`. Report it as money (`$1.92`), not as the raw
+ten-decimal string. An estimate is never a bill.
+
+**Put both steps in front of the user before generating anything**, e.g.:
+"1 character reference image (a few cents, exact figure unconfirmed) + 3 shots
+at 8s/720p (~$1.92 each) = ~$5.76 of video plus a small one-time image cost."
+Breaking it out is what shows them the image cost does not scale with shot
+count.
+
+
+## Prompt language follows the audio
+
+Audio is generated on by default, and the model speaks **whatever language the
+prompt is written in**. So keep quoted dialogue in the user's own language —
+if they give you Chinese lines, put Chinese in the prompt. Translating them to
+match the English examples in this file produces an English-dubbed clip, and
+the user only finds out after paying for it.
+
+The rest of the prompt (setting, camera, lighting) can be English regardless;
+it is the quoted speech that determines the spoken language.
+
+The "2-3 spoken words per second" budget below is calibrated for English. For
+Chinese and Japanese, count characters rather than words and budget roughly
+5-6 characters per second.
+
+## Several takes to choose from
+
+Video generation is a slot machine — most takes go in the bin. When the user
+wants options rather than one clip, use `batch` instead of running `generate`
+repeatedly:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh batch --dry-run \
+  --prompt "..." --takes 4 --duration 8 --resolution 480p --out-dir ./out
+```
+
+It prices the whole batch up front, stops on the first failure instead of
+burning the remaining takes, and produces a contact sheet — three frames per
+take, one row each — so the user picks from one image instead of opening N
+files.
+
+**Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`.** If one take in four
+is usable, that clip cost the whole total; the per-take figure understates it
+by 4x.
+
+Hand the user the `CONTACT_SHEET` path on its own line, the same way you hand
+over a video — in this flow it is the artifact they actually look at first,
+since it is how they pick. Then list the individual take paths beneath it.
+
+Each `TAKE` line carries `seed=N`. That seed is the handle for "take 3 was the
+good one": re-run the same prompt with that seed on a better model or higher
+resolution to reproduce that take rather than rolling a new one.
+
+
+Worth offering when the user is exploring: draft cheap on
+`bytedance/seedance-2.0-mini` at 480p, then render the winner on
+`bytedance/seedance-2.5`. Four 8-second drafts cost about $0.64 on mini versus
+$7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
+different model is a different look, not just a different price.
+
+
+
+## Pricing a job with no API key
+
+**No API key needed** to find out what something costs. All three of these
+work with `OFOX_API_KEY` unset:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh models      # models and rates
+bash ../ofox-video-core/references/ofox-video.sh providers   # full price matrix
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+  --prompt "..." --duration 15 --resolution 720p             # a real quote
+```
+
+So when a user hasn't signed up yet, **quote the job first and let them decide
+whether it's worth registering.** Don't open by sending them to a signup form
+— price it, show them the number, then point at
+[app.ofox.ai](https://app.ofox.ai) if they want to proceed.
+
+## If the script isn't found
+
+```
+bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
+```
+
+This means `ofox-video-core` isn't installed alongside this skill — not that
+anything is broken. This skill delegates all execution to it and reaches it by
+relative path. Fix: `npx skills add ofoxai/skills` (the whole repo). Say that
+plainly rather than relaying the raw path error, which names neither the
+missing skill nor the fix.
+
+## Before you spend: show the prompt, not just the price
+
+The user is paying for **the prompt** — what the characters look like, how the
+camera moves, whether their lines survived word for word. The price is the
+smaller half of what they are agreeing to.
+
+So put both in front of them: the prompt you built, and the `--dry-run`
+estimate. A clip that costs exactly what you quoted and shows a character the
+user never pictured is still a wasted job.
+
+## Exit codes worth knowing
+
+Full table in [`../ofox-video-core/SKILL.md`](../ofox-video-core/SKILL.md) —
+the ones that come up:
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `1` | Parameter rejected locally, no network call, nothing billed | Fix the flag and retry freely |
+| `2` | Environment problem — `curl`/`jq` missing, or no `OFOX_API_KEY` | Ask the user to fix it; `check` reports the same |
+| `3` | API rejected it, or the job ended failed/cancelled/expired | Read the mapped message; a rejected create was not billed |
+| `4` | Timed out waiting — **the job is still running and billable** | `poll JOB_ID`, never re-run `generate` |
+| `5` | Ambiguous network failure on create | Do not retry blindly; check https://app.ofox.ai first |
+| `6` | `--out-dir` unusable | Fix the path; if it happened after a create, `poll JOB_ID` instead of regenerating |
+
+## How long to tell the user it will take
+
+`generate` blocks while it polls, up to `--max-wait` (default 540s). A short
+480p draft is usually one to three minutes; longer or higher-resolution jobs
+take longer. Say so before starting, so the wait isn't silent.
+
+If your tool call can't stay open that long, use `create` (submits and returns
+a job id in seconds) followed by `poll`, instead of `generate`. That way a
+timeout can never strand a job whose id you never saw. For `batch`, the worst
+case is `takes x max-wait` — lower `--max-wait` for drafts, or create and poll
+each take yourself.
+
+## Where the file lands
+
+Always pass `--out-dir`. Without it the script writes to the current working
+directory, which is usually the user's project root, and the filename is a
+bare job id. Pick something sensible (`./out`, or wherever the user asked) and
+relay the absolute `VIDEO_PATH` the script prints, on its own line.
+
+## Running the script
+
+Paths in the examples above are written relative to **this skill's own
+directory** (`skills/<this-skill>/`), which is where `../ofox-video-core/...`
+resolves from. If you are running from somewhere else, adjust accordingly —
+from the repo root it is `skills/ofox-video-core/references/ofox-video.sh`.
 
 ## Generating: putting the two steps together
 
