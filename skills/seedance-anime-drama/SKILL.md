@@ -238,14 +238,16 @@ This skill spends money in **two** places, at different rates, and they scale
 differently — so break them out rather than blending them into one number.
 
 **Step 1 (image) — paid once per character, not once per shot.**
-`ofox-image-core/references/pricing.md` has no single confirmed
-dollar-per-image figure: the model page's "$60/M output image" rate is
-ambiguous as documented, and a real test call left roughly a 20x spread
-between the two possible readings, unresolved against actual billing history.
-Say so honestly instead of inventing a number: "a character reference image
-costs a small amount — likely well under $0.10 based on observed token counts,
-but not a firm figure yet." Whatever it turns out to be, it is paid **once per
-character**; generating N shots of that character does not repeat it.
+`ofox-image.sh generate` prints an `IMAGE_COST` line, computed from the
+model's published rates and the response's own token counts and verified
+against a real invoice (see `ofox-image-core/references/pricing.md`). Relay
+that figure, the same way you relay `VIDEO_COST`.
+
+For a `google/gemini-3.1-flash-image` reference sheet, observed calls land
+around **$0.067** each — the output token count barely moves with prompt
+length, so that is a good planning number rather than a coincidence. It is
+paid **once per character**: generating N shots of that character does not
+repeat it.
 
 **Step 2 (video) — paid once per shot**, and this half you can quote exactly.
 
@@ -275,10 +277,9 @@ from `usage.video_cost`. Report it as money (`$1.92`), not as the raw
 ten-decimal string. An estimate is never a bill.
 
 **Put both steps in front of the user before generating anything**, e.g.:
-"1 character reference image (a few cents, exact figure unconfirmed) + 3 shots
-at 8s/720p (~$1.92 each) = ~$5.76 of video plus a small one-time image cost."
-Breaking it out is what shows them the image cost does not scale with shot
-count.
+"1 character reference image (~$0.07, one-off) + 3 shots at 8s/720p (~$1.92
+each) = ~$5.83 total." Breaking it out is what shows them the image cost does
+not scale with shot count.
 
 
 ## Prompt language follows the audio

@@ -1,0 +1,4 @@
+{"file": "CONTRIBUTING.md", "reason": "本仓库强制的 skill 质量门槛：English-only 文档、命令真机实测、不编造数字。"}
+{"file": ".trellis/spec/skills/external-api-integration.md", "reason": "计费 API 集成纪律，尤其「从真实响应计算、不信文档措辞」这一条——本任务正是它的直接应用。"}
+{"file": ".trellis/spec/skills/index.md", "reason": "skills 层作者约定，以及 ofox-image-core / ofox-video-core 作为共享执行层的定位。"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "视频侧 rate_for() 已确立「取不到费率就明确放弃、绝不猜」的模式，图片侧应沿用同一纪律而非另起一套。"}
