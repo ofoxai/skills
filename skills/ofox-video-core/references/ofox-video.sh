@@ -104,10 +104,12 @@ DEFAULT_MAX_WAIT=540
 DEFAULT_POLL_INTERVAL=6
 
 # Cap for the readable part of an output filename, counted in Unicode
-# codepoints (not bytes). 24 CJK characters is 72 UTF-8 bytes, which leaves
+# codepoints (not bytes). 40 CJK characters is 120 UTF-8 bytes, which leaves
 # the whole name — slug, '-', 8 hex of job id, extension — far below the
-# 255-byte limit every filesystem this runs on enforces.
-SLUG_MAX_CHARS=24
+# 255-byte limit every filesystem this runs on enforces. Latin text needs the
+# headroom more than CJK does: 24 was enough for a Chinese scene name but cut
+# "convenience-store-breakup" mid-word.
+SLUG_MAX_CHARS=40
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_SNAPSHOT="$SCRIPT_DIR/models-snapshot.json"
@@ -648,6 +650,7 @@ cmd_generate() {
   local real_person=""
   local callback_url=""
   local extra_json=""
+  local name_hint=""
   local out_dir="$PWD"
   local max_wait="$DEFAULT_MAX_WAIT"
   local poll_interval="$DEFAULT_POLL_INTERVAL"
@@ -668,7 +671,7 @@ cmd_generate() {
         ;;
     esac
     case "$key" in
-      --model|--prompt|--duration|--resolution|--aspect-ratio|--size|--generate-audio|--seed|--provider|--frame-first-image|--frame-last-image|--real-person|--callback-url|--extra-json|--out-dir|--max-wait|--poll-interval)
+      --model|--prompt|--duration|--resolution|--aspect-ratio|--size|--generate-audio|--seed|--provider|--frame-first-image|--frame-last-image|--real-person|--callback-url|--extra-json|--name|--out-dir|--max-wait|--poll-interval)
         if [ $# -lt 2 ]; then
           echo "ERROR: $key requires a value." >&2
           return 1
@@ -696,6 +699,7 @@ cmd_generate() {
       --real-person) real_person="$val" ;;
       --callback-url) callback_url="$val" ;;
       --extra-json) extra_json="$val" ;;
+      --name) name_hint="$val" ;;
       --out-dir) out_dir="$val" ;;
       --max-wait) max_wait="$val" ;;
       --poll-interval) poll_interval="$val" ;;
@@ -1099,12 +1103,20 @@ cmd_generate() {
     echo "OUT_DIR $abs_out"
     echo "" >&2
     echo "Submitted, not waiting. Download it with:" >&2
-    echo "  $0 poll $job_id --out-dir $abs_out" >&2
+    # Carry --name into the suggested command: the follow-up poll is a
+    # separate process that would otherwise fall back to naming the file from
+    # the prompt, quietly losing the name the caller chose here.
+    if [ -n "$name_hint" ]; then
+      echo "  $0 poll $job_id --out-dir $abs_out --name \"$name_hint\"" >&2
+    else
+      echo "  $0 poll $job_id --out-dir $abs_out" >&2
+    fi
     echo "The job is billable from now on whether or not you poll for it." >&2
     return 0
   fi
 
-  poll_and_download "$job_id" "$polling_url" "$out_dir" "$max_wait" "$poll_interval"
+  poll_and_download "$job_id" "$polling_url" "$out_dir" "$max_wait" "$poll_interval" \
+    "$name_hint" "$payload"
   return $?
 }
 
@@ -1569,6 +1581,7 @@ MAX_SHOTS=10
 cmd_chain() {
   local shots=() shots_file="" out_dir="$PWD" duration="" resolution=""
   local model="$DEFAULT_MODEL" concat="auto" aspect="" chain_dry=""
+  local chain_name=""
   local passthrough=() key val
 
   while [ $# -gt 0 ]; do
@@ -1603,6 +1616,7 @@ cmd_chain() {
           --resolution) resolution="$val" ;;
           --model) model="$val" ;;
           --aspect-ratio) aspect="$val" ;;
+          --name) chain_name="$val" ;;
         esac
         passthrough+=("$key" "$val")
         shift 2
@@ -1683,6 +1697,12 @@ cmd_chain() {
     echo "--- shot $i/$n ---" >&2
 
     local args=("${passthrough[@]}" --prompt "${shots[$((i - 1))]}" --out-dir "$abs_out")
+    # A chain's shots are meant to be watched — and concatenated — in order,
+    # so when the caller named the chain, number the shots inside that name.
+    # Without it every shot would share one slug and differ only by job id,
+    # losing the ordering. This --name comes after passthrough's copy, and
+    # generate's parser takes the last occurrence.
+    [ -n "$chain_name" ] && args+=(--name "${chain_name}-shot${i}")
     [ -n "$prev_frame" ] && args+=(--frame-first-image "$prev_frame")
 
     out="$(cmd_generate "${args[@]}")"
@@ -1860,12 +1880,13 @@ cmd_poll() {
   local out_dir="$PWD"
   local max_wait="$DEFAULT_MAX_WAIT"
   local poll_interval="$DEFAULT_POLL_INTERVAL"
+  local name_hint=""
   local key val
 
   while [ $# -gt 0 ]; do
     key="$1"
     case "$key" in
-      --out-dir|--max-wait|--poll-interval)
+      --out-dir|--max-wait|--poll-interval|--name)
         if [ $# -lt 2 ]; then
           echo "ERROR: $key requires a value." >&2
           return 1
@@ -1882,12 +1903,16 @@ cmd_poll() {
       --out-dir) out_dir="$val" ;;
       --max-wait) max_wait="$val" ;;
       --poll-interval) poll_interval="$val" ;;
+      --name) name_hint="$val" ;;
     esac
   done
 
   if ! check_api_key; then return 2; fi
 
-  poll_and_download "$job_id" "$API_BASE/videos/$job_id" "$out_dir" "$max_wait" "$poll_interval"
+  # No request payload to pass: a poll knows only what the response reports,
+  # so the sidecar it writes omits the resolution/aspect-ratio half.
+  poll_and_download "$job_id" "$API_BASE/videos/$job_id" "$out_dir" "$max_wait" \
+    "$poll_interval" "$name_hint"
   return $?
 }
 
@@ -1897,6 +1922,9 @@ cmd_poll() {
 
 poll_and_download() {
   local job_id="$1" polling_url="$2" out_dir="$3" max_wait="$4" poll_interval="$5"
+  # Both optional; only the generate path has them to give. See
+  # download_result() and write_sidecar().
+  local name_hint="${6:-}" request_json="${7:-}"
   local elapsed=0 tmp_body http_code curl_rc body status
   local out_dir_input="$out_dir"
 
@@ -1938,7 +1966,7 @@ poll_and_download() {
         status=$(printf '%s' "$body" | jq -r '.status // empty')
         case "$status" in
           completed)
-            download_result "$job_id" "$body" "$out_dir"
+            download_result "$job_id" "$body" "$out_dir" "$name_hint" "$request_json"
             return $?
             ;;
           failed|cancelled|expired)
@@ -2009,9 +2037,12 @@ poll_and_download() {
 # Both sources are untrusted text that becomes part of a path: a --name comes
 # from a calling skill, and a prompt comes from whoever wrote it. Path
 # separators, characters illegal on Windows filesystems, and control
-# characters are stripped, then leading dots and dashes are removed, so
-# '../../etc/passwd' cannot survive as anything traversable and nothing turns
-# into a hidden file or a leading-dash pseudo-flag.
+# characters are stripped, then any non-alphanumeric run is trimmed off both
+# ends, so '../../etc/passwd' cannot survive as anything traversable, nothing
+# turns into a hidden file or a leading-dash pseudo-flag, and a name never
+# trails a stray comma or full stop where the slice happened to land. Han
+# characters count as alphanumeric here, so CJK text survives while CJK
+# punctuation is trimmed.
 build_output_slug() {
   local name_hint="$1" prompt="$2" raw=""
 
@@ -2042,14 +2073,86 @@ build_output_slug() {
     | gsub("[[:cntrl:]]"; "")
     | gsub("[/\\\\:*?\"<>|]"; "")
     | gsub("-+"; "-")
-    | .[0:$max]
-    | sub("^[-.]+"; "")
-    | sub("[-.]+$"; "")
+    | . as $full
+    | $full[0:$max] as $cut
+    | (if ($full | length) > $max
+       then (($cut | rindex("-")) // -1) as $ix
+            | (if $ix > ($max / 2) then $cut[0:$ix] else $cut end)
+       else $cut end)
+    | sub("^[^[:alnum:]]+"; "")
+    | sub("[^[:alnum:]]+$"; "")
   '
+}
+
+# Write the metadata sidecar that sits next to a downloaded video.
+#
+# It carries what the filename cannot: the full job id (the short prefix in
+# the name can't be expanded back, since the API has no list endpoint), the
+# prompt, and the request as submitted — enough to re-render the same shot at
+# a different resolution without reconstructing anything by hand.
+#
+# Note the split: the poll response reports model, prompt, seconds and cost,
+# but *not* resolution or aspect ratio — those are echoed nowhere, so they
+# only reach the sidecar through the create payload, which means only the
+# generate path records them. A bare `poll JOB_ID` writes the response half
+# and omits `request` rather than guessing.
+#
+# Returns nonzero without leaving a partial file if anything goes wrong; the
+# caller treats that as a warning, never as a failed download.
+write_sidecar() {
+  local body="$1" video_path="$2" sidecar_path="$3" name_hint="$4" request_json="$5"
+  local req="null" tmp rc
+
+  if [ -n "$request_json" ]; then
+    # A resolved --frame-first-image lands in the payload as a base64 data
+    # URI that can exceed a megabyte on its own. Record that frames were
+    # used, never the bytes.
+    req=$(printf '%s' "$request_json" | jq -c '
+      (if (.frame_images | type) == "array"
+       then {frame_images_count: (.frame_images | length)}
+       else {} end) as $f
+      | del(.frame_images) + $f' 2>/dev/null) || req="null"
+    [ -z "$req" ] && req="null"
+  fi
+
+  tmp=$(mktemp) || return 1
+  printf '%s' "$body" | jq \
+    --arg video "$(basename "$video_path")" \
+    --arg name "$name_hint" \
+    --argjson request "$req" '
+    {
+      job_id: .id,
+      status: .status,
+      model: .model,
+      prompt: .prompt,
+      video_seconds: (.usage.video_seconds // null),
+      video_cost: (.usage.video_cost // null),
+      created_at: .created_at,
+      updated_at: .updated_at,
+      video_file: $video
+    }
+    | (if $name != "" then .name = $name else . end)
+    | (if $request != null then .request = $request else . end)
+  ' >"$tmp" 2>/dev/null
+  rc=$?
+
+  # Only publish a sidecar that is actually parseable — a truncated or empty
+  # one is worse than none, because it looks like a record and isn't.
+  if [ "$rc" -ne 0 ] || ! jq -e . "$tmp" >/dev/null 2>&1; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  mv "$tmp" "$sidecar_path" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  return 0
 }
 
 download_result() {
   local job_id="$1" body="$2" out_dir="$3"
+  # Optional. name_hint is the caller's --name; request_json is the create
+  # payload as actually submitted, which only the generate path has. A bare
+  # `poll JOB_ID` passes neither, and everything below degrades cleanly.
+  local name_hint="${4:-}" request_json="${5:-}"
   local urls=() url
 
   # Prefer mirror_urls (CDN-signed, persistent) when present. In practice,
@@ -2087,7 +2190,22 @@ download_result() {
   cost=$(printf '%s' "$body" | jq -r '.usage.video_cost // "unknown"')
   seconds=$(printf '%s' "$body" | jq -r '.usage.video_seconds // "unknown"')
 
-  local i=0 count=${#urls[@]} paths=() ext fname outpath
+  # The readable stem of every file this job produces. The job's own prompt
+  # comes from the response, so this works identically whether the caller is
+  # 'generate' (which knows what it asked for) or a bare 'poll JOB_ID' in a
+  # fresh shell (which knows nothing). A short job-id suffix keeps two runs of
+  # the same prompt from overwriting each other and keeps the file traceable
+  # back to the job.
+  local prompt slug base
+  prompt=$(printf '%s' "$body" | jq -r '.prompt // empty')
+  slug=$(build_output_slug "$name_hint" "$prompt")
+  if [ -n "$slug" ]; then
+    base="${slug}-${job_id:0:8}"
+  else
+    base="$job_id"
+  fi
+
+  local i=0 count=${#urls[@]} paths=() sidecars=() ext fname outpath sidecar
 
   for url in "${urls[@]}"; do
     i=$((i + 1))
@@ -2097,9 +2215,9 @@ download_result() {
       *) ext="mp4" ;;
     esac
     if [ "$count" -gt 1 ]; then
-      fname="${job_id}_${i}.${ext}"
+      fname="${base}_${i}.${ext}"
     else
-      fname="${job_id}.${ext}"
+      fname="${base}.${ext}"
     fi
     outpath="${out_dir%/}/${fname}"
     if ! curl -fsSL "$url" -o "$outpath"; then
@@ -2107,12 +2225,28 @@ download_result() {
       return 3
     fi
     paths+=("$outpath")
+
+    # Sidecar: the short id in the filename is not enough to poll or reconcile
+    # this job later (the API has no list endpoint to expand a prefix
+    # against), so the full id lives here along with everything needed to
+    # re-render the same shot at a different resolution.
+    sidecar="${outpath%.*}.json"
+    if write_sidecar "$body" "$outpath" "$sidecar" "$name_hint" "$request_json"; then
+      sidecars+=("$sidecar")
+    else
+      # A missing sidecar must never cost the user the video they just paid
+      # for; the mp4 is on disk and every field below is still printed.
+      echo "WARN: could not write metadata sidecar next to $outpath." >&2
+    fi
   done
 
   echo "STATUS completed"
   echo "JOB_ID $job_id"
   for outpath in "${paths[@]}"; do
     echo "VIDEO_PATH $outpath"
+  done
+  for sidecar in "${sidecars[@]}"; do
+    echo "SIDECAR_PATH $sidecar"
   done
   echo "VIDEO_SECONDS $seconds"
   echo "VIDEO_COST $cost"
