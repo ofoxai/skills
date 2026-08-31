@@ -167,6 +167,54 @@ else
 fi
 
 echo
+echo "=== A failed sidecar write keeps the handoff, and does not kill the run ==="
+# The case the cleanup fix was actually about, and the one that was missing:
+# the download succeeds and only the sidecar write fails. Two things must
+# hold — the record survives for a retry, and the user still gets a complete,
+# successful report for the video they just paid for.
+OUT_S="$WORK/outsidecar"; mkdir -p "$OUT_S"
+HF_S="$(request_handoff_path "$OUT_S" "$JOB")"
+save_request_handoff "$PAYLOAD" "$OUT_S" "$JOB"
+[ -f "$HF_S" ] || fail "setup: no handoff to start from" "$HF_S"
+
+# Override for this case only; restored immediately after.
+eval "orig_write_sidecar() $(declare -f write_sidecar | sed '1d')"
+write_sidecar() { return 1; }
+
+out="$(download_result "$JOB" "$(body)" "$OUT_S" "sidecar fails" "$PAYLOAD" 2>/dev/null)"
+rc=$?
+
+eval "write_sidecar() $(declare -f orig_write_sidecar | sed '1d')"
+
+if [ "$rc" -eq 0 ]; then
+  pass "a sidecar failure is a warning, not a failed download"
+else
+  fail "a sidecar failure sank the whole download" "exit $rc, after the job was billed"
+fi
+# Regression: expanding an empty array under `set -u` aborts on bash 3.2,
+# which is what /bin/bash still is on macOS. That killed the run right here,
+# after VIDEO_PATH was printed but before the cost was.
+if printf '%s\n' "$out" | grep -q '^VIDEO_COST '; then
+  pass "the cost is still reported when no sidecar was written"
+else
+  fail "VIDEO_COST missing" "a paid, downloaded video reported as if it failed"
+fi
+if [ -f "$HF_S" ]; then
+  pass "the handoff survives a failed sidecar write"
+else
+  fail "handoff cleared without a sidecar to show for it" "the record is gone for good"
+fi
+
+echo
+echo "=== Empty arrays do not abort on bash 3.2 ==="
+# chain with nothing but --shot leaves passthrough empty.
+if bash "$TARGET" chain --shot "a lone shot" --dry-run 2>&1 | grep -q 'unbound variable'; then
+  fail "chain aborts when no passthrough flags are given" "empty array expansion"
+else
+  pass "chain runs with an empty passthrough"
+fi
+
+echo
 echo "=== poll honours --max-wait in wall-clock time ==="
 # elapsed used to be a tally of poll_interval, so a run of slow requests
 # could overshoot --max-wait by minutes while believing it was inside it.

@@ -1286,7 +1286,7 @@ cmd_batch() {
     # reasonably relay the last one — the per-take figure this skill spends
     # two documents telling people not to quote. Errors still surface.
     local inner_err
-    if ! inner_err="$(cmd_generate "${passthrough[@]}" --dry-run 2>&1 >/dev/null)"; then
+    if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --dry-run 2>&1 >/dev/null)"; then
       printf '%s\n' "$inner_err" >&2
       return 1
     fi
@@ -1310,7 +1310,7 @@ cmd_batch() {
     # "take 3 was the good one, render that properly" is impossible — you can
     # only reroll and hope. With it, the seed is a handle: the same prompt and
     # seed on a better model reproduces that take.
-    local take_args=("${passthrough[@]}") take_seed=""
+    local take_args=(${passthrough[@]+"${passthrough[@]}"}) take_seed=""
     if [ -z "$seed_given" ]; then
       take_seed=$(( (RANDOM << 15 | RANDOM) & 0x7FFFFFFF ))
       take_args+=(--seed "$take_seed")
@@ -1355,7 +1355,7 @@ EOF_TAKE
   # --- report: real billing, never the estimate ---
 
   local total
-  total="$(printf '%s\n' "${costs[@]}" | awk '{ s += $1 } END { printf "%.10f", s }')"
+  total="$(printf '%s\n' ${costs[@]+"${costs[@]}"} | awk '{ s += $1 } END { printf "%.10f", s }')"
   local per
   per="$(awk -v t="$total" -v n="$done_count" 'BEGIN { printf "%.10f", (n ? t/n : 0) }')"
 
@@ -1728,7 +1728,7 @@ cmd_chain() {
 
   if [ -n "$chain_dry" ]; then
     local inner_err
-    if ! inner_err="$(cmd_generate "${passthrough[@]}" --prompt "${shots[0]}" --dry-run 2>&1 >/dev/null)"; then
+    if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --prompt "${shots[0]}" --dry-run 2>&1 >/dev/null)"; then
       printf '%s\n' "$inner_err" >&2
       return 1
     fi
@@ -1749,7 +1749,7 @@ cmd_chain() {
     echo "" >&2
     echo "--- shot $i/$n ---" >&2
 
-    local args=("${passthrough[@]}" --prompt "${shots[$((i - 1))]}" --out-dir "$abs_out")
+    local args=(${passthrough[@]+"${passthrough[@]}"} --prompt "${shots[$((i - 1))]}" --out-dir "$abs_out")
     # A chain's shots are meant to be watched — and concatenated — in order,
     # so when the caller named the chain, number the shots inside that name.
     # Without it every shot would share one slug and differ only by job id,
@@ -1811,7 +1811,7 @@ EOF_SHOT
   fi
 
   local total per
-  total="$(printf '%s\n' "${costs[@]}" | awk '{ s += $1 } END { printf "%.10f", s }')"
+  total="$(printf '%s\n' ${costs[@]+"${costs[@]}"} | awk '{ s += $1 } END { printf "%.10f", s }')"
   per="$(awk -v t="$total" -v n="$done_count" 'BEGIN { printf "%.10f", (n ? t/n : 0) }')"
 
   echo "STATUS chain_completed"
@@ -2320,6 +2320,12 @@ download_result() {
     base="$job_id"
   fi
 
+  # Note the ${arr[@]+"${arr[@]}"} form used on these arrays below: bash 3.2,
+  # which is what /bin/bash still is on macOS, treats an empty array as unset,
+  # so a plain "${arr[@]}" under `set -u` aborts the script. That mattered
+  # here: if every sidecar write failed, expanding an empty sidecars killed
+  # the run right after a paid download, printing VIDEO_PATH but never
+  # VIDEO_COST — a successful, billed generation looking like a failure.
   local i=0 count=${#urls[@]} paths=() sidecars=() ext fname outpath sidecar
 
   for url in "${urls[@]}"; do
@@ -2362,7 +2368,7 @@ download_result() {
   for outpath in "${paths[@]}"; do
     echo "VIDEO_PATH $outpath"
   done
-  for sidecar in "${sidecars[@]}"; do
+  for sidecar in ${sidecars[@]+"${sidecars[@]}"}; do
     echo "SIDECAR_PATH $sidecar"
   done
 
