@@ -443,3 +443,53 @@ frontmatter fields ClawHub actually reads were all missing, and are now added.
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: 测试质量整改：源码 grep 换成行为断言，用变异检验证明断言是活的
+
+**Date**: 2026-08-31
+**Task**: 测试质量整改：源码 grep 换成行为断言，用变异检验证明断言是活的
+**Branch**: `feat/seedance-video-skills`
+
+### Summary
+
+用户追问「不必要的测试案例没放进去吧」，审计后发现上一轮补的 53 项断言里有 4 项不合格。
+
+诊断：
+1) imagecost 里一条 not priced at the text-output rate 是冗余——锚定用例已断言精确等于 0.0672395，费率退回 3 美元/M 时它会先失败。该条还读了上一个代码块残留的 got 变量，本块从未赋值。
+2) 三条用 grep 检查脚本源码文本而非行为，违反 CLAUDE.md 的 Test behavior, not implementation——无害重构会误报，逻辑真坏了又可能照样通过。
+
+改法：
+- seed：改用 generate --dry-run --print-payload 观测真实请求体（dry-run 在发送前返回，天然免费），断言 payload 含 seed、两次运行不同、显式 --seed 被尊重。
+- 费率键名：改用三份合成模型列表（只有 prompt / 只有 input / 两者皆无），验证前两者能算出成本、第三者拒绝给数。
+- 冗余那条直接删。
+
+核心验收是变异检验，不是「跑绿」：在临时副本上移除 seed roll、去掉 prompt 键名回退、让公式忽略 input token，三次都精确地只让对应断言失败，证明新断言不是永真。8 位小数精度抓住了 3.95e-5 的差异。
+
+结果：断言 248 到 250，源码 grep 断言 3 到 0，12 个测试文件在 /bin/bash 3.2 下全绿。
+
+保留两条 grep 程序输出的断言（VIDEO_COST、unbound variable），那属于行为断言；既有 8 个套件里刻意检查源码结构的断言（如 pricing.test.sh 验证旧硬编码价格表已删除）也未纳入整改，其检查对象本身就是源码结构。
+
+分支已 push，PR #1 同步至 86 个提交。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1917f3d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
