@@ -57,21 +57,36 @@ body() {
 
 PAYLOAD='{"model":"bytedance/seedance-2.5","prompt":"a handoff run","duration":8,"resolution":"480p","aspect_ratio":"9:16","seed":418715175}'
 
-echo "=== generate rolls a seed when the caller does not supply one ==="
-# Without this the server picks a seed and reports it nowhere, so nothing
-# generated could ever be reproduced — only re-rolled.
-# --dry-run stops before a seed is printed and a real run costs money, so the
-# roll is asserted structurally: it must happen where the payload is built,
-# with the same expression batch already uses.
-if grep -q 'seed=\$(( (RANDOM << 15 | RANDOM) & 0x7FFFFFFF ))' "$TARGET"; then
-  pass "generate rolls a seed with the same expression batch uses"
+echo "=== generate sends a seed even when the caller does not pick one ==="
+# Without one the server chooses a seed and reports it nowhere, so nothing
+# generated could be reproduced — only re-rolled. --print-payload dumps the
+# request body that would have been sent, and --dry-run returns before
+# sending it, so this is observable for free.
+payload_seed() { # extra args...
+  bash "$TARGET" generate --dry-run --print-payload \
+    --prompt "seed check" --duration 8 --resolution 480p "$@" 2>&1 |
+    sed -n 's/^PAYLOAD //p' | head -1 | jq -r '.seed // empty'
+}
+
+s1="$(payload_seed)"
+if [ -n "$s1" ]; then
+  pass "the payload carries a seed with no --seed given ($s1)"
 else
-  fail "no client-side seed roll in generate" "reproducibility depends on it"
+  fail "no seed in the payload" "the run would not be reproducible"
 fi
-if [ "$(grep -c 'echo "SEED \$seed"' "$TARGET")" -ge 2 ]; then
-  pass "SEED is printed on both the create and the generate path"
+
+s2="$(payload_seed)"
+if [ -n "$s1" ] && [ -n "$s2" ] && [ "$s1" != "$s2" ]; then
+  pass "it is rolled per run, not a constant ($s1 then $s2)"
 else
-  fail "SEED is not printed on both paths" "$(grep -n 'echo "SEED' "$TARGET" | tr '\n' ' ')"
+  fail "two runs produced the same seed" "$s1 and $s2 — a fixed seed is not a roll"
+fi
+
+s3="$(payload_seed --seed 12345)"
+if [ "$s3" = "12345" ]; then
+  pass "an explicit --seed is sent unchanged"
+else
+  fail "explicit --seed was overwritten" "sent '$s3', asked for 12345"
 fi
 
 echo

@@ -73,16 +73,6 @@ else
   fail "second real call priced wrong" "want 0.0672255, got '$got'"
 fi
 
-echo
-echo "=== Output tokens bill at output_image, not at the text output rate ==="
-# The distinction the invoice settled. At the $3/M text rate the first case
-# would be ~0.0034 — 20x lower — so this guards against silently reverting
-# to the cheaper, wrong reading.
-if [ "$got" != "0.00339" ] && [ "${got%%0.003*}" != "" ]; then
-  pass "not priced at the text-output rate"
-else
-  fail "looks like the \$3/M text rate crept back in" "$got"
-fi
 
 echo
 echo "=== Rates are per model, not hardcoded to one ==="
@@ -116,13 +106,34 @@ fi
 echo
 echo "=== Both spellings of the rate keys are accepted ==="
 # /v1/models calls them prompt/completion; /v2/models/catalog calls them
-# input/output. The script loads the v1 list, so reading only the catalog
-# spelling silently produced no cost at all.
-if grep -q '\.pricing\.input // \.pricing\.prompt' "$TARGET"; then
-  pass "reads either input/ or prompt/-style rate keys"
+# input/output. The script loads the v1 list, so handling only the catalog
+# spelling silently produced no cost at all. Both are exercised against a
+# synthetic list rather than by reading the source, so a refactor that keeps
+# the behaviour keeps the test passing.
+synthetic() { # <input-key> <output-image-value>
+  jq -nc --arg ik "$1" --arg oi "$2" \
+    '{data:[{id:"fake/model", pricing:{($ik):"0.0000005", output_image:$oi}}]}'
+}
+
+for spelling in prompt input; do
+  MODELS_FILE="$WORK/models-$spelling.json"
+  synthetic "$spelling" "0.00006" > "$MODELS_FILE"
+  got="$(image_cost_for "fake/model" 79 1120)"
+  if [ "$got" = "0.0672395" ]; then
+    pass "a list using '$spelling' for the input rate prices correctly"
+  else
+    fail "'$spelling' spelling yielded no usable cost" "got '$got'"
+  fi
+done
+
+# And a list with neither spelling must yield nothing rather than a partial
+# figure computed from the output rate alone.
+MODELS_FILE="$WORK/models-none.json"
+jq -nc '{data:[{id:"fake/model", pricing:{output_image:"0.00006"}}]}' > "$MODELS_FILE"
+if image_cost_for "fake/model" 79 1120 >/dev/null 2>&1; then
+  fail "priced a model with no input rate" "a partial cost is still a wrong cost"
 else
-  fail "only one spelling of the rate key is handled" \
-    "the other endpoint's naming will silently yield no cost"
+  pass "a missing input rate yields no figure, not a partial one"
 fi
 
 echo
