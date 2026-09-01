@@ -9,8 +9,9 @@ Skills work with Claude Code, Cursor, Copilot, and 70+ other agents via
 
 ## The video skills cost real money — here's how to check before you commit
 
-The four `seedance-*` skills call [Ofox](https://ofox.ai)'s video API, which
-bills per second of generated video. A 15-second 720p clip runs about
+The four `seedance-*` skills call Ofox's video API, which runs
+[Seedance 2.5](https://ofox.ai/models/bytedance/seedance-2.5?utm_source=github&utm_medium=readme&utm_campaign=skills)
+and bills per second of generated video. A 15-second 720p clip runs about
 **$3.60**; a 4-second 480p draft is about **$0.44**, and there are cheaper
 models. Generation is a slot machine — you often want several takes and keep
 one — so the per-clip figure is not the whole cost.
@@ -29,7 +30,7 @@ bash ~/.claude/skills/ofox-video-core/references/ofox-video.sh \
 request. `ofox-video.sh models` and `ofox-video.sh providers` likewise need no
 key. Decide whether it's worth it, *then* sign up.
 
-When you are ready: get a key at [app.ofox.ai](https://app.ofox.ai)
+When you are ready: get a key at [app.ofox.ai](https://app.ofox.ai/?utm_source=github&utm_medium=badge&utm_campaign=skills)
 (Settings → API Keys → Create New Key, shown once), then
 
 ```
