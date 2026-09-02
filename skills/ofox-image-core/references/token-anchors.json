@@ -1,0 +1,26 @@
+{
+  "_what_this_is": "Measured output-token counts from real, paid calls to POST /v1/images/generations. ofox-image.sh reads this file to produce the ROUGH estimate that --dry-run prints. A model with no measurement here gets no estimate at all — the script says it cannot predict the cost and why, rather than borrowing another model's token count. Borrowed numbers look like measurements and are not.",
+  "_why_it_is_needed": "An image bills per output token (cost = input_tokens * pricing.input + output_tokens * pricing.output_image) and the token counts only exist once the response comes back. Unlike video, where duration is an input and the price is exact before submitting, the only thing that makes a pre-flight image estimate possible at all is a previously measured token count for that same model.",
+  "_how_to_add_a_row": "Run one real generation with the model, take USAGE_OUTPUT_TOKENS straight from the printed output (never a derived or rounded figure), and record it with the date and the exact prompt/size used. Then update references/pricing.md's anchor table to match.",
+  "anchors": {
+    "google/gemini-3.1-flash-image": {
+      "output_tokens": 1120,
+      "measured": "2026-08-29",
+      "samples": 3,
+      "note": "1120 on all three observed calls, with input tokens of 8, 51 and 79 — the output count did not move with prompt length. This model ignores --size and always renders 1024x1024, so the count does not vary with the requested size either.",
+      "source": "references/pricing.md"
+    },
+    "microsoft/mai-image-2.5-flash": {
+      "output_tokens": null,
+      "measured": null,
+      "note": "NOT MEASURED YET. This is the chain's preferred model, so it is the one whose anchor matters most; until one real call records its USAGE_OUTPUT_TOKENS, --dry-run says the cost cannot be predicted for it. Do not estimate it from gemini-3.1-flash-image's 1120 tokens — different vendor, different tokeniser, no reason to expect the same figure.",
+      "source": null
+    },
+    "openai/gpt-image-2": {
+      "output_tokens": null,
+      "measured": null,
+      "note": "NOT MEASURED YET. Second in the priority chain. Same rule as above: no measurement, no estimate.",
+      "source": null
+    }
+  }
+}

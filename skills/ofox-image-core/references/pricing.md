@@ -100,6 +100,49 @@ otherwise.
 first written the rate question was open and this was recorded as "either
 ~$0.0034 or ~$0.067"; the invoice check confirmed the higher reading.)
 
+## Pre-flight estimates: the token anchor table
+
+The formula above needs `usage.output_tokens`, which does not exist until the
+response comes back. That is the whole asymmetry with the video side: a video
+is priced per second and duration is an input, so a video job can be quoted
+exactly before it is submitted; an image cannot.
+
+`generate --dry-run` still has to print something, because the approval gate
+requires a number or an explicit "no number, and here is why" — never a
+figure the agent invented. What it prints comes from
+`references/token-anchors.json`, the measured output-token count of a real
+earlier call **with that same model**:
+
+| Model | Measured output tokens | When | Rough cost/image at today's rate |
+|---|---|---|---|
+| `google/gemini-3.1-flash-image` | **1120** | 2026-08-29, 3 calls | ~6.7 cents |
+| `microsoft/mai-image-2.5-flash` | *not measured yet* | — | **cannot be predicted** |
+| `openai/gpt-image-2` | *not measured yet* | — | **cannot be predicted** |
+
+The two unmeasured rows are the chain's **preferred** and **second** models —
+i.e. the two that a default `generate` call will actually use. Until one real
+call records each one's `USAGE_OUTPUT_TOKENS`, `--dry-run` says the cost
+cannot be predicted for them and says why. That is the intended behavior, not
+a gap to paper over.
+
+**Do not fill those rows by scaling gemini's 1120.** Different vendor,
+different tokeniser, no reason to expect a similar count — and a number
+derived that way is indistinguishable, in the table the user approves, from
+one that was measured. Two real calls (a few cents each) settle it; nothing
+else does. Take `USAGE_OUTPUT_TOKENS` verbatim from the printed output and
+update both the JSON file and this table.
+
+Even a measured anchor is labelled **ROUGH** when it is printed. It is one
+model's observed count, not a promise, and it excludes the input-token
+component (the prompt), which was a fraction of a cent on every call observed
+so far. The exact figure is always `IMAGE_COST`, computed after the fact from
+the response's own counts.
+
+`--size` is not a lever on this. `google/gemini-3.1-flash-image` reported 1120
+output tokens whether or not a size was requested, because it renders
+1024x1024 regardless — see the size gotcha above. So "scale the token count by
+pixel count" is not available either.
+
 ## Cost formula (confirmed)
 
 ```

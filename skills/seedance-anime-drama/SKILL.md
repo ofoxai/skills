@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Turn a novel/script excerpt into an anime- or manga-style storyboard shot using the Ofox image and video APIs — generates one character reference image with ofox-image-core, then reuses that exact same image as `--frame-first-image` across every shot of that character via ofox-video-core, for real visual consistency instead of relying on repeated text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime/manga styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.5.0"
+version: "1.6.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.5.0"
+  version: "1.6.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -164,7 +164,6 @@ with, so the sheet buys nothing and costs an opening frame.
 
 ```bash
 bash ../ofox-image-core/references/ofox-image.sh generate \
-  --model google/gemini-3.1-flash-image \
   --prompt "<character description>, <the shot's opening moment: setting, pose, camera angle>, <anime/manga style descriptor>, cinematic composition, no text, no panels, single illustration" \
   --quality standard \
   --out-dir <a directory for this project's generated assets>
@@ -180,7 +179,6 @@ every shot inherits one design.
 
 ```bash
 bash ../ofox-image-core/references/ofox-image.sh generate \
-  --model google/gemini-3.1-flash-image \
   --prompt "<character description>, <anime/manga style descriptor>, character reference sheet, plain neutral background, front-facing full body" \
   --quality standard \
   --out-dir <a directory for this project's generated assets>
@@ -194,13 +192,23 @@ whatever `--aspect-ratio` says. If the delivery needs a specific ratio
 (9:16 for social, say), crop or pad the image before Step 2 — there is no
 flag that fixes it afterwards.
 
-`google/gemini-3.1-flash-image` is the recommended default for this step —
-no strong reason to use `openai/gpt-image-2` or `bailian/qwen-image-3.0-pro`
-unless the user asks for one of those specifically. Per `ofox-image-core`'s
-own documented gotcha: whatever `--size` you pass (or omit), Gemini appears
-to always actually generate at its native 1024x1024 resolution and just
-echoes back the requested size — don't promise the user a specific output
-size, and don't fight this if you do pass `--size`.
+**Don't pass `--model` here.** `ofox-image-core` resolves one from its
+cheapest-first priority chain — defined in exactly one place, its
+`MODEL_CHAIN` — and prints the id it settled on, before it prints any
+estimate. Pass `--model` only when the user named a model themselves.
+
+This skill used to hardcode `google/gemini-3.1-flash-image`, the
+sixth-cheapest image model Ofox serves and 2.3x the chain's preferred rate,
+with no recorded reason for the choice. That is what a scenario skill holding
+its own model id buys you: prices move, the copy doesn't, and nobody notices
+because nothing is wrong — it just costs more than it needs to.
+
+Whichever model runs, **don't promise the user a specific output resolution**.
+`google/gemini-3.1-flash-image` was verified to always generate at its native
+1024x1024 and just echo back whatever `--size` was requested, and no other
+image model's `--size` handling has been confirmed either way — see
+`ofox-image-core`'s size gotcha. If a specific frame shape matters, check the
+real file's dimensions rather than the `SIZE` line.
 
 Take the printed `IMAGE_PATH` (an absolute path) and **show it to the user
 as its own standalone line** — say whether it is the shot's opening frame or
@@ -284,54 +292,89 @@ Pass `--provider volcengine` for the mainland platform, or `--provider auto` to
 let Ofox choose. Pricing is identical either way. See
 `ofox-video-core/references/api-params.md` for the detail.
 
-## Cost: quote it, get a yes, then spend it
+## Before you spend: two approvals, not one
 
-This skill spends money in **two** places, at different rates, and they scale
-differently — so break them out rather than blending them into one number.
+**Never submit a paid job until the user has seen a cost table and said yes.**
+The shared spec — the table's required columns, where the numbers must come
+from, batch itemisation, and the two-phase rule this skill is the current
+example of — is written down once for every Ofox skill in this repo:
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md).
 
-**Step 1 (image) — paid once per character, not once per shot.**
-`ofox-image.sh generate` prints an `IMAGE_COST` line, computed from the
-model's published rates and the response's own token counts and verified
-against a real invoice (see `ofox-image-core/references/pricing.md`). Relay
-that figure, the same way you relay `VIDEO_COST`.
+This skill spends in **two** places, at different rates that scale
+differently, and phase 2's prompt depends on what phase 1 produced — the clip
+literally opens on that image. So it asks **twice**. A single combined
+estimate up front would have the user paying for shots of a character they
+have not seen yet, and "what the character looks like" is the entire thing
+this skill sells.
 
-For a `google/gemini-3.1-flash-image` reference sheet, observed calls land
-around **6.7 cents** each — the output token count barely moves with prompt
-length, so that is a good planning number rather than a coincidence. It is
-paid **once per character**: generating N shots of that character does not
-repeat it.
+### Approval 1 — the image (paid once per character, not once per shot)
 
-**Step 2 (video) — paid once per shot**, and this half you can quote exactly.
+```bash
+bash ../ofox-image-core/references/ofox-image.sh generate --dry-run \
+  --prompt "<character description + opening moment + style>" \
+  --quality standard --out-dir ./assets
+```
 
-Never submit a paid job without the user having seen the number first. The
-script makes that possible with `--dry-run`, which validates everything and
-prints the estimate **without sending a request**:
+The table row: the `MODEL` line from that output (the chain has already
+resolved it — never write "the default"), type `image`, the quality and size
+you passed, quantity 1, and whatever the `Estimated cost:` line says.
+
+**Expect that line to say the cost cannot be predicted.** An image bills per
+output token and the count only exists in the response; `ofox-image-core` will
+only quote a model whose token count it has actually measured, and today that
+is `google/gemini-3.1-flash-image` alone — not the chain's default. Put
+"cannot be predicted — no measured token count for this model" in the cost
+column and **still wait for a yes**. Do not fill it in with gemini's ~6.7
+cents: that is a different model's measurement, and in a table the user is
+approving it would be indistinguishable from a real one.
+
+Say plainly that this is paid **once per character** — generating N shots of
+that character does not repeat it.
+
+**Preview phase 2 in the same message.** Dry-run one shot at the duration and
+resolution you plan to use, and quote it as "and then roughly X per shot for N
+shots". Nobody should agree to step 1 without knowing the size of step 2 —
+especially when step 2 is the expensive half. The preview is legitimate
+without the image existing yet: attaching a first frame does not move the job
+to a pricier tier (see below), so the number does not change once the image
+is real.
+
+### Approval 2 — the shots (paid once per shot)
+
+Ask again once the image exists and the user has seen it. Now the shot prompt
+is writable, because the character is on screen rather than described.
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
-  --prompt "..." --duration 15 --resolution 720p --out-dir ./out
+  --prompt "<the shot prompt>" \
+  --frame-first-image "<the absolute IMAGE_PATH from phase 1>" \
+  --duration 8 --resolution 720p --out-dir ./out
 ```
 
-Relay the `Estimated cost:` line it prints, wait for a yes, then re-run the
-identical command with `--dry-run` removed.
+This table carries three things the first one could not:
 
-The estimate a *real* run prints comes microseconds before the request goes
-out, so it is not something you can relay in time — that is what `--dry-run`
-is for. Every run prints exactly one `Estimated cost:` line, including when it
-can't compute one (it says why). Relay whatever you get; never invent a number.
+- **one row per shot**, not a single total — three 8-second 720p shots and one
+  30-second 1080p shot can come to similar money and mean nothing alike;
+- **what phase 1 actually billed** (`IMAGE_COST` from the real run, not the
+  estimate), and
+- **the running total** across both phases.
 
-Image-to-video via `--frame-first-image` bills at **t2v** rates — v2v pricing
-applies only when a *video* is the input, which this skill never does. The
-script already picks the right tier.
+Relay the `Estimated cost:` line as printed — never a number of your own. The
+estimate a *real* run prints comes microseconds before the request goes out,
+too late to relay; that is what `--dry-run` is for.
 
-Afterwards, the **actual** bill is `VIDEO_COST` from the finished job, read
+Attaching `--frame-first-image` does **not** move the job to the more
+expensive v2v tier: a real image-to-video run billed 4s at 11 cents/s at 480p,
+the t2v rate, not v2v's 14 cents/s. Only a *video* input does that, and this
+skill never sends one. The script picks the tier; take it from the dry run
+rather than assuming either way.
+
+If the user approves phase 1 and then declines phase 2, phase 1 was still
+billed. Say so — don't present the image as free because no video followed.
+
+Afterwards the **actual** bill is `VIDEO_COST` from the finished job, read
 from `usage.video_cost`. Report it as money (`$1.92`), not as the raw
 ten-decimal string. An estimate is never a bill.
-
-**Put both steps in front of the user before generating anything**, e.g.:
-"1 character reference image (~7 cents, one-off) + 3 shots at 8s/720p (~$1.92
-each) = ~$5.83 total." Breaking it out is what shows them the image cost does
-not scale with shot count.
 
 
 ## Prompt language follows the audio
@@ -365,9 +408,10 @@ burning the remaining takes, and produces a contact sheet — three frames per
 take, one row each — so the user picks from one image instead of opening N
 files.
 
-**Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`.** If one take in four
-is usable, that clip cost the whole total; the per-take figure understates it
-by 4x.
+**Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`**, and give the takes a
+row each — the approval gate wants the itemised shape, not just the sum. If
+one take in four is usable, that clip cost the whole total; the per-take
+figure understates it by 4x.
 
 Hand the user the `CONTACT_SHEET` path on its own line, the same way you hand
 over a video — in this flow it is the artifact they actually look at first,
@@ -419,16 +463,6 @@ anything is broken. This skill delegates all execution to it and reaches it by
 relative path. Fix: `npx skills add ofoxai/skills` (the whole repo). Say that
 plainly rather than relaying the raw path error, which names neither the
 missing skill nor the fix.
-
-## Before you spend: show the prompt, not just the price
-
-The user is paying for **the prompt** — what the characters look like, how the
-camera moves, whether their lines survived word for word. The price is the
-smaller half of what they are agreeing to.
-
-So put both in front of them: the prompt you built, and the `--dry-run`
-estimate. A clip that costs exactly what you quoted and shows a character the
-user never pictured is still a wasted job.
 
 ## Exit codes worth knowing
 
@@ -482,9 +516,8 @@ Example full sequence (the character/shot content is illustrative — the
 calling agent fills in the real content extracted from the user's story):
 
 ```bash
-# Step 1 — once per character
+# Step 1 — once per character (--model omitted on purpose: the chain resolves it)
 bash ../ofox-image-core/references/ofox-image.sh generate \
-  --model google/gemini-3.1-flash-image \
   --prompt "A teenage girl, silver bob haircut, wearing a navy school uniform with a red ribbon, sharp green eyes, modern theatrical-anime style, cel-shaded, vibrant colors, character reference sheet, plain neutral background, front-facing full body" \
   --quality standard \
   --out-dir ./assets
@@ -518,7 +551,7 @@ plus this skill's own:
 | 1 (image) | Exit `3`, `error.type: invalid_request_error` | The request was rejected as malformed/unsupported. The confirmed error shape is `{"error":{"message","type","code"}}` — `error.code` is just the HTTP status as a number here, `error.type` is the real classifier | Read the printed `Upstream message`, fix the prompt/flags, retry — a rejected request has not been confirmed to bill |
 | 1 (image) | Exit `4` | `--out-dir` could not be created or entered | Caught before any network call, so no money was spent finding this out. Fix `--out-dir` and retry |
 | 1 (image) | Exit `5`, ambiguous network failure | No HTTP response at all — this is a synchronous, no-job-id API, so there's nothing to poll afterward | Do not guess or retry blindly; check `https://app.ofox.ai`'s usage/billing history first |
-| 1 (image) | `SIZE` in the printed output doesn't match what you asked for | `google/gemini-3.1-flash-image` always generates at its native 1024x1024 and just echoes back the requested `size` regardless of the real output | Don't promise the user a specific size; if a guaranteed size matters, check the real file's dimensions (`file <path>` / `sips -g pixelWidth -g pixelHeight <path>`), not the `SIZE` line |
+| 1 (image) | `SIZE` in the printed output doesn't match what you asked for | Verified for `google/gemini-3.1-flash-image`: it always generates at its native 1024x1024 and just echoes back the requested `size`. No other image model's `--size` handling has been confirmed either way, so treat the `SIZE` line as unverified for whichever model the chain resolved | Don't promise the user a specific size; if a guaranteed size matters, check the real file's dimensions (`file <path>` / `sips -g pixelWidth -g pixelHeight <path>`), not the `SIZE` line |
 | 2 (video) | Exit `1`, no network call made | Bad `--duration`/`--resolution`, or missing `--prompt` | Fix the flag per the error message and re-run `generate` — free to retry, nothing was submitted |
 | 2 (video) | Exit `1`, "local image file ... exists but is not readable" | `--frame-first-image`'s path exists locally but this script/OS can't read it (permissions) — caught by `resolve_image_ref()` before any network call | Fix the file's permissions (confirm it's the exact `IMAGE_PATH` printed in Step 1) and retry — free, nothing was submitted |
 | 2 (video) | Exit `2` | `curl`/`jq` missing, or `OFOX_API_KEY` not set | Re-run `ofox-video-core`'s `check` and follow its install/signup guidance |

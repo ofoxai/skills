@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — writes a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.5.0"
+version: "1.6.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.5.0"
+  version: "1.6.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -178,26 +178,36 @@ around a human model can't be chained, while product and environment shots
 can. Each shot is a separately billed job; the run estimates the total before
 spending.
 
-## Cost: quote it, get a yes, then spend it
+## Before you spend: the approval gate
 
-Never submit a paid job without the user having seen the number first. The
-script makes that possible with `--dry-run`, which validates everything and
-prints the estimate **without sending a request**:
+**Never submit a paid job until the user has seen a cost table and said yes.**
+The rule, the table's required columns, where the numbers must come from, how
+to itemise a batch and what to do when no estimate is possible are written
+down once, for every Ofox skill in this repo:
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md).
+Follow it rather than improvising; everything below is only what this scenario
+adds to it.
+
+Get the numbers from `--dry-run`, which validates everything and prints the
+estimate **without sending a request**:
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
   --prompt "..." --duration 15 --resolution 720p --out-dir ./out
 ```
 
-Relay the `Estimated cost:` line it prints, wait for a yes, then re-run the
-identical command with `--dry-run` removed.
-
+Relay the `Estimated cost:` line it prints — never a number of your own — then
+wait for a yes, then re-run the identical command with `--dry-run` removed.
 The estimate a *real* run prints comes microseconds before the request goes
-out, so it is not something you can relay in time — that is what `--dry-run`
-is for. Every run prints exactly one `Estimated cost:` line, including when it
-can't compute one (it says why). Relay whatever you get; never invent a number.
+out, too late to relay; that is what `--dry-run` is for.
 
-Afterwards, the **actual** bill is `VIDEO_COST` from the finished job, read
+What this scenario's table usually needs a row for: the clip itself, priced
+at the duration, resolution and aspect ratio you settled on. When the choice
+between a 720p draft and a 1080p deliverable is still open, dry-run **both**
+and show two rows — the difference is a decision, and it reads as one only
+when both numbers are on screen.
+
+Afterwards the **actual** bill is `VIDEO_COST` from the finished job, read
 from `usage.video_cost`. Report it as money (`$3.60`), not as the raw
 ten-decimal string. An estimate is never a bill.
 
@@ -217,9 +227,10 @@ burning the remaining takes, and produces a contact sheet — three frames per
 take, one row each — so the user picks from one image instead of opening N
 files.
 
-**Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`.** If one take in four
-is usable, that clip cost the whole total; the per-take figure understates it
-by 4x.
+**Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`**, and give the takes a
+row each — the approval gate wants the itemised shape, not just the sum. If
+one take in four is usable, that clip cost the whole total; the per-take
+figure understates it by 4x.
 
 Hand the user the `CONTACT_SHEET` path on its own line, the same way you hand
 over a video — in this flow it is the artifact they actually look at first,
@@ -271,16 +282,6 @@ anything is broken. This skill delegates all execution to it and reaches it by
 relative path. Fix: `npx skills add ofoxai/skills` (the whole repo). Say that
 plainly rather than relaying the raw path error, which names neither the
 missing skill nor the fix.
-
-## Before you spend: show the prompt, not just the price
-
-The user is paying for **the prompt** — what the characters look like, how the
-camera moves, whether their lines survived word for word. The price is the
-smaller half of what they are agreeing to.
-
-So put both in front of them: the prompt you built, and the `--dry-run`
-estimate. A clip that costs exactly what you quoted and shows a character the
-user never pictured is still a wasted job.
 
 ## Exit codes worth knowing
 

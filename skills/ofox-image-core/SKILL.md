@@ -2,11 +2,11 @@
 name: ofox-image-core
 description: Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
 license: MIT
-version: "1.1.0"
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.2.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -48,21 +48,111 @@ happened" recovery path if a request goes wrong mid-flight.
   the conversation. A missing key means "can't call the paid API yet," not
   "stop talking to me."
 
-## Which model
+## Which model: the priority chain
 
-`bash references/ofox-image.sh models` lists every image model Ofox serves and
-its per-output-token price. No API key needed — `GET /v1/models` is public.
+`bash references/ofox-image.sh models` lists every image model Ofox serves,
+its per-output-token price, and the priority chain below together with the
+model it resolves to **right now**. No API key needed — `GET /v1/models` is
+public.
 
-`--model` is required and has no default on purpose: these models differ
-roughly 4x in price with no obvious winner, so defaulting would silently pick
-a price on the user's behalf. (Its sibling `ofox-video-core` does default,
-because every scenario built on it targets Seedance 2.5 specifically.)
+`--model` is optional. Omit it (or pass `auto`) and the script walks a
+cheapest-first chain and uses the first model that is actually available:
+
+| | Model | Per output token | Why it is here |
+|---|---|---|---|
+| 1 | `microsoft/mai-image-2.5-flash` | 0.000026 | cheapest image model Ofox serves |
+| 2 | `openai/gpt-image-2` | 0.000030 | tied on price, preferred of the tied set |
+| 3 | `google/gemini-3.1-flash-lite-image` | 0.000030 | tied on price, the other one |
+| 4 | `microsoft/mai-image-2.5` | 0.000047 | same vendor as (1), when quality matters more |
+
+**The chain is defined in exactly one place** — `MODEL_CHAIN` in
+`references/ofox-image.sh` — and every skill built on this one resolves a
+model by calling that script, never by keeping its own copy of the list. The
+rates above are the catalog's as of 2026-09-02, quoted here to explain the
+ordering; the script reads live rates, so a repricing moves the estimate
+without invalidating this table's argument.
+
+It is a **priority, not a lock**. `--model <id>` still pins any image model
+Ofox serves, including far more expensive ones. The chain only decides what
+happens when nobody picked.
+
+**Fallback is reported, never silent.** If the preferred model is missing from
+the model list, doesn't serve `/v1/images/generations`, or is deprecated, the
+script skips it and prints `MODEL_FALLBACK_FROM`, `MODEL_FALLBACK_REASON` and
+`MODEL_PRICE_DELTA` (e.g. "1.80x the preferred rate"). Relay all three —
+falling back to something more expensive is a decision the user may want to
+make differently.
+
+**The model is resolved before anything is quoted**, so the id in a `--dry-run`
+quote is the id that would really run. There is deliberately no path where the
+model gets chosen after the user approves a price.
+
+### Why there is a default now, when there deliberately wasn't one before
+
+This skill used to require `--model` and refuse to default it, reasoning that
+the models differ roughly 4x in price with no obvious winner, so defaulting
+would silently pick a price on the user's behalf. That reasoning was right
+about the risk, and the risk is now paid for rather than avoided: `--dry-run`
+plus [the approval gate](../ofox-video-core/references/approval-gate.md) put
+the resolved model and its cost in front of the user **before every spend**,
+default or not. The default no longer decides anything quietly, which was the
+only thing wrong with having one. Weaken the gate and the default should go
+back.
 
 Three models are documented in depth in `references/api-params.md` and
 `references/pricing.md` — `openai/gpt-image-2`,
 `google/gemini-3.1-flash-image`, `bailian/qwen-image-3.0-pro`. The rest work
 too; what isn't documented is which `--size`/`--quality` values each accepts,
-because the API doesn't publish that for image models.
+because the API doesn't publish that for image models. That gap covers the
+chain's models too: a `--quality` value a given model won't take surfaces as
+exit `3` with the upstream message, not as a client-side rejection.
+
+## Before you spend: quote it, get a yes, then spend it
+
+**Never send a generation request until the user has seen a cost table and
+said yes.** The full spec — required columns, where the numbers must come
+from, how to itemise a batch, what to do when no estimate is possible — is
+shared by every Ofox skill in this repo and lives in one place:
+[`ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md).
+
+What this skill contributes to that table:
+
+```bash
+bash references/ofox-image.sh generate --dry-run \
+  --prompt "..." --quality standard --out-dir ./assets
+```
+
+`--dry-run` parses the arguments, resolves the model against the chain,
+validates every parameter, creates and checks `--out-dir`, builds the payload
+and prints the estimate — then returns, before the `POST`. Nothing is
+submitted, nothing is billed, and **no `OFOX_API_KEY` is needed**, so a job
+can be priced before anyone signs up. It prints `STATUS dry_run`, `MODEL`,
+`QUALITY`, `SIZE`/`N` where they apply, the `MODEL_FALLBACK_*` lines when a
+fallback happened, and `MODEL_CHAIN_EXHAUSTED` in the rarer case where
+*nothing* in the chain is usable — the model named is then one the script
+already expects the API to reject, which the user needs to hear before
+approving anything.
+
+### The estimate is rough, and sometimes impossible — say which
+
+Video can be quoted exactly: duration is an input and the rate is per second.
+Images cannot. They bill per output token, and the token count only exists in
+the response. So `--dry-run` prints exactly one `Estimated cost:` line, and it
+is one of two things:
+
+- **`ROUGH ~<amount> (1120 output tokens x ...)`** — anchored to a real
+  measured call with **that same model**, recorded in
+  `references/token-anchors.json`. Relay it as rough; it is not a quote.
+- **`cannot be predicted for '<model>' — no real call's output-token count has
+  been recorded for it`** — no measurement exists yet. Relay that sentence,
+  show the table anyway with "cannot be predicted" in the cost column, and
+  still wait for a yes.
+
+**Never borrow one model's measured token count for another model.** A
+borrowed number is indistinguishable from a measured one and is worth less
+than no number at all. Today only `google/gemini-3.1-flash-image` has a
+measurement; the chain's top two are marked as awaiting one — see
+`references/pricing.md`.
 
 ## Availability check
 
@@ -89,13 +179,13 @@ are present — it makes no network call. Handle each failure mode plainly:
 
 ```bash
 bash references/ofox-image.sh generate \
-  --model MODEL --prompt "..." --quality VAL [OPTIONS]
+  --prompt "..." --quality VAL [--model MODEL] [OPTIONS]
 ```
 
-`generate` validates every parameter client-side (model name, size,
-quality, and the documented `n` + Gemini incompatibility) **before any
-network call**, builds the request, sends exactly one `POST`, and on
-success base64-decodes each returned image and writes it to a file. It
+`generate` resolves the model, validates every parameter client-side (model
+name, size, quality, and the documented `n` + Gemini incompatibility)
+**before any network call**, builds the request, sends exactly one `POST`,
+and on success base64-decodes each returned image and writes it to a file. It
 prints:
 
 ```
@@ -109,13 +199,14 @@ USAGE_OUTPUT_TOKENS <n>
 USAGE_TOTAL_TOKENS <n>
 ```
 
-Required flags: `--model` (one of `openai/gpt-image-2`,
-`google/gemini-3.1-flash-image`, `bailian/qwen-image-3.0-pro`), `--prompt`,
-`--quality` (one of `auto low medium high standard hd` — Ofox's docs mark
-this required, and not every value is confirmed to apply to every model, so
-the script never guesses a default; you must pass one explicitly).
+Required flags: `--prompt`, and `--quality` (one of
+`auto low medium high standard hd` — Ofox's docs mark this required, and not
+every value is confirmed to apply to every model, so the script never guesses
+a default; you must pass one explicitly).
 
-Optional flags: `--size` (one of the documented WxH values or `auto`),
+Optional flags: `--model` (any image model Ofox serves; default: the priority
+chain above), `--dry-run` (validate, resolve, quote, stop — no request, no
+key needed), `--size` (one of the documented WxH values or `auto`),
 `--n` (1-10, default 1 — **not supported at all by
 `google/gemini-3.1-flash-image`**, rejected client-side before any network
 call if combined with that model, even `--n 1`), `--output-format`
@@ -219,7 +310,7 @@ script's `print_api_error` if/when a new one is confirmed by a real call.
 
 | Exit | Meaning |
 |---|---|
-| `0` | Success — image(s) decoded and saved, usage token counts and `IMAGE_COST` printed. |
+| `0` | Success — image(s) decoded and saved, usage token counts and `IMAGE_COST` printed. Also the exit code of a `--dry-run`, which prints `STATUS dry_run` and spends nothing. |
 | `1` | Usage/parameter validation error — no network call was made. Fix the flag and retry `generate` freely. |
 | `2` | Environment error — `curl`/`jq`/`OFOX_API_KEY` missing. Fix the environment, no request was attempted. |
 | `3` | The API rejected the request, or the response body couldn't be parsed into a usable image (see `references/api-params.md` for the one confirmed `error.type`; everything else is surfaced via the raw upstream message). |
@@ -232,6 +323,18 @@ A scenario skill (for example, one that generates a character reference
 image before handing it to `ofox-video-core` for image-to-video) should
 call `references/ofox-image.sh generate` rather than duplicating any of the
 request-building, validation, or decoding logic above. It owns the
-scenario-specific prompt template and recommended model/size/quality
-defaults; this skill owns the mechanics of talking to the API correctly and
-safely.
+scenario-specific prompt template and recommended size/quality defaults;
+this skill owns the mechanics of talking to the API correctly and safely.
+
+**Two things a scenario skill must not re-implement**, because a second copy
+is a second thing to forget:
+
+- **The model choice.** Don't hardcode a model id and don't keep a copy of
+  the priority chain. Omit `--model` and let the script resolve it, or pass
+  `--model` through when the user asked for a specific one. A scenario skill
+  that pinned its own model quietly kept paying an old price after the chain
+  moved — that is the failure this rule exists for.
+- **The approval wording.** Link
+  [`ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
+  instead of restating the rule in your own words. Four paraphrases of "show
+  the price first" become four different rules.

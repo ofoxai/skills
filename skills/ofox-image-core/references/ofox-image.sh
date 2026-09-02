@@ -17,22 +17,37 @@
 # Usage:
 #   ofox-image.sh check
 #   ofox-image.sh models
-#   ofox-image.sh generate --prompt "..." --model NAME --quality VAL [OPTIONS]
+#   ofox-image.sh generate --prompt "..." --quality VAL [--model NAME] [OPTIONS]
 #
 # generate OPTIONS:
-#   --model NAME              required — no default, on purpose. The image
-#                               models differ roughly 4x in price
-#                               (mai-image-2.5-flash to mai-image-2.5-pro) with
-#                               no obvious default winner, so picking one for
-#                               you would silently pick a price. Contrast
-#                               ofox-video-core, which does default, because
-#                               every scenario there targets Seedance 2.5.
-#                               Run 'models' to list them. Documented in depth
-#                               here: openai/gpt-image-2,
+#   --model NAME              optional, default "auto": the first available
+#                               model in the cheapest-first priority chain
+#                               (MODEL_CHAIN below), resolved against the live
+#                               model list BEFORE the estimate is printed, so
+#                               the model named in a quote is the model that
+#                               would actually run. Pass an explicit id to pin
+#                               one instead; run 'models' to list them.
+#                               This used to be required with no default, on
+#                               the grounds that the image models differ ~4x in
+#                               price and defaulting would silently pick a
+#                               price on the caller's behalf. --dry-run plus
+#                               the approval gate answer that objection: the
+#                               resolved model and its price now go in front of
+#                               the user before every spend, default or not.
+#                               Documented in depth here: openai/gpt-image-2,
 #                               google/gemini-3.1-flash-image,
 #                               bailian/qwen-image-3.0-pro. Every other image
 #                               model Ofox serves also works; only their
 #                               size/quality support is undocumented here.
+#   --dry-run                 validate everything, resolve the model, build the
+#                               payload and print a ROUGH cost estimate — then
+#                               stop. No request is sent, nothing is billed,
+#                               and no API key is needed. The estimate is
+#                               rough by nature: an image is billed per output
+#                               token, and the token count is only known once
+#                               the response comes back. See references/
+#                               token-anchors.json for what it is based on and
+#                               when it refuses to guess at all.
 #   --prompt TEXT        required.
 #   --quality VAL        required (documented as required by the API).
 #                          One of: auto low medium high standard hd
@@ -98,6 +113,7 @@ GET_KEY_URL="https://app.ofox.ai"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_SNAPSHOT="$SCRIPT_DIR/models-snapshot.json"
+TOKEN_ANCHORS="$SCRIPT_DIR/token-anchors.json"
 MODELS_CACHE_TTL="${OFOX_MODELS_TTL:-86400}" # 24h
 
 # Network timeouts for the one call that costs money. Only the model-list
@@ -115,6 +131,38 @@ GENERATE_MAX_TIME=300
 # so any image model Ofox offers works. This is only what gets named in help
 # text when we have no list to name real models from.
 DOCUMENTED_MODELS="openai/gpt-image-2 google/gemini-3.1-flash-image bailian/qwen-image-3.0-pro"
+
+# THE image model priority chain — the single definition in this repo. Every
+# consumer (this skill's docs, and every scenario skill built on it) resolves
+# a model by calling this script, never by keeping its own copy of the list:
+# a second copy is a second thing to forget to update when prices move.
+#
+# Cheapest first, by the catalog's output_image rate (checked 2026-09-02):
+#
+#   microsoft/mai-image-2.5-flash        $0.000026 / output token   preferred
+#   openai/gpt-image-2                   $0.000030                  tie, ranked by preference
+#   google/gemini-3.1-flash-lite-image   $0.000030                  tie, last resort of the two
+#   microsoft/mai-image-2.5              $0.000047                  same vendor, better quality
+#
+# It is a PRIORITY, not a lock: --model <id> still pins any image model Ofox
+# serves, including ones far more expensive than anything here. The chain only
+# decides what happens when nobody picked.
+#
+# google/gemini-2.5-flash-image also sits at $0.000030 and is deliberately not
+# in the chain — three entries at the same price buys nothing over two.
+# The openai/gpt-5* family's $0.000032 is a text model's incidental image
+# output, not an image model, and is not a candidate at all.
+MODEL_CHAIN="microsoft/mai-image-2.5-flash openai/gpt-image-2 google/gemini-3.1-flash-lite-image microsoft/mai-image-2.5"
+
+# Set by resolve_model(): the id that will actually be used, plus — when the
+# preferred model was skipped — what was skipped, why, and how the price
+# compares. All four are reported to the caller, because "we fell back" is
+# exactly the fact an approval table must not omit.
+RESOLVED_MODEL=""
+MODEL_FALLBACK_FROM=""
+MODEL_FALLBACK_REASON=""
+MODEL_PRICE_DELTA=""
+MODEL_CHAIN_EXHAUSTED=""
 
 # Set by load_models(): the file holding the model list, and where it came
 # from ("live" | "cache" | "stale-cache" | "snapshot").
@@ -251,6 +299,102 @@ model_entry() {
     "$MODELS_FILE" 2>/dev/null
 }
 
+output_image_rate() {
+  # $1 = model id. Prints its per-output-token image rate, or nothing.
+  local entry
+  entry="$(model_entry "$1")" || return 1
+  [ -n "$entry" ] || return 1
+  printf '%s' "$entry" | jq -er '.pricing.output_image // empty' 2>/dev/null
+}
+
+model_unavailable_reason() {
+  # $1 = model id. Prints why this model cannot be used, or nothing when it
+  # can. Only checks that cost nothing: the model list is public and keyless.
+  local entry
+  entry="$(model_entry "$1")"
+  if [ -z "$entry" ]; then
+    echo "not in the Ofox model list"
+    return 0
+  fi
+  if ! printf '%s' "$entry" | jq -e '(.supported_endpoints // []) | index("/v1/images/generations")' >/dev/null 2>&1; then
+    echo "does not serve /v1/images/generations"
+    return 0
+  fi
+  if printf '%s' "$entry" | jq -e '.is_deprecated == true' >/dev/null 2>&1; then
+    echo "marked deprecated by Ofox"
+    return 0
+  fi
+  return 0
+}
+
+resolve_model() {
+  # Walks MODEL_CHAIN and sets RESOLVED_MODEL to the first usable entry,
+  # recording the fallback in MODEL_FALLBACK_* when that is not the preferred
+  # one. Always succeeds: an unresolvable chain still yields the preferred
+  # model, because refusing to name one would leave the caller with nothing to
+  # put in front of the user.
+  #
+  # This runs BEFORE any estimate is printed and before any request is built,
+  # on purpose. A quote that says "the preferred model" and a run that uses
+  # something else is a user approving a price they were never shown.
+  local preferred reason candidate rate_pref rate_used
+  preferred="${MODEL_CHAIN%% *}"
+  RESOLVED_MODEL=""
+  MODEL_FALLBACK_FROM=""
+  MODEL_FALLBACK_REASON=""
+  MODEL_PRICE_DELTA=""
+  MODEL_CHAIN_EXHAUSTED=""
+
+  if ! load_models; then
+    RESOLVED_MODEL="$preferred"
+    echo "NOTE: no model list available, so '$preferred' (the preferred model) could not be checked for availability. Using it unverified; the API will have the final say." >&2
+    return 0
+  fi
+
+  for candidate in $MODEL_CHAIN; do
+    reason="$(model_unavailable_reason "$candidate")"
+    if [ -z "$reason" ]; then
+      RESOLVED_MODEL="$candidate"
+      break
+    fi
+    [ "$candidate" = "$preferred" ] && MODEL_FALLBACK_REASON="$reason"
+    echo "NOTE: skipping '$candidate' — $reason." >&2
+  done
+
+  if [ -z "$RESOLVED_MODEL" ]; then
+    # Not a fallback: nothing was fallen back TO, so MODEL_FALLBACK_FROM stays
+    # empty and the fallback lines stay silent. MODEL_CHAIN_EXHAUSTED is what
+    # carries this case into the caller's output instead, because "the model
+    # in your table is one we already know is broken" is the last thing that
+    # should reach the user as stderr prose only.
+    MODEL_CHAIN_EXHAUSTED="${MODEL_FALLBACK_REASON:-no usable model in the chain}"
+    MODEL_FALLBACK_REASON=""
+    RESOLVED_MODEL="$preferred"
+    echo "ERROR: none of the models in the priority chain is usable right now ($MODEL_CHAIN)." >&2
+    echo "Falling back to '$preferred' anyway so you get a definite answer rather than none; expect the API to reject it. Run 'ofox-image.sh models' and pass --model explicitly." >&2
+    return 0
+  fi
+
+  [ "$RESOLVED_MODEL" = "$preferred" ] && return 0
+
+  MODEL_FALLBACK_FROM="$preferred"
+  rate_pref="$(output_image_rate "$preferred")" || rate_pref=""
+  rate_used="$(output_image_rate "$RESOLVED_MODEL")" || rate_used=""
+  if [ -n "$rate_pref" ] && [ -n "$rate_used" ]; then
+    MODEL_PRICE_DELTA="$(awk -v a="$rate_used" -v b="$rate_pref" 'BEGIN {
+      if (b + 0 == 0) { printf "%s vs %s per output token", a, b }
+      else { printf "%.2fx the preferred rate (%s vs %s per output token)", a/b, a, b }
+    }')"
+  elif [ -n "$rate_used" ]; then
+    MODEL_PRICE_DELTA="unknown — '$RESOLVED_MODEL' is $rate_used per output token, but there is no published rate for '$preferred' to compare it against"
+  elif [ -n "$rate_pref" ]; then
+    MODEL_PRICE_DELTA="unknown — no published output_image rate for '$RESOLVED_MODEL', the model actually chosen, so it cannot be compared with '$preferred' at $rate_pref per output token"
+  else
+    MODEL_PRICE_DELTA="unknown — neither '$preferred' nor '$RESOLVED_MODEL' has a published output_image rate on hand"
+  fi
+  return 0
+}
+
 # Compute what one image generation actually cost.
 #
 # The image endpoint returns no cost of its own (unlike the video API's
@@ -293,6 +437,86 @@ image_cost_for() {
     | tostring' 2>/dev/null
 }
 
+# ---------------------------------------------------------------------------
+# pre-flight estimate
+#
+# The video side can quote a job exactly before submitting it: duration is an
+# input and the rate is per second. Images cannot — they bill per output token
+# and the token count only exists in the response. So the only honest
+# pre-flight figure is one anchored to a real, previously measured call with
+# the same model, labelled as rough, and withheld entirely when no such
+# measurement exists (references/token-anchors.json).
+#
+# Applying one model's measured token count to another model would produce a
+# number that looks exactly like the measured one and is not. That is the
+# failure mode this refuses.
+# ---------------------------------------------------------------------------
+
+anchor_output_tokens() {
+  # $1 = model id. Prints a measured output-token count, or nothing.
+  [ -f "$TOKEN_ANCHORS" ] || return 1
+  jq -er --arg m "$1" '.anchors[$m].output_tokens // empty | numbers' \
+    "$TOKEN_ANCHORS" 2>/dev/null
+}
+
+anchor_measured_date() {
+  [ -f "$TOKEN_ANCHORS" ] || return 1
+  jq -er --arg m "$1" '.anchors[$m].measured // empty' "$TOKEN_ANCHORS" 2>/dev/null
+}
+
+# Set to 1 by generate --dry-run, so the estimate can say "nothing is going to
+# be billed here" rather than "the bill follows below". Same switch, same
+# reason, as ofox-video.sh's DRY_RUN_ACTIVE.
+DRY_RUN_ACTIVE=""
+
+print_estimate() {
+  # $1 = model id, $2 = image count (n).
+  #
+  # ALWAYS prints exactly one "Estimated cost:" line. Silence is the one
+  # outcome a calling agent cannot relay to a user — it can repeat a number,
+  # and it can repeat "cannot be predicted", but it cannot notice the absence
+  # of a line it was never told to expect. (Lifted from ofox-video.sh's
+  # print_estimate, deliberately: the two scripts must behave the same way
+  # here, because the same agent relays both into the same approval table.)
+  local model="$1" count="${2:-1}" tokens rate measured per_image total tail
+  # The rate comes from the model list, which validation usually loaded
+  # already — but not when OFOX_SKIP_MODEL_VALIDATION=1. Load it here too
+  # rather than quoting nothing for a run that skipped the check.
+  load_models >/dev/null 2>&1 || true
+  tokens="$(anchor_output_tokens "$model")" || tokens=""
+  rate="$(output_image_rate "$model")" || rate=""
+
+  if [ -z "$tokens" ]; then
+    echo "Estimated cost: cannot be predicted for '$model' — no real call's output-token count has been recorded for it (see references/token-anchors.json). An image bills per output token, and the token count only exists once the response comes back. Say so; do not substitute another model's figure." >&2
+    return 0
+  fi
+  if [ -z "$rate" ]; then
+    echo "Estimated cost: cannot be predicted — no published output_image rate for '$model' (offline, or the model is missing from the list). Its measured output-token count is $tokens; the rate to multiply it by is what's missing." >&2
+    return 0
+  fi
+
+  measured="$(anchor_measured_date "$model")" || measured="an earlier run"
+  per_image="$(awk -v t="$tokens" -v r="$rate" 'BEGIN { printf "%.4f", t * r }')"
+  total="$(awk -v t="$tokens" -v r="$rate" -v n="$count" 'BEGIN { printf "%.4f", t * r * n }')"
+
+  if [ -n "$DRY_RUN_ACTIVE" ]; then
+    tail="Nothing is being billed by this run."
+  else
+    tail="The exact figure is the IMAGE_COST line below, computed from the response's own token counts."
+  fi
+
+  if [ "$count" -gt 1 ] 2>/dev/null; then
+    printf 'Estimated cost: ROUGH ~$%s total = %s images x ~$%s each (%s output tokens x $%s/token, measured %s). %s\n' \
+      "$total" "$count" "$per_image" "$tokens" "$rate" "$measured" "$tail" >&2
+    echo "  Rough, twice over: the token count is one model's measured average, not a promise, and whether output tokens scale linearly with --n has never been measured. Treat the per-image figure as the reliable half." >&2
+  else
+    printf 'Estimated cost: ROUGH ~$%s (%s output tokens x $%s/token, measured %s). %s\n' \
+      "$per_image" "$tokens" "$rate" "$measured" "$tail" >&2
+    echo "  Rough because an image's token count is only known after the fact; this reuses a measured one for the same model. It also excludes the input-token component (the prompt), which on every observed call was a fraction of a cent." >&2
+  fi
+  return 0
+}
+
 infer_extension() {
   # $1 = the --output-format value the caller requested (may be empty).
   # The documented response shape has no format/output_format field of its
@@ -316,7 +540,13 @@ ofox-image.sh — Ofox image generation API client (synchronous: request,
 decode, save; no job id, no polling).
 
   ofox-image.sh check
-  ofox-image.sh generate --prompt "..." --model NAME --quality VAL [OPTIONS]
+  ofox-image.sh models
+  ofox-image.sh generate --prompt "..." --quality VAL [--model NAME] [OPTIONS]
+
+--model is optional: omit it (or pass "auto") to use the first available
+model in the cheapest-first priority chain, resolved before anything is
+quoted. Add --dry-run to any generate call to validate it and print a rough
+cost estimate without sending a request — no API key needed.
 
 Run with no arguments for this message. See the top of this file, or
 skills/ofox-image-core/SKILL.md and references/api-params.md, for the full
@@ -394,6 +624,29 @@ cmd_models() {
   echo "and the invoice it was verified against. This skill documents these in depth:"
   echo "  $DOCUMENTED_MODELS"
   echo "Others work but their size/quality support is not documented here."
+
+  # Show the default that a caller who omits --model would actually get,
+  # resolved right now against this same list — not just the head of the
+  # chain, which may be the one that is unavailable.
+  echo
+  echo "Priority chain used when --model is omitted (cheapest first):"
+  local rank=1 candidate reason
+  for candidate in $MODEL_CHAIN; do
+    reason="$(model_unavailable_reason "$candidate")"
+    if [ -n "$reason" ]; then
+      printf '  %s. %s  [unavailable: %s]\n' "$rank" "$candidate" "$reason"
+    else
+      printf '  %s. %s\n' "$rank" "$candidate"
+    fi
+    rank=$((rank + 1))
+  done
+  resolve_model 2>/dev/null
+  echo "Resolves right now to: $RESOLVED_MODEL"
+  if [ -n "$MODEL_FALLBACK_FROM" ]; then
+    echo "  (fallback from $MODEL_FALLBACK_FROM — $MODEL_FALLBACK_REASON; $MODEL_PRICE_DELTA)"
+  elif [ -n "$MODEL_CHAIN_EXHAUSTED" ]; then
+    echo "  (nothing in the chain is usable — that is the preferred model, and it is $MODEL_CHAIN_EXHAUSTED. Pass --model explicitly.)"
+  fi
   return 0
 }
 
@@ -461,6 +714,7 @@ cmd_generate() {
   local extra_json=""
   local out_dir="$PWD"
   local out_name=""
+  local dry_run=""
   local key val
 
   while [ $# -gt 0 ]; do
@@ -473,6 +727,11 @@ cmd_generate() {
         fi
         val="$2"
         shift 2
+        ;;
+      --dry-run)
+        dry_run=1
+        shift
+        continue
         ;;
       *)
         echo "ERROR: unknown option '$key' for generate." >&2
@@ -493,11 +752,23 @@ cmd_generate() {
     esac
   done
 
-  # --- validation (no network calls made before this point) ---
+  # --- validation: all of it runs before the one billable call, and the only
+  #     network it does is the public, keyless GET /v1/models ---
 
-  if [ -z "$model" ]; then
-    echo "ERROR: --model is required. Run 'ofox-image.sh models' to list them; this skill documents $DOCUMENTED_MODELS in depth." >&2
-    return 1
+  [ -n "$dry_run" ] && DRY_RUN_ACTIVE=1
+
+  if [ -z "$model" ] || [ "$model" = "auto" ]; then
+    # Resolve the chain to one concrete id here, before the estimate is
+    # printed and before the payload is built, so everything downstream —
+    # including whatever the caller shows the user for approval — names the
+    # model that would really run.
+    resolve_model
+    model="$RESOLVED_MODEL"
+    if [ -n "$MODEL_FALLBACK_FROM" ]; then
+      echo "NOTE: falling back to '$model' — the preferred '$MODEL_FALLBACK_FROM' is $MODEL_FALLBACK_REASON. Price: $MODEL_PRICE_DELTA." >&2
+    elif [ -n "$MODEL_CHAIN_EXHAUSTED" ]; then
+      echo "NOTE: no model in the priority chain is usable ('$model', the preferred one, is $MODEL_CHAIN_EXHAUSTED). It is being used anyway so there is a definite model to quote, but expect the API to reject it — say so before asking anyone to approve this." >&2
+    fi
   fi
 
   if [ "${OFOX_SKIP_MODEL_VALIDATION:-}" != "1" ] && load_models; then
@@ -609,7 +880,12 @@ cmd_generate() {
     return 4
   fi
 
-  if ! check_api_key; then return 2; fi
+  # A dry run sends no authenticated request, so it must not demand a key:
+  # pricing a job is exactly what someone does *before* signing up, and this
+  # repo's rule is to guide a keyless user rather than dead-end them.
+  if [ -z "$dry_run" ]; then
+    if ! check_api_key; then return 2; fi
+  fi
 
   # --- build the request payload ---
 
@@ -624,6 +900,30 @@ cmd_generate() {
 
   if [ -n "$extra_json" ]; then
     payload=$(printf '%s' "$payload" | jq --argjson extra "$extra_json" '. * $extra')
+  fi
+
+  # Say what this will cost before spending anything.
+  print_estimate "$model" "${n:-1}"
+
+  if [ -n "$dry_run" ]; then
+    # Everything above already ran: arguments parsed, model resolved against
+    # the chain, parameters validated, out-dir created, payload built, price
+    # quoted. Nothing below runs — the POST is the next statement — so nothing
+    # is submitted and nothing is billed.
+    echo "DRY RUN — nothing was submitted and nothing was billed." >&2
+    echo "Re-run without --dry-run to generate." >&2
+    echo "STATUS dry_run"
+    echo "MODEL $model"
+    echo "QUALITY $quality"
+    [ -n "$size" ] && echo "SIZE $size"
+    echo "N ${n:-1}"
+    if [ -n "$MODEL_FALLBACK_FROM" ]; then
+      echo "MODEL_FALLBACK_FROM $MODEL_FALLBACK_FROM"
+      echo "MODEL_FALLBACK_REASON $MODEL_FALLBACK_REASON"
+      echo "MODEL_PRICE_DELTA $MODEL_PRICE_DELTA"
+    fi
+    [ -n "$MODEL_CHAIN_EXHAUSTED" ] && echo "MODEL_CHAIN_EXHAUSTED $MODEL_CHAIN_EXHAUSTED"
+    return 0
   fi
 
   # --- the one and only network call ---

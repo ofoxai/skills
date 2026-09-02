@@ -4,6 +4,18 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.6.0 — link the shared approval gate instead of restating it
+
+- "Cost: quote it, get a yes, then spend it" and "Before you spend: show the
+  prompt, not just the price" are replaced by one section that links
+  [`ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md),
+  the spec now shared by every Ofox skill in this repo. Both sections were
+  right; keeping four private copies of them was the problem.
+- What stays here is scenario-specific: dry-run both a 720p draft and a 1080p
+  deliverable when that choice is still open, so the difference is a row in
+  the table rather than a sentence.
+- Batches get an itemised table, not just `BATCH_COST_TOTAL`.
+
 ## 1.5.0 — tell people they can get a price without signing up
 
 - New section: `models`, `providers` and `--dry-run` all work with no API key,

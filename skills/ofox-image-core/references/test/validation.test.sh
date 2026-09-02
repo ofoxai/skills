@@ -93,6 +93,18 @@ expect_accept "microsoft/mai-image-2.5 (was rejected)" -- \
   --model microsoft/mai-image-2.5 --prompt x --quality high
 
 echo
+echo "=== --model is optional now, and resolves to one concrete id ==="
+# It used to be required, refused a default, and rejected the call outright.
+# The default is the priority chain; what makes that acceptable rather than
+# "silently picking a price" is that the resolved id and its price go in
+# front of the user before every spend (--dry-run + the approval gate).
+warm_cache_then_go_offline
+expect_accept "omitting --model resolves the chain instead of failing" -- \
+  --prompt x --quality high
+expect_accept "--model auto is the same as omitting it" -- \
+  --model auto --prompt x --quality high
+
+echo
 echo "=== Wrong-endpoint and unknown models are still caught ==="
 # These reject before any network call, so a live base is safe here.
 online_base
@@ -146,8 +158,6 @@ echo "=== Parameters the API does not describe stay hardcoded and enforced ==="
 offline_base
 expect_reject "prompt" "--prompt is still required" -- \
   --model openai/gpt-image-2 --quality high
-expect_reject "model" "--model is still required" -- \
-  --prompt x --quality high
 expect_reject "quality" "--quality is still required" -- \
   --model openai/gpt-image-2 --prompt x
 expect_reject "quality" "an undocumented --quality is still rejected" -- \

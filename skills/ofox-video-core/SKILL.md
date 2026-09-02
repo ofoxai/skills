@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.9.0"
+version: "1.10.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.9.0"
+  version: "1.10.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -238,6 +238,14 @@ which exceeds what any single Bash tool call can be given. Either lower
 will take before starting.
 
 ## Quote the price before you spend it
+
+**Never submit a paid job until the user has seen a cost table and said yes.**
+The rule and the table format are shared by every Ofox skill in this repo and
+written down once, in
+[`references/approval-gate.md`](references/approval-gate.md) — required
+columns, where the numbers must come from, how to itemise a batch, what to do
+when no estimate is possible, and how a two-phase (image then video) flow
+splits into two approvals. This section is the mechanics that feed it.
 
 `generate`, `batch` and `chain` all take **`--dry-run`**: they parse arguments,
 validate every parameter against the chosen model, resolve the upstream, build
@@ -534,9 +542,16 @@ invoke this skill's script (typically
 `../ofox-video-core/references/ofox-video.sh` relative to their own
 directory) rather than duplicating any of the request-building, polling,
 error-mapping, or download logic above. They own the scenario-specific
-prompt template, recommended parameter defaults, and the pre-generation
-cost estimate (using `references/pricing.md`'s formula); this skill owns
-the mechanics of talking to the API correctly and safely.
+prompt template and recommended parameter defaults; this skill owns the
+mechanics of talking to the API correctly and safely, and the numbers that
+go in front of the user.
+
+**Don't restate the approval rules in a scenario skill.** Link
+[`references/approval-gate.md`](references/approval-gate.md) and add only what
+is scenario-specific (which command to dry-run, which parameters matter). The
+four scenario skills each used to carry their own prose version of "quote it,
+get a yes" and they had already begun to diverge — the shared file exists so
+that stops happening.
 
 ## Compatible with existing prompt-writing skills
 

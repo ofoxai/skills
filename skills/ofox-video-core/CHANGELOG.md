@@ -4,6 +4,20 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.10.0 — one approval gate, shared by every skill in this repo
+
+- **New `references/approval-gate.md`**: the single spec for "never spend
+  before an approved cost table". Required columns, where the numbers must
+  come from (`--dry-run`, never the agent's own arithmetic), how to itemise a
+  batch, what to do when no estimate is possible, and how a two-phase image →
+  video flow splits into two approvals.
+- The four `seedance-*` skills each carried their own prose version of the
+  same rule, which is a guarantee of drift. They now link this file and keep
+  only what is scenario-specific.
+- `SKILL.md` links it from "Quote the price before you spend it" and from the
+  guidance for scenario skills built on this one. The script's mechanics are
+  unchanged — no behavior change here, only where the rules are written down.
+
 ## 1.9.0 — surface the keyless price check; stop leading with a misleading rate
 
 A third role-play review, this time as a non-programmer with no Ofox account,

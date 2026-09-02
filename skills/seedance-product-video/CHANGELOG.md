@@ -4,6 +4,17 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.6.0 — link the shared approval gate instead of restating it
+
+- "Cost: quote it, get a yes, then spend it" and "Before you spend: show the
+  prompt, not just the price" are replaced by one section that links
+  [`ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md),
+  the spec now shared by every Ofox skill in this repo. Both sections were
+  right; keeping four private copies of them was the problem.
+- What stays here is scenario-specific: one table row per shot for a
+  multi-shot sequence, since each shot is a separately billed job.
+- Batches get an itemised table, not just `BATCH_COST_TOTAL`.
+
 ## 1.5.0 — tell people they can get a price without signing up
 
 - New section: `models`, `providers` and `--dry-run` all work with no API key,

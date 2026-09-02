@@ -23,7 +23,7 @@
     },
     {
       "title": "Image",
-      "description": "Generate images with the Ofox image API (openai/gpt-image-2, google/gemini-3.1-flash-image, bailian/qwen-image-3.0-pro). ofox-image-core is the shared execution layer for this synchronous, no-job-id API: validates parameters, sends one request, decodes and saves the result, and reports real token usage. A library skill other scenario skills (e.g. a video pipeline's character-reference-image step) build on.",
+      "description": "Generate images with the Ofox image API (every image model Ofox serves; the model defaults to a cheapest-first priority chain that falls back and says so). ofox-image-core is the shared execution layer for this synchronous, no-job-id API: validates parameters, prices a job with --dry-run before spending, sends one request, decodes and saves the result, and reports real token usage. A library skill other scenario skills (e.g. a video pipeline's character-reference-image step) build on.",
       "skills": ["ofox-image-core"]
     }
   ]

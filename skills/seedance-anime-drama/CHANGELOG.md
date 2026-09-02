@@ -4,6 +4,36 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.6.0 — stop hardcoding the image model; two approvals, not one
+
+**Behavior change: `--model` is no longer passed to `ofox-image-core`.** This
+skill hardcoded `google/gemini-3.1-flash-image` — the sixth-cheapest image
+model Ofox serves, 2.3x the price of the cheapest, with no recorded reason.
+`ofox-image-core` 1.2.0 resolves a model from its own cheapest-first priority
+chain and prints the id it settled on, so this skill omits `--model` and
+relays what it gets. Pass `--model` only when the user names one.
+
+- **Two approvals, not one.** Phase 2's prompt depends on what phase 1
+  produced — the clip literally opens on that image — so a single combined
+  estimate would have the user paying for shots of a character they have not
+  seen. Approval 1 covers the image and previews phase 2's size; approval 2
+  covers the shots and carries phase 1's **actual** `IMAGE_COST` plus the
+  running total.
+- The general rules moved to the shared
+  [`ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md);
+  what is left here is the two-phase shape, which is this skill's own.
+- **The image phase now usually says "cannot be predicted".** The old "~6.7
+  cents per reference sheet" planning figure was `google/gemini-3.1-flash-image`'s
+  measured cost, and that is no longer the model in use. Quoting it for
+  another model would be inventing a measurement — say the cost cannot be
+  predicted, and still wait for a yes.
+- The `SIZE` gotcha is now stated as verified for
+  `google/gemini-3.1-flash-image` specifically and unconfirmed elsewhere,
+  rather than as a property of whichever model runs.
+- Restates, with its evidence, that attaching `--frame-first-image` bills at
+  the **t2v** tier (a real i2v run billed 4s at 11 cents/s at 480p) — only a
+  video input moves a job to v2v.
+
 ## 1.5.0 — tell people they can get a price without signing up
 
 - New section: `models`, `providers` and `--dry-run` all work with no API key,
