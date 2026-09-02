@@ -2,25 +2,49 @@
   "_what_this_is": "Measured output-token counts from real, paid calls to POST /v1/images/generations. ofox-image.sh reads this file to produce the ROUGH estimate that --dry-run prints. A model with no measurement here gets no estimate at all — the script says it cannot predict the cost and why, rather than borrowing another model's token count. Borrowed numbers look like measurements and are not.",
   "_why_it_is_needed": "An image bills per output token (cost = input_tokens * pricing.input + output_tokens * pricing.output_image) and the token counts only exist once the response comes back. Unlike video, where duration is an input and the price is exact before submitting, the only thing that makes a pre-flight image estimate possible at all is a previously measured token count for that same model.",
   "_how_to_add_a_row": "Run one real generation with the model, take USAGE_OUTPUT_TOKENS straight from the printed output (never a derived or rounded figure), and record it with the date and the exact prompt/size used. Then update references/pricing.md's anchor table to match.",
+  "_what_the_count_does_not_depend_on": "Prompt content. Measured 2026-09-02: two unrelated prompts ('A simple red apple on a white table' and 'A wooden sailboat on a calm lake at sunrise, wide shot') at --quality low --size 1024x1024 produced byte-identical usage on both mai-image-2.5-flash (14 in / 1024 out) and gpt-image-2 (14 in / 196 out). Combined with gemini's three 1120s at input lengths 8, 51 and 79, the working model is: output_tokens is fixed by model + size + quality, not by what is being drawn. That is exactly why a single measured anchor can price a later run with a different prompt — the anchor would be worthless otherwise. It is two samples per model, not a proof; a count that moves with the prompt would falsify it, so record the counterexample here if one ever shows up.",
+  "_cost_is_not_the_same_claim_as_tokens": "output_tokens is observed. The dollar figure beside it is the formula's output, and the formula (output tokens bill entirely at output_image, not at the $3/M `output` rate) has been checked against a real invoice for exactly ONE model. cost_invoice_checked says which. This distinction is not pedantry: reading the model page alone left two readings 20x apart, and only an invoice line settled it — see references/pricing.md. Do not flip a false to true without an invoice.",
   "anchors": {
     "google/gemini-3.1-flash-image": {
       "output_tokens": 1120,
+      "input_tokens_observed": [
+        8,
+        51,
+        79
+      ],
       "measured": "2026-08-29",
       "samples": 3,
-      "note": "1120 on all three observed calls, with input tokens of 8, 51 and 79 — the output count did not move with prompt length. This model ignores --size and always renders 1024x1024, so the count does not vary with the requested size either.",
+      "cost_per_image": "0.06723950",
+      "cost_invoice_checked": true,
+      "note": "1120 on all three observed calls, with input tokens of 8, 51 and 79 — the output count did not move with prompt length. This model ignores --size and always renders 1024x1024, so the count does not vary with the requested size either. The cost is the one figure in this file an actual invoice line confirmed (2026-08-31, $0.06723950 for in=79 out=1120, matching to eight decimals).",
       "source": "references/pricing.md"
     },
     "microsoft/mai-image-2.5-flash": {
-      "output_tokens": null,
-      "measured": null,
-      "note": "NOT MEASURED YET. This is the chain's preferred model, so it is the one whose anchor matters most; until one real call records its USAGE_OUTPUT_TOKENS, --dry-run says the cost cannot be predicted for it. Do not estimate it from gemini-3.1-flash-image's 1120 tokens — different vendor, different tokeniser, no reason to expect the same figure.",
-      "source": null
+      "output_tokens": 1024,
+      "input_tokens_observed": [
+        14,
+        14
+      ],
+      "measured": "2026-09-02",
+      "samples": 2,
+      "cost_per_image": "0.026694",
+      "cost_invoice_checked": false,
+      "note": "The chain's preferred model. Two calls at --quality low --size 1024x1024 with unrelated prompts both reported 14 in / 1024 out. ofox-image.sh printed IMAGE_COST 0.026694 for them (14*0.000005 + 1024*0.000026). That figure is the formula's, not an invoice's — the formula itself was invoice-verified on gemini-3.1-flash-image only, so applying it here is an assumption that a real bill has not yet been held up against.",
+      "source": "references/pricing.md"
     },
     "openai/gpt-image-2": {
-      "output_tokens": null,
-      "measured": null,
-      "note": "NOT MEASURED YET. Second in the priority chain. Same rule as above: no measurement, no estimate.",
-      "source": null
+      "output_tokens": 196,
+      "input_tokens_observed": [
+        14,
+        14,
+        14
+      ],
+      "measured": "2026-09-02",
+      "samples": 3,
+      "cost_per_image": "0.00595",
+      "cost_invoice_checked": false,
+      "note": "Second in the priority chain. Three calls at --quality low --size 1024x1024 (two with unrelated prompts, one after the fix below) all reported 14 in / 196 out. 196 is genuinely that much lower than mai-flash's 1024 — observed three times, so do not 'correct' it toward the others. $0.00595 is what ofox-image.sh itself now prints as IMAGE_COST, but it is still the FORMULA's output, NOT invoice-checked: the formula (output tokens bill entirely at output_image) was settled by a real invoice on gemini-3.1-flash-image only. History worth keeping: the first two runs printed no cost at all, because this model's response carries no `model` field and the code looked the literal string 'unknown' up in the rate table. Fixed 2026-09-02 — the requested id is used when the response omits one, while a response that echoes a DIFFERENT id is reported as-is (upstream may route elsewhere, and hiding that would misprice the run). Verified by a third real call.",
+      "source": "references/pricing.md"
     }
   }
 }

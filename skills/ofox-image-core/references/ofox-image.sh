@@ -438,6 +438,74 @@ image_cost_for() {
 }
 
 # ---------------------------------------------------------------------------
+# which model do we report, and price, once the response is back?
+#
+# Not the bookkeeping question it looks like. The response is supposed to echo
+# the model in `.model`, and everything downstream — the printed MODEL line and
+# the rate lookup behind IMAGE_COST — reads that echo.
+#
+# openai/gpt-image-2 does not send the field at all (measured 2026-09-02, two
+# paid calls). The old code did `.model // "unknown"`, then looked the literal
+# string "unknown" up in the rate table, found nothing, and printed
+# "could not compute a cost — no published rates available for 'unknown'" —
+# for a request this script had built itself, three hundred lines earlier, out
+# of a model id it knew perfectly well. Both real calls came back with no cost
+# figure for no reason. That is the bug this exists to close.
+#
+# The fix is a fallback, and the two ways the echo can disappoint us must NOT
+# be collapsed into one:
+#
+#   - The field is ABSENT. Nothing was contradicted; the upstream just did not
+#     bother to repeat itself. Use the requested id, and say the id came from
+#     the request so nobody mistakes it for confirmation.
+#   - The field is PRESENT and DIFFERENT. Something upstream routed, aliased or
+#     downgraded the request. Report what it says, not what we asked for.
+#     Overwriting it with the requested id would erase the only evidence that
+#     it happened — and it is the model that ran, not the one that was asked
+#     for, that the invoice will be computed from.
+#
+# MODEL_SOURCE is printed on every success, not only on the awkward paths. An
+# agent relaying this can repeat a line; it cannot notice a line that was never
+# there to begin with (same reasoning as print_estimate's always-one-line rule).
+# ---------------------------------------------------------------------------
+
+# Outputs of resolve_response_model. Globals rather than a printed value, for
+# the same reason resolve_model uses RESOLVED_MODEL: the caller needs two
+# answers (which id, and where it came from), and a `x=$(fn)` capture runs the
+# function in a subshell, where the second one would be assigned and then
+# thrown away.
+RESPONSE_MODEL=""
+RESPONSE_MODEL_SOURCE=""
+
+resolve_response_model() {
+  # $1 = the model id that was requested, $2 = the raw response body.
+  # Sets RESPONSE_MODEL (the id to report and price) and RESPONSE_MODEL_SOURCE
+  # ("response" or "request"). Warns on stderr when the echo is missing or
+  # contradicts the request.
+  local requested="$1" body="$2" echoed
+  echoed=$(printf '%s' "$body" | jq -r '.model // empty' 2>/dev/null)
+
+  if [ -z "$echoed" ]; then
+    RESPONSE_MODEL="$requested"
+    RESPONSE_MODEL_SOURCE="request"
+    echo "NOTE: the response carried no 'model' field, so the MODEL line below" >&2
+    echo "is the id that was requested ('$requested'), not one the API confirmed." >&2
+    echo "The cost is priced at that model's published rates." >&2
+    return 0
+  fi
+
+  RESPONSE_MODEL="$echoed"
+  RESPONSE_MODEL_SOURCE="response"
+  if [ "$echoed" != "$requested" ]; then
+    echo "WARNING: upstream ran '$echoed', not the requested '$requested'." >&2
+    echo "Reported and priced as '$echoed' — that is what will be billed." >&2
+    echo "Anything measured from this run belongs to '$echoed'; do not record it" >&2
+    echo "against '$requested' (see references/token-anchors.json)." >&2
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # pre-flight estimate
 #
 # The video side can quote a job exactly before submitting it: duration is an
@@ -695,6 +763,44 @@ print_api_error() {
     echo "  Raw response body:" >&2
     printf '%s\n' "$body" >&2
   fi
+}
+
+# ---------------------------------------------------------------------------
+# response model resolution
+#
+# 实测 2026-09-02:`openai/gpt-image-2` 的响应里**没有** `model` 字段。旧代码把
+# 缺省的字面量 "unknown" 拿去查费率表,查不到,吐出
+# "NOTE: could not compute a cost — no published rates available for 'unknown'"
+# —— 脚本自己明明知道请求的是谁,只是没去用它。两次真实付费调用都因此没拿到
+# IMAGE_COST,响应本身其实完全正常。
+#
+# ⚠️ 两种情况必须分开,别图省事一律用请求值:
+#   - 响应没有 model 字段        → 用请求的 id(本例;上游只是没回显,不代表换模型)
+#   - 响应回显了一个不同的 id    → 如实显示回显值并在 stderr 提示。那才是上游真的
+#     换了模型(路由/降级),悄悄改回请求值 = 把这件事掩盖掉,而计价必须按真正
+#     跑的那个模型算,不是按请求的那个
+#
+# Pulled out into its own function (rather than left inline in cmd_generate)
+# so both branches get a direct unit test the same way image_cost_for does —
+# cmd_generate itself makes a real network call and cannot be unit tested.
+# ---------------------------------------------------------------------------
+
+resolve_response_model() {
+  # $1 = requested model id, $2 = response's raw .model field (may be empty
+  # string when the field is absent). Prints the model id to use for display
+  # and pricing. Emits a NOTE to stderr when the response named a model
+  # different from the one requested — never silently.
+  local requested="$1" raw="$2"
+  if [ -z "$raw" ]; then
+    printf '%s' "$requested"
+    return 0
+  fi
+  printf '%s' "$raw"
+  if [ "$raw" != "$requested" ]; then
+    echo "NOTE: upstream ran '$raw', not the requested '$requested'." >&2
+    echo "      Cost below is computed for the model that actually ran." >&2
+  fi
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -991,7 +1097,8 @@ cmd_generate() {
   done < <(printf '%s' "$body" | jq -c '.data[]')
 
   local resp_model resp_size resp_quality input_tokens output_tokens total_tokens
-  resp_model=$(printf '%s' "$body" | jq -r '.model // "unknown"')
+  resolve_response_model "$model" "$body"
+  resp_model="$RESPONSE_MODEL"
   resp_size=$(printf '%s' "$body" | jq -r '.size // "unknown"')
   resp_quality=$(printf '%s' "$body" | jq -r '.quality // "unknown"')
   input_tokens=$(printf '%s' "$body" | jq -r '.usage.input_tokens // "unknown"')
@@ -1003,6 +1110,13 @@ cmd_generate() {
     echo "IMAGE_PATH $outpath"
   done
   echo "MODEL $resp_model"
+  echo "MODEL_SOURCE $RESPONSE_MODEL_SOURCE"
+  # Only worth a line when the two disagree — and then it is the single most
+  # important line in the block, because it is the difference between a bill
+  # that reconciles and one that does not.
+  if [ "$resp_model" != "$model" ]; then
+    echo "MODEL_REQUESTED $model"
+  fi
   echo "SIZE $resp_size"
   echo "QUALITY $resp_quality"
   echo "USAGE_INPUT_TOKENS $input_tokens"

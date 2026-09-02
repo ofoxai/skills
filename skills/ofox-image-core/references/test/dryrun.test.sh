@@ -127,16 +127,21 @@ else
   fail "the gemini estimate should be ~0.0672" \
     "$(printf '%s' "$explicit" | grep -i 'estimated cost' | head -1)"
 fi
-if printf '%s' "$out" | grep -qi 'cannot be predicted'; then
-  pass "an unmeasured model gets 'cannot be predicted' plus the reason"
+# ⚠️ 这一条原先断言 mai-flash「没有锚点、不许估价」。2026-09-02 实测补上了它的
+# 锚点(1024 tokens,两个不相关的提示词都是这个数),所以断言反过来了:它现在**必须**
+# 被估价。留着旧断言会在补测数据后变成红灯,而红灯的原因恰恰是"数据变好了"。
+# 1024 output tokens x $0.000026 + 14 x $0.000005 = 0.026694
+if printf '%s' "$out" | grep -q '0\.0266'; then
+  pass "the chain's preferred model is priced from its own measured anchor (~\$0.0267)"
 else
-  fail "mai-image-2.5-flash has no anchor yet and must not be priced" \
+  fail "mai-image-2.5-flash has a measured anchor and should be priced" \
     "$(printf '%s' "$out" | grep -i 'estimated cost' | head -1)"
 fi
-# The failure this guards: reusing gemini's 1120 tokens for a model that was
-# never measured. Same number, different model, invented.
+# The failure this guards: reusing gemini's 1120 tokens for a different model.
+# Same number, different model, invented. mai-flash's own count is 1024 — close
+# enough to 1120 that a borrow would not look obviously wrong, which is the point.
 if printf '%s' "$out" | grep -q '1120'; then
-  fail "an unmeasured model borrowed another model's token count" \
+  fail "mai-image-2.5-flash borrowed gemini's token count" \
     "a borrowed number looks exactly like a measured one"
 else
   pass "no anchor is borrowed across models"

@@ -104,6 +104,100 @@ else
 fi
 
 echo
+echo "=== Which model is priced when the response's echo is missing or wrong ==="
+# The bug: openai/gpt-image-2 returns no `model` field, the old code defaulted
+# it to the literal string "unknown", and pricing "unknown" found no rates —
+# so two real, paid calls printed no cost at all. The fallback that fixes it
+# must keep two cases apart, because they mean opposite things: a missing echo
+# is silence (use what we asked for), a different echo is a contradiction
+# (believe it — that is the model the invoice will be for).
+GPT="openai/gpt-image-2"
+MAI="microsoft/mai-image-2.5-flash"
+ERRLOG="$WORK/resolve.err"
+
+# The runs above overwrote MODELS_FILE with synthetic lists in later sections;
+# this section needs the real rates, so re-resolve from the live list/snapshot.
+MODELS_FILE=""
+load_models >/dev/null 2>&1 || true
+
+echoed_body() { jq -nc --arg m "$1" '{model: $m, data: [], usage: {}}'; }
+
+resolve_response_model "$GPT" "$(echoed_body "$GPT")" 2>"$ERRLOG"
+if [ "$RESPONSE_MODEL" = "$GPT" ] && [ "$RESPONSE_MODEL_SOURCE" = "response" ]; then
+  pass "an echo that agrees is taken from the response, and labelled as such"
+else
+  fail "an agreeing echo was mishandled" \
+    "model='$RESPONSE_MODEL' source='$RESPONSE_MODEL_SOURCE'"
+fi
+if [ -s "$ERRLOG" ]; then
+  fail "the ordinary case warned about something" "$(tr '\n' ' ' <"$ERRLOG")"
+else
+  pass "the ordinary case says nothing extra"
+fi
+
+# Three shapes of "no echo": absent key, explicit null, empty string. All three
+# are silence, not contradiction.
+for shape in absent null empty; do
+  case "$shape" in
+    absent) body='{"data":[],"usage":{}}' ;;
+    null) body='{"model":null,"data":[]}' ;;
+    empty) body='{"model":"","data":[]}' ;;
+  esac
+  RESPONSE_MODEL=""
+  RESPONSE_MODEL_SOURCE=""
+  resolve_response_model "$GPT" "$body" 2>"$ERRLOG"
+  if [ "$RESPONSE_MODEL" = "$GPT" ] && [ "$RESPONSE_MODEL_SOURCE" = "request" ]; then
+    pass "a $shape 'model' field falls back to the requested id, marked 'request'"
+  else
+    fail "a $shape 'model' field was mishandled" \
+      "model='$RESPONSE_MODEL' source='$RESPONSE_MODEL_SOURCE'"
+  fi
+  if [ "$RESPONSE_MODEL" = "unknown" ]; then
+    fail "the literal string 'unknown' is back" "that is the original bug"
+  fi
+done
+if grep -q "no 'model' field" "$ERRLOG" && grep -q 'not one the API confirmed' "$ERRLOG"; then
+  pass "the fallback is disclosed, not silently substituted"
+else
+  fail "a missing echo must be disclosed" "$(tr '\n' ' ' <"$ERRLOG")"
+fi
+
+# The whole point of the fix: a cost comes out the other end.
+cost="$(image_cost_for "$RESPONSE_MODEL" 14 196 2>/dev/null || true)"
+if [ "$cost" = "0.00595" ]; then
+  pass "the requested id prices the call (in=14 out=196 -> \$$cost), where 'unknown' priced nothing"
+else
+  fail "the fallback id still yields no usable cost" "got '$cost', want 0.00595"
+fi
+
+# A different echo must NOT be overwritten with the requested id. Doing that
+# would hide an upstream swap, and the swap is exactly what makes a bill fail
+# to reconcile.
+RESPONSE_MODEL=""
+RESPONSE_MODEL_SOURCE=""
+resolve_response_model "$GPT" "$(echoed_body "$MAI")" 2>"$ERRLOG"
+if [ "$RESPONSE_MODEL" = "$MAI" ] && [ "$RESPONSE_MODEL_SOURCE" = "response" ]; then
+  pass "a contradicting echo wins over the requested id"
+else
+  fail "a contradicting echo was overwritten with the request" \
+    "model='$RESPONSE_MODEL' source='$RESPONSE_MODEL_SOURCE' — the swap would be invisible"
+fi
+if grep -q "upstream ran '$MAI'" "$ERRLOG" && grep -q "$GPT" "$ERRLOG"; then
+  pass "the mismatch is reported, naming both the requested and the actual model"
+else
+  fail "a model swap must be surfaced" "$(tr '\n' ' ' <"$ERRLOG")"
+fi
+# And it must be priced as the model that ran, not the one that was asked for.
+swapped="$(image_cost_for "$RESPONSE_MODEL" 14 1024)"
+asked="$(image_cost_for "$GPT" 14 1024)"
+if [ "$swapped" = "0.026694" ] && [ "$swapped" != "$asked" ]; then
+  pass "the swapped-in model is priced at its own rate (\$$swapped, not \$$asked)"
+else
+  fail "a swapped model was priced at the requested model's rate" \
+    "swapped='$swapped' asked='$asked'"
+fi
+
+echo
 echo "=== Both spellings of the rate keys are accepted ==="
 # /v1/models calls them prompt/completion; /v2/models/catalog calls them
 # input/output. The script loads the v1 list, so handling only the catalog
@@ -134,6 +228,57 @@ if image_cost_for "fake/model" 79 1120 >/dev/null 2>&1; then
   fail "priced a model with no input rate" "a partial cost is still a wrong cost"
 else
   pass "a missing input rate yields no figure, not a partial one"
+fi
+
+echo
+echo "=== resolve_response_model: a response with no 'model' field falls back to the requested id ==="
+# Regression case: openai/gpt-image-2's real response has no top-level
+# 'model' field at all. The old code took jq's '// "unknown"' fallback
+# literally, priced against the string "unknown", found no rates, and two
+# real paid calls printed no IMAGE_COST even though nothing else was wrong.
+got="$(resolve_response_model "openai/gpt-image-2" "" 2>/dev/null)"
+if [ "$got" = "openai/gpt-image-2" ]; then
+  pass "empty response model -> falls back to the requested id ($got)"
+else
+  fail "empty response model did not fall back" "want openai/gpt-image-2, got '$got'"
+fi
+note="$(resolve_response_model "openai/gpt-image-2" "" 2>&1 >/dev/null)"
+if [ -z "$note" ]; then
+  pass "falling back to the requested id prints no NOTE (nothing upstream to report)"
+else
+  fail "unwarranted NOTE on the fallback path" "$note"
+fi
+
+echo
+echo "=== resolve_response_model: a response that echoes a DIFFERENT id is reported as-is ==="
+# The other branch, and the one that must never collapse into the first:
+# upstream actually routed to a different model (fallback/downgrade). Silently
+# rewriting that back to the requested id would misprice the run and hide a
+# routing change the caller has no other way to see.
+got="$(resolve_response_model "openai/gpt-image-2" "some/other-model" 2>/dev/null)"
+if [ "$got" = "some/other-model" ]; then
+  pass "a differing echoed id is reported verbatim, not overwritten ($got)"
+else
+  fail "a differing echoed id was overwritten" "want some/other-model, got '$got'"
+fi
+note="$(resolve_response_model "openai/gpt-image-2" "some/other-model" 2>&1 >/dev/null)"
+case "$note" in
+  *"upstream ran 'some/other-model', not the requested 'openai/gpt-image-2'"*)
+    pass "a differing echoed id prints a NOTE naming both models"
+    ;;
+  *)
+    fail "no NOTE (or a wrong one) on a differing echoed id" "$note"
+    ;;
+esac
+
+echo
+echo "=== resolve_response_model: a response that echoes the SAME id is silent ==="
+got="$(resolve_response_model "openai/gpt-image-2" "openai/gpt-image-2" 2>/dev/null)"
+note="$(resolve_response_model "openai/gpt-image-2" "openai/gpt-image-2" 2>&1 >/dev/null)"
+if [ "$got" = "openai/gpt-image-2" ] && [ -z "$note" ]; then
+  pass "a matching echoed id passes through with no NOTE"
+else
+  fail "matching echoed id path misbehaved" "model='$got' note='$note'"
 fi
 
 echo
