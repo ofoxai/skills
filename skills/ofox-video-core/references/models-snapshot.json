@@ -1,6 +1,6 @@
 {
   "_snapshot_note": "Offline fallback only. ofox-video.sh fetches the live list from GET /v1/models (public, no API key) and only reads this file when that fetch fails. Regenerate with: references/refresh-snapshot.sh",
-  "_snapshot_date": "2026-08-30",
+  "_snapshot_date": "2026-09-02",
   "object": "list",
   "data": [
     {

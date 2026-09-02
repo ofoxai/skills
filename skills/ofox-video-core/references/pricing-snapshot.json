@@ -1,6 +1,6 @@
 {
   "_snapshot_note": "Offline fallback for cost estimates only. ofox-video.sh reads the live catalog (GET /v2/models/catalog/...?include=provider_price, public, no API key) and only falls back here. Regenerate with: references/refresh-snapshot.sh",
-  "_snapshot_date": "2026-08-30",
+  "_snapshot_date": "2026-09-02",
   "models": [
     {
       "id": "alibaba/happyhorse-1.0",
