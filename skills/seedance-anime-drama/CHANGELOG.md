@@ -4,6 +4,35 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.8.0 — a transition menu on the template line, and a shot count to aim at
+
+Docs only; no script changes. This follows the same review that produced
+`seedance-short-drama` 1.8.0, where a real clip rendered correctly and was
+rejected for being visually plain. Two of the four faults found there were
+present here too; the other two were not (this template already carries
+`<shot size, camera position, movement>` in every segment, and its `RULES —
+action` block already prescribes 2–5s shots with a cause chain and an
+escalation curve). What moves:
+
+- **The transition slot offered two of the nine kinds.** The line was `HARD
+  CUT.` or `Without cutting, …`, so the other seven kinds in the shared
+  "Transitions" table were reachable only by an author who already knew to go
+  looking. It is now a `TRANSITION` slot that names the choice as a choice,
+  with occlusion, pass-through, case 29's in-frame element move and case 11's
+  speed ramp spelled out inline. A new "Choosing a transition, not defaulting
+  to a cut" subsection lists all nine kinds and which have animation-adjacent
+  instances (hard cut 18/11/63, cuts forbidden 29/44, speed ramp 11,
+  narrative ordering 9, morph 54/13), says plainly that occlusion,
+  pass-through, flash and match cut have none, and notes that animation is
+  where the in-frame options are cheapest because nothing has to stay
+  photoreal across the change.
+- **The density guidance was a segment length with no count.** "Two to five
+  seconds per shot for action" is now paired with what that means as a
+  number: case 11 is 10 shots in 24s, case 18 is 8 in 30s, case 9's chain is
+  six sizes in 30s, and the worked example adapted from case 10 is the quiet
+  end at four segments in 30s. Both ends are real; an action beat written as
+  four 7-second segments is below every action prompt in the gallery.
+
 ## 1.7.0 — creative brief, structured template, several shots per job, and the sheet is no longer a first frame
 
 Docs only; no script changes.

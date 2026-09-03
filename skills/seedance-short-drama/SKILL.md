@@ -1,12 +1,12 @@
 ---
 name: seedance-short-drama
-description: Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera feel open ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), or for anything not involving people/dialogue.
+description: Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), or for anything not involving people/dialogue.
 license: MIT
-version: "1.7.0"
+version: "1.8.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.7.0"
+  version: "1.8.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -139,7 +139,7 @@ every axis — write the prompt.
 | Tier | Short-drama axes |
 |---|---|
 | **must-ask** | which beat of a multi-scene script to render; whether an asset the request implies actually exists |
-| **ask-if-open** | aspect ratio, emotional arc, camera feel; a draft batch versus one final, but only when the user is already exploring |
+| **ask-if-open** | aspect ratio, emotional arc, the camera register — which also fixes the shot count; a draft batch versus one final, but only when the user is already exploring |
 | **never-ask** | resolution, model, provider, audio on/off, duration once stated |
 
 ### The short-drama questions
@@ -149,9 +149,18 @@ every axis — write the prompt.
 | 1 | must-ask | `Beat` | Which beat gets this clip? One job holds 4–30 seconds. | Two or three beats extracted from the script, each named by its turning line or action (`Kitchen confrontation — "Where were you last night?"`, `She walks out — no lines`); recommended = the one with the clearest reversal. **No "Let the AI decide" here** — a must-ask axis never gets one, and no model can tell which beat the user meant. If they answer "you pick" in free text, choose the strongest beat, name it in the recap, and let the gate be the check | The script spans more than one scene or more than about 30s of action. A single beat: skip. |
 | 2 | ask-if-open | `Aspect` | Where will it be watched? Vertical and landscape are different framings, not a crop. | `9:16 vertical (recommended)` — mobile short-drama feeds, the default below / `16:9 landscape` — web and YouTube; the gallery's own short-drama sample is mostly landscape (5 of the 6 cases that state a ratio) / `Let the AI decide` | No platform word and no ratio in the input. |
 | 3 | ask-if-open | `Arc` | How does the feeling move across the clip? It decides the shots. | Two or three arrow chains built from the script (`braced → hears him → wavers → wry smile → "We're done." → steps back`, adapted from case 3; `calm → the lie lands → silence → she leaves`); recommended = the one the lines support most directly / `Let the AI decide` | Lines with no stage directions and no tone word. Stage directions present: skip. |
-| 4 | ask-if-open | `Camera` | What should the camera feel like? | `Handheld documentary (recommended)` — breathing sway, 35mm grain; the realistic short-drama convention (cases 1, 4, 6) / `Steady cinematic` — slow push from a medium two-shot into a close-up (cases 1, 22) / `Static over-the-shoulder` — locked at the partner's eye height, reframing comes from the actors, no shot/reverse-shot (case 3) / `Let the AI decide` | No camera word in the input. |
+| 4 | ask-if-open | `Camera` | How is the beat shot? This one answer decides what the camera does **and** how many shots there are. | Put the register that fits the beat first and mark it `(recommended)` — the travelling take when the beat has somewhere to go (two rooms, a corridor, a doorway, a street), the cut list when it jumps between faces, hands and details, the held take when everything happens on one face. `Travelling one take` — no cuts; the camera moves with them and each new view arrives from behind an occlusion or through a gap; 3–5 phases of 5–8s (cases 2, 6, 8) / `Multi-shot cut list` — a new shot size and camera position at every timestamp, 2–5s a shot, so 4–10 shots in 20–30s (cases 1, 11, 14) / `Held take` — locked, or a breathing handheld, on one or two faces; the reframing comes from an actor moving rather than the lens (cases 3, 22) / `Let the AI decide` | No camera word in the input. |
 | 5 | follow-up | `Lines` | The lines overrun this duration's budget (tiers below). | `Extend to <N> seconds (recommended)` — keeps every line; state N / `Trim to budget` — the cut lines are shown before the cost table / `Let the AI decide` | Only when the dialogue exceeds its tier for the chosen duration. |
 | 6 | ask-if-open | `Drafts` | Several takes to choose from, or one final? | `One 720p final on seedance-2.5 (recommended)` / `Four 480p drafts on seedance-2.0-mini, then the final` — a different model is a different look, not only a different price; see "Several takes to choose from" / `Let the AI decide` | Only when the user asks for versions, or says they are unsure what they want. |
+
+Handheld or locked is a **texture inside** the register, not a fourth
+option: the realistic short-drama convention is a breathing handheld (cases
+1, 4, 6), and it applies to a travelling take (case 6) as readily as to a
+held one. Until 1.8.0 this question offered `Handheld documentary`, `Steady
+cinematic` and `Static over-the-shoulder` — three labels for the camera
+staying roughly where it is, which is exactly what `creative-brief.md`'s "The
+shape of a question" forbids ("visibly different pictures, not synonyms").
+A user who wanted the camera to travel could not pick it.
 
 If more than four are open, ask in this order: `Beat`, `Aspect`, `Arc`,
 `Camera`; `Lines` is the follow-up; `Drafts` folds into the cost table as a
@@ -167,7 +176,9 @@ On top of the generic rows in `creative-brief.md`:
 | The language the quoted lines are written in | spoken language | that language — **never asked**; see "Prompt language follows the audio" |
 | Stage directions in the script ("crying", "slams the door", "deadpan") | emotional arc | build the arc from them |
 | A tone adjective ("tense", "tender", "bitter") | emotional arc | build the arc from it |
-| A camera word ("handheld", "locked off", "slow push") | camera feel | as stated |
+| A camera word ("handheld", "locked off", "slow push", "over the shoulder") | camera register | held take, with that word as the movement value |
+| A traversal word ("walks with her", "follows him through", "one take", "no cuts", "out onto the street") | camera register | travelling one take |
+| A cutting word ("cut between", "intercut", "shot list"), or a numbered storyboard in the input | camera register | multi-shot cut list, at the count the input implies |
 | An image attached to the request | asset question | settled; see "Reference images and real people" for the route it takes and the real-person refusal |
 
 ### Every answer lands somewhere
@@ -177,7 +188,7 @@ On top of the generic rows in `creative-brief.md`:
 | Beat | which lines and actions the timeline covers; the `--name` |
 | Aspect | `--aspect-ratio` |
 | Arc | the `ARC` arrow chain in the header and the 1–3 signals in each shot |
-| Camera feel | the `CAMERA` line and each shot's size / position / movement |
+| Camera register | how many `SHOT` blocks there are and how long each runs, which kinds appear on the `TRANSITION` lines, the movement field of the `CAMERA` line, and each shot's size / position / movement |
 | Lines over budget | `--duration`, or the trimmed lines shown in the recap |
 | Drafts | `batch` on `bytedance/seedance-2.0-mini` at 480p, or a single `generate` |
 
@@ -188,7 +199,7 @@ Brief
 - Beat: the kitchen confrontation — "Where were you last night?" (your choice)
 - Aspect: 9:16 (inferred from "for Reels")
 - Arc: composed → hears the excuse → wavers → wry smile → "We're done." → steps back (AI's pick)
-- Camera: handheld documentary, over-the-shoulder into a held close-up (your choice)
+- Camera: multi-shot cut list — six shots of about 2.5s, breathing handheld; occlusion into shot 4, hard cuts elsewhere (your choice)
 - 720p, 15s, byteplus, audio on (defaults — rows in the table below)
 ```
 
@@ -217,7 +228,7 @@ Slots in `<angle brackets>`; optional lines in `[square brackets]`. Two to
 five seconds per shot; most shots carry no line.
 
 ```
-[FORMAT: <ratio>, <T> seconds, <N shots, hard cuts on the timestamps | one continuous shot, no cuts>]      — optional; must match the flags
+[FORMAT: <ratio>, <T> seconds, <N shots, hard cuts on the timestamps | N shots, transitions named on the timeline | one continuous shot, no cuts>]      — optional; must match the flags
 STYLE: live-action, <colour 35mm film grain | phone or mirrorless realism, slight sensor noise>, <light: soft cool key from front-left, warm rim from behind | tungsten practicals>, <palette or grade>.
 <TAG A>: <age range, build>, <hair>, <clothing item by item, colour + material — "grey turtleneck knit top, small gold hoops, thin chain">, <one bearing word>. Referred to as "<tag A>".
 <TAG B>: <same fields> — or: heard only, never shown | seen only as a dark, heavily out-of-focus shoulder at frame right.
@@ -225,11 +236,11 @@ SCENE: <place, time of day, light direction and colour temperature, one foregrou
 ARC: <state 1> → <what she hears or sees> → <wavering> → <the cover: wry smile, looks down> → <the line that turns it> → <the exit action>.
 
 SHOT 1 (0–<a>s): <shot size, camera position, movement>. <tag A> <one action — at most 1–3 visible signals: eyes, hands, breath>. [<Tag B> (off-screen, <tone>): "<line>".] <sound for this beat>
-HARD CUT.                                                                — or: Without cutting, <what changes the framing: she steps back; the camera drifts>
+<TRANSITION — name a kind on purpose; a hard cut is one of nine, not the default: HARD CUT. | Without cutting, <the swinging door / his shoulder / a passing body> sweeps across the lens and the camera comes out of the occlusion on <the next view>. | Without cutting, the camera pushes through <the doorway / the beaded curtain / the gap between the machines> into <the next space>. | Without cutting, <what changes the framing: she steps back; the camera drifts>. | <nothing here — one continuous shot, declared in the first sentence instead>>
 SHOT 2 (<a>–<b>s): … [<Tag A> (<tone>): "<line>" — <delivery: quiet, no anger; on "<word>" the eyes steady>.]
 SHOT <N> (<x>–<T>s): … <ending state: hold on her face for one second | hard cut to black at the peak | the camera settles and the clip runs on a moment>.
 
-CAMERA: <lens: 70–100mm medium telephoto | 24mm wide>, <depth of field>, focus stays on <tag A>'s eyes; <axis rule: one eye-line axis, never crossed>.
+CAMERA: <movement — not optional, and `static` is one of its values rather than the absence of one: locked with a breathing sway | close handheld follow just behind and beside her | slow push from the two-shot into a close-up | a half-turn orbit | travels with her from <space 1> through <space 2>; state it per shot when it changes>, <lens: 70–100mm medium telephoto | 24mm wide>, <depth of field>, focus stays on <tag A>'s eyes; <axis rule: one eye-line axis, never crossed>.
 SOUND: <room tone>, <two diegetic sounds tied to actions: door click, fabric>; music <none | enters at <t> | drops out at <t>>. Dialogue in <language>, mouths matched to it.
 CONSISTENCY: <tag A>'s face, hairstyle, <accessory>, <clothing items> identical in every shot; <tag B>'s <items>; positions and light direction do not change.
 AVOID: subtitles, on-screen text, watermarks; extra or warped limbs; CGI look, plastic skin, skin smoothing; <the cuts you forbid: jump cuts, dissolves | shot/reverse-shot when one continuous shot>; theatrical over-acting, sudden tears.
@@ -246,6 +257,8 @@ What each short-drama slot is for, and where it comes from:
 | Two people told apart by wardrobe colour blocks | Case 7's four characters are `cobalt trench / rust knit polo / faded green workwear / pale gray suit` and nothing else, and stay distinguishable | 7, 1 |
 | Ending state | Stated in 6 of the 11: freeze, black, `End on …`, the camera settling | 4 (`hard cut to black at the peak of suspense`), 5 (`the frame freezes`), 7, 8 |
 | Separate `SOUND` block | Room tone plus two or three sounds keyed to actions; music in and out points | 3, 4, 7, 6 |
+| `TRANSITION` line between shots | Nine kinds exist and only one of them is a cut; naming a kind is what stops a timeline from becoming a list of held frames spliced together | 2 (the back-flags sweep past the lens and the camera comes out on the other actor), 3 (she is revealed from behind his out-of-focus silhouette), 8 (an ice crevice and a roof each carry one transition), 7 (`Cut to` / `Cut back inside`) |
+| `CAMERA` movement field | The camera has to be doing something specific, even when that something is holding still; without the field the prompt tends to come back as "locked, no push, no zoom" in every shot | 6 (`close handheld follow shot, staying just behind and slightly beside her`), 8 (a movement phase per segment), 2 (orbit into the next actor), 3 (locked, deliberately) |
 | `AVOID` — the short-drama items | subtitles / text / watermarks (6 of 11); CGI or plastic skin (1, 4, 20); over-acting (3, 20); the transitions you are not making (3, 8) | 4, 5, 20 |
 | Clothing with colour and material | The one appearance field every gallery prompt that describes a character writes; age, build, hair, eyes appear as needed | 1, 3, 4, 5, 7, 8 |
 
@@ -254,7 +267,69 @@ language" tables: over-the-shoulder at the partner's eye height, held (case
 3); a fixed close-up where the reframing comes from an actor stepping back,
 not a zoom (3); a close handheld follow that stays just behind and beside (6);
 a frontal medium two-shot with a slow push into a close-up (1, 22); `do not
-cut to shot/reverse-shot` when the point is one held take (3).
+cut to shot/reverse-shot` when the point is one held take (3). The travelling
+end of the same tables: a slow orbit of the upper body that carries into the
+next actor (2); a close handheld follow that struggles through the same crowd
+she does, then releases and settles at her level (6); one movement phase per
+segment, written out as its own block — `low-altitude rear FPV pursuit`,
+`smooth three-quarter rear tracking`, `continuous rise into a high-angle
+wide` (8).
+
+### Choosing a transition, not defaulting to a cut
+
+The shared "Transitions" section holds **nine** kinds with the exact phrasing
+to copy for each: hard cut; one continuous shot with cuts forbidden;
+occlusion; pass-through; morph; flash; match cut; speed ramp; narrative
+ordering words. Load it and pick one per boundary. Four of the nine have
+short-drama instances among the 63 prompts:
+
+| Kind | Short-drama cases |
+|---|---|
+| Hard cut | 1 (nine numbered shots), 4, 5, 7 |
+| One continuous shot, cuts forbidden | 2, 3, 6, 8 |
+| Occlusion | 2, 3, 8 |
+| Pass-through | 8 |
+
+The other five — morph, flash, match cut, speed ramp, narrative ordering
+words — appear only outside this category (ads, fashion, fight and
+music-video prompts). Borrowing one is a deliberate choice, not a documented
+short-drama convention; say so in the recap if you do.
+
+A boundary with no transition kind named is not neutral. It renders as a
+hard cut, so a timeline of `SHOT 1 … SHOT 2 … SHOT 3` with nothing between
+them is a cut list whether or not that was the intent — the same mistake as
+leaving the `CAMERA` movement field empty, one line further down.
+
+### Shot density — pick a register, then count
+
+The register comes from the brief's `Camera` answer; the shot count follows
+from the register and the duration. Per-case measurements behind this table
+are in "Shot density, measured per case" in the shared file; these are the
+short-drama targets read off them.
+
+| Register | Per shot | 20s | 30s | Measured on |
+|---|---|---|---|---|
+| **Held take** — one or two faces, the camera stays put | performance beats of 1–3s inside one frame, no cuts | 1 shot | 1 shot | case 3: eight beats in 15s |
+| **Travelling one take** — no cuts; the camera moves through the space and an occlusion or a pass-through carries each new view | 5–8s a phase | 3–4 phases | 4–5 phases | case 2: 3 phases in 20s; case 6: 4 phases and three spaces in 30s; case 8: 5 phases and four locations in 30s |
+| **Multi-shot cut list** — a new size and position at every stamp | 3–5s | 4–6 shots | 6–9 shots | case 1: 9 shots in 30s; case 18: 8 in 30s; case 22: 6 in 30s |
+| **Spectacle, beat-driven** — cuts on the action, the line or the music | 2–3s | 7–10 shots | 10–13 shots | case 11: 10 shots in 24s; case 34: 13 cuts in 30s |
+
+Frequency is not effect: these are counts from prompts good enough to be
+collected, not a measured relationship between shot count and how good a
+clip is. What they do settle is the floor. **Four 5-second shots in a
+20-second clip is the slowest point on this table** — and if each of those
+shots also holds the camera still, the result is a slideshow of held frames
+that renders exactly as written. Measured here on 2026-09-03, job
+`38ca8311-5b2d-47d5-a45d-e8ebea0e6312` (20s, 480p, four static shots, cuts
+landing on 5/10/15s as written, consistent characters, clean Mandarin
+delivery): technically correct on every axis and discarded for being plain.
+That run is why this subsection and the `Camera` register question exist.
+
+Above three cuts in one job is past what has been verified on Ofox — three
+shots in eight seconds, "Shots, cuts and jobs" above. The two dense registers
+are gallery practice, not Ofox measurements: price a first attempt as an
+experiment, and check where the cuts actually landed on a 480p draft before
+paying for the final.
 
 ### Dialogue budget — two tiers
 
@@ -267,7 +342,17 @@ A script that overruns its tier is the brief's `Lines` question: extend the
 duration (within 30s) or trim and show the trimmed lines in the recap.
 Compressing the delivery is what produces rushed, garbled speech.
 
-### Worked example — adapted from case 3 (translated): 15 seconds, one continuous shot
+### Two worked examples, two registers
+
+Both are legitimate short drama and the brief's `Camera` answer picks between
+them. The first is the restrained end: one held take, one face, six spoken
+words in fifteen seconds. The second is the dense end: nine shots in
+twenty-four seconds, a space the camera travels through, and something other
+than a hard cut at three of its eight boundaries. Writing the first when the beat
+wanted the second is this skill's most likely failure, because it fails
+quietly — every rule obeyed, nothing to look at.
+
+### Worked example 1 — adapted from case 3 (translated): 15 seconds, one continuous shot
 
 The original attached a photo of the actress; on Ofox that is refused (real
 person), so this version carries her in text. Six spoken words in fifteen
@@ -292,6 +377,56 @@ CAMERA: over-the-shoulder from behind his right shoulder at her eye height, 70�
 SOUND: door hinge, knit fabric, distant street; no score. Dialogue in English.
 CONSISTENCY: her face, hair knot, hoops, chain, grey turtleneck and apparent age identical throughout; his position and the light direction do not change.
 AVOID: subtitles, on-screen text, watermarks; tears rolling, hysterics, exaggerated frowning; shot/reverse-shot, fast push-ins, orbits, sudden zooms, multi-camera switching; plastic skin, beauty filter.
+```
+
+### Worked example 2 — adapted from case 1 (translated): 24 seconds, nine shots, four kinds of transition
+
+Case 1 is the official nine-shot storyboard: 30 seconds, a shot every 3.3
+seconds, a new size and camera position at every stamp, a line in almost every
+shot. This version keeps that ladder, writes the manifest in the `Uppercase
+labels` style this skill's template uses (case 1's own is bracketed section
+headings), moves the beat into a space the camera can travel through, and
+varies the transition instead of cutting eight times — occlusion once,
+pass-through once, a no-cut drift once, hard cuts for the rest. The original
+attached one appearance image per character; on Ofox a photoreal person cannot
+be attached, so both are carried in text. Eleven spoken words in twenty-four
+seconds is 0.46 words/s, the quiet end of the drama tier — density here is in
+the shots, not the lines.
+
+**Nine shots in one job is three times the count verified on Ofox** (three
+shots in eight seconds). Price a first run at this density as an experiment
+and read the cuts off a 480p draft.
+
+```
+FORMAT: 16:9, 24 seconds, 9 shots, transitions named on the timeline.
+STYLE: live-action, colour 35mm film grain, slight exposure fluctuation; the only light is a phone torch, a green emergency sign and city glow through the stairwell windows — cold white close in, sodium orange far off; deep black shadow, real skin texture, no smoothing.
+HER: woman around 30, tall, black hair pushed back and damp at the temples, a grey hooded sweatshirt over pyjama trousers, trainers with the laces loose, a phone held torch-down in her right hand; braced, moving fast. Referred to as "her".
+HIM: boy about 12, small for his age, cropped hair, a red school tracksuit top zipped to the chin, one trainer untied, a folded paper kite under one arm; still, watchful. Referred to as "him".
+SCENE: an old eight-storey apartment block during a night power cut — a tiled ground-floor lobby with a dead lift, a concrete stairwell with a window at every landing, a top landing whose steel door stands open, and a flat roof with the dark city and one lit crane behind it; warm summer night, no wind at ground level, wind on the roof.
+ARC: she comes in already looking → the lift is dead → she starts up → the torch finds one untied trainer on a step → she climbs faster → the roof door is open → she sees him at the parapet → she does not shout → she sits down beside him.
+
+SHOT 1 (0-2.5s): Wide, low, from just inside the lobby door, camera locked. She comes in fast from frame left, presses the dead lift button twice, turns to the stairwell without waiting. No line. Sound: the door swinging, the fly-buzz of the emergency sign, no lift motor.
+Without cutting, the swinging lobby door sweeps across the lens and the camera comes out of the occlusion on the first flight of stairs.
+SHOT 2 (2.5-5s): Medium from behind, close handheld follow just behind and beside her on the first flight; the torch beam jumps across the wall and the handrail. No line. Sound: two sets of steps doubling in the shaft, her breath.
+HARD CUT.
+SHOT 3 (5-7.5s): Extreme close-up, torch-lit: one untied trainer lying on a step. Her hand enters frame and lifts it. Her (quiet, not calling out): "Bo?" Sound: the shoe leaving the concrete, nothing answering.
+HARD CUT.
+SHOT 4 (7.5-10s): Low angle straight up the stairwell shaft, three flights receding into the dark; she climbs past the lens fast, the torch swinging. No line. Sound: steps accelerating, a handrail knock.
+Without cutting, the camera pushes through the open steel door into the night.
+SHOT 5 (10-13s): Wide on the roof, the dark city behind, the one lit crane at frame right; he stands at the parapet with the kite under his arm, back to us, small in the frame. No line. Sound: the wind arrives, the shaft noise stops.
+HARD CUT.
+SHOT 6 (13-15.5s): Medium single on her in the doorway, chest-up, locked, breathing hard; she does not shout. Her (very quiet): "I am not angry." Sound: wind, her breath.
+HARD CUT.
+SHOT 7 (15.5-18s): Close-up single on him, three-quarter, the crane light along one cheek; he keeps looking out, not at her, and his grip on the kite tightens. No line. Sound: wind, paper flexing.
+HARD CUT.
+SHOT 8 (18-21s): Two-shot from behind at parapet height; she enters frame and stops beside him without touching him, both looking out. Him (small, flat): "You could have knocked." Her: "I know." Sound: wind, fabric, one far siren.
+Without cutting, the camera drifts back and down to the roof surface.
+SHOT 9 (21-24s): Wide, low, from the roof floor: the two of them in silhouette against the crane light; she sits down first, he sits a second later, the kite across his knees. Hold the silhouettes for the last second. Sound: wind only; no music.
+
+CAMERA: movement per shot, and `locked` is a value here rather than a default — locked in 1, close handheld follow in 2 and 4, locked singles in 6 and 7, a slow drift back and down in 8 into the low wide of 9; 28mm in the stairwell and on the roof, 70mm for the singles; shallow depth of field on the singles, deep on the wides; the torch is the only key below the roof; the eye-line axis between the two of them is set in shot 5 and never crossed.
+SOUND: a dead lift, a buzzing emergency sign, two sets of footsteps in a concrete shaft, a shoe lifted off concrete, roof wind arriving at 10s, fabric, paper, one far siren; no music at any point. Dialogue in English, mouths matched to it.
+CONSISTENCY: her face, pushed-back black hair, grey hooded sweatshirt, pyjama trousers and loose trainers identical in every shot; his face, cropped hair, red zipped tracksuit top, one untied trainer and the folded paper kite identical in every shot; the power stays off, the torch stays in her right hand, the crane light stays at frame right on the roof.
+AVOID: subtitles, captions, on-screen text, watermarks, logos; extra or warped limbs, warped hands; CGI look, plastic skin, skin smoothing; dissolves, jump cuts, shot/reverse-shot, sudden zooms, whip pans, crossing the eye-line axis; the lights coming back on, anyone climbing onto the parapet, anyone falling, shouting, tears rolling, hugging.
 ```
 
 ### 10 seconds or less: one shot, no manifest
@@ -545,6 +680,7 @@ plus the short-drama-specific ones:
 | Exit `3`, `error.code: insufficient_credits` | Ofox balance too low | No charge was made; the user needs to add credits at `https://app.ofox.ai` before retrying |
 | Exit `3`, `error.code: input_moderation_failed` on create | An attached frame contains a real person — refused at submission, nothing billed | Drop the image and carry the character in text (see "Reference images and real people"); `--real-person true` is untested on 2.5 |
 | Exit `3`, job ends `failed`, or `invalid_request` on create, with no other error code hint | Likely a moderation rejection: prompts describing real/identifiable public figures, sexual content, or graphic violence are commonly rejected before or during generation | Rewrite the prompt: use a generic character description instead of naming a real person, tone down graphic detail, then call `generate` again — this is a **new** request with a new prompt, not a resubmission of the failed one, so it's safe to retry immediately |
+| The clip renders exactly as written and still looks like nothing — held frames spliced together, no reason to keep watching | Every shot 5s or longer, every `CAMERA` movement static, and every boundary a bare hard cut: the slowest point of "Shot density — pick a register, then count", reached by writing the template's defaults instead of choosing a register | Re-ask the brief's `Camera` question, take the register the beat actually wants, then rewrite: more shots at 2–3s, or one travelling take, and a named transition kind at each boundary. This is a new prompt, so it is a new cost table |
 | Generated speech sounds rushed, garbled, or cut off | Too many words for the clip's tier — see "Dialogue budget — two tiers" | Extend `--duration` (within 4–30s) or trim the lines; never compress the delivery |
 | A cut lands up to a second off its timestamp | Expected: the verified runs placed cuts within about ±1s of the written stamps | Give each shot 2s or more of slack around a line; if a cut must be frame-exact, generate the shots as separate jobs |
 | Character's appearance drifts between two clips of the "same" script | Each `generate` call is stateless — no persistent character memory | Reuse the exact same character block word for word and keep the `CONSISTENCY` line in every prompt for that script |

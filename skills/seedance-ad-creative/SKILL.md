@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.7.0"
+version: "1.8.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.7.0"
+  version: "1.8.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -96,7 +96,7 @@ delegates the taste axes only — it never answers this one.
 |---|---|---|---|---|---|
 | 1 | must-ask | `Photo` | Do you have a photo or render of the product? With one, label text and shape stay faithful. | **Yes — I'll give a local path (recommended)**: the real product is rendered from the image; the gallery's product, logo and packaging shots all lock to one (cases 12, 13, 24). / **No — describe it in text**: fine for a generic or fictional product; on a real SKU the label and logo may drift. The gallery's text-only ads all stay on generic categories — a bowl of ramen (case 14), juice bottles and produce (case 27), gym gear (case 25) — and its text-only product prompts (cases 16, 17, 19) are all fictional brands. **No AI option.** | No image attached and the user did not say "no photo". |
 | 2 | ask-if-open | `Tone` | Brand tone — it sets the palette, the pace and the light. | Put the archetype that fits the product category first, marked `(recommended)`: perfume / watch / jewellery → **Luxury** — slow, dark background, warm gold highlights (cases 13, 15). snack / drink / sneaker → **Playful/consumer** — bright, saturated, cuts on the beat (cases 12, 14). headphones / gadget / app → **Minimalist-tech** — white or grey, cool light, steady precise camera. Then the other two. Then **Let the AI decide** — "I'll use the recommended archetype and mark it (AI's pick)". | No tone word in the request. |
-| 3 | ask-if-open | `Camera` | The camera move for the hero segment. | **Slow 30-degree orbit (recommended)**: the whole product in one move; the orbit is the gallery's most reused rotation (cases 13, 15; official case 42 does a full 360 in 5s). The 30 degrees is this skill's convention, not a gallery figure. / **Slow push-in, shallow depth of field**: one detail fills the frame (cases 19, 24). / **Rack-focus reveal**: the background is sharp first, then focus snaps to the product (the phrasing is in the shared file's `Camera language`; its gallery examples, cases 7 and 26, are not ads). / **Let the AI decide**. | No camera word in the request. |
+| 3 | ask-if-open | `Camera` | The camera move for the hero segment. | **Slow 30-degree orbit (recommended)**: the whole product in one move; the orbit is the gallery's most reused rotation (cases 13, 15; official case 42 does a full 360 in 5s). The 30 degrees is this skill's convention, not a gallery figure. / **Travelling move — the camera goes somewhere and the move *is* the transition**: it plunges down through the gears, passes into a spinning brass box, spirals out to a wide (case 13, all three in one 30s piece, which never cuts); pick this when the product sits in a world worth crossing rather than on a table. / **Slow push-in, shallow depth of field**: one detail fills the frame (cases 19, 24) — with a rack focus as its variant when there is a background worth showing sharp first, then snapping off (the phrasing is in the shared file's `Camera language`; its examples, cases 7 and 26, are not ads). / **Let the AI decide**. | No camera word in the request. |
 | 4 | ask-if-open | `Aspect` | Where will it run? That fixes the frame shape. | **16:9 hero (recommended)**: website, YouTube, landing page — this skill's default. / **9:16 vertical**: TikTok, Reels, Shorts. / **1:1 square**: feed placements. / **Let the AI decide**. When a product photo is attached the output ratio follows the image (`adaptive`), so each description must add "= I crop or pad the photo to this ratio before generating". | No platform or ratio in the request. |
 
 Not asked: 720p vs 1080p (two rows in the cost table); duration — take the
@@ -174,6 +174,16 @@ Segments run 3–5s (cases 15, 25, 26, 27); the one official 30s piece with
 10s segments (case 13) never cuts. Slots are in `<angle brackets>`; optional
 lines in `[square brackets]`. Pick one header labelling style and keep it.
 
+**The five beats below are a floor, not a ceiling.** Counted per case: the
+gallery's ads run 5 shots in 20s (case 15, 4s each) up to 9 `CUT`s in one
+generation (case 14), and case 26 runs seven segments in 30s — so a 30s spot
+written as five 6-second beats is the slowest ad in the set. Split a beat into
+two shots rather than holding one for six seconds; the per-case counts are in
+"Shot density, measured per case" in the shared file. Against that, the
+Ofox-verified envelope is three shots in eight seconds (see "Several shots:
+timestamps inside one job, `chain` across jobs" below), so any count above
+three cuts is gallery practice and a first attempt at it is an experiment.
+
 ```
 [FORMAT: <N> seconds, <16:9 | 9:16 | 1:1>, hard cuts on the timestamps.]            — optional; must match the flags
 STYLE: <ad category> commercial, <capture anchor: 8K photoreal studio | 35mm film grain | glossy high-speed>, <tone: luxury — slow, dark, warm gold | playful — bright, saturated, fast | minimalist-tech — white or grey, cool, steady>.
@@ -184,6 +194,7 @@ PRODUCT: <shape> <material and finish> <colour> <product name>, <label text in q
 SCENE: <backdrop>, <one or two props framing the shot>, <light: saturated studio key with a warm rim | golden hour | single hard key>.
 
 0–<3–5>s    HOOK — <one visual focus: a macro of one ingredient | the cap | the clock face>; <one strong move: the music downbeat hits as we cut in | low-angle dolly-in | a white flash freezes the frame | layers unfold>.   (cases 12, 13, 15, 14)
+<TRANSITION between any two beats — name a kind; a hard cut is one of nine and an unnamed boundary becomes one: HARD CUT on the downbeat. | The camera plunges through <the gears / the pour / the open lid> into the next beat. (case 13) | <The product / the blade / a hand> sweeps past the lens and the camera comes out of the occlusion on <the next arrangement>. (the phrasing is cases 2, 8, 41, none of them ads) | A white flash freezes the frame, then <the next pose>. (case 15) | An extreme speed ramp carries <the event> into <the next beat>. (case 15) | Without cutting, <the array reassembles in frame>.>
 <>–<>s      SHOWCASE — <arrangement: a strict geometric array of the variants | <tag> holds the product toward the lens, steam rising | the camera orbits the product 30 degrees>; cut to close-ups of <two or three details>.   (cases 12, 14, 24)
 <>–<>s      CLIMAX — <one physical event: the biscuit snaps | the broth erupts | the blade sweeps past the lens>; drops into slow motion for one second — <micro-detail: the filling bursts, crumbs fly, droplets hang> — then back to speed.   (cases 12, 14, 15)
 [<>–<>s     VARIATION — back at full tempo, <a second arrangement>.]                                                        (case 12)

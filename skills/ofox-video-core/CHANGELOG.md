@@ -4,6 +4,38 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.12.0 — `prompt-structure.md`: shot density measured per case, and the transition choice made visible
+
+Docs only; no script changes. Both additions come from a real failure: the
+first short-drama clip generated with the 1.11.0 references (2026-09-03, job
+`38ca8311-5b2d-47d5-a45d-e8ebea0e6312`, 20s at 480p, four static shots, cuts
+landing where the timestamps said) obeyed every rule in this file and was
+rejected as too plain to publish. Two of those rules were discoverable only
+by an author who already knew to look for them.
+
+- **New "Shot density, measured per case" under "Segmenting the timeline".**
+  The existing "Segment length" gave ranges; this gives the per-case counts
+  they were read off, which is what a draft can be compared against: case 11
+  at 10 shots in 24s (2.4s each), case 34 at 13 cuts in 30s, case 1 at 9 in
+  30s, case 18 at 8 in 30s, case 14 at 9 `CUT`s, case 22 at 6 in 30s, case 15
+  at 5 in 20s — and the one-takes counted the same way, cases 8, 6, 2 and 3
+  with zero cuts but a movement phase every 6–8 seconds. Two findings stated
+  outright: among prompts that cut, nothing collected holds a cut shot longer
+  than about five seconds; and **a timeline of 5-second shots with a static
+  camera in each is the one shape the gallery does not contain** — which is
+  precisely what a scenario template's defaults produce when nobody chooses a
+  register. The narrow Ofox-verified envelope (three shots in eight seconds)
+  is restated next to it so a denser count is priced as an experiment.
+- **The transition choice is now on the skeleton.** "Skeleton to copy" gained
+  a `TRANSITION` line between beats, pointing at "Transitions" and saying
+  that an unnamed boundary renders as a hard cut. The nine kinds were already
+  documented in full; what was missing was any prompt to use them at the
+  moment a timeline is being written.
+- **Checklist items 3 and 4 tightened**: item 3 now asks for a shot count
+  that matches the register rather than a template's floor, and item 4 asks
+  for a transition kind named at each boundary on purpose, not only for the
+  timestamp's meaning to be declared.
+
 ## 1.11.0 — two shared references for every Seedance scenario skill: prompt structure and the creative brief
 
 - **New `references/prompt-structure.md`**: how to structure the text that

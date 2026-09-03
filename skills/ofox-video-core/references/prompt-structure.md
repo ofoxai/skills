@@ -223,6 +223,7 @@ header manifest.
 <SCENE: place, time, light direction and colour temperature, foreground elements, weather>
 
 <0–Ns>  <shot size + camera position>, <camera movement>. <tag> <one action, 1–3 visible signals>. [<Speaker>: "<line>" — <delivery note>.] <sound for this beat>
+<TRANSITION — one of the nine kinds, named on purpose; an unnamed boundary renders as a hard cut — see "Transitions">
 <N–Ms>  …
 <M–Ts>  … <ending state — see "Endings">
 
@@ -289,6 +290,45 @@ Measured on the 32 timestamped prompts against their stated durations:
 
 Segment counts follow: a 30s clip runs 6–9 segments at the default, 13–15
 when beat-driven, 3–4 when continuous.
+
+### Shot density, measured per case
+
+`Segment length` gives the ranges; these are the individual counts they were
+read off, which is what a draft can be compared against. Counted from the
+numbered shots, timestamp spans or `CUT` markers in the prompt text, against
+the duration the gallery records.
+
+| Case | Category | Length | Cuts | Per shot | Form |
+|---|---|---|---|---|---|
+| 11 | anime-drama | 24s | 10 | 2.4s | `SHOT 1 — 0.0–2.0` … `SHOT 10 — 21.5–24.0` |
+| 34 | shorts-reels | 30s | 13 | ~2.3s | `[Cut]` between bare `0-2s` spans |
+| 1 | short-drama | 30s | 9 | 3.3s | nine numbered shots, official, against a storyboard-grid reference image |
+| 18 | product-video | 30s | 8 | 3.75s | `[0:00–0:04]` … `[0:25–0:30]` |
+| 14 | ad-creative | not stated | 9 | — | prose beats separated by `CUT` |
+| 22 | talking-head | 30s | 6 | 5.0s | `SHOT 1`–`SHOT 6`, three fixed fields each |
+| 15 | ad-creative | 20s | 5 | 4.0s | `0–4 seconds — Iconic opening pose` … |
+| 8 | short-drama | 30s | **0** | 6.0s a phase | one continuous shot; five movement phases across four locations, with an occlusion and a pass-through carrying two of the boundaries |
+| 6 | short-drama | 30s | **0** | 7.5s a phase | one take, four phases, three spaces; the camera follows her out of each one |
+| 2 | short-drama | 20s | **0** | 6.7s a phase | official one take; the back-flags sweeping past the lens are the transition |
+| 3 | short-drama | 15s | **0** | 1.9s a beat | one held frame, eight sub-2s performance beats |
+
+Two readings of the same table. Among the prompts that cut, **the dense end
+is 2–3 seconds a shot and the slow end is 5** — nothing collected holds a cut
+shot longer than about five seconds. And the one-takes are not the slow
+option: they replace cuts with movement phases and in-camera transitions, so
+a clip with zero cuts still changes what it is looking at every six to eight
+seconds. **A timeline of 5-second shots with a static camera in each is the
+one shape the gallery does not contain** — it is reachable by filling a
+scenario template's defaults without choosing a register, and it renders
+correctly, which is what makes it easy to ship by accident (measured: this
+repo's first real short-drama job, `38ca8311-5b2d-47d5-a45d-e8ebea0e6312`,
+2026-09-03, 20s at 480p, four static shots, cuts landing where they were
+written, discarded for being plain).
+
+Set against this, the Ofox-verified envelope is narrow: three shots in eight
+seconds ("Several shots in one job"). Every count above three cuts in one
+job is gallery practice, so a first attempt at one is an experiment and
+should be priced as one.
 
 ### Two things a timestamp can mean
 
@@ -814,9 +854,14 @@ From cases 29, 26, 24, 5.
 2. **Declared once: format (optional, matching the flags), style anchor, each
    character's appearance with a short tag, the scene** (cases 1, 8, 10).
 3. **Segmented if 16s or longer**, one timestamp format throughout; 3–5s per
-   segment by default, 2–3s when beat- or dialogue-driven (cases 1, 7, 34).
+   segment by default, 2–3s when beat- or dialogue-driven (cases 1, 7, 34),
+   and a shot count that matches the register rather than the template's
+   floor (see "Shot density, measured per case").
 4. **Said which kind of timestamp it is** — cut boundaries, or beats inside
-   `one continuous shot` (cases 3, 6, 8 against 1, 22).
+   `one continuous shot` (cases 3, 6, 8 against 1, 22) — and **named a
+   transition kind at each boundary on purpose**: nine kinds exist, a hard cut
+   is one of them, and an unnamed boundary becomes one by default (see
+   "Transitions").
 5. **Every segment runs time → shot size / position → action → dialogue →
    sound** (cases 1, 7, 22).
 6. **Dialogue is speaker + quoted line + delivery note, in the language to be

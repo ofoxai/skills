@@ -4,6 +4,39 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.8.0 — a travelling camera option, a transition menu, and the beat count as a floor
+
+Docs only; no script changes. Same review as `seedance-short-drama` 1.8.0,
+where a real clip rendered exactly as written and was rejected for being
+visually plain. Template A came out of that review in better shape than the
+drama template — it already carries slow motion, speed ramps, `low-angle
+dolly-in` and an orbit inside its beats — but three gaps were real:
+
+- **The `Camera` question had no travelling option.** Orbit, push-in and
+  rack-focus reveal are three ways to move a little around a product that
+  stays on a table. A fourth is now offered and the option count is
+  unchanged, because the rack-focus reveal folds into the push-in as its
+  variant (same picture family: one detail fills the frame): **travelling
+  move — the camera goes somewhere and the move *is* the transition**, taken
+  from case 13, which plunges down through the gears, passes into a spinning
+  brass box and spirals out to a wide inside one 30-second piece that never
+  cuts. Pick it when the product sits in a world worth crossing.
+- **Template A named no transition kinds.** Its `FORMAT` line said "hard cuts
+  on the timestamps" and that was the whole vocabulary. A `TRANSITION` slot
+  now sits in the timeline with a hard cut on the downbeat, case 13's
+  pass-through, an occlusion (phrasing from cases 2, 8, 41 — none of them
+  ads, and labelled as such), case 15's white flash and case 15's extreme
+  speed ramp, plus the note that an unnamed boundary becomes a hard cut by
+  default.
+- **The five beats read as a target instead of a floor.** Counted per case,
+  the gallery's ads run 5 shots in 20s (case 15) up to 9 `CUT`s in one
+  generation (case 14), with case 26 at seven segments in 30s — so a 30s spot
+  written as five 6-second beats is the slowest ad in the set. The template
+  now says to split a beat rather than hold one for six seconds, points at
+  "Shot density, measured per case" in the shared file for the counts, and
+  restates the Ofox-verified envelope (three shots in eight seconds) so a
+  denser attempt is priced as an experiment.
+
 ## 1.7.0 — creative brief, timestamped ad template, multi-shot inside one job
 
 New:

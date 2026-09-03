@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.7.0"
+version: "1.8.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.7.0"
+  version: "1.8.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -247,7 +247,14 @@ quoted in translation.
 ### 15–30 seconds: a manifest and timestamped segments
 
 Slots in `<angle brackets>`; optional lines in `[square brackets]`. Two to
-five seconds per shot for action, six to nine for a held emotional beat.
+five seconds per shot for action, six to nine for a held emotional beat. As a
+count rather than a length: this category's densest collected prompt is case
+11 at **10 shots in 24 seconds** (2.4s each), case 18 runs 8 in 30s, and case
+9's shot chain is six sizes in 30s — while the worked example below, adapted
+from case 10, is the quiet end at four segments in 30s. Both ends are real;
+the per-case measurements are in "Shot density, measured per case" in the
+shared file. An action or fight beat written as four 7-second segments is
+below every action prompt in the gallery.
 
 ```
 [FORMAT: <ratio>, <T> seconds, <N shots, hard cuts on the timestamps | one continuous shot>]      — optional; must match the flags
@@ -260,7 +267,7 @@ RULES — action: each shot is one continuous camera take, no jump to a new posi
 RULES — quiet: one action per segment, long enough to read. No fast cutting, no time-lapse, no jump cuts.
 
 [<segment title>, 0–<a>s] <shot size, camera position, movement>. <tag> <action A → B → C>. <the environment answers: petals lift, the light brightens>. [<Tag>: "<line>"]
-HARD CUT.                                                                — or: Without cutting, …
+<TRANSITION — name a kind on purpose; a hard cut is one of nine, and an unnamed boundary becomes one by default: HARD CUT. | Without cutting, <a sleeve / a banner / a passing body> sweeps across the lens and the camera comes out of the occlusion on <the next view>. | Without cutting, the camera pushes through <the doorway / the torii / the gap in the hedge> into <the next space>. | <an element inside the frame moves and carries the change — case 29's four shots inside one declared continuous take>. | <a speed ramp past the lens into the next beat — case 11>. | Without cutting, …>
 [<segment title>, <a>–<b>s] … (each segment raises the stakes or the feeling one step)
 [Ending, <x>–<T>s] <terminal pose: faces the lens | freeze | slow pull-back to a wide | arm raised>; hold one second.
 
@@ -286,6 +293,27 @@ What each anime slot is for, and where it comes from:
 | **Sequel block** | `must be the same … continuing the fight from PART 1`; PART 1's final frame re-described in words as this clip's first; `no re-positioning, no re-facing, no slow preparation` — the text-level complement to `chain` across sessions | 44 |
 | **`AUDIO` block** | itemised: music / ambience / character sounds with a qualifier / keyed sfx / what remains at the end; or `No BGM, no narration, no subtitles` | 10, 44, 11 |
 | **`AVOID`** | subtitles, watermarks, logos; fast cutting, jump cuts; `never make him realistic`, `no face swap, no AI plastic skin, no 3D, no game CG`; random character changes | 18, 44, 61, 11 |
+
+### Choosing a transition, not defaulting to a cut
+
+The shared "Transitions" section holds **nine** kinds with the phrasing to
+copy for each: hard cut; one continuous shot with cuts forbidden; occlusion;
+pass-through; morph; flash; match cut; speed ramp; narrative ordering words.
+Load it and pick one per boundary — animation is the category where the
+in-frame options are cheapest, because nothing has to stay photoreal across
+the change.
+
+| Kind | Animation-adjacent cases |
+|---|---|
+| Hard cut | 18 (eight timestamped segments, while forbidding *fast* cutting and jump cuts), 11 (ten numbered shots), 63 (four scene stamps in about 8s) |
+| One continuous shot, cuts forbidden | 29 (four shots declared as one continuous take), 44 (`no jump cuts, no flicker`) |
+| Speed ramp | 11 (`Return to normal speed as the human staggers backward`) |
+| Narrative ordering words | 9 (`close-up → medium → tracking shot → low-angle foot shot → corridor wide → close-up`) |
+| Morph | 54, 13 — outside this category, but the mechanism is case 29's in-frame element move |
+
+Occlusion, pass-through, flash and match cut have no animation instance among
+the 63; borrowing one is a deliberate choice rather than a documented
+convention, and the phrasing to borrow is in the shared table.
 
 ### Worked example — adapted from case 10 (translated): 30 seconds, four segments, no dialogue
 

@@ -4,6 +4,68 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.8.0 — the template stopped defaulting to restraint: camera register, a transition menu, shot density
+
+Docs only; no script changes. This release is a correction, not a feature:
+the first real short-drama clip produced with 1.7.0 (2026-09-03, job
+`38ca8311-5b2d-47d5-a45d-e8ebea0e6312`, 20s at 480p, four static shots, cuts
+landing on 5/10/15s exactly as written, characters consistent across all four,
+Mandarin delivery clean) was **rejected as too plain to publish**. Nothing in
+it broke. It was written by filling this skill's own template with this
+skill's own defaults, and the template's defaults were restraint on every
+axis at once. Four things were wrong and are fixed:
+
+- **The `Camera` question could not express a moving camera.** Its options
+  were `Handheld documentary`, `Steady cinematic` and `Static
+  over-the-shoulder` — three labels for the camera staying roughly where it
+  is, which is the synonym-options anti-pattern `creative-brief.md`'s "The
+  shape of a question" already forbids. The question is now about the
+  **register**, and one answer settles both what the camera does and how many
+  shots there are: `Travelling one take` (no cuts, the camera moves through
+  the space, an occlusion or pass-through carries each new view, 3–5 phases of
+  5–8s — cases 2, 6, 8) / `Multi-shot cut list` (a new size and position at
+  every stamp, 2–5s a shot, 4–10 shots in 20–30s — cases 1, 11, 14) / `Held
+  take` (locked or breathing handheld on one or two faces — cases 3, 22) /
+  `Let the AI decide`. Handheld versus locked is now documented as a texture
+  inside the register rather than a fourth option. New skip rows map traversal
+  words ("walks with her", "one take", "out onto the street") and cutting
+  words ("intercut", "shot list") straight onto a register.
+- **The transition slot offered two of the nine kinds.** The template line was
+  `HARD CUT.` or `Without cutting, <what changes the framing>`; the other
+  seven kinds in the shared "Transitions" table were reachable only by an
+  author who already knew to go looking. The line is now a `TRANSITION` slot
+  that names the choice as a choice, with occlusion and pass-through spelled
+  out inline, and a new "Choosing a transition, not defaulting to a cut"
+  subsection lists all nine kinds and which four have short-drama instances
+  (hard cut 1/4/5/7, cuts forbidden 2/3/6/8, occlusion 2/3/8, pass-through 8)
+  — plus the fact that an unnamed boundary renders as a hard cut, so silence
+  there is a decision.
+- **The `CAMERA:` block had no movement field.** It held lens, depth of
+  field, focus and the axis rule, so camera movement had nowhere to go — and
+  the rejected run duly came back with "locked off, never a whip, never a
+  zoom, never a push-in" in the `CAMERA` line and "camera still" in all four
+  shots. The field now leads the block, with `static` as one of its values
+  rather than the absence of one, and the slot table explains why it is not
+  optional.
+- **Shot density was unstated, so the template's floor became the target.**
+  New "Shot density — pick a register, then count": four registers with per-
+  case anchors (held take, case 3's eight beats in one 15s frame; travelling
+  one take at 5–8s a phase, cases 2/6/8; cut list at 3–5s, cases 1/18/22;
+  spectacle at 2–3s, cases 11/34), the target count for 20s and 30s in each,
+  and the finding that four 5-second static shots is the slowest point on the
+  whole table and a shape the gallery does not contain. The Ofox-verified
+  envelope (three shots in eight seconds) is restated as the limit it is, so
+  a dense register is priced as an experiment.
+
+Also: a **second worked example**, adapted from case 1 — 24 seconds, nine
+shots at about 2.7s, four kinds of transition, a stairwell and a roof the
+camera travels through, eleven spoken words. The case-3 example is kept
+unchanged, and a new "Two worked examples, two registers" heading says both
+are legitimate short drama and the brief's `Camera` answer picks between them.
+A new failure-mode row covers the clip that renders exactly as written and
+still looks like nothing, with the fix (re-ask the register, rewrite, new cost
+table) rather than a shrug.
+
 ## 1.7.0 — creative brief, structured prompt template, several shots per job
 
 Docs only; no script changes. What moves:
