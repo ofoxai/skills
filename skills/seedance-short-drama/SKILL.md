@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), or for anything not involving people/dialogue.
 license: MIT
-version: "1.8.0"
+version: "1.9.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.8.0"
+  version: "1.9.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -139,7 +139,7 @@ every axis — write the prompt.
 | Tier | Short-drama axes |
 |---|---|
 | **must-ask** | which beat of a multi-scene script to render; whether an asset the request implies actually exists |
-| **ask-if-open** | aspect ratio, emotional arc, the camera register — which also fixes the shot count; a draft batch versus one final, but only when the user is already exploring |
+| **ask-if-open** | aspect ratio, emotional arc, the camera register — which also fixes the shot count; a draft batch versus one final, but only when the user is already exploring; on a published deliverable, a second round adds the duration split and whether a slow-motion or freeze-frame beat belongs in the clip at all — see "Pacing questions belong in round two" in `creative-brief.md` |
 | **never-ask** | resolution, model, provider, audio on/off, duration once stated |
 
 ### The short-drama questions
@@ -152,6 +152,8 @@ every axis — write the prompt.
 | 4 | ask-if-open | `Camera` | How is the beat shot? This one answer decides what the camera does **and** how many shots there are. | Put the register that fits the beat first and mark it `(recommended)` — the travelling take when the beat has somewhere to go (two rooms, a corridor, a doorway, a street), the cut list when it jumps between faces, hands and details, the held take when everything happens on one face. `Travelling one take` — no cuts; the camera moves with them and each new view arrives from behind an occlusion or through a gap; 3–5 phases of 5–8s (cases 2, 6, 8) / `Multi-shot cut list` — a new shot size and camera position at every timestamp, 2–5s a shot, so 4–10 shots in 20–30s (cases 1, 11, 14) / `Held take` — locked, or a breathing handheld, on one or two faces; the reframing comes from an actor moving rather than the lens (cases 3, 22) / `Let the AI decide` | No camera word in the input. |
 | 5 | follow-up | `Lines` | The lines overrun this duration's budget (tiers below). | `Extend to <N> seconds (recommended)` — keeps every line; state N / `Trim to budget` — the cut lines are shown before the cost table / `Let the AI decide` | Only when the dialogue exceeds its tier for the chosen duration. |
 | 6 | ask-if-open | `Drafts` | Several takes to choose from, or one final? | `One 720p final on seedance-2.5 (recommended)` / `Four 480p drafts on seedance-2.0-mini, then the final` — a different model is a different look, not only a different price; see "Several takes to choose from" / `Let the AI decide` | Only when the user asks for versions, or says they are unsure what they want. |
+| 7 | ask-if-open (round two) | `Pacing` | Where do the seconds go? The payoff decides it — a fight's payoff is the middle of the clip, a dialogue beat's can be the last line. | `Weight the core (recommended)` — setup and close stay near the "Action / spectacle" row of "Duration budget" below; most of the runtime goes to the fight or the exchange itself / `Weight the close` — the payoff is the last line or action, so the close gets real time, near the "Dialogue / slice-of-life" row / `Let the AI decide` | Only in round two (a published deliverable — see `creative-brief.md`), and only when the beat has a clear "main event" whose share of the runtime the request leaves open. |
+| 8 | ask-if-open (round two) | `Effects` | Slow motion or a freeze frame on the best beat, or full speed throughout? | `One insert, capped near 2–3s (recommended)` — on the single decisive hit or reveal only, per "Duration budget" below / `None — full speed throughout` — plainer, and nothing to check on the draft / `Let the AI decide` | Only in round two, and only when the beat has an obvious climactic hit, reveal or gesture where either device is a plausible choice. |
 
 Handheld or locked is a **texture inside** the register, not a fourth
 option: the realistic short-drama convention is a breathing handheld (cases
@@ -162,10 +164,14 @@ staying roughly where it is, which is exactly what `creative-brief.md`'s "The
 shape of a question" forbids ("visibly different pictures, not synonyms").
 A user who wanted the camera to travel could not pick it.
 
-If more than four are open, ask in this order: `Beat`, `Aspect`, `Arc`,
-`Camera`; `Lines` is the follow-up; `Drafts` folds into the cost table as a
-second row. Never asked: the language of the lines (follows the script),
-resolution, model, provider, audio on/off — all rows in the table.
+If more than four are open in round one, ask in this order: `Beat`,
+`Aspect`, `Arc`, `Camera`; `Lines` is the follow-up. `Drafts` folds into the
+cost table as a second row rather than taking a question slot. On a
+published deliverable (`creative-brief.md`'s two-round rule), round two adds
+`Pacing` and `Effects` — in that order, since the duration split has to be
+settled before a slow-motion budget can be carved out of it. Never asked:
+the language of the lines (follows the script), resolution, model, provider,
+audio on/off — all rows in the table.
 
 ### Skip rows specific to short drama
 
@@ -180,6 +186,8 @@ On top of the generic rows in `creative-brief.md`:
 | A traversal word ("walks with her", "follows him through", "one take", "no cuts", "out onto the street") | camera register | travelling one take |
 | A cutting word ("cut between", "intercut", "shot list"), or a numbered storyboard in the input | camera register | multi-shot cut list, at the count the input implies |
 | An image attached to the request | asset question | settled; see "Reference images and real people" for the route it takes and the real-person refusal |
+| The request names where the runtime should go ("mostly the fight", "linger on the ending", "keep it snappy") | duration split | as stated; see "Duration budget" below |
+| The request rules slow motion or a freeze frame in or out ("no slow-mo", "give me a freeze on the hit", "keep it at full speed") | slow motion / freeze | as stated |
 
 ### Every answer lands somewhere
 
@@ -191,6 +199,8 @@ On top of the generic rows in `creative-brief.md`:
 | Camera register | how many `SHOT` blocks there are and how long each runs, which kinds appear on the `TRANSITION` lines, the movement field of the `CAMERA` line, and each shot's size / position / movement |
 | Lines over budget | `--duration`, or the trimmed lines shown in the recap |
 | Drafts | `batch` on `bytedance/seedance-2.0-mini` at 480p, or a single `generate` |
+| Pacing | the per-shot lengths and the `SHOT` count given to setup, core and close, per "Duration budget" below |
+| Effects | whether a shot's action line or `TRANSITION` carries a speed ramp or a freeze frame, and how many seconds it spends |
 
 ### The recap for this scenario
 
@@ -200,6 +210,8 @@ Brief
 - Aspect: 9:16 (inferred from "for Reels")
 - Arc: composed → hears the excuse → wavers → wry smile → "We're done." → steps back (AI's pick)
 - Camera: multi-shot cut list — six shots of about 2.5s, breathing handheld; occlusion into shot 4, hard cuts elsewhere (your choice)
+- Pacing: most of the runtime goes to the confrontation itself; setup and close stay brief (your choice)
+- Effects: one slow-motion beat on the final line, capped at about 2s (AI's pick)
 - 720p, 15s, byteplus, audio on (defaults — rows in the table below)
 ```
 
@@ -300,6 +312,27 @@ hard cut, so a timeline of `SHOT 1 … SHOT 2 … SHOT 3` with nothing between
 them is a cut list whether or not that was the intent — the same mistake as
 leaving the `CAMERA` movement field empty, one line further down.
 
+**Naming a `HARD CUT` is not a guarantee it renders as one, and the reason is
+the rest of the timeline, not that boundary alone.** Two 30-second
+`bytedance/seedance-2.5` jobs on Ofox point opposite ways at threshold-0.3
+scene detection: job `844c9145-9b10-4335-9fdc-ec4937793a2f` (8 boundaries, 3
+hard cuts against 5 named continuous transitions) had all three written hard
+cuts land within about 1.5s of their stamps; job
+`4e5c9581-d462-443b-9663-b1aa6d72f527` (9 boundaries, 3 hard cuts against 6
+named continuous transitions) had **zero** of its three written hard cuts
+detected — the whole clip rendered as one continuous flow instead. The only
+thing that moved between the two jobs is the mix. The full reading of both
+runs, including what it does and does not establish, is under "Several shots
+in one job" in `../ofox-video-core/references/prompt-structure.md`. Two
+samples are not a threshold: don't treat a `HARD CUT` label as safe on its
+own once continuous transitions are close to or past half the boundaries in
+that job, and check where the cuts actually land on a 480p draft before
+paying for a longer or higher-resolution take. What this does not establish:
+whether the softened cuts are what made the accepted clip above read, in the
+repository owner's words, as not well connected — that is a plausible
+follow-on hypothesis, not a tested finding, and this repo has no measurement
+of viewer-perceived coherence to test it against.
+
 ### Shot density — pick a register, then count
 
 The register comes from the brief's `Camera` answer; the shot count follows
@@ -330,6 +363,77 @@ shots in eight seconds, "Shots, cuts and jobs" above. The two dense registers
 are gallery practice, not Ofox measurements: price a first attempt as an
 experiment, and check where the cuts actually landed on a 480p draft before
 paying for the final.
+
+### Duration budget — spend the seconds where the beat is
+
+Shot density says how many shots and how long each one runs; it says nothing
+about which shots the story actually needs seconds for, and a clip can obey
+every row of that table while still spending more than a third of its
+runtime on the parts nobody came to watch. Measured on job
+`4e5c9581-d462-443b-9663-b1aa6d72f527` (30s, 720p, ten shots, 3.0s each,
+$7.20, accepted but flagged): a 2.5s stand-off, six shots of close-quarters
+combat, one 4.5s decisive-strike shot carrying a speed ramp and a freeze
+frame, then 7 seconds — close to a quarter of the clip — spent recovering
+breath and settling into a stand-down that mirrors the opening shot. The
+repository owner's own words on it: "why is 20 to 30 seconds so plain? Don't
+compress the best part just to make room for the ending — the ending took
+10 seconds, most of it should be the fight." The uniform 3.0s-per-shot
+average that produced this — every shot the same length, none longer or
+shorter than any other — is itself part of the problem: it is the same
+flattening shape "Shot density" already warns against for a static camera,
+just spread across duration instead of across shot count.
+
+**Budget by function, not by shot count**, and check the numbers add up to
+the duration before writing a single shot:
+
+| Register | 20s | 24s | 30s |
+|---|---|---|---|
+| **Action / spectacle** — a fight, a chase, a stunt; the beat's payoff is the middle of the clip, not the last shot | setup ~1.5s, core ~15s, close ~3.5s | setup ~2s, core ~19s, close ~3s | setup ~2s, core ~24s, close ~3–4s |
+| **Dialogue / slice-of-life** — an exchange that lands on a line or an action; the beat's payoff can legitimately be the last shot | setup ~3s, build ~12s, close ~5s | setup ~3.5s, build ~15s, close ~5.5s | setup ~4–5s, build ~17–18s, close ~6–8s |
+
+The two rows are not the same rule with different numbers — they encode
+where the payoff sits. An action beat's payoff is the fight itself, so the
+close is a stand-down after it rather than the destination, and stays the
+smaller number. A dialogue beat's payoff is often the final line or gesture,
+so its close is allowed real weight: job
+`844c9145-9b10-4335-9fdc-ec4937793a2f` gives its last shot the
+sitting-down-and-eating beat the whole scene has been building to, and that
+is the close doing its job, not padding. Pick the row that matches the
+beat's `Arc`, not the clip's genre label — a dialogue scene that resolves
+mid-clip and coasts to a static hold behaves like the action row.
+
+**Slow motion, speed ramps and freeze frames spend real seconds and have to
+come out of this budget, not sit outside it.** The 4.5s decisive-strike shot
+above stacked an extreme speed ramp into a flash-freeze into a resume — three
+effects on one action — to cover what a single clean strike needed about
+half that time for. Cap it: **no more than about 2–3 seconds of
+slow-motion/freeze/speed-ramp effect, total, across a 30-second clip**
+(scale down for shorter clips — roughly 1.5–2s at 20s, 2–2.5s at 24s), and
+default to using the device **once**, on the single best beat, not on every
+hit. A second use is defensible only when each instance stays under about
+1.5s.
+
+**A symmetrical bookend — the last shot mirroring the first — is a
+deliberate flourish, not the default shape of a close.** It reads well (the
+`ARC` line and the shared file's `Endings` section both support it), but it
+is not free: in the job above it cost the close roughly half its budget on
+two static, held shots that do nothing but face each other. If you use it,
+its seconds come **out of** the close row above, not on top of it — a
+mirrored bookend in a 30s action clip should still leave the close at 3–4s
+total, split between the two bookend shots, not 3–4s each.
+
+**"The best part gets more shots and more description" is an instruction
+about density, not just enthusiasm — apply it unevenly on purpose.** The
+counter-example is exactly what produced the flagged clip: ten shots
+averaging 3.0s each, uniformly, so the six-shot melee in the middle got the
+same per-shot allowance as the stand-off that opened it and the stand-down
+that closed it. The fix is not more shots overall — it is fewer, longer
+shots outside the core and more, shorter, more specifically described shots
+inside it: one shot for the setup, one or two for the close, and the core
+written at the dense end of "Shot density" (2–2.5s a shot, one distinct
+action verb per shot) while the shots around it sit at the loose end
+(4–6s). A prompt where every shot is the same length is easy to write and
+hard to notice is flat until the clip is already paid for.
 
 ### Dialogue budget — two tiers
 

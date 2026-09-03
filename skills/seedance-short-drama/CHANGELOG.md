@@ -4,6 +4,55 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.9.0 — a duration budget, so the exciting part stops paying for the ending
+
+Docs only; no script changes. Another correction from a real clip: the
+first 720p short-drama job made with 1.8.0 (2026-09-03, job
+`4e5c9581-d462-443b-9663-b1aa6d72f527`, 30s, ten shots, $7.20) was accepted
+but flagged with four specific complaints — the fight in the middle was
+good, the last third was plain; don't compress the best part to make room
+for the ending; transitions were wasting seconds on slow motion; give the
+repository owner more say in the brief. 1.8.0's `Shot density` table fixed
+*how many* shots and *how long each one runs*; it had nothing to say about
+*which* shots get the seconds, so a clip could pass every row of that table
+and still spend a third of its runtime on a stand-off and a mirrored
+stand-down. Fixed:
+
+- **New "Duration budget — spend the seconds where the beat is."** A
+  function-based split (setup / core / close) in concrete seconds at 20s,
+  24s and 30s, in two rows: action/spectacle (payoff is the middle, close
+  stays small) and dialogue/slice-of-life (payoff can legitimately be the
+  last line, close gets real weight). Slow motion, speed ramps and freeze
+  frames now have an explicit cap — about 2–3s total in a 30s clip, once by
+  default — because the flagged clip's one decisive strike alone ran 4.5s
+  once a speed ramp, a freeze and a resume were stacked on it. A symmetrical
+  bookend (last shot mirrors the first) is documented as optional and priced
+  out of the close budget, not added on top. The uniform ten-shots-at-3.0s
+  pattern that produced the flagged clip is named as the counter-example the
+  section exists to prevent.
+- **"Choosing a transition, not defaulting to a cut" gained a finding that
+  cuts against the direction 1.7.0's research pointed:** a `HARD CUT` label
+  is not a guarantee, because a timeline weighted toward continuous
+  transitions can soften an explicitly named hard cut along with the rest.
+  Two 30-second jobs, read side by side (job `844c9145-9b10-4335-9fdc-ec4937793a2f`,
+  8 boundaries, 3 hard cuts landed as written; job
+  `4e5c9581-d462-443b-9663-b1aa6d72f527`, 9 boundaries, 3 hard cuts, **zero**
+  detected). Two samples, not a threshold — the full comparison is in
+  `ofox-video-core/references/prompt-structure.md`.
+- **Two new brief questions, `Pacing` and `Effects`, in round two of a
+  published deliverable** (`creative-brief.md`'s new second round) — where
+  the runtime goes, and whether a slow-motion or freeze-frame beat belongs
+  in the clip at all. Previously both were left entirely to the agent's own
+  judgement, which is exactly what produced the flagged clip's imbalance
+  without anyone approving it as a choice.
+
+What a caller can do now that they could not before: ask "should the fight
+or the ending get the runtime" as an actual question with concrete second
+counts behind each answer, instead of discovering the answer only after
+paying for a 720p clip; and check a draft's cut points against a documented
+finding that a hard-cut-heavy timeline needs a hard-cut-heavy *mix*, not
+just hard-cut labels.
+
 ## 1.8.0 — the template stopped defaulting to restraint: camera register, a transition menu, shot density
 
 Docs only; no script changes. This release is a correction, not a feature:

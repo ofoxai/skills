@@ -46,7 +46,7 @@ one of them is a question the table already asks better: two resolutions are
 two rows with two prices, which is more informative than an `AskUserQuestion`
 with two labels and no numbers.
 
-## One round
+## One round — two, for a published deliverable
 
 If any axis is open, ask **once** with `AskUserQuestion`: at most **four**
 questions, usually two or three. The axes are independent of each other, so
@@ -56,9 +56,51 @@ they belong in the same call — do not drip one question per message.
 that did not exist before it was given. After that, no more questions: write
 the prompt and `--dry-run` it.
 
-If four slots are not enough: **must-ask first**, then the axis that changes
-the picture most, then the rest. Whatever does not fit takes its default and
-becomes a row in the cost table.
+**A second round of up to four questions is allowed — not "no more
+questions" — when the clip is going out under the user's name rather than
+being previewed once and set aside**: a page asset, a published post, a
+client deliverable, or anything the user describes that way ("for the
+site", "to publish", "for the gallery"). The second round is not a second
+helping of taste questions on top of the first; it is reserved for **how the
+seconds are spent** — see "Pacing questions belong in round two" below.
+Everything else about a round still applies to it: independent axes in one
+call, a recommendation first, "Let the AI decide" last. A single-shot
+preview, an internal draft, or a small request stays at one round; when it
+is unclear which tier applies, default to one round and let a scenario skill
+name the published tier explicitly rather than assume it.
+
+If four slots are not enough, in either round: **must-ask first**, then the
+axis that changes the picture most, then the rest. Whatever does not fit
+takes its default and becomes a row in the cost table.
+
+### Pacing questions belong in round two
+
+Five axes decide how a clip's *seconds* are spent, not what appears in them,
+and until now every scenario skill left all five to the agent's own
+judgement by default — which is how a 30-second clip spent close to a
+quarter of its runtime recovering from its own climax and mirroring its
+opening shot, while the six shots in between carried the entire fight on an
+even, undifferentiated allowance (job
+`4e5c9581-d462-443b-9663-b1aa6d72f527`, 2026-09-03; a scenario skill's own
+account of it is in its `SKILL.md`). These axes are **ask-if-open**, each
+carrying a "Let the AI decide" option like any other taste axis, and when a
+brief has reached round two they belong there rather than in round one —
+round one settles what is in the picture, round two settles how long each
+piece of it holds the screen.
+
+| Axis | What it changes | Ask when |
+|---|---|---|
+| **Duration split** | how many seconds go to the setup, to the core (the fight, the exchange, the reveal — whatever the beat is actually about), and to the close | the clip has a clear "main event" whose share of the runtime is not obvious from the request |
+| **Ending length** | whether the close is where the beat's payoff lands (a final line, a landing action) or a brief settle after the payoff already happened earlier in the clip | the register leaves this open; each scenario skill's own version of this axis says which default applies to which genre |
+| **Slow motion / freeze frame** | whether either appears at all, and how much of the duration budget they are allowed to spend | the request implies a climactic hit, reveal or beat where either is a plausible choice |
+| **Density of the standout segment** | whether the best beat gets shorter, more numerous shots than the segments around it, or the same even spacing as the rest of the clip | the clip runs 20s or longer and has an action, spectacle or comic beat that is meant to be the reason to watch it |
+| **Hard-cut share** | roughly what fraction of the boundaries are true cuts rather than in-camera transitions — a timeline weighted toward continuous transitions can soften even an explicitly written hard cut (see the two 30-second Ofox runs under "Several shots in one job" in `prompt-structure.md`) | more than three boundaries are planned and a definite cutting rhythm matters to the beat |
+
+A scenario skill's own question table carries the exact wording, the
+recommended option and the rest of the options for these axes — this file
+only fixes where they sit and when the second round opens. Not every
+scenario needs all five; add the ones the scenario's axis actually applies
+to.
 
 ## Zero questions is legitimate and common
 
@@ -130,8 +172,9 @@ the question and let the default stand.
 ## Order, with the approval gate
 
 ```
-read input → fill the brief → [open axes] one AskUserQuestion
-→ [only if an answer opens a branch] one follow-up
+read input → fill the brief → [open axes] round one (up to 4 questions)
+→ [an answer opened a branch] one follow-up
+→ [a published deliverable, open pacing axes] round two (up to 4 questions)
 → write the prompt → --dry-run
 → one message: brief recap (AI's picks and inferred values marked) + full prompt + cost table
 → wait for an explicit yes → generate → report the real bill
@@ -164,9 +207,11 @@ Then continue with the same flow.
 
 ## Anti-patterns
 
-1. **More than four questions, or a second round that no answer required.**
-   A follow-up is for a branch an answer opened, not for questions that did
-   not fit in the first call.
+1. **More than four questions in one round, or a second round that neither
+   an opened branch nor the published-deliverable tier justifies.** A
+   follow-up is for a branch an answer opened; a second round is for the
+   pacing axes on a published deliverable — neither is a place for questions
+   that simply did not fit in the first call.
 2. **Asking what the input already settled.** The platform was named and you
    asked for the ratio; an asset was attached and you asked whether one
    exists; the request stated a value and you offered three.

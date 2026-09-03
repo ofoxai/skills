@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.7.0"
+version: "1.8.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.7.0"
+  version: "1.8.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -179,7 +179,9 @@ gallery observation. The beat structure and the locks are the gallery's.
 One action per segment (case 18: `Show only one salon action at a time. Each
 action must last long enough to show the process clearly`), 3–5s each (case
 39 runs 4/3/4/4; case 41 about 2s per outfit). Slots in `<angle brackets>`;
-optional lines in `[square brackets]`.
+optional lines in `[square brackets]`. `a`/`b`/`c` scale to the chosen
+`--duration` — see "Scale the segments, don't copy the stamps" below the
+template.
 
 ```
 [<N> seconds, <1:1 | 9:16 | 16:9 | 4:3>.]                                  — optional; must match the flags (cases 18, 39, 41 write it; the vendor says it is not needed)
@@ -188,18 +190,29 @@ PRODUCT: <product name>, <main colour> with <accent colour>, <material and finis
          [image1 provides the product exactly as it is; take nothing from its background.]
 SCENE: the product centered on a <pure white | light grey | matte neutral> surface against a <pure white | neutral> backdrop; even studio softbox lighting, soft true reflections, no props, no shadows on the backdrop. Background and light do not change.   (case 17 for the surface and light; the white is a listing convention)
 
-0–3s     [REVEAL, optional — <the box lid lifts away | a hand moves away from the lens | the product fades up from dark> to show the product]   (cases 17, 19, 41)
-         | <static front view, product centered, camera still>.
-3–7s     DETAIL — the camera pushes in to a macro of <the seam | hinge | logo | fabric weave>; reflections slide across the surface.   (cases 19, 39, 24)
-7–12s    ORBIT — the camera orbits the product <90 | 180 | 360> degrees at constant height and speed; the product does not move.   (cases 42, 39)
-         | TURNTABLE — the product rotates 360 degrees on its own axis at constant speed; the camera is fixed and centered.   (no gallery prompt; kept as the listing convention)
-12–<N>s  [ACCESSORIES — <A>, <B>, <C> lie neatly beside the main unit; a slow macro pan across them]   (case 17)
-         | back to the front view; hold the final frame.   (cases 39, 40)
+0–<a>s     [REVEAL, optional — <the box lid lifts away | a hand moves away from the lens | the product fades up from dark> to show the product]   (cases 17, 19, 41)
+           | <static front view, product centered, camera still>.
+<a>–<b>s   DETAIL — the camera pushes in to a macro of <the seam | hinge | logo | fabric weave>; reflections slide across the surface.   (cases 19, 39, 24)
+<b>–<c>s   ORBIT — the camera orbits the product <90 | 180 | 360> degrees at constant height and speed; the product does not move.   (cases 42, 39)
+           | TURNTABLE — the product rotates 360 degrees on its own axis at constant speed; the camera is fixed and centered.   (no gallery prompt; kept as the listing convention)
+<c>–<N>s   [ACCESSORIES — <A>, <B>, <C> lie neatly beside the main unit; a slow macro pan across them]   (case 17)
+           | back to the front view; hold the final frame.   (cases 39, 40)
 
 SOUND: none.                                                                — and `--generate-audio false`
 AVOID: subtitles, logo overlays, watermarks, interface graphics; deformation, parts clipping through each other, duplicated accessories; floating objects; camera shake, zoom, sudden reframing; fast cuts, jump cuts; a CGI look.   (cases 38, 40, 41, 18, 24)
 hyper-realistic textures, realistic reflections, smooth 60fps motion, 4K.   (cases 16, 17, 19, 24, 39 — a gallery habit, effect unverified; resolution comes from --resolution, not the prompt)
 ```
+
+**Scale the segments, don't copy the stamps.** REVEAL, DETAIL and ORBIT
+alone already run to about 12s at their default lengths, so a literal
+`0–3s / 3–7s / 7–12s / 12–<N>s` reading only fits a 15s clip — at 10s or 12s
+it leaves ACCESSORIES zero or negative seconds. Scale `a`, `b` and `c` to
+the `--duration` actually chosen instead. The worked example below keeps the
+same shape at a shorter total (3/6/10/12): REVEAL and DETAIL get one beat
+each, ORBIT gets the single largest share because showing the product from
+every angle is the point of a catalog clip, and ACCESSORIES — the one
+segment that isn't the product itself — stays the smallest, 2–3s, never the
+majority of the clip.
 
 Notes on the slots:
 

@@ -4,6 +4,54 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.13.0 — a second finding on hard cuts, and a second round for a published deliverable
+
+Docs only; no script changes. Both additions trace back to one accepted-but-
+flagged clip: the first 720p `seedance-short-drama` job made on the 1.12.0
+references (2026-09-03, job `4e5c9581-d462-443b-9663-b1aa6d72f527`, 30s, ten
+shots, $7.20) obeyed every rule these two shared files already stated and
+still drew four specific complaints from the repository owner — a plain
+back half, a compressed climax, seconds wasted on transitions, and a request
+for more say in the brief before the job runs.
+
+- **New "Two 30-second jobs past that envelope: the mix, not the label,
+  decided" under "Several shots in one job."** The existing envelope
+  (three shots in eight seconds) said nothing about longer timelines with a
+  mix of hard cuts and named continuous transitions. Two 30-second jobs fill
+  that gap and contradict each other on the one claim either alone would
+  support: job `844c9145-9b10-4335-9fdc-ec4937793a2f` (8 boundaries, 3 hard
+  cuts against 5 continuous) had every explicit label render as written; job
+  `4e5c9581-d462-443b-9663-b1aa6d72f527` (9 boundaries, 3 hard cuts against
+  6 continuous) had **zero** of its written hard cuts detected at threshold
+  0.3 — the whole clip read as one continuous flow. Stated as a working
+  hypothesis from two samples, not a threshold: a boundary's rendering isn't
+  decided independently of the rest of the timeline, so a timeline weighted
+  toward continuous transitions can soften an explicitly labeled hard cut
+  too.
+- **`creative-brief.md` now allows a second round of up to four questions
+  when the deliverable is published** (a page asset, a client deliverable,
+  anything the user describes that way) rather than previewed once and set
+  aside. The second round is reserved for a new class of axis —
+  **"Pacing questions belong in round two"**: duration split, ending
+  length, slow motion/freeze frame use, density of the standout segment, and
+  hard-cut share — all five of which every scenario skill previously left
+  entirely to the agent's own judgement, by default, with no question and no
+  approval step in between. The flow diagram and anti-pattern 1 were updated
+  to match; a follow-up (branch-triggered) and a round two (published-tier)
+  are now two different, both-legitimate reasons to ask again.
+
+`seedance-short-drama` 1.9.0 is the first scenario skill to wire the new
+round-two axes into its own question table (`Pacing`, `Effects`) and to add
+its own "Duration budget" section with concrete second counts. The other
+three scenario skills were audited for the same duration-imbalance risk in
+the same pass: `seedance-product-video` needed a related fix (its own
+1.8.0 entry — a template whose segments didn't scale with `--duration`);
+`seedance-ad-creative` and `seedance-anime-drama` did not change, because
+their existing templates already bound their equivalent risk (a one-second
+cap on the ad climax's slow motion already in the template text; an
+escalation-driven segment structure for anime that does not front-load a
+static setup or close).
+
 ## 1.12.0 — `prompt-structure.md`: shot density measured per case, and the transition choice made visible
 
 Docs only; no script changes. Both additions come from a real failure: the

@@ -408,6 +408,39 @@ in 30s stays gallery practice); dialogue running across a cut; any resolution
 other than 480p; the `volcengine` upstream. Treat a first attempt at any of
 those as an experiment, and price it as one.
 
+### Two 30-second jobs past that envelope: the mix, not the label, decided
+
+The three-shot/8-second envelope above is deliberately narrow. Two more
+`bytedance/seedance-2.5` jobs, both 30 seconds and both scene-detected at
+threshold 0.3 (and again at a looser 0.12), go one step past it — still
+first attempts each, not a settled rule, and the only two data points anyone
+has yet for what a longer timeline with a *mix* of hard cuts and named
+in-camera transitions actually does.
+
+| Job | Resolution | Boundaries | Written mix | What threshold-0.3 detection found |
+|---|---|---|---|---|
+| `844c9145-9b10-4335-9fdc-ec4937793a2f` | 480p | 8 | 3 hard cuts, 5 named continuous (a pass-through, two occlusions, a no-cut tilt, a no-cut pull-back) | all 3 hard cuts detected within about 1.5s of their stamps; 4 of the 5 continuous boundaries stayed continuous (undetected); the fifth (the pull-back) triggered a detection that may be the pull-back's own large frame change rather than a cut |
+| `4e5c9581-d462-443b-9663-b1aa6d72f527` | 720p | 9 | 3 hard cuts, 6 named continuous (three occlusions, a pass-through, a speed ramp used as a transition, a no-cut pull-back) | **zero** of the 3 written hard cuts detected; the entire 30 seconds read as one continuous flow. At the looser threshold 0.12, 9 brightness/motion changes turned up, none aligned cleanly with the written hard-cut stamps |
+
+Read side by side, the two jobs contradict each other on the one claim
+either alone would support. The first reads as "an explicitly named
+boundary renders as named" — its hard cuts landed, its continuous
+boundaries stayed continuous. The second breaks that: the same explicit
+`HARD CUT` label, in the same model at the same duration, rendered as
+nothing of the kind. The only variable that moved between the two jobs is
+the mix — 5-of-8 boundaries named continuous in the first, 6-of-9 in the
+second — so the working hypothesis is that **a boundary's rendering is not
+decided independently of the rest of the timeline**: a timeline weighted
+enough toward continuous transitions can pull an explicitly labeled hard cut
+toward continuous along with it. This is two samples, not a threshold —
+nobody knows where the mix stops holding a hard cut as a hard cut, and the
+gap between 5-of-8 and 6-of-9 is small enough that the real trigger could be
+something neither job isolates on its own (the boundary count, the
+resolution, the specific transition kinds used). If a real cutting rhythm
+matters to the shot, weight the mix toward hard cuts rather than assuming a
+named `HARD CUT` is safe on its own, and check a 480p draft's actual cut
+points before paying for a longer or higher-resolution job.
+
 ### Where `chain` fits
 
 `ofox-video.sh chain` carries the last frame of one job into the first frame

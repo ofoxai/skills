@@ -4,6 +4,40 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.8.0 — the segmented template's timestamps didn't scale, and ACCESSORIES could go negative
+
+Docs only; no script changes. Prompted by an audit of every scenario
+skill's template after a real short-drama clip was accepted but flagged for
+spending too much of its runtime on setup and the ending instead of the
+part the clip was actually for (`seedance-short-drama`'s 1.9.0). This
+skill's own "Full template — 10–15s, three or four segments" was checked
+for the same failure shape and found a related but different defect: its
+absolute stamps (`0–3s / 3–7s / 7–12s / 12–<N>s`) do not scale with
+`--duration`. REVEAL, DETAIL and ORBIT alone already run to 12s at those
+literal numbers, so the template only fits a 15s clip as written — at 10s
+or 12s, the recommended low end of this skill's own duration default,
+ACCESSORIES is left with zero or negative seconds, and the abstract
+template's stamps didn't even match its own worked example (which uses
+3/6/10/12, not 3/7/12/N).
+
+- **The four stamps are now `<a>`/`<b>`/`<c>` placeholders**, scaled to the
+  chosen `--duration` rather than copied literally, with a new note
+  directly under the template ("Scale the segments, don't copy the
+  stamps") spelling out why and pointing at the worked example's actual
+  proportions.
+- **ACCESSORIES' proportion was checked, not just its arithmetic**: it
+  stays the smallest segment by design — 2–3s, never the majority — while
+  ORBIT keeps the single largest share, because showing the product from
+  every angle is the point of a catalog clip. This skill's plain,
+  restrained positioning is unchanged; this release fixes a template that
+  couldn't produce a valid prompt at its own recommended durations, not the
+  skill's stance on how showy a listing clip should be.
+
+Ad-creative and anime-drama were audited in the same pass and needed no
+change — see `seedance-short-drama`'s 1.9.0 changelog entry for why, and
+`ofox-video-core`'s 1.13.0 entry for the shared two-30-second-job finding
+that motivated the audit.
+
 ## 1.7.0 — creative brief, segmented catalog template, camera-orbit default
 
 New:
