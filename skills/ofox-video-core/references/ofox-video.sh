@@ -1619,10 +1619,15 @@ cmd_last_frame() {
 # ---------------------------------------------------------------------------
 # chain: N shots, each opening on the previous shot's closing frame
 #
-# One job is one continuous take, so a multi-shot sequence means multiple jobs
-# — and separate jobs share nothing, so the character, set and lighting drift
-# between them. Feeding shot N-1's last frame in as shot N's first frame is the
-# lever this API gives you against that.
+# One job is one 4-30s clip, and a clip CAN hold several shots joined by hard
+# cuts written as timestamps (verified 2026-09-03 — see "Several shots in one
+# job" in references/prompt-structure.md). So this subcommand is not "the way
+# to get multiple shots": it is continuity ACROSS jobs, for a sequence past the
+# duration ceiling or when each shot needs its own approval, seed or
+# resolution. Separate jobs share nothing, so the character, set and lighting
+# drift between them; feeding shot N-1's last frame in as shot N's first frame
+# is the lever this API gives you against that. The two compose — each job in a
+# chain can itself carry several timestamped shots.
 #
 # Same house rules as batch: estimate before spending, one job at a time via
 # cmd_generate (no-resubmit holds for free), stop on first failure, report real

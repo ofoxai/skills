@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.10.0"
+version: "1.11.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.10.0"
+  version: "1.11.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -67,10 +67,17 @@ always announced on stderr, never silent.
 
 ## Multi-shot sequences (`chain`)
 
-One job is one continuous take, so a sequence means several jobs — and
-separate jobs share nothing, so the set, lighting and framing drift between
-them. `chain` carries each shot's closing frame into the next one as its
-opening frame:
+One job is one 4-30 second clip, and that clip **can** hold several hard-cut
+shots marked with timestamps — verified on this path, with the job ids and
+the untested range in `references/prompt-structure.md`, "Several shots in one
+job". So a multi-shot sequence does not automatically mean several jobs.
+
+`chain` is for **continuity across jobs**: when a sequence runs past one
+job's duration ceiling, or when each shot needs its own approval, seed or
+resolution. Separate jobs share nothing, so left alone their set, lighting
+and framing drift apart; `chain` carries each shot's closing frame into the
+next one as its opening frame. The two mechanisms combine rather than compete
+— every job in a chain can itself contain several timestamped shots:
 
 ```bash
 bash references/ofox-video.sh chain \
@@ -112,10 +119,11 @@ Nothing is generated and nothing is billed, but the chain stops there.
 
 So chaining works for products, landscapes, illustration and anime, and
 **does not work for live-action human sequences** on this model. That is why
-`seedance-anime-drama` can reuse a character sheet across shots while a
-short-drama sequence cannot. `--real-person true` exists for authorized
-real-person references and Ofox documents it for `bytedance/seedance-2.0`;
-whether it lifts the restriction on 2.5 is untested here — don't promise it.
+`seedance-anime-drama` can open each of its shots on a generated frame of
+the character while a short-drama sequence cannot. `--real-person true` exists
+for authorized real-person references and Ofox documents it for
+`bytedance/seedance-2.0`; whether it lifts the restriction on 2.5 is untested
+here — don't promise it.
 
 ### Extracting a frame on its own
 
@@ -552,6 +560,35 @@ is scenario-specific (which command to dry-run, which parameters matter). The
 four scenario skills each used to carry their own prose version of "quote it,
 get a yes" and they had already begun to diverge — the shared file exists so
 that stops happening.
+
+### Writing the prompt: one shared structure reference
+
+**Load [`references/prompt-structure.md`](references/prompt-structure.md)
+before writing a prompt.** It is the prompt-structure reference shared by
+every Seedance scenario skill: the vendor's own formula, the header-manifest
+-> timeline -> closing-block skeleton, when and how to timestamp segments,
+transition and camera vocabularies, pacing, consistency locks and negative
+lists, dialogue density by tier, the two meanings of an attached image (frame
+lock vs. identity reference, and the `--extra-json` form for the latter), and
+endings — every item tagged with the gallery cases it was observed in. A
+scenario skill keeps only its own template and links that file for the rest,
+exactly as it links `approval-gate.md` for the spend rule. This `SKILL.md`
+does not restate it: the script runs whatever `--prompt` it is given, and the
+shape of that text is the scenario layer's job.
+
+### Asking before writing: one shared brief reference
+
+**Load [`references/creative-brief.md`](references/creative-brief.md) before
+asking the user anything.** It is the shared rule for the pre-generation
+brief: the three tiers of axis, one `AskUserQuestion` round of at most four
+questions, the shape of a question, the "Let the AI decide" discipline, the
+generic skip rows, how the brief recap rides along with the cost table, the
+fallback when the runtime has no `AskUserQuestion`, and the anti-patterns. A
+scenario skill keeps only its own question set, its scenario-specific
+inference rows, its answer-to-prompt map and a worked recap. Three shared
+files, three jobs: what to ask (`creative-brief.md`), how to write
+(`prompt-structure.md`), what to show before spending
+(`approval-gate.md`).
 
 ## Compatible with existing prompt-writing skills
 

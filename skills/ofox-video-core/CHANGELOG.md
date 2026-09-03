@@ -4,6 +4,72 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.11.0 — two shared references for every Seedance scenario skill: prompt structure and the creative brief
+
+- **New `references/prompt-structure.md`**: how to structure the text that
+  goes into `--prompt`, distilled from the 63-prompt Seedance 2.5 gallery (24
+  ByteDance first-party, 39 community). The vendor's own formula and worked
+  example; the header-manifest -> timeline -> closing-block skeleton; when to
+  timestamp (56% of prompts do; 78% of 16–30s ones), which formats are in use
+  and how long a segment runs; the two things a timestamp can mean; transition,
+  camera, pacing and ending vocabularies; consistency locks and negative lists;
+  dialogue density in two tiers; and the two meanings of an attached image —
+  first-frame lock (`--frame-first-image`) versus identity reference
+  (`input_references` through `--extra-json`) — with the API constraints that
+  decide between them. Every entry carries the case numbers it was observed
+  in, and the file says up front that frequency is not effect.
+- **New `references/creative-brief.md`**: the other half of the same job —
+  what to ask the user *before* a prompt exists. The three tiers (must-ask /
+  ask-if-open / never-ask) and why a never-ask axis belongs in the cost table
+  rather than in a question; one `AskUserQuestion` round of at most four
+  questions with at most one branch follow-up; zero questions as a legitimate
+  and common outcome; the shape of a question (12-character header, a
+  recommendation first, visibly different pictures, no hand-rolled "Other");
+  the three rules for "Let the AI decide" (always last, never pre-selected,
+  resolves to a concrete value marked `(AI's pick)`, and a blanket "you
+  decide" never covers must-ask); the generic skip rows (platform words to
+  ratios, an attached asset, a repeat request in one session); the rule that
+  every answer must be findable in the prompt or a flag; the order with the
+  approval gate and the recap format; the fallback for a runtime with no
+  `AskUserQuestion`; and ten anti-patterns. Scenario vocabulary is
+  deliberately absent — each scenario skill supplies its own question set,
+  inference rows and recap example.
+- **What callers do**: nothing changes in the script or its flags. Scenario
+  skills load `references/prompt-structure.md` before writing a prompt and
+  `references/creative-brief.md` before asking anything, and link both
+  instead of restating them, the same way they link `approval-gate.md`. The
+  1.7.0 releases of `seedance-short-drama`, `seedance-anime-drama`,
+  `seedance-ad-creative` and `seedance-product-video` do so and keep only
+  their scenario-specific template and question set.
+- **"Several shots in one job" carries a real-run record, not a
+  placeholder.** Prompt text cannot show whether a video honoured its cuts,
+  so the section was drafted with a `VERIFY-MULTICUT` marker and then filled
+  from two paid `bytedance/seedance-2.5` runs on `byteplus` (2026-09-03, 8s,
+  480p, three shots each). Both cut where the timestamps said, to about ±1s,
+  in bare-timestamp and in manifest + `SHOT N` notation, and one character
+  survived three shots on text alone. The subsection also lists what those
+  runs did not cover — 30s or 8+ shots, dialogue across a cut, resolutions
+  other than 480p, `volcengine` — so scenario skills can say "verified" only
+  where it is.
+- **`SKILL.md`'s `chain` section no longer opens on the claim this release
+  disproves.** It began "One job is one continuous take, so a sequence means
+  several jobs", which contradicted the new reference and the four scenario
+  skills. It now says a job is one 4-30s clip that can hold several
+  timestamped hard cuts, and frames `chain` as continuity *across* jobs — for
+  a sequence past the duration ceiling, or when each shot needs its own
+  approval, seed or resolution — with the two mechanisms combinable rather
+  than alternatives. The commands and verified-behaviour notes below it are
+  unchanged. Also corrected in the real-person subsection: what
+  `seedance-anime-drama` reuses across shots is a generated frame of the
+  character, not a character sheet — that skill's 1.7.0 forbids feeding a
+  design sheet to `--frame-first-image`.
+- `SKILL.md` links both files from "For scenario skills built on this", one
+  subsection each, and names the division of labour between the three shared
+  references. No behaviour change and no test changes; the one edit inside
+  `ofox-video.sh` is `cmd_chain`'s header comment, which opened on the same
+  retired claim — left alone, it is where the next maintainer would read it
+  back out and re-propagate it.
+
 ## 1.10.0 — one approval gate, shared by every skill in this repo
 
 - **New `references/approval-gate.md`**: the single spec for "never spend
