@@ -69,7 +69,7 @@ cheapest-first chain and uses the first model that is actually available:
 is ordered by the wrong one.** Measured 2026-09-02: `mai-image-2.5-flash`
 spends 1024 output tokens on an image, `gpt-image-2` spends 196. So the
 15%-more-expensive-per-token model is **4.5x cheaper per image**
-($0.00595 vs $0.026694). The chain has **not** been reordered on two samples
+(0.595 cents vs 2.6694 cents). The chain has **not** been reordered on two samples
 per model, but do not re-derive its ordering from the rate card either — the
 comparable figure is rate x that model's own measured token count. Full numbers
 and the caveats on them: `references/pricing.md`.
