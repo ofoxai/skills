@@ -4,6 +4,79 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.7.0 — creative brief, timestamped ad template, multi-shot inside one job
+
+New:
+
+- **"Before writing the prompt: the creative brief."** Before any prompt is
+  written the skill fills a four-axis brief — product photo (must-ask, no
+  delegation option), brand tone, hero camera move, aspect ratio — and asks
+  only the open axes. The rules that govern that — the three tiers, **one**
+  `AskUserQuestion` call of at most four questions with one dependency
+  follow-up, "Let the AI decide" always last and never pre-selected, a
+  delegated pick resolved to a concrete value marked `(AI's pick)`, the recap
+  in the same message as the prompt and the cost table, the generic skip
+  rows, the fixed flow (read → brief → ask → prompt → `--dry-run` → recap +
+  prompt + table → yes → generate), and the anti-patterns — live once in
+  `ofox-video-core/references/creative-brief.md` and are linked, not
+  restated. This skill keeps its own question set and its own inference rows
+  ("premium" → Luxury, "young" → Playful, "orbit" → slow orbit, "spin" or
+  "white background" → out of scope, that is `seedance-product-video`), so
+  that **zero questions is a normal outcome**. Resolution is never asked —
+  720p and 1080p are two rows in the cost table.
+- **"Prompt template."** Template A (15–30s: header manifest, then hook →
+  showcase → slow-motion climax → hero close with slogan or logo, 3–5s per
+  segment, AUDIO / CONSISTENCY / AVOID blocks), Template B (10s or less,
+  three beats, marked as inferred — the gallery has no ad under 20s), a UGC
+  variant slot table (cases 24–27), and a worked example adapted from the
+  official fruit-biscuit ad (case 12, translated, timestamps added).
+  Vocabulary is not restated: the template points at
+  `ofox-video-core/references/prompt-structure.md` by section heading.
+
+Behaviour changes a caller may notice:
+
+- **Prompt order is no longer product-first.** All nine gallery ad prompts
+  open with a style/format line (or the reference-image anchor) and place
+  the product second or third; none leads with the product. Prompts of 15s
+  and longer now use a header manifest (FORMAT → STYLE → CHARACTER → PRODUCT
+  → SCENE → timeline → CAMERA → AUDIO → CONSISTENCY / AVOID); 10s and
+  shorter follow the vendor's subject-first formula. The file says plainly
+  that there is no A/B evidence for either order, only no case for the old
+  one.
+- **Several shots inside one job are now the documented route for cuts.**
+  Verified on Ofox 2026-09-03 (two three-shot prompts, `seedance-2.5`,
+  `byteplus`, 8s, 480p, 16:9, no audio, pure text-to-video with no image
+  attached — both cut within about one second of the written timestamps).
+  Not covered by those runs: more than three shots, clips longer than 8s,
+  an attached reference image, cuts with dialogue, other resolutions,
+  `volcengine`. Template A's own four or five beats are therefore flagged
+  as beyond the tested count. "Multi-shot ad sequences" is replaced by
+  "Several shots: timestamps inside one job, `chain` across jobs" — `chain`
+  is for sequences past the 30s ceiling or shots that need their own
+  approval, seed or resolution, not for every cut.
+- **Duration default stays at 10s but is now flagged as a draft length**:
+  every gallery ad with a stated length runs 20–30s. When the user gives no
+  duration the recap says so and offers 15–20s as a row.
+- **The product-photo section names both image semantics.**
+  `--frame-first-image` (first frame, verified) and identity references via
+  `--extra-json '{"input_references":[…]}'` (up to 9 images, element shape
+  from `api-params.md`, not run end to end here), and states that the two
+  are mutually exclusive (`references_conflict`). New failure-table rows for
+  `references_conflict`, `input_moderation_failed` and "the clip did not cut
+  where written".
+- **Real-person reference frames**: the section now says Seedance 2.5
+  image-to-video refuses them at submission and that `--real-person true`
+  is untested on 2.5; the recommended route is a text-described person with
+  the product locked to the image. The UGC variant table repeats this for
+  creator-style clips.
+- `description` now mentions the brief and the timestamped shape; triggers
+  are unchanged.
+
+What to do: nothing breaks. Agents that previously jumped from request to
+`--dry-run` should now fill the brief first and expect to ask 0–3 questions
+before quoting. Callers who copied the old product-first example still get a
+valid prompt; the new order is what the collected ads look like.
+
 ## 1.6.0 — link the shared approval gate instead of restating it
 
 - "Cost: quote it, get a yes, then spend it" and "Before you spend: show the

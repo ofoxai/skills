@@ -4,6 +4,102 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.7.0 — creative brief, segmented catalog template, camera-orbit default
+
+New:
+
+- **"Before writing the prompt: the creative brief."** Before any prompt is
+  written the skill fills a four-axis brief — product photo and target
+  platform / aspect ratio (both must-ask, neither has a delegation option),
+  background, motion — and asks only the open axes. The rules that govern
+  that — the three tiers, **one** `AskUserQuestion` call of at most four
+  questions with one dependency follow-up, "Let the AI decide" always last
+  and never pre-selected, a delegated pick resolved to a concrete value
+  marked `(AI's pick)`, the recap in the same message as the prompt and the
+  cost table, the generic skip rows, the fixed flow (read → brief → ask →
+  prompt → `--dry-run` → recap + prompt + table → yes → generate), and the
+  anti-patterns — live once in
+  `ofox-video-core/references/creative-brief.md` and are linked, not
+  restated. This skill keeps its own question set and its own inference rows
+  ("Etsy" → 1:1, "4:3 legacy catalog" → 4:3, "white background" → pure
+  white, "spin" → turntable, "orbit" → camera orbit, an attached photo →
+  image-to-video) so that **zero questions is a normal outcome**.
+  Resolution, duration and audio are never asked — they are rows in the cost
+  table.
+- **"Prompt template."** A full template (10–15s, three or four segments:
+  optional plain reveal → detail push-in → orbit or turntable → accessory
+  pan, one action per 3–5s segment, consistency lock, negative list,
+  technical tail marked "gallery habit, effect unverified"), a compact 5s
+  orbit template, and a worked example adapted from the community
+  hair-dryer reveal (case 17). Vocabulary is not restated: the template
+  points at `ofox-video-core/references/prompt-structure.md` by section
+  heading.
+
+Behaviour changes a caller may notice:
+
+- **Default motion is now "the camera orbits, the product stays still".**
+  Every rotation in the gallery's product-adjacent prompts is written as
+  camera movement (official case 42's `360-degree orbit`, case 39) or a hand
+  turning the product (case 24); none writes a turntable with a fixed
+  camera. The turntable sentence is kept as the alternative and is what the
+  brief picks when the user says "spin" or "turntable".
+- **The pure white background is now labelled a marketplace convention, not
+  gallery evidence.** The gallery's cleanest product prompt (case 17) uses a
+  reflective studio surface; case 41 pins its background rather than
+  removing it. The brief offers pure white (recommended), light grey studio,
+  or the photo's own background.
+- **"Prefer a real product photo — practically require it" is replaced by a
+  two-row rule**: a real SKU (logo, printed label, distinctive geometry,
+  brand packaging) requires the photo; a category prototype or fictional
+  brand may go text-only, with expectations set — the gallery's four
+  product-video prompts (cases 16–19) are all text-only and all fictional.
+  The section also states that **an AI-generated product image is not a
+  substitute for a photo of the real item**: no gallery product case takes
+  that route, and a generated image can be wrong in the same ways the video
+  can, then lock the error in as the first frame.
+- **Aspect ratio moved from "ask the user" in the defaults table to a
+  must-ask brief item** with four platform options (1:1 marketplace
+  recommended, 9:16 TikTok Shop, 16:9 detail page, 4:3 legacy catalog). The
+  reason is unchanged: with a photo attached the output follows the photo's
+  shape, so the photo has to be cropped or padded to the ratio before
+  generating.
+- **Several shots inside one job are now the documented route for cuts.**
+  Verified on Ofox 2026-09-03 (two three-shot prompts, `seedance-2.5`,
+  `byteplus`, 8s, 480p, 16:9, no audio, pure text-to-video with no image
+  attached — both cut within about one second of the written timestamps).
+  Not covered by those runs: more than three shots, clips longer than 8s,
+  an attached reference image (this skill's usual route), cuts with
+  dialogue, other resolutions, `volcengine`. The full template's four
+  segments are one beyond the tested count and the file says so.
+  "Multi-shot product sequences" is replaced by "Several shots: timestamps
+  inside one job, `chain` across jobs" — `chain` is for sequences past the
+  30s ceiling or shots that need their own approval, seed or resolution.
+- **Both image semantics are named**: `--frame-first-image` (first frame,
+  verified, the default here) and identity references via
+  `--extra-json '{"input_references":[…]}'` for several angles of one
+  product (up to 9 images; element shape from `api-params.md`; not run end
+  to end in this repo). The two are mutually exclusive
+  (`references_conflict`). New failure-table rows for `references_conflict`,
+  `input_moderation_failed`, "the output is the photo's shape" and "the clip
+  did not cut where written".
+- **Real-person reference photos** (a hand modelling a ring): the file now
+  says Seedance 2.5 image-to-video refuses them at submission and that
+  `--real-person true` is untested on 2.5; the reliable route is a photo of
+  the product alone.
+- Duration default is `5` for the compact orbit and `10`–`15` for the
+  segmented template, instead of a single `5`.
+- `description` now mentions the brief and "a simple camera orbit or
+  turntable motion"; scope (catalog footage, no people, no brand mood) and
+  triggers are unchanged. When NOT to use adds the border case with
+  `seedance-ad-creative` (a clean showcase with a lid reveal, case 17): the
+  test is whether there is a brand narrative or emotional tone to carry.
+
+What to do: nothing breaks. Agents that previously jumped from request to
+`--dry-run` should now fill the brief first and expect to ask 0–3 questions
+before quoting — and must settle the platform ratio before any photo is
+attached. Callers who copied the old turntable example still get a valid
+prompt; it is now the alternative rather than the default.
+
 ## 1.6.0 — link the shared approval gate instead of restating it
 
 - "Cost: quote it, get a yes, then spend it" and "Before you spend: show the

@@ -1,12 +1,12 @@
 ---
 name: seedance-product-video
-description: Generate a clean, catalog-style e-commerce product video from a real product photo (or, less reliably, a text description) using the Ofox video API (Seedance 2.5) — writes a plain-background, literal-accuracy prompt (precise product description, simple turntable/orbit motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
+description: Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.6.0"
+version: "1.7.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.6.0"
+  version: "1.7.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -23,18 +23,31 @@ metadata:
 # seedance-product-video: clean e-commerce product showcase videos
 
 Turns a product photo into a plain-background catalog/listing clip: a
-precise product description plus a simple turntable or orbit motion become a
-Seedance 2.5 image-to-video prompt, which this skill submits, polls,
-downloads, and reports the cost for.
+precise product description plus a simple camera orbit or turntable motion
+become a Seedance 2.5 image-to-video prompt, which this skill submits,
+polls, downloads, and reports the cost for.
 
 This skill is a thin, scenario-specific layer over
 [`ofox-video-core`](../ofox-video-core/SKILL.md). It owns the product-video
-prompt craft, recommended defaults, and the pre-generation cost estimate;
-`ofox-video-core` owns talking to the Ofox API correctly and safely (the
-`OFOX_API_KEY` handling, the no-resubmit rule, error-code mapping,
-download/verification, and reporting the downloaded file's absolute
-`VIDEO_PATH`). **Read that skill's safety contract before using this one** —
-it is not restated here.
+prompt craft, the creative brief, recommended defaults, and the
+pre-generation cost estimate; `ofox-video-core` owns talking to the Ofox API
+correctly and safely (the `OFOX_API_KEY` handling, the no-resubmit rule,
+error-code mapping, download/verification, and reporting the downloaded
+file's absolute `VIDEO_PATH`). **Read that skill's safety contract before
+using this one** — it is not restated here.
+
+The prompt structure shared by every Seedance scenario skill — the vendor's
+formula, timestamp formats and segment lengths, camera vocabulary,
+consistency locks and negative lists, the two meanings of an attached image
+— lives in
+[`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md).
+Load it before writing a prompt. This file only adds what is specific to
+catalog footage.
+
+The rules for the questions that come **before** a prompt exists are shared
+the same way, in
+[`../ofox-video-core/references/creative-brief.md`](../ofox-video-core/references/creative-brief.md);
+the brief section below carries only this scenario's question set.
 
 ## Before generating: the availability check
 
@@ -49,48 +62,277 @@ an `OFOX_API_KEY` at `https://app.ofox.ai`) — don't dead-end the
 conversation, and don't re-run this check on every subsequent request once
 it has passed.
 
-## Prefer a real product photo — practically require it
+## Before writing the prompt: the creative brief
 
-For this scenario, literal accuracy (exact shape, printed text, logo,
-color, material) matters more than in any other Seedance use case: the
-output is catalog/listing content a shopper compares directly against the
-real item, so an invented detail is a real problem, not just an aesthetic
-one. Pure text-to-video is far more likely to hallucinate an inaccurate
-shape or garble label text than image-to-video is. If the user has a
-product photo at all, always use `--frame-first-image` with it rather than
-describing the product purely in text — treat a text-only prompt as a
-fallback only when no photo exists, and set expectations accordingly (the
-result may not exactly match the real product).
+The shared rules are in
+[`../ofox-video-core/references/creative-brief.md`](../ofox-video-core/references/creative-brief.md)
+— the three tiers, one round of at most four questions, the shape of a
+question, the "Let the AI decide" discipline, the generic skip rows, the order
+with the approval gate, the fallback for a runtime without
+`AskUserQuestion`, and the anti-patterns. Read it before writing a prompt.
+This section adds only what is specific to catalog footage.
+
+For catalog footage two of the axes are not taste at all: without the photo
+the product may come out wrong, and without the ratio the photo cannot be
+prepared, because once an image is attached the output ratio follows the image
+and cannot be changed afterwards — a wrong ratio is a paid clip in the bin.
+Zero questions is still common: "5-second white-background orbit of this mug
+for my Etsy listing" plus an attached photo has settled every axis.
+
+| Tier | Product-video axes |
+|---|---|
+| **must-ask** | is there a product photo? which platform, hence which aspect ratio? Both come **first** — the answers decide the prompt route and the crop applied to the photo. |
+| **ask-if-open** | background, the camera motion |
+| **never-ask** | resolution, model, provider, audio (off in this scenario), duration. 720p vs 1080p is **two rows in the cost table**, not a question. |
+
+If four slots are not enough: the two must-ask items first, then
+`Background`, then `Motion`; anything left falls to a default and the cost
+table.
+
+**Neither must-ask question carries a "Let the AI decide" option.** A photo
+that does not exist cannot be invented, and a ratio chosen after the image
+exists is too late. The aspect question fills its slot with four platform
+options instead; if the user answers "I don't know" in free text, fall to
+`1:1` and mark it `(AI's pick)` in the recap.
+
+### The product-video question set
+
+| # | Tier | `header` | Question | Options (1 = recommended) | Ask when |
+|---|---|---|---|---|---|
+| 1 | must-ask | `Photo` | Do you have a photo of the product? A listing is compared against the real item, so the photo is what keeps the shape and label right. | **Yes — I'll give a local path (recommended)**: image-to-video from the real photo; every gallery prompt that had to match a real product or logo used an image (cases 12, 13, 24). / **No — describe it in text**: acceptable for a generic item or a fictional brand (the gallery's product prompts, cases 16–19, are all text-only and all fictional); for a real SKU the result may not match the item — I will say so. **No AI option.** | No image attached and the user did not say "no photo". |
+| 2 | must-ask | `Aspect` | Which platform is this for? It fixes the frame shape, and with a photo I have to crop or pad the photo to that shape before generating. | **1:1 marketplace grid (recommended)**: Amazon, Etsy, Shopify, eBay listings. / **9:16 TikTok Shop and mobile storefronts**. / **16:9 website product-detail page**. / **4:3 legacy catalog template**. **No AI option** — four platform options fill the slot; a free-text "don't know" falls to 1:1, marked (AI's pick). | No platform or ratio in the request. |
+| 3 | ask-if-open | `Background` | What should sit behind the product? | **Pure white (recommended)**: what most marketplace listing rules ask for; no props, no shadows on the backdrop. / **Light grey studio**: a soft neutral surface with true reflections (the gallery's cleanest product prompt, case 17, uses a bright reflective surface with softbox light). / **Keep the photo's own background**: the scene stays as shot, pinned in place (case 41 locks its background geometry rather than removing it). / **Let the AI decide**. | No background word in the request. |
+| 4 | ask-if-open | `Motion` | How should the product be shown? | **Camera orbits, product still (recommended)**: every rotation in the gallery is written as camera movement or as a hand turning the product (`360-degree orbit`, official case 42; `the camera slowly circles the build platform`, case 39). / **Product turntable 360, camera fixed**: the classic listing spin; no gallery prompt writes it this way, kept because platforms ask for it. / **Slow push-in on a detail**: one feature fills the frame (cases 19, 24, 39). / **Let the AI decide**. | No motion word in the request. |
+
+Not asked: 720p vs 1080p (two rows in the cost table); duration (5s for a
+single orbit, 10–15s for the segmented template — a row, and the recap says
+which); model, provider, the audio flag (off here).
+
+### Skip rows specific to product-video
+
+On top of the generic rows in `creative-brief.md`:
+
+| Input says… | Axis | Value |
+|---|---|---|
+| a product photo is attached, or a path is given | Photo | have one → image-to-video; do not ask whether there is one |
+| eBay, "marketplace", "main image", "listing grid" | Aspect | `1:1` |
+| TikTok Shop, "mobile store" | Aspect | `9:16` |
+| "product page", "detail page" | Aspect | `16:9` |
+| "catalog template", "4:3", "legacy" | Aspect | `4:3` |
+| "white background", "white", "cut out", "clean" | Background | pure white |
+| "grey", "studio", "neutral" | Background | light grey studio |
+| "keep the background", "as shot", "in place" | Background | the photo's own background |
+| "orbit", "circle around", "camera moves around" | Motion | camera orbits, product still |
+| "spin", "turntable", "rotate", "360 on its axis" | Motion | product turntable, camera fixed |
+| "close-up", "zoom in on the detail", "push in" | Motion | slow push-in on a detail |
+
+### From answers to prompt — traceability
+
+Every answer has to be findable in the prompt or the flags.
+
+| Answer | Lands in |
+|---|---|
+| Photo: yes, path | `--frame-first-image PATH`, the `image1 provides the product exactly` sentence in the PRODUCT block, and the crop/pad step before generating |
+| Photo: no | a text-only PRODUCT block, an expectation note in the recap, and `--aspect-ratio` becomes effective |
+| Aspect | the crop/pad ratio for the photo (image-to-video), or `--aspect-ratio` (text-to-video) |
+| Background | the SCENE line: `pure white surface and backdrop` / `light grey studio surface` / `keep the background exactly as in image1` |
+| Motion | the ORBIT segment's camera sentence, or the compact template's single motion sentence |
+| Duration | `--duration`, and the timestamps in the timeline |
+
+### The recap for this scenario
+
+```
+Brief:
+- Photo: /Users/me/shop/mug-front.jpg (given) — I will pad it to 1:1 first
+- Aspect: 1:1 (inferred from "Etsy")
+- Background: pure white (you chose)
+- Motion: camera orbits 360 degrees, product still (AI's pick)
+- Duration / resolution / audio: 5s / 720p / off — one row below; 1080p as a second row
+```
+
+Then the full prompt, then the cost table, all in one message — the order and
+the rule for a change made at the gate are in `creative-brief.md`'s `Order,
+with the approval gate`. Here a ratio change also means re-padding the photo.
+
+## Prompt template
+
+Vocabulary is not repeated here. Timestamp formats and segment lengths:
+`Segmenting the timeline`; the orbit, push-in, macro and static terms:
+`Camera language`; the closing blocks: `Consistency locks and the negative
+list`; asset role sentences and the two image semantics: `Reference assets as
+visual anchors`; freeze and settle endings: `Endings` — all headings in
+`../ofox-video-core/references/prompt-structure.md`. What follows is the
+catalog-specific shape.
+
+The gallery's product prompts (cases 16–19, 37–41) share a first line that
+names the format and places the product, a product block built from
+material, colour and physical words rather than adjectives, and a short
+action chain of three or four beats with one action per beat. The closing
+blocks are common but not universal: a consistency lock in cases 19, 39 and
+41, a negative list in 18, 38, 40 and 41, a technical tail in 16, 17, 19 and
+39. None of the nine is a white-background listing clip — they are ads and
+demos — so the plain background below is a marketplace convention, not a
+gallery observation. The beat structure and the locks are the gallery's.
+
+### Full template — 10–15s, three or four segments
+
+One action per segment (case 18: `Show only one salon action at a time. Each
+action must last long enough to show the process clearly`), 3–5s each (case
+39 runs 4/3/4/4; case 41 about 2s per outfit). Slots in `<angle brackets>`;
+optional lines in `[square brackets]`.
+
+```
+[<N> seconds, <1:1 | 9:16 | 16:9 | 4:3>.]                                  — optional; must match the flags (cases 18, 39, 41 write it; the vendor says it is not needed)
+PRODUCT: <product name>, <main colour> with <accent colour>, <material and finish>, <shape and structural points>[, printed text verbatim: "<text>"][, accessories: <A>, <B>, <C>].
+         The product stays identical in shape, colour, proportions and label throughout.          (cases 19, 24, 39, 41)
+         [image1 provides the product exactly as it is; take nothing from its background.]
+SCENE: the product centered on a <pure white | light grey | matte neutral> surface against a <pure white | neutral> backdrop; even studio softbox lighting, soft true reflections, no props, no shadows on the backdrop. Background and light do not change.   (case 17 for the surface and light; the white is a listing convention)
+
+0–3s     [REVEAL, optional — <the box lid lifts away | a hand moves away from the lens | the product fades up from dark> to show the product]   (cases 17, 19, 41)
+         | <static front view, product centered, camera still>.
+3–7s     DETAIL — the camera pushes in to a macro of <the seam | hinge | logo | fabric weave>; reflections slide across the surface.   (cases 19, 39, 24)
+7–12s    ORBIT — the camera orbits the product <90 | 180 | 360> degrees at constant height and speed; the product does not move.   (cases 42, 39)
+         | TURNTABLE — the product rotates 360 degrees on its own axis at constant speed; the camera is fixed and centered.   (no gallery prompt; kept as the listing convention)
+12–<N>s  [ACCESSORIES — <A>, <B>, <C> lie neatly beside the main unit; a slow macro pan across them]   (case 17)
+         | back to the front view; hold the final frame.   (cases 39, 40)
+
+SOUND: none.                                                                — and `--generate-audio false`
+AVOID: subtitles, logo overlays, watermarks, interface graphics; deformation, parts clipping through each other, duplicated accessories; floating objects; camera shake, zoom, sudden reframing; fast cuts, jump cuts; a CGI look.   (cases 38, 40, 41, 18, 24)
+hyper-realistic textures, realistic reflections, smooth 60fps motion, 4K.   (cases 16, 17, 19, 24, 39 — a gallery habit, effect unverified; resolution comes from --resolution, not the prompt)
+```
+
+Notes on the slots:
+
+- **Write the consistency lock every time**, even though only some gallery
+  prompts do — for a listing it is the whole point. The ones that carry it:
+  `consistent diamond throughout the entire shot`
+  (case 19), `Maintain perfect product consistency, including the frame
+  shape, lenses, hinges, colors, materials, and proportions` (case 24), the
+  dragon's `identity, anatomy, scale pattern, horns, wings and proportions
+  must stay completely consistent` (case 39), `Keep every architectural line
+  perfectly fixed across all cuts` (case 41).
+- **Printed text goes in quotes, verbatim** (`yellow "Honey Crunch Cereal"
+  box`, case 16). If the text must match a real package, that is a reason
+  for the photo, not for more adjectives.
+- **The reveal is optional** and the only place the gallery's product prompts
+  add any drama (a jewellery box opening, case 19; a storage box lid, case
+  17; a palm leaving the lens, case 41). Keep it to one plain gesture; a
+  cinematic reveal with mood lighting is `seedance-ad-creative`'s job.
+- **Timestamps here are cut boundaries** between camera set-ups. Three shots
+  in one job are verified on Ofox (see Several shots below); if the user
+  wants the whole clip as one continuous move, drop the timestamps and use
+  the compact template.
+
+### Compact template — 5s orbit
+
+The single-motion clip most listings want. No segments, no header; vendor
+formula order — subject first (shared file, `The vendor's own formula (ByteDance first-party)`).
+
+```
+<Product name>, <main colour>, <material and finish>, <shape point>[, "<label text verbatim>"]. Centered on a pure white surface against a pure white backdrop; even studio softbox lighting, true reflections, no props, no shadows. The camera orbits the product 360 degrees at constant height and speed; the product stays still and identical in shape, colour, proportions and label throughout. No subtitles, no logo overlays, no watermarks; no deformation, no floating parts; no camera shake, no zoom. Hyper-realistic textures, realistic reflections, smooth motion.
+```
+
+Swap the motion sentence for `The product rotates 360 degrees on its own
+axis at constant speed; the camera is fixed and centered` when the brief
+chose the turntable — that phrasing has **no gallery source**; it is the
+listing convention written out. Sources for the rest: 5s +
+`360-degree orbit` from official case 42;
+surface and light from case 17; the lock from cases 19 and 24; the negative
+list from cases 38 and 41.
+
+### Worked example — adapted from case 17
+
+The community hair-dryer reveal, moved from prose into the full template at
+12 seconds, 1:1. The original's purple leather storage box and "minimalist
+luxury" wording are dropped for catalog neutrality; the lid reveal, the
+copper-accent product block, the accessory row and the technical tail are
+the original's. Timestamps are added.
+
+```
+12 seconds, 1:1.
+PRODUCT: a hair dryer, deep blue body with copper accents, matte finish with polished copper trim, slim cylindrical barrel with a round rear intake; accessories: straight nozzle, diffuser nozzle, styling barrel. The product stays identical in shape, colour, proportions and trim throughout. image1 provides the product exactly as it is; take nothing from its background.
+SCENE: the product centered on a pure white surface against a pure white backdrop; even studio softbox lighting, soft true reflections, no props, no shadows on the backdrop. Background and light do not change.
+
+0–3s    REVEAL — a plain white box lid lifts away, showing the hair dryer standing upright.
+3–6s    DETAIL — the camera pushes in to a macro of the copper trim and the intake grille; reflections slide across the surface.
+6–10s   ORBIT — the camera orbits the dryer 360 degrees at constant height; the product does not move.
+10–12s  ACCESSORIES — the three nozzles lie neatly in a row beside the dryer; a slow macro pan across them; hold the final frame.
+
+SOUND: none.
+AVOID: subtitles, logo overlays, watermarks; deformation, clipping; floating objects; camera shake, zoom, sudden reframing; fast cuts.
+hyper-realistic textures, realistic reflections, smooth 60fps motion.
+```
+
+## A product photo: when it is required, when text is enough
+
+For a listing, a shopper compares the clip against the real item, so literal
+accuracy (shape, printed text, logo, colour, material) matters more here than
+in any other Seedance scenario — an invented detail is a real problem, not
+an aesthetic one. The gallery splits the question in two, and so does this
+skill:
+
+| The product is… | Route | Evidence |
+|---|---|---|
+| a **real SKU** — a logo, a printed label, distinctive geometry (hinges, seams, a particular cap), brand packaging | **Photo required.** Image-to-video from the real photo. | every gallery prompt that had to match a real product, logo or package used an image (cases 12, 13, 24, 29); text-only prompts avoid readable text instead — `all labels illegible` (case 40), `unreadable signage` (case 7) |
+| a **category prototype** or a fictional brand — "a matte white ceramic mug", "a blue-and-copper hair dryer", a made-up label the user is happy to have invented | Text is acceptable. Say so, and set expectations. | the gallery's four product-video prompts are all text-only and all fictional (cases 16–19) |
+
+**An AI-generated product image is not a substitute for a photo of the real
+product.** No gallery product case goes generate-an-image-then-animate; the
+ones with images used real photos or the vendor's own white-model assets
+(cases 24, 37). The reason follows from that split rather than from an
+observed failure: a generated image can be wrong about the label, the cap and
+the proportions in exactly the ways the video can — and then locks those
+errors in as the first frame. If the user has no photo of a real SKU, say the
+result may not match the item, and offer to proceed as a category prototype
+rather than offering to generate a reference first.
 
 **Prefer a local file over a remote URL** when the user has one available.
 `ofox-video-core` auto-base64-encodes a local, readable file into the
 request; real testing found this more reliable than a remote URL in at
 least one case (an otherwise valid, publicly reachable image URL was
 rejected by the upstream provider — likely host-side bot/hotlink
-protection, not something under our control):
+protection, not something under our control). A remote URL also works if
+that's all the user has, it's just the less-reliable option of the two.
+
+### Two ways to attach the photo
+
+An attached image means one of two things, and the API has a field for each
+(shared file, `Reference assets as visual anchors`):
+
+| Meaning | Flag | What it does | Status in this repo |
+|---|---|---|---|
+| **First frame** — the clip starts on this exact picture | `--frame-first-image PATH` | locks the opening view to the photo; on `bytedance/seedance-2.5` forces `aspect_ratio: adaptive`, so the photo is cropped or padded to the target ratio **before** generating | verified with real runs; this skill's default route |
+| **Identity reference** — the model borrows the product's appearance from one or more images, no frame is locked | `--extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"…"}}, …]}'`, up to 9 images | lets front, back, top and box photos all inform the clip, with one role line per image (`image1: front view; image2: the label, verbatim`) — the pattern nearly every gallery prompt with an image uses (cases 24, 37) | element shape documented in `api-params.md`; **no image-reference job has been run end to end in this repo**, and whether the `image1` tokens resolve by position is unverified — write role sentences that read correctly as plain text either way |
+
+**The two are mutually exclusive** in one job: the script rejects a request
+carrying both (`references_conflict`). For a single photo, the first-frame
+route is the tested one and the default here. Reach for identity references
+only when the user has several angles of the product and wants them all to
+count.
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate \
-  --prompt "The product rotates smoothly 360 degrees against a pure white background, no props, no shadows, no dramatic lighting" \
+  --prompt "<the compact template above>" \
   --frame-first-image "/path/to/local/product-photo.jpg" \
   --duration 5 --resolution 720p --generate-audio false
 ```
-
-A remote URL also works if that's all the user has (`--frame-first-image
-"https://example.com/product-photo.jpg"`), it's just the less-reliable
-option of the two.
 
 **Do not pass `--aspect-ratio` here** for the default model
 (`bytedance/seedance-2.5`) — `ofox-video-core` forces `aspect_ratio` to
 `adaptive` whenever an image is attached with this model (verified against
 the real API: every other value fails for image-to-video on this model),
-overriding anything else and printing a notice when it does. See
-Recommended defaults below for when `--aspect-ratio` does matter for this
-skill.
+overriding anything else and printing a notice when it does. The output's
+frame shape follows the **photo's** shape, which is why the brief settles
+the platform before anything is generated and the photo is cropped or padded
+to that ratio first.
 
 If the reference image includes an actual person (e.g. a hand modeling a
-ring, a person wearing the product), add `--real-person true` per the API
-contract. That path validates the image server-side and can fail with
+ring, a person wearing the product), Seedance 2.5 image-to-video refuses it
+at submission (`input_moderation_failed`, nothing billed). `--real-person
+true` exists for authorised references per the API contract, but whether it
+lifts the refusal on 2.5 is untested here; the reliable route is a photo of
+the product alone. The `--real-person` path validates the image server-side
+and can fail with
 `bad_data_uri`/`download_failed`/`unreachable`/`not_image`/`too_large` if the
 image isn't a small, valid file the API can use — see the failure table
 below.
@@ -98,81 +340,71 @@ below.
 ## Writing a good product-video prompt
 
 Keep the prompt plain and literal — this is the opposite instinct from
-`seedance-ad-creative`'s cinematic mood-building.
+`seedance-ad-creative`'s cinematic mood-building. The templates above are
+the shape; these are the three things that go into them.
 
 ### 1. Product description, precise and neutral
 
-State shape, material, color, and finish exactly, the same framing
-discipline `seedance-ad-creative` uses for product accuracy — but skip its
-mood/brand-tone layer entirely, since a catalog shot has no brand story to
-tell.
+Shape, material, colour, finish, structural points, and any printed text
+verbatim in quotes — the same precision `seedance-ad-creative` uses for
+product accuracy, without its mood or brand-tone layer, since a catalog shot
+has no brand story to tell. The gallery's product blocks are built from
+physical words: `glowing copper accents`, `physically accurate diamond
+refraction`, `realistic stainless-steel reflections` (cases 17, 19, 38).
 
 ```
-A matte ceramic coffee mug, off-white, cylindrical with a curved handle.
+A matte ceramic coffee mug, off-white, cylindrical with a curved handle, "MORNING" printed in dark grey on one side.
 ```
 
 ### 2. Explicit plain-background language
 
-State the background directly rather than assuming the model will remove
+A pure white background is what marketplace listing rules ask for and what a
+shopper expects of catalog footage. It is a **platform convention, not
+something the gallery shows**: the gallery's cleanest product prompt (case
+17) uses a bright reflective surface under studio softbox light, and case 41
+pins a grey stone background in place rather than removing it. Whatever the
+brief chose, state it directly instead of assuming the model will remove
 whatever is behind the product in the reference photo:
 
 ```
-Pure white background, clean studio background, no props, no shadows on the
-backdrop, even lighting.
+Pure white surface and backdrop, clean studio background, no props, no shadows on the backdrop, even lighting.
 ```
 
 ### 3. Simple, literal camera motion — not cinematography
 
-Describe the motion as a plain mechanical turntable or orbit, not a "shot."
-Avoid `seedance-ad-creative`'s cinematography vocabulary (dolly-in, rack
-focus, rim light, moody backlight) entirely — none of that belongs here;
-the point is to see the product clearly from multiple angles, not to evoke
-a mood.
+Describe the motion as a plain mechanical move, not a "shot". The default is
+now **the camera orbits, the product stays still**: every rotation in the
+gallery's thirteen product-adjacent prompts is written as camera movement
+(`360-degree orbit`, official case 42 — whose subject is a person, not a
+product; `the camera slowly circles the build platform`, case 39; `smooth
+spiral pull-out`, case 13) or as a hand turning the product (case 24) — none
+writes a turntable with a fixed camera. The turntable stays as an
+alternative because listing platforms and users ask for it by name.
 
 ```
-The product rotates smoothly 360 degrees on its own axis at a constant
-speed, camera fixed and centered.
+The camera slowly orbits once around the product at a constant height, product stays still and centered in frame.
 ```
 
-or, for a still product with camera movement instead of product rotation:
-
 ```
-Camera slowly orbits once around the product at a constant height, product
-stays still and centered in frame.
+The product rotates smoothly 360 degrees on its own axis at a constant speed, camera fixed and centered.
 ```
 
-### Putting it together
-
-```
-A matte ceramic coffee mug, off-white, cylindrical with a curved handle. The
-product rotates smoothly 360 degrees on its own axis at a constant speed
-against a pure white background, no props, no shadows, even studio lighting,
-camera fixed and centered.
-```
+Use only orbit, push-in, macro pan and static from the shared file's `Camera
+language`. Avoid `seedance-ad-creative`'s vocabulary (dolly-in with a speed
+ramp, rack focus, rim light, moody backlight) — the point is to see the
+product clearly from several angles, not to evoke a mood.
 
 ## Recommended defaults
 
 | Parameter | Default | Why |
 |---|---|---|
 | `--model` | `bytedance/seedance-2.5` (script default, no flag needed) | current-generation model |
-| `--duration` | `5` (5–10s range; adjust to match the request) | a full 360-degree turntable reads clearly in 5 seconds and keeps cost low; Seedance 2.5 accepts 4–30 |
-| `--resolution` | `720p` | catalog/listing thumbnails rarely benefit from more; suggest `1080p` only if the target platform explicitly requires higher-resolution assets |
-| `--aspect-ratio` | ask the user — do not assume a single fixed default, but see the note below | e-commerce platforms vary widely: `1:1` fits most marketplace grid listings (Amazon, Etsy, Shopify), `4:3` matches older catalog templates, `9:16` suits mobile-first storefronts or short-video shopping (TikTok Shop), `16:9` suits a website product-detail page. Confirm the target platform before generating. |
-| `--generate-audio` | `false` (this scenario's default) | a silent product-rotation clip needs no audio track; this **overrides** the server's `generate_audio: true` default, unlike `seedance-short-drama`/`seedance-ad-creative` which leave audio on. Verified against `ofox-video-core`'s script: `--generate-audio false` sets `generate_audio: false` directly on the request. |
-| `--real-person` | leave unset (`false`) | only set `true` if the reference photo includes an actual person (e.g. a hand or model wearing the product), not just the product itself |
-
-**Important caveat on `--aspect-ratio` for this skill**: since this skill
-*practically requires* `--frame-first-image` (see above), the platform's
-target aspect ratio applies **only on the rare text-only fallback path**
-(no product photo available). Once an image is attached with the default
-model, `ofox-video-core` forces `aspect_ratio` to `adaptive` and the
-output's frame shape follows the **input photo's own aspect ratio**
-instead of whatever platform ratio was asked for. Tell the user this
-plainly: if a specific output ratio is required for a platform (e.g. a
-strict `1:1` grid), the product photo itself should be cropped/padded to
-that ratio *before* generating, since the generation step will no longer
-be able to force a different one once an image is attached.
-
+| `--duration` | `5` for the compact orbit; `10`–`15` for the segmented template | a full 360-degree orbit reads clearly in 5 seconds (official case 42 does it in 5s) and keeps cost low; three or four segments need 3–5s each; Seedance 2.5 accepts 4–30 |
+| `--resolution` | `720p` | catalog/listing thumbnails rarely benefit from more; show `1080p` as a second row in the cost table when the target platform might require it |
+| `--aspect-ratio` | settled by the brief's `Aspect` question (must-ask); `1:1` is the recommended option | e-commerce platforms vary: `1:1` fits most marketplace grids (Amazon, Etsy, Shopify), `4:3` matches older catalog templates, `9:16` suits mobile-first storefronts and TikTok Shop, `16:9` suits a website product-detail page. With a photo attached the flag is not sent — the photo is cropped or padded to the ratio instead, per `Two ways to attach the photo` above |
+| Motion | camera orbits, product still | every gallery rotation is written as camera movement or as a hand turning the product; none writes a fixed-camera turntable. The turntable stays as the alternative when the user asks for a spin by name |
+| `--generate-audio` | `false` (this scenario's default) | a silent product clip needs no audio track; this **overrides** the server's `generate_audio: true` default, unlike `seedance-short-drama`/`seedance-ad-creative` which leave audio on. Verified against `ofox-video-core`'s script: `--generate-audio false` sets `generate_audio: false` directly on the request. |
+| `--real-person` | leave unset (`false`) | Seedance 2.5 image-to-video refuses photoreal people at submission; whether `true` lifts that on 2.5 is untested — prefer a photo of the product alone |
 
 ## Which upstream renders it
 
@@ -183,24 +415,40 @@ Pass `--provider volcengine` for the mainland platform, or `--provider auto` to
 let Ofox choose. Pricing is identical either way. See
 `ofox-video-core/references/api-params.md` for the detail.
 
+## Several shots: timestamps inside one job, `chain` across jobs
 
-## Multi-shot product sequences
+Two different tools, not alternatives.
 
-`ofox-video-core`'s `chain` subcommand generates a sequence where each shot
-opens on the previous shot's closing frame, so the product stays in the same
-place under the same light across cuts — then joins them into one file. It
-works for product footage: the real-person restriction that blocks chaining
-live-action sequences doesn't apply to objects.
+**Cuts inside one job are written as timestamps** — the full template's
+REVEAL → DETAIL → ORBIT → ACCESSORIES is one generation. Verified on Ofox on
+2026-09-03: two three-shot prompts on `bytedance/seedance-2.5`, both pinned
+to `byteplus`, 8s, 480p, 16:9, `--generate-audio false`, **pure
+text-to-video with no image attached**. Both rendered all three shots with
+hard cuts landing within about one second of the written timestamps — one in
+the bare `0-3s: … Hard cut. 3-6s: …` form, one with a header manifest and
+`SHOT N (a-bs)` + `HARD CUT`. **Not covered by those two runs**: more than
+three shots, clips longer than 8 seconds, an attached reference image (this
+skill's usual route), dialogue running across a cut, any resolution other
+than 480p, the `volcengine` upstream. The record is in the shared file's
+`Several shots in one job`. **The full template's four segments sit one
+beyond that**: say so in the recap when you use all four, and fall back to
+three if the cut count matters more than the accessory pan.
+
+**`chain` carries the last frame of one job into the first frame of the
+next**, then joins the clips into one file. Use it when the sequence exceeds
+one job's 30s ceiling, or when each shot needs its own approval, seed or
+resolution — a 5s orbit approved first, then a 5s detail push-in as a second
+decision. Each shot is a separately billed job; the run estimates the total
+before spending and reports real per-shot cost. The real-person restriction
+that blocks chaining live-action sequences doesn't apply to objects, so
+product footage chains freely.
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh chain \
-  --shot "the product on a white background, slow turntable rotation" \
-  --shot "the camera pushes in on the same product, same white background" \
-  --duration 5 --resolution 720p
+  --shot "the product centered on a pure white surface and backdrop; the camera orbits it 360 degrees at constant height; the product does not move" \
+  --shot "the camera pushes in to a macro of the same product's label, same white background, same light" \
+  --duration 5 --resolution 720p --generate-audio false
 ```
-
-Each shot is a separately billed job; the run estimates the total before
-spending and reports real per-shot cost.
 
 ## Before you spend: the approval gate
 
@@ -225,9 +473,13 @@ wait for a yes, then re-run the identical command with `--dry-run` removed.
 The estimate a *real* run prints comes microseconds before the request goes
 out, too late to relay; that is what `--dry-run` is for.
 
+The brief recap (see the creative brief section) goes in the **same
+message** as the prompt and the table, above them — the user approves the
+choices, the prompt and the price together.
+
 What this scenario's table usually needs a row for: the clip itself, at the
 duration and resolution you settled on — plus one row per shot when a
-multi-shot sequence is planned, since each shot is a separately billed job.
+`chain` sequence is planned, since each shot is a separately billed job.
 When the choice between a 720p draft and a 1080p deliverable is still open,
 dry-run both and show two rows.
 
@@ -269,14 +521,11 @@ A single `generate` prints a `SEED` line too, and records it in the clip's
 good, give me it at 1080p" works off one clip — you do not need a batch to
 get a reusable handle.
 
-
 Worth offering when the user is exploring: draft cheap on
 `bytedance/seedance-2.0-mini` at 480p, then render the winner on
 `bytedance/seedance-2.5`. Four 8-second drafts cost about 64 cents on mini versus
 $7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
 different model is a different look, not just a different price.
-
-
 
 ## Pricing a job with no API key
 
@@ -306,6 +555,16 @@ anything is broken. This skill delegates all execution to it and reaches it by
 relative path. Fix: `npx skills add ofoxai/skills` (the whole repo). Say that
 plainly rather than relaying the raw path error, which names neither the
 missing skill nor the fix.
+
+A broken link to a shared reference has the same single cause. This skill
+packages only its `SKILL.md` and `CHANGELOG.md`, so `prompt-structure.md`,
+`creative-brief.md`, `approval-gate.md` and `api-params.md` — all shipped by
+`ofox-video-core` — are absent whenever the script is, and return with the
+same command. The skill remains usable without them: the prompt templates,
+the brief's question table and the defaults are written out in this file. What
+is unavailable is the depth behind the rules they reference — the full camera
+and consistency vocabulary, the general question-flow rules, and the exact
+wording of the spend gate, which applies regardless.
 
 ## Exit codes worth knowing
 
@@ -356,25 +615,23 @@ from the repo root it is `skills/ofox-video-core/references/ofox-video.sh`.
 ## Generating
 
 With a product photo (the common case — prefer a local file path over a
-remote URL when one is available):
+remote URL when one is available; the photo already cropped or padded to the
+platform's ratio):
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate \
   --prompt "<the product-video prompt built above>" \
-  --name "<short product name, e.g. sneaker turntable>" \
+  --name "<short product name, e.g. sneaker orbit>" \
   --frame-first-image "<local path or URL to the product photo>" \
   --duration 5 \
   --resolution 720p \
   --generate-audio false
 ```
 
-No `--aspect-ratio` flag here on purpose — with the default model,
-`ofox-video-core` forces `adaptive` once an image is attached (see the
-caveat above), so passing a different value would just be overridden
-anyway (the script prints a notice when it does this, it's never silent,
-but there's no reason to pass a value that won't take effect). Without a
-product photo (text-only fallback), `--aspect-ratio` does take effect and
-should be set per the platform the user named:
+No `--aspect-ratio` flag here on purpose — with an image attached the
+default model forces `adaptive` anyway (see `Two ways to attach the photo`).
+Without a product photo (category prototype or fictional brand) the flag does
+take effect, and is set to the platform ratio the brief settled:
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate \
@@ -403,13 +660,17 @@ plus the product-video-specific ones:
 | Symptom | Cause | Fix |
 |---|---|---|
 | Exit `1`, no network call made | Bad `--duration`/`--resolution`/`--aspect-ratio`, or missing `--prompt` | Fix the flag per the error message and re-run `generate` — free to retry, nothing was submitted |
+| Exit `1`, `references_conflict` | `--frame-first-image` and an `input_references` array in `--extra-json` in the same job | Pick one meaning — first frame, or identity references — and drop the other |
 | Exit `2` | `curl`/`jq` missing, or `OFOX_API_KEY` not set | Re-run `ofox-video-core`'s `check` and follow its install/signup guidance |
 | Exit `3`, `error.code: insufficient_credits` | Ofox balance too low | No charge was made; the user needs to add credits at `https://app.ofox.ai` before retrying |
+| Exit `3`, `error.code: input_moderation_failed` on an image-to-video job | The reference photo contains a photoreal person (a hand, a model) — refused at submission on Seedance 2.5, nothing billed | Use a photo of the product alone, or crop the person out; `--real-person true` is untested on 2.5 |
 | Exit `3`, job ends `failed`, or `invalid_request` on create, with no other error code hint | Likely a moderation rejection: a reference photo showing someone else's trademarked packaging/logo without rights, or a prohibited product category, is commonly rejected | Remove or crop the flagged trademark/brand element from the reference photo or prompt, then call `generate` again — this is a **new** request, not a resubmission of the failed one, so it's safe to retry immediately |
 | Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated **output** failed a post-generation content check — happens after the job ran, not at submission. Not billed (no `usage` field on the response) | Retry with a brand-new `generate` call using a different prompt or reference photo — a new request, not a resubmission of the failed one, so it's safe |
-| `bad_data_uri` / `download_failed` / `unreachable` / `not_image` / `too_large` on an image-to-video job | The `--frame-first-image` reference isn't a small, valid image the API can use (a remote URL that isn't publicly reachable, or a local file that failed to read/encode) | Prefer a local file (auto-base64'd, more reliable than some remote URLs — see above); confirm it's a real image file under the size limit and retry |
-| Product shape, printed text, or logo looks distorted or inaccurate in the result | Pure text-to-video was used instead of a real reference photo | Switch to image-to-video with `--frame-first-image` pointing at the real product photo — literal accuracy matters more in this scenario than anywhere else, so treat text-only description as a last resort |
-| Background isn't pure white, or shows props/shadows from the original photo | The prompt didn't state the background explicitly, or the source photo's busy background carried through | Add explicit "pure white background, no props, no shadows" language; a reference photo with a cluttered background can still bleed through in image-to-video since the model anchors on that image |
+| `bad_data_uri` / `download_failed` / `unreachable` / `not_image` / `too_large` | `api-params.md` documents these as `real_person: true` image-validation failures, raised when Ofox fetches the reference image: it isn't a small, valid image the API can use (a remote URL that isn't publicly reachable, or a local file that failed to read/encode) | Prefer a local file (auto-base64'd, more reliable than some remote URLs — see above); confirm it's a real image file under the size limit and retry |
+| Product shape, printed text, or logo looks distorted or inaccurate in the result | Pure text-to-video was used for a real SKU instead of a real reference photo | Switch to image-to-video with `--frame-first-image` pointing at the real product photo — for a real SKU the photo is required, not preferred (see the photo section); for a category prototype, tighten the PRODUCT block instead |
+| Background isn't plain, or shows props/shadows from the original photo | The prompt didn't state the background explicitly, or the source photo's busy background carried through | Add the SCENE line verbatim ("pure white surface and backdrop, no props, no shadows on the backdrop"); a reference photo with a cluttered background can still bleed through in image-to-video since the model anchors on that image |
+| The output is the photo's shape, not the platform's ratio | The photo was attached without being cropped or padded first; `adaptive` follows the image | Crop or pad the photo to the brief's ratio and generate again — a new job, billed again, which is why `Aspect` is asked before generating |
+| The clip did not cut where the timestamps said, or ran the four segments as fewer | Cuts inside one job are verified only up to three shots in 8s at 480p | Drop to three segments, or run the extra segment as a second `chain` shot |
 | Exit `4`, timed out waiting for completion | Job is still running upstream, not failed | Do **not** re-run `generate`; run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID` using the job id printed before the timeout |
 | Exit `5`, ambiguous network failure on create | No HTTP response received at all — can't tell if a job was created | Do not guess or retry `generate`; tell the user to check `https://app.ofox.ai` for a job that may already be running, per `ofox-video-core`'s no-resubmit rule |
 | Exit `6`, `--out-dir` could not be created or entered | Local filesystem problem (bad path, permissions), not an API problem | The job itself is unaffected — do not re-run `generate`; fix `--out-dir` and re-run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID --out-dir <a writable directory>` |
@@ -418,9 +679,12 @@ plus the product-video-specific ones:
 
 - Cinematic brand/mood advertising — dramatic lighting, camera language like
   dolly-ins or rim light, a brand-tone background — use `seedance-ad-creative`
-  instead. This skill's prompts are deliberately plain (white background,
-  fixed or simple orbiting camera) for literal catalog accuracy, not brand
-  storytelling.
+  instead. This skill's prompts are deliberately plain (plain background,
+  a simple orbiting camera or turntable) for literal catalog accuracy, not
+  brand storytelling. The border case is a clean studio showcase with a
+  lid-opening reveal (gallery case 17): the test is whether there is a brand
+  narrative or an emotional tone to carry. A listing that just needs to show
+  the item is this skill; a reveal that sells a feeling is the other one.
 - Anything involving people, characters, or dialogue — use
   `seedance-short-drama` instead; this skill is for inanimate product objects
   only.
