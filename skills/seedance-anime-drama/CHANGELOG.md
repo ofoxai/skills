@@ -4,6 +4,80 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.7.0 — creative brief, structured template, several shots per job, and the sheet is no longer a first frame
+
+Docs only; no script changes.
+
+- **Fixed a contradiction.** "Two different images, do not confuse them" said
+  a character reference sheet must never go to `--frame-first-image` (verified
+  on a real run: the clip animates out of a grid with a caption). The full
+  example at the bottom did exactly that. The example now generates an
+  opening frame for a single shot; for several shots the sheet exists only to
+  confirm the design with the user, and each shot gets its own opening frame
+  written from the same description. "The mechanism", Step 2, the failure
+  table and `description` say the same thing. "Reuse the identical
+  `IMAGE_PATH` across every shot" is gone — two different shots do not start
+  on the same frame.
+- **Behaviour change: several hard-cut shots in one job.** "One job = one
+  continuous shot … never try to cram multiple hard cuts into one call" is
+  replaced by "Shots, cuts and jobs": verified on Ofox 2026-09-03 (two 8s /
+  480p / three-shot runs, cuts at the timestamps to about ±1s — see
+  `ofox-video-core/references/prompt-structure.md`, "Several shots in one
+  job"), with the unverified range (30s or 8+ shots, dialogue across a cut,
+  other resolutions, `volcengine`) stated as such. `chain` stays the tool for
+  continuation across jobs and for sequences past 30s.
+- **Step 0 becomes the creative brief.** The anime-versus-manga binary is
+  gone — manga/screentone has no gallery case; the split the gallery shows
+  is cel-shaded modern theatrical / hand-drawn 90s TV anime / 3D-stylised,
+  with pixel 8-bit and American retro cartoon as alternates. Five questions:
+  shots (must-ask), aspect (must-ask, **before** any image exists — adaptive
+  follows the image; cropping later costs a second image), style, sheet-first
+  (follow-up, several shots only), sound. The shared rules — tiers, the
+  one-round limit, the "Let the AI decide" discipline, the recap in the
+  approval message, the skip rows, the anti-patterns — live once in
+  `ofox-video-core/references/creative-brief.md` and are linked, not restated;
+  this section keeps the question set, the anime inference rows, the
+  answer-to-prompt map, and the one timing constraint that is specific to a
+  two-phase scenario: the ratio must be settled before the first image is
+  paid for. Showing the generated image is the second participation point,
+  not a new question round. The two must-ask questions (`Shots`, `Aspect`)
+  carry **no** "Let the AI decide" option, per the shared rule: a blanket
+  "you decide" delegates the taste questions and leaves those two standing,
+  because a paid image freezes the ratio.
+- **New "Prompt template"**: a 15–30s manifest with the style sandwich (first
+  sentence, mid-prompt block, closing quality line), action-scene rules (cause
+  chain, escalation, effects allow-list, terminal pose), quiet-scene rules, an
+  optional sequel block adapted from case 44, an AUDIO block and the negative
+  list; plus an 8–15s single-shot template for frame-lock prompts. Worked
+  examples adapted from case 10 (translated).
+- **Two ways an image can enter a shot.** `--frame-first-image` (frame lock,
+  this skill's mechanism) versus `input_references` through `--extra-json`
+  (identity reference, what the gallery's image-bearing anime prompts use);
+  mutually exclusive per job. The identity route is documented in
+  `api-params.md` and has not been exercised end-to-end from this skill —
+  the file says so rather than claiming it.
+- Default `--duration 8` kept, with the note that the gallery's segmented
+  anime prompts run 24–30s and a multi-shot job sums 2–5s per shot.
+- Multiple characters: still out of scope for v1; noted that gallery cases 1,
+  11 and 44 did it with several identity references, which maps to
+  `input_references` (untested here).
+- A sub-dollar price in Approval 1 written with a dollar sign and a leading
+  zero is now "about 2.7 cents" (CONTRIBUTING rule 8 — that sequence is
+  expanded when a skill loads).
+- Sentences that restated `approval-gate.md` — where an estimate comes from,
+  the missing-estimate rule, batch itemisation, phase 1 still billing when
+  phase 2 is declined — are pointers now. The gate itself has not changed.
+- Two claims were narrowed to what was actually run: the `chain` continuity
+  observation is `ofox-video-core`'s, and its recorded run was a static
+  object, not a character; the identity-reference row no longer implies
+  chained *anime* shots were the thing verified.
+
+**What callers do**: an agent following the old example must stop passing a
+sheet to `--frame-first-image`; generate an opening frame instead. Expect the
+aspect ratio to be asked before the image when the request names no platform.
+Several shots inside one job are now an option alongside `chain` and separate
+jobs.
+
 ## 1.6.1 — the image step usually *can* be priced now
 
 Docs only. Phase 1 of the approval table told the agent to **expect** "cannot

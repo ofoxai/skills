@@ -1,12 +1,12 @@
 ---
 name: seedance-anime-drama
-description: Turn a novel/script excerpt into an anime- or manga-style storyboard shot using the Ofox image and video APIs — generates one character reference image with ofox-image-core, then reuses that exact same image as `--frame-first-image` across every shot of that character via ofox-video-core, for real visual consistency instead of relying on repeated text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime/manga styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
+description: Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.6.1"
+version: "1.7.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.6.1"
+  version: "1.7.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -20,36 +20,70 @@ metadata:
     homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 ---
 
-# seedance-anime-drama: anime/manga storyboard shots with real character consistency
+# seedance-anime-drama: anime storyboard shots with image-based character consistency
 
-Turns one shot of a novel/script excerpt into an anime- or manga-style video
-clip, using a genuine image-based mechanism for character consistency across
-every shot of the same character — not just a repeated text description.
+Turns one shot — or a short sequence — of a novel/script excerpt into an
+anime-style video clip, using an image of the character as the frame each
+shot starts from, not just a repeated text description.
 
 This is the first scenario skill in this repo that orchestrates **two**
 execution-layer skills rather than one:
 
-1. [`ofox-image-core`](../ofox-image-core/SKILL.md) generates ONE character
-   reference image (text-to-image).
+1. [`ofox-image-core`](../ofox-image-core/SKILL.md) generates the character
+   as an image (text-to-image).
 2. [`ofox-video-core`](../ofox-video-core/SKILL.md) generates each shot,
-   passing that same image back in as `--frame-first-image`.
+   with that image passed in as `--frame-first-image`.
 
 Neither core skill's request-building, error-mapping, or download/reporting
 logic is duplicated here — this skill owns only the anime-specific prompt
-craft, the two-step orchestration order, and the combined cost estimate.
-**Read both core skills' safety contracts before using this one** — neither
-is restated here.
+craft, the pre-generation brief, the two-step orchestration order, and the
+two approvals. **Read both core skills' safety contracts before using this
+one** — neither is restated here.
+
+Three shared references from `ofox-video-core` are load-bearing and are
+linked, not copied:
+
+- [`../ofox-video-core/references/creative-brief.md`](../ofox-video-core/references/creative-brief.md)
+  — what to ask the user before a prompt exists: the three tiers, one round of
+  at most four questions, the "Let the AI decide" discipline, the skip rows,
+  and the anti-patterns. Read it before the brief section below, which adds
+  this scenario's question set and the one axis a two-phase flow must settle
+  before the first image is paid for.
+- [`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md)
+  — the vendor's formula, the header-manifest → timeline → closing-block
+  skeleton, timestamp formats and segment lengths, transition and camera
+  vocabularies, consistency locks and negative lists, the two meanings of an
+  attached image, endings. Load it before writing a prompt; this file adds
+  only what is specific to anime.
+- [`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
+  — never spend before an approved cost table; this skill is its two-phase
+  example.
 
 ## The mechanism — the whole point of this skill
 
-Generate the character once as an image in Step 1, then pass that **exact
-same image file** to `--frame-first-image` on every Step-2 call for every
-shot of that character. This is what produces real visual consistency,
-instead of `seedance-short-drama`'s text-only approach of repeating the same
-description across stateless jobs and hoping the model renders it the same
-way twice. Reusing the identical `IMAGE_PATH` is not an optional refinement
-of this skill — it is the mechanism this skill exists to provide. See "When
-NOT to use" below for the full comparison with `seedance-short-drama`.
+The character exists as an image before any video is paid for, and every
+shot **starts on an image of that character** (`--frame-first-image`) rather
+than on a description the model interprets fresh each time. That is what
+separates this skill from `seedance-short-drama`'s text-only consistency —
+and it is available here because an anime character is not a photoreal
+person, so Seedance 2.5's real-person refusal does not apply.
+
+How many images that means depends on the shot count (the brief's first
+question, and Step 1):
+
+- **one shot** — one opening frame, fed to that shot;
+- **several shots continuing one moment** — one opening frame for the first
+  shot, then `chain` carries each job's closing frame into the next;
+- **several shots cutting to new setups** — one opening frame per shot,
+  written from the same character description word for word, each fed to its
+  own shot; by default a design sheet comes first and is shown to the user to
+  confirm the design (the brief's `Sheet` question can skip it). The sheet
+  itself never goes to `--frame-first-image` (see "Two different images, do
+  not confuse them").
+
+A second, different way for an image to enter a shot — as an identity
+reference that locks no frame (`input_references`) — is described under "Two
+ways an image can enter a shot". The two are mutually exclusive per job.
 
 ## Before generating: two availability checks
 
@@ -65,64 +99,237 @@ or get an `OFOX_API_KEY` at `https://app.ofox.ai`) — don't dead-end the
 conversation, and don't re-run either check on every subsequent request once
 both have passed.
 
-## One job = one continuous shot
+## Shots, cuts and jobs
 
-Seedance 2.5 generates a single continuous clip per job (4–30 seconds). A
-multi-scene "storyboard" from a novel excerpt maps to **one `generate` call
-per shot** — never try to cram multiple hard cuts into one call. If a story
-beat spans multiple hard cuts (e.g. an establishing shot then a close-up),
-either:
+One job is one clip of 4–30 seconds, and a clip **can hold several shots
+joined by hard cuts**. The gallery's animation prompts do this routinely —
+case 11 asks for ten shots in 24s, case 18 for eight segments in 30s,
+official case 29 for four shots in 15s. Write the timestamps as cut
+boundaries and keep **2–5 seconds per shot**.
 
-- describe it as one continuous camera move within a single clip (a
-  push-in, a pan, a walk-and-follow), or
-- generate one clip per cut as **separate `generate` calls** (each a
-  separately billed job), or
-- use **`ofox-video-core`'s `chain`**, which feeds each shot's closing frame
-  into the next as its opening frame and joins the results into one file.
+The measured evidence is narrower than the gallery's practice: two real runs
+on 2026-09-03, `bytedance/seedance-2.5` on `byteplus`, 8 seconds, 480p, 16:9,
+`--generate-audio false`, **no image attached**, three shots each, which cut
+at the written timestamps to about ±1 second. Job ids and the frame-by-frame
+reading are under "Several shots in one job" in
+`../ofox-video-core/references/prompt-structure.md`, together with what those
+runs did not cover. One item on that list matters most here: both were
+text-to-video, so **a multi-cut job that also carries a
+`--frame-first-image` — this skill's normal shape — is untested.** Treat the
+first one as an experiment and price it as one.
 
-**Chaining works for this skill specifically**, and that is not a given:
-Seedance 2.5 image-to-video refuses reference frames containing a real person,
-so a live-action sequence cannot be chained — but an anime/manga character is
-not a photoreal person, so these shots chain fine. Verified continuity is
-strong: the next shot opens on very nearly the exact frame it was fed, then
-follows its own prompt.
+Three ways to lay a sequence out, and they compose:
 
-Two ways to keep a character consistent, and they compose:
+| Route | What it gives | When |
+|---|---|---|
+| **Timestamped shots inside one job** | several cuts; one approval; one bill | the sequence fits in 30s and one seed and resolution suit every shot |
+| **`chain`** (`ofox-video-core`) | each job's closing frame becomes the next job's opening frame; the results are joined into one file | consecutive shots that continue one moment; sequences past 30s; each shot priced and approved on its own |
+| **Separate `generate` calls** | independent jobs | shots that cut to unrelated setups, each started from its own opening frame (Step 1) |
 
-- **The character sheet** (Step 1 below) locks *who* the character is across
-  shots that are otherwise unrelated.
-- **`chain`** locks *where everything is* between consecutive shots — set,
-  framing, lighting.
+`chain` works in this scenario, and that is not a given: Seedance 2.5
+image-to-video refuses frames containing a real person, so a live-action
+sequence cannot be chained, but an anime character is not a photoreal person.
+Continuity is strong on the run `ofox-video-core` recorded — the next shot
+opens on very nearly the frame it was fed, then follows its own prompt (that
+run was a static object, not a character).
 
-Use the sheet for shots that cut to a new setup, and `chain` for shots that
-continue the same moment.
+Shot count is the user's call, not the skill's — it is the brief's must-ask
+question, because it decides how many images and how many approvals follow.
 
-Don't assume how many shots a novel excerpt needs — confirm the shot count
-and content with the user first; deciding that is the user's/calling
-agent's job, not this skill's.
+## Before writing the prompt: the creative brief
 
-## Step 0: ask which visual look the user wants
+The shared rules are in
+[`../ofox-video-core/references/creative-brief.md`](../ofox-video-core/references/creative-brief.md)
+— the three tiers, the one-round limit, the shape of a question, the "Let the
+AI decide" discipline, the generic skip rows, the order with the approval
+gate, the fallback for a runtime without `AskUserQuestion`, and the
+anti-patterns. Read it before writing a prompt. This section adds only what
+is specific to anime — including this scenario's instance of the shared
+file's last anti-pattern, an axis a paid step freezes: **the aspect ratio has
+to be settled before the image is paid for.**
 
-Before building any prompt, ask whether the user wants:
+Read the user's message and attachments first, and mark every axis of the
+clip **settled** or **open**. Zero questions is common here: "just this one
+shot, 9:16, in a 90s hand-drawn look, keep her lines" has settled every axis
+— write the prompt.
 
-- **Anime/animated-film style** — smooth cel-shading, clean line art,
-  vibrant flat colors, expressive character animation. Example descriptors:
-  "modern theatrical-anime style, cel-shaded, vibrant colors", "soft
-  cinematic anime style, detailed backgrounds, gentle lighting", "90s-anime
-  style, bold outlines, saturated colors".
-- **Manga-panel/screentone style** — black-and-white or limited-color panel
-  look, screentone shading, ink line art, comic-panel framing. Example
-  descriptors: "black-and-white manga panel style, screentone shading, ink
-  linework", "shoujo-manga style, delicate linework, soft screentone
-  gradients", "seinen-manga style, high-contrast ink, dramatic screentone
-  hatching".
+| Tier | Anime axes |
+|---|---|
+| **must-ask** | how many shots this round; the aspect ratio **before** any image exists (the clip's shape follows the image); whether a character image the request implies actually exists |
+| **ask-if-open** | the animation look; dialogue or no dialogue |
+| **never-ask** | resolution, video model, image model, provider, duration once stated |
 
-Don't assume one over the other — the two produce visually very different
-reference images and shots, and the choice belongs to the user. Carry the
-chosen style descriptor into **both** steps below (the character reference
-image prompt and every shot's video prompt), so the character image and
-every shot stay visually consistent with each other, not just internally
-consistent shot-to-shot.
+### The anime questions
+
+| # | Tier | Header | Question | Options — first is recommended; "Let the AI decide" comes last wherever it appears, and never on a must-ask row | Ask when |
+|---|---|---|---|---|---|
+| 1 | must-ask | `Shots` | How many shots this round? Each shot is a video job, and several shots also mean several opening frames. | `One shot first (recommended)` — see the character move before committing to a sequence / `<N> shots` — one row per shot in Approval 2; timestamped inside one job when they fit in 30s, otherwise `chain` or separate jobs / `Not sure — propose one` — the agent names N with the per-shot price and says why. **This is not a "Let the AI decide" option**: a must-ask axis never gets one, and the proposed count is only settled by the user's yes on Approval 2's rows | No shot count in the input. "Just this one shot" / "these three beats": skip. |
+| 2 | must-ask | `Aspect` | The clip's shape follows the image (adaptive), so the image has to be made at the target ratio. Where will it be watched? | `9:16 vertical (recommended)` — mobile feeds / `16:9 landscape` — web, YouTube; the gallery's anime cases that state a ratio are 16:9 (cases 9, 18, 44) / `1:1 square` — grid feeds | No platform word and no ratio. **Before Approval 1**, and with **no "Let the AI decide"** — this is the axis a paid image freezes, so it is the one thing a blanket "you decide" does not cover. If the user still declines to choose, take 9:16, mark it `(AI's pick)` in the recap, and say in the same message that changing it later means paying for a second image. |
+| 3 | ask-if-open | `Style` | Which animation look? It goes into the image and into every shot. | `Modern theatrical cel-shaded (recommended)` — clean line, flat vibrant colour, soft glow; the safest match for a contemporary excerpt, and the closest to the gallery's cel-shaded hybrid (case 18) / `Hand-drawn 90s TV anime` — fine ink lines, dramatic shadow, soft VHS grain, teal-and-orange (case 61) / `3D-stylised anime` — rounded appealing designs, sparkle and particle glow (case 10); swap in `Pixel 8-bit` (case 29) or `American retro cartoon, halftone dots` (case 11) when the story suggests it / `Let the AI decide` | No style word in the input. No school dominates the gallery — the recommendation is a convention, not a measured winner. |
+| 4 | follow-up | `Sheet` | Several shots — confirm the design on a sheet before the opening frames? | `Sheet first (recommended)` — one extra image; catches a wrong design before N frames and N shots are paid / `Straight to shot 1's opening frame` — later frames copy its description word for word / `I have a character image` — give the path | Only when Q1 answered several shots. |
+| 5 | ask-if-open | `Sound` | Lines, or ambience and music only? | `Dialogue in the excerpt's language (recommended)` / `No dialogue` — ambience and score only / `Let the AI decide` | Only when the excerpt is narration without quoted speech. Quoted lines present: dialogue on, no question. |
+
+If more than four are open, ask `Shots`, `Aspect`, `Style`, `Sound`; `Sheet`
+is the follow-up. Never asked: the language of the lines, resolution, video
+or image model, provider — all rows in the tables.
+
+### Skip rows specific to anime
+
+On top of the generic rows in `creative-brief.md`:
+
+| Signal in the input | Axis | Value |
+|---|---|---|
+| A style word — "90s anime", "like Ghibli", "pixel", "Saturday-morning cartoon", "cel-shaded" | style | map to the nearest school in the `Style` options; do not ask |
+| Quoted speech in the excerpt | sound | dialogue on, in the excerpt's language — the language is **never asked**; see "Prompt language follows the audio" |
+| A character image attached | asset question | settled: skip the sheet, the image is the design; see "Two ways an image can enter a shot" for which route it takes |
+
+### Every answer lands somewhere
+
+| Answer | Where it goes |
+|---|---|
+| Shots | the number of video jobs and of rows in Approval 2; whether a sheet is generated |
+| Aspect | the image is generated (or cropped/padded) at that ratio; the video inherits it through `adaptive` |
+| Style | the style sandwich — first sentence, `STYLE` block, closing quality line — in the image prompt **and** every shot prompt |
+| Sheet | the shape of Step 1: sheet first, or straight to shot 1's opening frame |
+| Sound | the `AUDIO` block, and `--generate-audio` |
+
+### Where the brief sits in the two-phase flow
+
+This scenario pays twice, so the shared order runs once per phase:
+
+```
+read input → fill the brief → [open axes] one AskUserQuestion (Shots, Aspect, Style, Sound)
+→ [Shots = several] one follow-up (Sheet)
+→ write the image prompt → image --dry-run
+→ one message: brief recap (AI's picks and inferred values marked) + image prompt + Approval 1 table, with the phase-2 preview
+→ wait for an explicit yes → generate the image → show IMAGE_PATH
+     (the second participation point: the user may send the design back here — that is a revision, not a new question round)
+→ write the shot prompt → video --dry-run
+→ one message: recap carried over + full shot prompt + Approval 2 table
+→ wait for an explicit yes → generate → report the real bill
+```
+
+Everything that must be settled before an image exists — **aspect ratio**,
+style, shot count — is asked before Approval 1; the ratio is must-ask for a
+mechanical reason, not a matter of taste ("The opening frame decides the
+output's shape"). Nothing is asked between Approval 1 and the image; the
+image itself is the question.
+
+The recap, in the same message as the table:
+
+```
+Brief
+- Shots: one shot first (your choice)
+- Aspect: 9:16 (inferred from "for Reels") — the image will be generated at 9:16
+- Style: hand-drawn 90s TV anime, fine ink lines, soft VHS grain (AI's pick)
+- Sound: dialogue in Japanese, as written in the excerpt (inferred from the quoted lines)
+- Image: quality standard, chain default model — row 1; video 8s 720p — row 2 (defaults)
+```
+
+## Prompt template
+
+Load these sections of `../ofox-video-core/references/prompt-structure.md`
+first: "Prompt skeleton: header manifest, timeline, closing block",
+"Segmenting the timeline", "Transitions", "Camera language", "Pacing",
+"Consistency locks and the negative list", "Dialogue and sound", "Reference
+assets as visual anchors", "Endings". The vocabulary lives there and is not
+repeated. What follows is the anime shape laid over that skeleton.
+
+Gallery evidence for the shape: all eight animation-adjacent prompts (cases
+9, 10, 11, 18, 29, 44, 61, 63) name their style school in the first sentence;
+five of the eight are timestamped; seven carry a negative list; the two fight
+scenes (11, 44) share a cause-chain rule; four layer an analogue texture (VHS
+grain, 35mm colours, 90s imperfections) over the school. Case 44 is in that
+set for its continuity and cause-chain writing, not its look — it asks for
+live action and forbids 3D and game CG outright. Chinese-language cases are
+quoted in translation.
+
+### 15–30 seconds: a manifest and timestamped segments
+
+Slots in `<angle brackets>`; optional lines in `[square brackets]`. Two to
+five seconds per shot for action, six to nine for a held emotional beat.
+
+```
+[FORMAT: <ratio>, <T> seconds, <N shots, hard cuts on the timestamps | one continuous shot>]      — optional; must match the flags
+STYLE: <school: cel-shaded modern theatrical anime | hand-drawn 90s TV anime, fine ink lines | 3D-stylised anime, rounded appealing designs | pixel 8-bit | 1969 American TV cartoon, thick outlines, halftone dots>, <texture layer: soft VHS grain | faded 35mm colours, gate weave | none>, <light: golden hour | neon | teal-and-orange | flat overcast>.
+[image1 provides <tag>'s identity only: face, <hair>, <signature accessory>, <outfit>. Ignore its background and pose.]      — identity-reference route only; omit when the shot starts on a frame
+<TAG>: <age range, build>, <eyes>, <hair colour + style + signature accessory>, <clothing item by item, colours>, <bearing>. Referred to as "<tag>".
+SCENE: <place, time, weather, light, palette>.
+[CONTINUITY (sequel): the same <tag> as in PART 1. The first frame continues PART 1's final image exactly: <position, pose, action in progress>. No re-positioning, no re-facing, no slow preparation — the action continues on frame one.]
+RULES — action: each shot is one continuous camera take, no jump to a new position inside a shot. Every strike runs visible target → body entry → strike motion → clear contact → immediate body reaction → balance change → next action; no reaction before contact; no effects in place of body motion. Effects allowed: SPEED LINES, SMEAR FRAME, IMPACT BURST, SHOCKWAVE RING, WOBBLE LINES — sparingly, only on <the decisive hits>. Onomatopoeia allowed: THWACK! POW! WHAM! — only on those.
+RULES — quiet: one action per segment, long enough to read. No fast cutting, no time-lapse, no jump cuts.
+
+[<segment title>, 0–<a>s] <shot size, camera position, movement>. <tag> <action A → B → C>. <the environment answers: petals lift, the light brightens>. [<Tag>: "<line>"]
+HARD CUT.                                                                — or: Without cutting, …
+[<segment title>, <a>–<b>s] … (each segment raises the stakes or the feeling one step)
+[Ending, <x>–<T>s] <terminal pose: faces the lens | freeze | slow pull-back to a wide | arm raised>; hold one second.
+
+AUDIO: <music, one line> / <ambience> / <character sounds with a qualifier: laughter (pure joy, not mocking)> / <keyed sfx> / <what remains at the end> — or: No BGM, no narration, no subtitles.
+CONSISTENCY: <tag>'s face, facial proportions, skin tone, body type, hairstyle and colour, <accessory>, <clothing items> identical in every shot; strictly no random character changes; never change the visual style.
+AVOID: subtitles, watermarks, logos; fast cutting and jump cuts (quiet scenes); photorealism, 3D game CG, plastic skin <or whichever school you are not making>; identity drift.
+<Closing quality line: restate the school, expressive facial animation, <camera texture>, character design consistent throughout.>
+```
+
+What each anime slot is for, and where it comes from:
+
+| Slot | Why it is here | Cases |
+|---|---|---|
+| **Style sandwich** — school in the first sentence, a `STYLE` block mid-prompt, a quality line at the end | All eight open with their school; 9, 18, 61 and 29 close by restating it | 9, 10, 18, 61, 29 |
+| **The schools seen** (the `Style` question's vocabulary) | `dreamlike cinematic anime aesthetic … anime 3D-stylised (rounded, appealing designs)` · `modern retro-anime 3D cel-shaded hybrid … soft VHS grain, synthwave colour glow` · `hand-drawn Japanese anime, highly detailed ink lines, expressive eyes, dramatic shadows … the slight imperfections of 1990s animation` · `pixel wuxia, 8-bit` · `hand-drawn 2D character inspired by 1969 American TV cartoons … thick black outlines, halftone dots, print misregistration` · `painterly anime illustration, cel-and-gradient shading` | 10, 18, 61, 29, 11, 34 |
+| **Cause chain** (action) | `visible target → body entry → real strike motion → clear contact → immediate body reaction → balance change → next action`; `no reaction before contact`; `no water/fire VFX in place of real body motion` | 44, 11 |
+| **Escalation curve** | each segment title raises the stakes (`REDIRECT → RUSH → PRESSURE WAVE → VORTEX BREAK → HYDRO DRILL → MAXIMUM FINISH`); `reactions grow louder after major punches`; the heaviest effects only on the decisive blow | 44, 11 |
+| **Effects allow-list with a frequency rule** | `SPEED LINES, SMEAR FRAME, IMPACT BURST, IMPACT FLASH, SHOCKWAVE RING, WOBBLE LINES — use effects sparingly`; onomatopoeia `THWACK! POW! SMACK! WHAM! CRACK!` | 11 |
+| **Terminal pose** | the referee raises the arm; faces the lens, serious and resolute; freeze; slow pull-back showing how small she is | 11, 9, 10, 29 |
+| **Environment answers the emotion** (quiet scenes) | `the garden responds to her joy — the flowers glow brighter` | 10 |
+| **One action per segment** (quiet and process scenes) | `Show only one salon action at a time … No fast cutting. No time-lapse. No jump cuts.` | 18 |
+| **Consistency sentence with invariants** | `face, facial proportions, skin tone, body type, hairstyle, hair colour, all visible accessories, clothing`; `strictly no random character changes`; `keep the stylist and the customer consistent throughout` | 44, 61, 18 |
+| **Sequel block** | `must be the same … continuing the fight from PART 1`; PART 1's final frame re-described in words as this clip's first; `no re-positioning, no re-facing, no slow preparation` — the text-level complement to `chain` across sessions | 44 |
+| **`AUDIO` block** | itemised: music / ambience / character sounds with a qualifier / keyed sfx / what remains at the end; or `No BGM, no narration, no subtitles` | 10, 44, 11 |
+| **`AVOID`** | subtitles, watermarks, logos; fast cutting, jump cuts; `never make him realistic`, `no face swap, no AI plastic skin, no 3D, no game CG`; random character changes | 18, 44, 61, 11 |
+
+### Worked example — adapted from case 10 (translated): 30 seconds, four segments, no dialogue
+
+```
+STYLE: dreamlike cinematic anime, 3D-stylised with rounded, appealing designs; continuous sparkle and magic particles; golden-hour light, warm palette, bright cheerful colour.
+THE GIRL: early teens, small and light; large round amber eyes, a soft round face; chestnut hair in two low bunches tied with pale-yellow ribbons; a cream sundress with a sky-blue sash; open, delighted. Referred to as "the girl".
+SCENE: a magic garden at golden hour — tall glowing flowers, drifting motes of light, soft grass, a distant hedge in haze.
+RULES — quiet: one action per segment, long enough to read. No fast cutting, no time-lapse, no jump cuts. Single character, no dialogue.
+
+[Opening, 0–6s] Wide shot of the garden, light motes hanging in the air. The girl sits alone on the grass, looks up at the sky, and a bright smile breaks. Soft music begins. The camera slowly orbits her.
+[Delight, 6–15s] Medium shot. She springs up and turns once with her arms out; the garden answers — the flowers glow brighter, petals lift and circle her. She laughs (pure joy, not mocking; subtle, not over the top). The camera follows her.
+[Wonder, 15–24s] Close-up. A small glowing bird lands on her fingertip; she goes still, eyes wide, then breathes out a smile. Behind her the light deepens toward gold. The camera drifts in a few centimetres.
+[Ending, 24–30s] The camera pulls back slowly, showing how small she is in the vast garden. The music reaches a soft peak. Freeze on this moment of quiet joy.
+
+AUDIO: music-box melody with strings and soft bells / petals rustling, a faint magic chime / her laughter (pure joy) / the bird's small trill / at the end only the music and a light breeze remain.
+CONSISTENCY: the girl's face, proportions, skin tone, hair bunches and ribbons, cream sundress and blue sash identical in every segment; strictly no random character changes; never change the visual style.
+AVOID: subtitles, watermarks, logos; fast cutting, jump cuts; photorealism, game CG, plastic skin; identity drift.
+Dreamlike cinematic anime, expressive facial animation, soft cinematic depth of field, character design consistent throughout.
+```
+
+### 8–15 seconds: one shot, starting on the frame
+
+This is the prompt that goes with `--frame-first-image`: it opens **on the
+image**, so the first sentence says so and the character block can be short —
+the frame carries the design. No manifest; the vendor's formula order in
+three or four sentences, and a `one shot` declaration so any beats read as
+performance, not cuts.
+
+```
+Start exactly on the opening frame. <Tag>, <appearance in one clause>, <place and light>. <School>, <texture layer>.
+One shot, <T> seconds. <Shot size and movement>. <Tag> <action A → B → C>; <the environment answers>. [<Tag>: "<line>" — <delivery>.]
+<Ending: faces the lens | freeze | the camera settles>; hold one second.
+AUDIO: <music> / <ambience> / <keyed sfx> — or No BGM. CONSISTENCY: <tag>'s face, hair, <accessory>, <outfit> unchanged. AVOID: subtitles, watermarks; <the school you are not making>; identity drift.
+```
+
+Adapted from case 10's opening (translated), 8 seconds, from an opening frame
+of the girl on the grass:
+
+```
+Start exactly on the opening frame. The girl — chestnut hair in two low bunches with pale-yellow ribbons, cream sundress, blue sash — sits alone on the grass of a magic garden at golden hour, light motes drifting. Dreamlike cinematic anime, 3D-stylised, rounded appealing designs, soft glow.
+One shot, 8 seconds. Wide shot; the camera slowly orbits her a quarter turn. She looks up at the sky, a bright smile breaks, and the nearest flowers glow brighter in answer; two petals lift and drift past the lens.
+The camera settles as the smile holds; hold one second.
+AUDIO: a music-box melody begins softly / petals rustling, a faint magic chime / no dialogue. CONSISTENCY: her face, hair bunches, ribbons, sundress and sash unchanged. AVOID: subtitles, watermarks; photorealism, game CG; identity drift.
+```
 
 ## Step 1: generate the image the shot will actually start from
 
@@ -132,9 +339,13 @@ story/script excerpt and write a precise, reusable character description
 covering:
 
 - age and build
-- hair (color, length, style)
-- clothing (exact garments, colors)
-- distinguishing features (scars, accessories, eye color, etc.)
+- hair (colour, length, style) and one signature accessory
+- clothing (exact garments, colours)
+- distinguishing features (scars, eye colour, etc.)
+
+Carry the brief's `Style` answer — the school, its texture layer, its light —
+into **this** prompt and into every shot prompt, so the image and the shots
+stay consistent with each other, not just shot to shot.
 
 ### Two different images, do not confuse them
 
@@ -144,7 +355,7 @@ thing to feed it:
 
 | Image | What it is for | Prompt shape |
 |---|---|---|
-| **Character sheet** | Locking a design, showing the user, keeping one character consistent across shots that cut to unrelated setups | multi-view, labels, plain background |
+| **Character sheet** | Locking a design and showing it to the user before several shots are paid for | multi-view, labels, plain background |
 | **Opening frame** | The frame the shot animates away from | one in-scene illustration, no text, no panels |
 
 Asking for a "character reference sheet" gets you exactly that: a real
@@ -152,45 +363,56 @@ multi-panel sheet with front/side/back views, an expression row, a palette
 swatch and printed labels — and models will happily invent a name and letter
 it across the top. Fed to `--frame-first-image`, the clip opens on that
 grid of thumbnails and text and animates out of it. **Verified on a real
-run**: a sheet generated from the wording above came back with four views,
-three expressions, a colour palette and the caption "HANA TANAKA", and had
-to be thrown away and regenerated as a single in-scene image.
+run**: a sheet generated from that wording came back with four views, three
+expressions, a colour palette and the caption "HANA TANAKA", and had to be
+thrown away and regenerated as a single in-scene image.
 
-So pick by what you need:
+So pick by the brief's `Shots` and `Sheet` answers:
 
-**Generating one shot** (the common case) — you need an opening frame. Skip
-the sheet: with a single shot there is no second shot to stay consistent
-with, so the sheet buys nothing and costs an opening frame.
+**One shot** (the common case) — you need an opening frame, and nothing else.
+There is no second shot to stay consistent with, so a sheet buys nothing.
 
 ```bash
 bash ../ofox-image-core/references/ofox-image.sh generate \
-  --prompt "<character description>, <the shot's opening moment: setting, pose, camera angle>, <anime/manga style descriptor>, cinematic composition, no text, no panels, single illustration" \
+  --prompt "<character description>, <the shot's opening moment: setting, pose, camera angle>, <school + texture layer from the brief>, <the brief's ratio as a composition instruction, e.g. vertical 9:16 composition>, cinematic composition, no text, no panels, single illustration" \
   --quality standard \
   --out-dir <a directory for this project's generated assets>
 ```
 
 The `no text, no panels, single illustration` tail is what keeps the model
-from drifting back into sheet mode — it is not optional padding.
+from drifting back into sheet mode — it is not optional padding. The ratio
+goes in the prompt because `--size` is not a guarantee on every image model
+(see below) — check the delivered file and crop or pad it before Step 2.
 
-**Generating several shots of one character** — generate the sheet as well,
-once, and show it to the user to confirm the design. Then write each shot's
-own opening frame using the **same character description word for word**, so
-every shot inherits one design.
+**Several shots, `Sheet first`** — generate the sheet once, show it to the
+user, and get the design confirmed. Then write **each shot's own opening
+frame** with the exact same character description, and feed each shot its
+own frame. The sheet is a checking artifact; it is never passed to
+`--frame-first-image`.
 
 ```bash
 bash ../ofox-image-core/references/ofox-image.sh generate \
-  --prompt "<character description>, <anime/manga style descriptor>, character reference sheet, plain neutral background, front-facing full body" \
+  --prompt "<character description>, <school + texture layer>, character reference sheet, plain neutral background, front-facing full body" \
   --quality standard \
   --out-dir <a directory for this project's generated assets>
 ```
 
+**Several shots, `Straight to shot 1`** — generate shot 1's opening frame as
+in the one-shot case, show it, and write the later frames from the same
+description. When consecutive shots continue one moment, only the first needs
+a frame at all — `chain` carries the rest.
+
+**`I have a character image`** — the user's file is the design. Whether it
+becomes an opening frame or an identity reference is the next subsection.
+
 ### The opening frame decides the output's shape
 
 `bytedance/seedance-2.5` forces `aspect_ratio: adaptive` whenever an image is
-attached, so the clip comes out at **the reference image's** aspect ratio,
-whatever `--aspect-ratio` says. If the delivery needs a specific ratio
-(9:16 for social, say), crop or pad the image before Step 2 — there is no
-flag that fixes it afterwards.
+attached, so the clip comes out at **the image's** aspect ratio, whatever
+`--aspect-ratio` says. That is why the brief asks for the ratio **before**
+Approval 1: generate the image at the target shape, or crop/pad it before Step
+2 — there is no flag that fixes it afterwards, and fixing it by regenerating
+is a second image bill.
 
 **Don't pass `--model` here.** `ofox-image-core` resolves one from its
 cheapest-first priority chain — defined in exactly one place, its
@@ -203,12 +425,10 @@ with no recorded reason for the choice. That is what a scenario skill holding
 its own model id buys you: prices move, the copy doesn't, and nobody notices
 because nothing is wrong — it just costs more than it needs to.
 
-Whichever model runs, **don't promise the user a specific output resolution**.
-`google/gemini-3.1-flash-image` was verified to always generate at its native
-1024x1024 and just echo back whatever `--size` was requested, and no other
-image model's `--size` handling has been confirmed either way — see
-`ofox-image-core`'s size gotcha. If a specific frame shape matters, check the
-real file's dimensions rather than the `SIZE` line.
+Whichever model runs, **don't promise the user a specific output resolution**,
+and don't trust the printed `SIZE` line for the ratio — check the delivered
+file's real dimensions and crop or pad it. The measured reason is in the
+failure table's `SIZE` row and in `ofox-image-core`'s size gotcha.
 
 Take the printed `IMAGE_PATH` (an absolute path) and **show it to the user
 as its own standalone line** — say whether it is the shot's opening frame or
@@ -218,70 +438,113 @@ a design sheet, since those get used differently. `ofox-image.sh` also prints
 Show the image to the user before spending on the shot. A wrong opening
 frame is cheap to notice here and expensive to notice after the video is
 paid for — a sheet that slipped through, an invented caption, a character
-who is not who they pictured.
+who is not who they pictured. This is the second participation point of the
+flow, and the user may send the design back here without it counting as a
+new question round.
 
 If the story needs more than one character, repeat Step 1 once per
-character who needs their own reference image — see "Multiple characters in
-one shot" below for the v1 scoping limit on this.
+character who needs their own image — see "Multiple characters in one shot"
+below for the v1 scoping limit on this.
+
+### Two ways an image can enter a shot
+
+"Reference assets as visual anchors" in the shared file has the full
+comparison; the part that matters here:
+
+| | Frame lock — this skill's mechanism | Identity reference — what the gallery's image-bearing anime prompts do |
+|---|---|---|
+| The image is … | the literal first frame; the shot animates away from it | a source of appearance; no frame is locked, the shot composes itself |
+| Flag | `--frame-first-image PATH` (local file, auto base64) | none — `--extra-json '{"input_references":[…]}'` |
+| Prompt | opens on the frame; short character block | a role sentence per image: `image1 provides <tag>'s identity only: face, hair, accessory, outfit. Ignore its background and pose.` (cases 34, 40, 11, 44) |
+| Ratio | `adaptive`, follows the image | not tested here |
+| Status in this repo | exercised on real runs: a generated image fed as a first frame produced a clip that opens on it — that is how the sheet-as-frame mistake was caught — and `ofox-video-core` records a `chain` continuity run | the element shape is documented in `../ofox-video-core/references/api-params.md`, and a `video_url` reference has gone through in a real video-to-video run; an `image_url` identity reference has **not been exercised end-to-end from this skill**. Whether the `image1` token maps to the attachment by position is unverified too |
+
+**They are mutually exclusive in one job** — the script rejects the
+combination client-side (`references_conflict`). A shot either starts on a
+frame or borrows an identity, not both. A user-supplied character image can
+go either way; a sheet can only sensibly be the second (as a frame it
+produces the grid problem above).
+
+Neither route is affected by the real-person refusal for an anime character;
+the identity route's behaviour with a real person is untested in this repo
+and irrelevant here.
+
+If you take the identity route, `--dry-run` it first like anything else. Only
+the URL element shape is documented for `input_references` — there is no
+documented local-file encoding for it, unlike `--frame-first-image`, so a
+user's local image has to be hosted somewhere reachable first:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+  --prompt "image1 provides the girl's identity only: face, chestnut bunches with pale-yellow ribbons, cream sundress, blue sash. Ignore its background and pose. <the rest of the shot prompt from the template>" \
+  --extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"<a publicly reachable https URL>"}}]}' \
+  --duration 8 --resolution 720p --out-dir ./out
+```
+
+Say in the approval message that this route is documented but not yet run
+end-to-end here, so the user is pricing an experiment.
 
 ## Step 2: generate each shot from its opening frame
 
-**Reuse the identical `IMAGE_PATH` from Step 1 across every shot of that
-character.** Do not regenerate the character image per shot, and do not
-swap in a different image between shots of the same character — that reuse
-is the entire mechanism this skill provides.
+Feed each shot the frame that was written for it:
 
-For each shot, build an anime-style video prompt covering:
+- **one shot** — the single `IMAGE_PATH` from Step 1;
+- **a chained sequence** — only the first job takes `--frame-first-image`;
+  `chain` carries the closing frames forward;
+- **shots that cut to new setups** — each shot's own opening frame from Step
+  1, all written from the same character description word for word.
 
-- scene action (what happens in the shot)
-- dialogue in quotes, attributed, if the shot has any
-- camera framing (wide/medium/close-up, pan/push-in), consistent with the
-  chosen art style from Step 0
+Always pass the **absolute `IMAGE_PATH`** a script printed — never a
+relative path, a re-derived guess, or a sheet.
 
-then call:
+For each shot, build the prompt from "Prompt template" above — the 8–15s
+frame-lock shape for a single shot, the 15–30s manifest when the job holds
+several timestamped shots — then call:
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate \
-  --prompt "<anime-style shot prompt built above>" \
-  --frame-first-image "<the character reference image's ABSOLUTE path from Step 1>" \
+  --prompt "<the shot prompt from the template>" \
+  --frame-first-image "<that shot's opening frame — the ABSOLUTE path printed in Step 1>" \
   --duration 8 \
-  --resolution 720p
+  --resolution 720p \
+  --out-dir ./out
 ```
 
 `ofox-video-core` auto-base64-encodes a local file path like this one — no
-need to upload it anywhere first. Always pass the **same absolute
-`IMAGE_PATH`** printed in Step 1, never a relative path, a re-derived guess,
-or a freshly generated image for this shot.
+need to upload it anywhere first.
 
 ### `aspect_ratio: adaptive` will fire automatically here — expected, not a bug
 
-Because every shot in this skill attaches a `--frame-first-image`, and the
-default model is `bytedance/seedance-2.5`, `ofox-video-core` will force
-`aspect_ratio` to `adaptive` and print a `NOTE:` every time, regardless of
-whether `--aspect-ratio` is passed. **Don't pass `--aspect-ratio` here** —
-it has no effect once an image is attached with this model. The output's
-frame shape follows the character reference image's own aspect ratio
-instead. If a specific output ratio matters for a platform, crop/pad the
-character reference image to that ratio before Step 1, not after.
+**Don't pass `--aspect-ratio` in Step 2.** Every shot here attaches a frame
+to `bytedance/seedance-2.5`, so the script forces `adaptive` and prints a
+`NOTE:` every time; the flag has no effect. The shape comes from the image
+(see "The opening frame decides the output's shape").
 
 ## Multiple characters in one shot: out of scope for v1
 
-This skill scopes to one primary character reference per shot, matching
+This skill scopes to one primary character image per shot, matching
 `ofox-video-core`'s single `--frame-first-image` slot. If a shot needs two
 characters interacting:
 
-- generate a reference image for the primary/foreground character only
+- generate an opening frame for the primary/foreground character only
   (Step 1),
 - pass that image as `--frame-first-image` for the shot,
-- describe the secondary character in the shot's video prompt text
-  (appearance, action, dialogue) — the same text-only approach
-  `seedance-short-drama` already uses for all of its characters.
+- describe the secondary character in the shot's prompt text (appearance,
+  action, dialogue) — the same text-only approach `seedance-short-drama`
+  uses for all of its characters.
 
 This is a real accuracy tradeoff, not a full solution: the secondary
 character has no image-based consistency guarantee across shots. Treat it
 as the workaround it is, not as feature parity with the primary character's
 mechanism.
 
+The gallery did solve multi-character consistency — official case 1 (two
+leads, one appearance image each), case 11 (two fighters and a venue, three
+images), case 44 (heroine and opponent, two images) — but with **several
+identity references**, which maps to `input_references` with more than one
+image. That route is documented and untested end-to-end here (see "Two ways
+an image can enter a shot"); it is the obvious next step for a v2, not
+something this version claims.
 
 ## Which upstream renders it
 
@@ -307,6 +570,10 @@ estimate up front would have the user paying for shots of a character they
 have not seen yet, and "what the character looks like" is the entire thing
 this skill sells.
 
+The brief recap (see "Where the brief sits in the two-phase flow") goes in
+the Approval 1 message, above the image prompt and the table; Approval 2
+carries it forward unchanged unless the user revised the design.
+
 ### Approval 1 — the image (paid once per character, not once per shot)
 
 ```bash
@@ -317,24 +584,21 @@ bash ../ofox-image-core/references/ofox-image.sh generate --dry-run \
 
 The table row: the `MODEL` line from that output (the chain has already
 resolved it — never write "the default"), type `image`, the quality and size
-you passed, quantity 1, and whatever the `Estimated cost:` line says.
+you passed, quantity 1, and whatever the `Estimated cost:` line says. With
+`Sheet first` there are two image rows — the sheet and the first opening
+frame — and say that later frames add one row each.
 
-**Copy that line; do not compute your own.** An image bills per output token
-and the count only exists in the response, so `ofox-image-core` will only quote
-a model whose token count it has actually measured. Since 2026-09-02 the
-chain's default is measured, so the usual answer is a real figure labelled
-`ROUGH` (~$0.027 for `microsoft/mai-image-2.5-flash`) — relay it with the word
-ROUGH intact.
+**Copy that line; do not compute your own.** Since 2026-09-02 the chain's
+preferred model is measured, so the usual answer here is a real figure
+labelled `ROUGH` (about 2.7 cents for `microsoft/mai-image-2.5-flash`) —
+relay it with the word ROUGH intact. If the chain resolves to a model nobody
+has measured, the line says "cannot be predicted" instead; the shared gate's
+"When there is no estimate" says what to do with that, and the answer is
+still to show the table and wait for a yes.
 
-If the line instead says **"cannot be predicted"** — which happens whenever the
-chain resolves to a model nobody has measured yet — put
-"cannot be predicted — no measured token count for this model" in the cost
-column and **still wait for a yes**. Do not fill that gap with another model's
-number: in a table the user is approving, a borrowed measurement is
-indistinguishable from a real one.
-
-Say plainly that this is paid **once per character** — generating N shots of
-that character does not repeat it.
+Say plainly that this is paid **once per character** (once per frame when
+several shots each get their own) — generating N shots of that character
+does not repeat it.
 
 **Preview phase 2 in the same message.** Dry-run one shot at the duration and
 resolution you plan to use, and quote it as "and then roughly X per shot for N
@@ -364,28 +628,19 @@ This table carries three things the first one could not:
   estimate), and
 - **the running total** across both phases.
 
-Relay the `Estimated cost:` line as printed — never a number of your own. The
-estimate a *real* run prints comes microseconds before the request goes out,
-too late to relay; that is what `--dry-run` is for.
-
 Attaching `--frame-first-image` does **not** move the job to the more
 expensive v2v tier: a real image-to-video run billed 4s at 11 cents/s at 480p,
 the t2v rate, not v2v's 14 cents/s. Only a *video* input does that, and this
 skill never sends one. The script picks the tier; take it from the dry run
 rather than assuming either way.
 
-If the user approves phase 1 and then declines phase 2, phase 1 was still
-billed. Say so — don't present the image as free because no video followed.
-
-Afterwards the **actual** bill is `VIDEO_COST` from the finished job, read
-from `usage.video_cost`. Report it as money (`$1.92`), not as the raw
-ten-decimal string. An estimate is never a bill.
-
+Afterwards, report both real figures — `IMAGE_COST` from phase 1 and
+`VIDEO_COST` from each finished shot — and the total across the two phases.
 
 ## Prompt language follows the audio
 
 Audio is generated on by default, and the model speaks **whatever language the
-prompt is written in**. So keep quoted dialogue in the user's own language —
+quoted lines are written in**. So keep dialogue in the user's own language —
 if they give you Chinese lines, put Chinese in the prompt. Translating them to
 match the English examples in this file produces an English-dubbed clip, and
 the user only finds out after paying for it.
@@ -393,9 +648,19 @@ the user only finds out after paying for it.
 The rest of the prompt (setting, camera, lighting) can be English regardless;
 it is the quoted speech that determines the spoken language.
 
-The "2-3 spoken words per second" budget below is calibrated for English. For
-Chinese and Japanese, count characters rather than words and budget roughly
-5-6 characters per second.
+Budget the lines by tier before writing them — "Density — two tiers, not one"
+under "Dialogue and sound" in the shared file. Overrun means a longer clip or
+fewer words, never a faster delivery.
+
+## Recommended defaults
+
+| Parameter | Default | Why |
+|---|---|---|
+| `--duration` | `8` for one shot; for several timestamped shots in one job, sum 2–5s per shot (the two verified runs fit three shots into 8s, both text-to-video — see "Shots, cuts and jobs") | the gallery's segmented anime prompts run 24–30s, so a sequence often wants the longer end; a single frame-lock shot rarely does |
+| `--resolution` | `720p` | detail on line art and faces at a reasonable cost; `1080p` only for a hero shot the user will publish |
+| `--aspect-ratio` | not passed — `adaptive` follows the image; the ratio is settled by the brief before the image exists | see "The opening frame decides the output's shape" |
+| `--generate-audio` | `true` (server default) unless the brief's `Sound` answer is `No dialogue` and the user wants silence; ambience and score still need it on | dialogue needs an audio track |
+| image `--quality` | `standard` | the frame is a starting point, not the deliverable |
 
 ## Several takes to choose from
 
@@ -411,12 +676,8 @@ bash ../ofox-video-core/references/ofox-video.sh batch --dry-run \
 It prices the whole batch up front, stops on the first failure instead of
 burning the remaining takes, and produces a contact sheet — three frames per
 take, one row each — so the user picks from one image instead of opening N
-files.
-
-**Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`**, and give the takes a
-row each — the approval gate wants the itemised shape, not just the sum. If
-one take in four is usable, that clip cost the whole total; the per-take
-figure understates it by 4x.
+files. Price it the way the shared gate's "Batches get an itemised table, not
+one total" requires: a row per take and `BATCH_COST_TOTAL`.
 
 Hand the user the `CONTACT_SHEET` path on its own line, the same way you hand
 over a video — in this flow it is the artifact they actually look at first,
@@ -431,14 +692,11 @@ A single `generate` prints a `SEED` line too, and records it in the clip's
 good, give me it at 1080p" works off one clip — you do not need a batch to
 get a reusable handle.
 
-
 Worth offering when the user is exploring: draft cheap on
 `bytedance/seedance-2.0-mini` at 480p, then render the winner on
 `bytedance/seedance-2.5`. Four 8-second drafts cost about 64 cents on mini versus
 $7.68 on 2.5 at 720p. But **don't switch models on their behalf** — a
 different model is a different look, not just a different price.
-
-
 
 ## Pricing a job with no API key
 
@@ -467,7 +725,18 @@ This means `ofox-video-core` isn't installed alongside this skill — not that
 anything is broken. This skill delegates all execution to it and reaches it by
 relative path. Fix: `npx skills add ofoxai/skills` (the whole repo). Say that
 plainly rather than relaying the raw path error, which names neither the
-missing skill nor the fix.
+missing skill nor the fix. The same goes for `ofox-image-core`, which Step 1
+needs for the opening frames.
+
+That one missing install takes the shared reference files with it. This skill
+packages only its `SKILL.md` and `CHANGELOG.md`; `prompt-structure.md`,
+`creative-brief.md`, `approval-gate.md` and the two `api-params.md` files
+live in the core skills, so a link to any of them will not resolve either,
+and the same command fixes all of it. Work can continue meanwhile — the
+prompt templates, the brief's questions, the two-phase flow and the defaults
+are written out here. Only the depth behind the general rules is missing:
+the full camera and transition vocabulary, the wider question-flow rules, and
+the gate's exact wording, which still applies before any money moves.
 
 ## Exit codes worth knowing
 
@@ -517,24 +786,34 @@ from the repo root it is `skills/ofox-video-core/references/ofox-video.sh`.
 
 ## Generating: putting the two steps together
 
-Example full sequence (the character/shot content is illustrative — the
-calling agent fills in the real content extracted from the user's story):
+Example full sequence for **one shot** (the character/shot content is
+illustrative — the calling agent fills in the real content extracted from the
+user's story, and the brief has already settled 9:16, the style and the shot
+count):
 
 ```bash
-# Step 1 — once per character (--model omitted on purpose: the chain resolves it)
+# Step 1 — the shot's OPENING FRAME, not a sheet (--model omitted on purpose: the chain resolves it)
 bash ../ofox-image-core/references/ofox-image.sh generate \
-  --prompt "A teenage girl, silver bob haircut, wearing a navy school uniform with a red ribbon, sharp green eyes, modern theatrical-anime style, cel-shaded, vibrant colors, character reference sheet, plain neutral background, front-facing full body" \
+  --prompt "A teenage girl, silver bob haircut, navy school uniform with a red ribbon, sharp green eyes, standing at the edge of a school rooftop at sunset, wind in her hair, seen from a low medium shot with the city behind her; modern theatrical anime, cel-shaded, vibrant colours; vertical 9:16 composition; cinematic composition, no text, no panels, single illustration" \
   --quality standard \
   --out-dir ./assets
 
-# Step 2 — once per shot, reusing the SAME IMAGE_PATH printed by Step 1
+# Step 2 — the shot, opening on that exact frame (the SAME absolute IMAGE_PATH Step 1 printed)
 bash ../ofox-video-core/references/ofox-video.sh generate \
-  --prompt "The girl stands on a rooftop at sunset, wind blowing through her hair, she looks toward the horizon and says, \"I'm not going back.\" Medium shot, slow push-in, modern theatrical-anime style, cel-shaded" \
+  --prompt "Start exactly on the opening frame. The silver-bobbed girl in the navy uniform stands at the rooftop edge at sunset; modern theatrical anime, cel-shaded. One shot, 8 seconds. Low medium shot, slow push-in. The wind lifts her hair; she looks toward the horizon, then says, quietly and without turning: \"I'm not going back.\" The camera settles; hold one second. AUDIO: wind, distant traffic, no music. CONSISTENCY: her face, silver bob, green eyes, uniform and red ribbon unchanged. AVOID: subtitles, watermarks; photorealism, game CG; identity drift." \
   --name "rooftop confession shot 1" \
-  --frame-first-image "/absolute/path/to/assets/ofox_image_20260829_1234.png" \
+  --frame-first-image "/absolute/path/to/assets/ofox_image_20260829183214_4821.png" \
   --duration 8 \
-  --resolution 720p
+  --resolution 720p \
+  --out-dir ./out
 ```
+
+For **several shots that cut to new setups**, Step 1 runs once per shot for
+its opening frame, each from the same character description — plus once for
+the sheet when the brief's `Sheet` answer kept it (shown to the user, never
+passed to the video); Step 2 runs once per shot with that shot's own frame.
+For **shots that continue one moment**, use `chain` with shot 1's frame; see
+`ofox-video-core`'s `chain` documentation.
 
 Report the **actual** printed `IMAGE_PATH` / `VIDEO_PATH` / `VIDEO_COST`
 from each script's own output — never an estimate, and never a path or cost
@@ -556,35 +835,38 @@ plus this skill's own:
 | 1 (image) | Exit `3`, `error.type: invalid_request_error` | The request was rejected as malformed/unsupported. The confirmed error shape is `{"error":{"message","type","code"}}` — `error.code` is just the HTTP status as a number here, `error.type` is the real classifier | Read the printed `Upstream message`, fix the prompt/flags, retry — a rejected request has not been confirmed to bill |
 | 1 (image) | Exit `4` | `--out-dir` could not be created or entered | Caught before any network call, so no money was spent finding this out. Fix `--out-dir` and retry |
 | 1 (image) | Exit `5`, ambiguous network failure | No HTTP response at all — this is a synchronous, no-job-id API, so there's nothing to poll afterward | Do not guess or retry blindly; check `https://app.ofox.ai`'s usage/billing history first |
-| 1 (image) | `SIZE` in the printed output doesn't match what you asked for | Verified for `google/gemini-3.1-flash-image`: it always generates at its native 1024x1024 and just echoes back the requested `size`. No other image model's `--size` handling has been confirmed either way, so treat the `SIZE` line as unverified for whichever model the chain resolved | Don't promise the user a specific size; if a guaranteed size matters, check the real file's dimensions (`file <path>` / `sips -g pixelWidth -g pixelHeight <path>`), not the `SIZE` line |
+| 1 (image) | The image is a multi-panel sheet with labels when an opening frame was wanted | The prompt lacked the `no text, no panels, single illustration` tail, or said "reference sheet" | Regenerate as an in-scene single illustration; do not pass the sheet to `--frame-first-image` |
+| 1 (image) | `SIZE` in the printed output doesn't match what you asked for | Verified for `google/gemini-3.1-flash-image`: it always generates at its native 1024x1024 and just echoes back the requested `size`. No other image model's `--size` handling has been confirmed either way, so treat the `SIZE` line as unverified for whichever model the chain resolved | Don't promise the user a specific size; if a guaranteed size matters, check the real file's dimensions (`file <path>` / `sips -g pixelWidth -g pixelHeight <path>`), not the `SIZE` line, and crop/pad to the ratio the brief settled |
 | 2 (video) | Exit `1`, no network call made | Bad `--duration`/`--resolution`, or missing `--prompt` | Fix the flag per the error message and re-run `generate` — free to retry, nothing was submitted |
+| 2 (video) | Exit `1`, `references_conflict` | Both `--frame-first-image` and an `input_references` array in `--extra-json` were sent | Pick one route per job — see "Two ways an image can enter a shot" |
 | 2 (video) | Exit `1`, "local image file ... exists but is not readable" | `--frame-first-image`'s path exists locally but this script/OS can't read it (permissions) — caught by `resolve_image_ref()` before any network call | Fix the file's permissions (confirm it's the exact `IMAGE_PATH` printed in Step 1) and retry — free, nothing was submitted |
 | 2 (video) | Exit `2` | `curl`/`jq` missing, or `OFOX_API_KEY` not set | Re-run `ofox-video-core`'s `check` and follow its install/signup guidance |
 | 2 (video) | Exit `3`, `error.code: insufficient_credits` | Ofox balance too low | No charge was made; the user needs to add credits at `https://app.ofox.ai` before retrying |
 | 2 (video) | Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated output failed a post-generation content check, after the job ran — not billed (no `usage` field) | Retry with a brand-new `generate` call using a different prompt — a new request, safe to retry immediately |
 | 2 (video) | Exit `3`, request rejected when the API tries to use the reference image (commonly `error.code: invalid_request`) | The `IMAGE_PATH` doesn't exist locally and isn't a URL either, so `resolve_image_ref()` passed it through unchanged and the API rejected it as an unusable value — `ofox-video-core`'s docs confirm `bad_data_uri`/`download_failed`/`unreachable`/`not_image`/`too_large` only for `--real-person`'s reference-photo validation, not for `--frame-first-image`/`frame_images`, so don't assume one of those five specific codes here | Confirm the exact `IMAGE_PATH` printed in Step 1 still exists and is a valid, readable image file, then retry |
-| 2 (video) | Unexpected aspect ratio / frame shape in the output | `bytedance/seedance-2.5` + `--frame-first-image` always forces `aspect_ratio: adaptive` (printed as a `NOTE:`, never silent) — the output follows the reference image's own aspect ratio | Expected behavior, not a bug — see "`aspect_ratio: adaptive` will fire automatically" above; crop/pad the reference image before Step 1 if a specific ratio is required |
+| 2 (video) | Unexpected aspect ratio / frame shape in the output | `bytedance/seedance-2.5` + `--frame-first-image` always forces `aspect_ratio: adaptive` (printed as a `NOTE:`, never silent) — the output follows the image's own aspect ratio | Expected behavior, not a bug — the brief settles the ratio before Step 1 for exactly this reason; crop/pad the image and regenerate the shot if it was missed |
+| 2 (video) | A cut lands up to a second off its timestamp | Expected: the verified multi-shot runs placed cuts within about ±1s of the written stamps | Give each shot 2s or more of slack around a line or a decisive hit; if a cut must be frame-exact, use `chain` or separate jobs |
 | 2 (video) | Exit `4`, timed out waiting for completion | Job is still running upstream, not failed | Do **not** re-run `generate`; run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID` using the job id printed before the timeout |
 | 2 (video) | Exit `5`, ambiguous network failure on create | No HTTP response received at all — can't tell if a job was created | Do not guess or retry `generate`; check `https://app.ofox.ai` first, per `ofox-video-core`'s no-resubmit rule |
 | 2 (video) | Exit `6`, `--out-dir` could not be created or entered | Local filesystem problem, not an API problem | The job itself is unaffected — fix `--out-dir` and re-run `poll JOB_ID --out-dir <a writable directory>`; do not re-run `generate` |
-| both | Character looks visibly different between two shots | The same `IMAGE_PATH` wasn't reused, or Step 1 was accidentally re-run per shot | Reuse the exact same absolute path from the ONE Step-1 call for every shot of that character — this is the entire mechanism, see above |
+| both | Character looks visibly different between two shots | The opening frames were written from different character descriptions, the sheet was skipped and a frame drifted unnoticed, or the shot prompt lacks the `CONSISTENCY` line and the style sandwich | Write every frame from the same description word for word, check each frame against the confirmed sheet before Step 2, and keep the `CONSISTENCY` and `STYLE` lines in every shot prompt |
 
 ## When NOT to use
 
-- Realistic-human dialogue scenes with no anime/manga styling — use
-  `seedance-short-drama` instead. That skill's character-consistency
-  approach is text-only (repeating the same description across stateless
-  jobs); this skill replaces that with a real, reused reference image, but
-  only for an anime/manga art style — every prompt this skill builds bakes
-  in the Step-0 style descriptor, so it is not a general-purpose "add image
-  consistency to any style" tool.
+- Realistic-human dialogue scenes with no anime styling — use
+  `seedance-short-drama` instead. That skill's character consistency is
+  text-only (repeating the same description across stateless jobs); this
+  skill starts every shot on an image of the character, but only for an
+  anime art style — every prompt this skill builds bakes in the brief's
+  `Style` answer, so it is not a general-purpose "add image consistency to
+  any style" tool, and a photoreal frame would be refused anyway.
 - Silent product/brand footage with no characters — use `seedance-ad-creative`
   instead.
 - Plain catalog/listing product shots — use `seedance-product-video` instead.
 - More than one character needing independent image-based consistency in the
   same shot — out of scope for v1 (see "Multiple characters in one shot"
-  above); only one primary character gets a reference image per shot.
+  above); only one primary character gets an image per shot.
 - Editing an existing character's outfit/appearance mid-story — this skill
   only does fresh text-to-image generation (`ofox-image-core` doesn't
-  implement `/v1/images/edits`); generate a new Step-1 reference image
-  instead, treated as a new "version" of the character from that point on.
+  implement `/v1/images/edits`); generate a new Step-1 image instead, treated
+  as a new "version" of the character from that point on.
