@@ -467,6 +467,10 @@ image_cost_for() {
 # MODEL_SOURCE is printed on every success, not only on the awkward paths. An
 # agent relaying this can repeat a line; it cannot notice a line that was never
 # there to begin with (same reasoning as print_estimate's always-one-line rule).
+#
+# Lives in its own function rather than inline in cmd_generate so that all
+# three branches get a direct unit test, the way image_cost_for does:
+# cmd_generate itself cannot be unit tested without a real, billable POST.
 # ---------------------------------------------------------------------------
 
 # Outputs of resolve_response_model. Globals rather than a printed value, for
@@ -763,44 +767,6 @@ print_api_error() {
     echo "  Raw response body:" >&2
     printf '%s\n' "$body" >&2
   fi
-}
-
-# ---------------------------------------------------------------------------
-# response model resolution
-#
-# 实测 2026-09-02:`openai/gpt-image-2` 的响应里**没有** `model` 字段。旧代码把
-# 缺省的字面量 "unknown" 拿去查费率表,查不到,吐出
-# "NOTE: could not compute a cost — no published rates available for 'unknown'"
-# —— 脚本自己明明知道请求的是谁,只是没去用它。两次真实付费调用都因此没拿到
-# IMAGE_COST,响应本身其实完全正常。
-#
-# ⚠️ 两种情况必须分开,别图省事一律用请求值:
-#   - 响应没有 model 字段        → 用请求的 id(本例;上游只是没回显,不代表换模型)
-#   - 响应回显了一个不同的 id    → 如实显示回显值并在 stderr 提示。那才是上游真的
-#     换了模型(路由/降级),悄悄改回请求值 = 把这件事掩盖掉,而计价必须按真正
-#     跑的那个模型算,不是按请求的那个
-#
-# Pulled out into its own function (rather than left inline in cmd_generate)
-# so both branches get a direct unit test the same way image_cost_for does —
-# cmd_generate itself makes a real network call and cannot be unit tested.
-# ---------------------------------------------------------------------------
-
-resolve_response_model() {
-  # $1 = requested model id, $2 = response's raw .model field (may be empty
-  # string when the field is absent). Prints the model id to use for display
-  # and pricing. Emits a NOTE to stderr when the response named a model
-  # different from the one requested — never silently.
-  local requested="$1" raw="$2"
-  if [ -z "$raw" ]; then
-    printf '%s' "$requested"
-    return 0
-  fi
-  printf '%s' "$raw"
-  if [ "$raw" != "$requested" ]; then
-    echo "NOTE: upstream ran '$raw', not the requested '$requested'." >&2
-    echo "      Cost below is computed for the model that actually ran." >&2
-  fi
-  return 0
 }
 
 # ---------------------------------------------------------------------------

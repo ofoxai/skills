@@ -60,6 +60,27 @@ exact, a computed cost is only as good as the rate table behind it.
 script actually loads — calls them `prompt`/`completion`. `output_image` is
 spelled the same in both. Code reading either source must accept both.
 
+**Which-model trap**: the rate lookup needs a model id, and the obvious place
+to get one is the response's `model` field — but `openai/gpt-image-2` does not
+send that field at all. The script used to default it to the literal string
+`"unknown"`, look `"unknown"` up in the rate table, find nothing, and print
+`could not compute a cost` for a request it had built itself. Two real, paid
+calls were billed with no cost figure printed. Fixed in
+`resolve_response_model()`, which keeps two cases deliberately apart:
+
+| Response's `model` field | Id used for display and pricing | Reported as |
+|---|---|---|
+| absent / null / empty | the **requested** id | `MODEL_SOURCE request` |
+| present, same as requested | the echoed id | `MODEL_SOURCE response` |
+| present, **different** | the **echoed** id, plus a stderr warning | `MODEL_SOURCE response` + `MODEL_REQUESTED <asked-for id>` |
+
+The third row is the one not to simplify away. A missing echo is silence and
+means nothing was contradicted; a *different* echo means something upstream
+routed, aliased or downgraded the request, and the invoice will follow the
+model that actually ran. Rewriting it back to the requested id would compute
+the cost off the wrong rate card and destroy the only evidence that the swap
+happened.
+
 ## Verified real example
 
 Real, paid, non-simulated call, 2026-08-29:
@@ -113,35 +134,95 @@ figure the agent invented. What it prints comes from
 `references/token-anchors.json`, the measured output-token count of a real
 earlier call **with that same model**:
 
-| Model | Measured output tokens | When | Rough cost/image at today's rate |
+| Model | Measured output tokens | When | Rough cost/image at today's rate | Invoice-checked? |
+|---|---|---|---|---|
+| `google/gemini-3.1-flash-image` | **1120** | 2026-08-29, 3 calls | ~6.7 cents | **yes** — see the invoice section above |
+| `microsoft/mai-image-2.5-flash` | **1024** | 2026-09-02, 2 calls | ~2.67 cents | no — formula only |
+| `openai/gpt-image-2` | **196** | 2026-09-02, 2 calls | ~0.6 cents | no — formula only |
+
+The sample counts here must match `samples` in `token-anchors.json` — that file
+is what the script actually reads, this table only explains it. When they
+disagree, the JSON wins and this table is the stale one.
+
+The chain's **preferred** and **second** models (`mai-image-2.5-flash` and
+`gpt-image-2`) are now both measured, so a default `generate --dry-run` gives
+a rough number instead of "cannot be predicted". The **"invoice-checked?"**
+column is a separate, weaker-or-stronger claim than the token count next to
+it — do not conflate the two:
+
+- The **token count** (1120 / 1024 / 196) is an observation. It came straight
+  out of a real response's `usage.output_tokens`.
+- The **dollar figure** is that count run through the cost formula
+  (`cost = input_tokens * pricing.input + output_tokens * pricing.output_image`,
+  confirmed further down this page). The formula itself has only ever been
+  checked against a real invoice line for **one** model,
+  `google/gemini-3.1-flash-image` (2026-08-31, see above). For the other two
+  rows, the dollar figure is what the formula predicts, not what a bill
+  confirmed — `token-anchors.json`'s `cost_invoice_checked: false` says this
+  explicitly for both. Reading the model page alone left the gemini rate 20x
+  ambiguous before an invoice settled it; there is no reason to assume the
+  other two vendors' pages are any less ambiguous, so treat their dollar
+  figures as **formula-derived estimates**, not verified charges, until a real
+  invoice line is checked against each one. Do not flip either `false` to
+  `true` without one.
+
+**Interesting side note, not yet acted on**: `gpt-image-2`'s per-token rate is
+15% *higher* than `mai-image-2.5-flash`'s, but it uses 196 output tokens
+against 1024 — so a single image from `gpt-image-2` is actually **~4.5x
+cheaper** than one from `mai-image-2.5-flash`, the opposite of what the
+priority chain (ordered by per-token rate) implies. The chain is not
+reordered by this task; it is left here as a finding for whoever next revisits
+`MODEL_CHAIN`.
+
+**Do not fill an unmeasured row by scaling another model's token count.**
+Different vendor, different tokeniser, no reason to expect a similar count —
+and a number derived that way is indistinguishable, in the table the user
+approves, from one that was measured. One real call (a few cents) settles it;
+nothing else does. Take `USAGE_OUTPUT_TOKENS` verbatim from the printed
+output and update both the JSON file and this table.
+
+### What the output-token count depends on — and does not
+
+Measured 2026-09-02, on two prompts with nothing in common ("A simple red
+apple on a white table" vs. "A wooden sailboat on a calm lake at sunrise,
+wide shot"), both at `--quality low --size 1024x1024`:
+
+| Model | Prompt | input tokens | output tokens |
 |---|---|---|---|
-| `google/gemini-3.1-flash-image` | **1120** | 2026-08-29, 3 calls | ~6.7 cents |
-| `microsoft/mai-image-2.5-flash` | *not measured yet* | — | **cannot be predicted** |
-| `openai/gpt-image-2` | *not measured yet* | — | **cannot be predicted** |
+| `microsoft/mai-image-2.5-flash` | apple | 14 | 1024 |
+| `microsoft/mai-image-2.5-flash` | sailboat | 14 | 1024 |
+| `openai/gpt-image-2` | apple | 14 | 196 |
+| `openai/gpt-image-2` | sailboat | 14 | 196 |
 
-The two unmeasured rows are the chain's **preferred** and **second** models —
-i.e. the two that a default `generate` call will actually use. Until one real
-call records each one's `USAGE_OUTPUT_TOKENS`, `--dry-run` says the cost
-cannot be predicted for them and says why. That is the intended behavior, not
-a gap to paper over.
+Byte-identical `output_tokens` for two unrelated prompts, on both models.
+Combined with `gemini-3.1-flash-image`'s three real calls (input tokens 8, 51
+and 79, output tokens **1120 every time**), the working model is:
 
-**Do not fill those rows by scaling gemini's 1120.** Different vendor,
-different tokeniser, no reason to expect a similar count — and a number
-derived that way is indistinguishable, in the table the user approves, from
-one that was measured. Two real calls (a few cents each) settle it; nothing
-else does. Take `USAGE_OUTPUT_TOKENS` verbatim from the printed output and
-update both the JSON file and this table.
+**`output_tokens` is fixed by model + size + quality. It does not depend on
+prompt content, or on input token count.**
+
+This is exactly what makes a single measured anchor usable for pricing a
+*different* prompt later — if the count moved with what was being drawn, an
+anchor measured on one prompt would say nothing about the cost of another,
+and `--dry-run` would have no honest number to print at all. That said: **this
+is two samples per model, not a proof.** It is a working model that has not
+yet been contradicted, held with exactly that much confidence. If a future
+call ever shows `output_tokens` moving with the prompt (or with `input
+tokens`), that is a counterexample, not noise — record it in
+`token-anchors.json` and stop trusting the anchor for that model.
+
+`--size` was already known not to move the count for `gemini-3.1-flash-image`
+specifically, because that model ignores `--size` outright (see the gotcha
+above). What is new here is that content-independence holds across two
+*different* vendors that do respect the requested size — so the size/quality
+part of "model + size + quality" is doing real work, prompt content is doing
+none.
 
 Even a measured anchor is labelled **ROUGH** when it is printed. It is one
 model's observed count, not a promise, and it excludes the input-token
 component (the prompt), which was a fraction of a cent on every call observed
 so far. The exact figure is always `IMAGE_COST`, computed after the fact from
 the response's own counts.
-
-`--size` is not a lever on this. `google/gemini-3.1-flash-image` reported 1120
-output tokens whether or not a size was requested, because it renders
-1024x1024 regardless — see the size gotcha above. So "scale the token count by
-pixel count" is not available either.
 
 ## Cost formula (confirmed)
 

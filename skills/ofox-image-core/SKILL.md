@@ -2,11 +2,11 @@
 name: ofox-image-core
 description: Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
 license: MIT
-version: "1.2.0"
+version: "1.3.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.3.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -64,6 +64,15 @@ cheapest-first chain and uses the first model that is actually available:
 | 2 | `openai/gpt-image-2` | 0.000030 | tied on price, preferred of the tied set |
 | 3 | `google/gemini-3.1-flash-lite-image` | 0.000030 | tied on price, the other one |
 | 4 | `microsoft/mai-image-2.5` | 0.000047 | same vendor as (1), when quality matters more |
+
+⚠️ **"Per output token" is not the same ranking as "per image", and this table
+is ordered by the wrong one.** Measured 2026-09-02: `mai-image-2.5-flash`
+spends 1024 output tokens on an image, `gpt-image-2` spends 196. So the
+15%-more-expensive-per-token model is **4.5x cheaper per image**
+($0.00595 vs $0.026694). The chain has **not** been reordered on two samples
+per model, but do not re-derive its ordering from the rate card either — the
+comparable figure is rate x that model's own measured token count. Full numbers
+and the caveats on them: `references/pricing.md`.
 
 **The chain is defined in exactly one place** — `MODEL_CHAIN` in
 `references/ofox-image.sh` — and every skill built on this one resolves a
@@ -191,13 +200,33 @@ prints:
 ```
 STATUS completed
 IMAGE_PATH <absolute/path/to/file.ext>   (one line per generated image)
-MODEL <model actually used, from the response>
+MODEL <the model the cost below is priced at>
+MODEL_SOURCE response | request
+MODEL_REQUESTED <id>                     (only when it differs from MODEL)
 SIZE <size actually used, from the response>
 QUALITY <quality actually used, from the response>
 USAGE_INPUT_TOKENS <n>
 USAGE_OUTPUT_TOKENS <n>
 USAGE_TOTAL_TOKENS <n>
+IMAGE_COST <dollars>
 ```
+
+`MODEL_SOURCE` says where the `MODEL` id came from, and it matters for two
+different reasons:
+
+- `response` — the API echoed it. Normal.
+- `request` — the response carried no `model` field, so the id is the one that
+  was **requested**, not one the API confirmed. `openai/gpt-image-2` does this
+  on every call. The cost is still computed, at that model's published rates.
+  Relay it as "the API didn't echo a model name; priced as the model we asked
+  for" rather than presenting it as confirmed.
+
+`MODEL_REQUESTED` appears only when upstream ran a **different** model from the
+one asked for (routing, aliasing, a silent downgrade). When it appears, `MODEL`
+and `IMAGE_COST` describe the model that actually ran — that is what the
+invoice will say — and anything you measure from that run belongs to `MODEL`,
+not to `MODEL_REQUESTED`. Surface the mismatch to the user; it is the
+difference between a bill that reconciles and one that does not.
 
 Required flags: `--prompt`, and `--quality` (one of
 `auto low medium high standard hd` — Ofox's docs mark this required, and not

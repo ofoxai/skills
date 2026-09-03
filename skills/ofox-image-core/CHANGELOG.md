@@ -4,6 +4,53 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.3.0 — the chain's top models are measured, and a missing `model` echo no longer costs you the cost
+
+**Bug fix: `openai/gpt-image-2` runs printed no `IMAGE_COST` at all.** Its
+responses carry no `model` field. The old code defaulted that to the literal
+string `"unknown"`, looked `"unknown"` up in the rate table, found nothing, and
+reported `could not compute a cost` — for a request the script had built itself
+from a model id it knew. Two real, paid calls were billed with no cost figure.
+
+The fallback deliberately keeps two cases apart rather than collapsing them:
+
+- **No `model` field** (absent, `null` or empty) — nothing was contradicted, the
+  upstream just didn't echo. The **requested** id is used for display and
+  pricing, and the new `MODEL_SOURCE request` line says so, so nobody reads the
+  `MODEL` line as something the API confirmed.
+- **A `model` field naming a different id** — that is an upstream route, alias
+  or downgrade. The **echoed** id wins for both display and pricing, a warning
+  goes to stderr, and `MODEL_REQUESTED` records what was asked for. Rewriting it
+  back to the requested id would price the call off the wrong rate card and
+  erase the only evidence the swap happened.
+
+**New output lines**: `MODEL_SOURCE` (`response` | `request`) on every
+successful generate, and `MODEL_REQUESTED` only when it differs from `MODEL`.
+`MODEL_SOURCE` is unconditional for the same reason `Estimated cost:` is — an
+agent can relay a line it was told to expect, but cannot notice one that was
+never printed.
+
+**Token anchors for the chain's top two models** (`references/token-anchors.json`),
+so a default `generate --dry-run` now quotes a rough figure instead of "cannot
+be predicted": `microsoft/mai-image-2.5-flash` 1024 output tokens (~$0.0267/image),
+`openai/gpt-image-2` 196 (~$0.0060/image). Both measured 2026-09-02 at
+`--quality low --size 1024x1024`.
+
+- **The count does not depend on the prompt.** Two unrelated prompts produced
+  byte-identical `usage` on both models; Gemini's three calls reported 1120
+  output tokens at input lengths of 8, 51 and 79. `output_tokens` looks fixed by
+  model + size + quality — which is the whole reason one anchor can price a
+  later run with a different prompt. Two samples per model, not a proof.
+- **The dollar figures are formula-derived and invoice-unchecked.** Only
+  `google/gemini-3.1-flash-image` has ever been reconciled against a real bill;
+  `cost_invoice_checked` records that per row and must not be flipped without an
+  invoice line. The model page alone once supported two readings 20x apart.
+- **Cheaper per token is not cheaper per image.** `gpt-image-2` costs 15% more
+  per output token than `mai-image-2.5-flash` and **4.5x less per image**
+  (196 tokens vs 1024). `MODEL_CHAIN` was ordered on the per-token rate; it is
+  not reordered here on two samples, but `SKILL.md` and `references/pricing.md`
+  now flag that the rate card is the wrong thing to rank on.
+
 ## 1.2.0 — a default model, a `--dry-run`, and the gate that pays for both
 
 **Behavior change: `--model` is now optional.** Omit it (or pass `auto`) and

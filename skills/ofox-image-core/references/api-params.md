@@ -58,8 +58,8 @@ Fixed shape, always base64, no URL option ever:
 | Field | Meaning |
 |---|---|
 | `data[].b64_json` | Base64-encoded image bytes. `ofox-image.sh` decodes each entry and writes it to its own file; if `n` produced more than one image, filenames get a `_<index>` suffix, otherwise the base name is used as-is. |
-| `model` / `size` / `quality` | The values Ofox actually used to generate the image — may not always exactly echo what was requested (e.g. `auto` resolving to a concrete value). The script prints these from the response, not from the request, for exactly this reason. |
-| `usage.input_tokens` / `usage.output_tokens` / `usage.total_tokens` | Real token counts for this specific generation. The script prints these directly (`USAGE_INPUT_TOKENS`/`USAGE_OUTPUT_TOKENS`/`USAGE_TOTAL_TOKENS`) — never estimate or invent these numbers. See `references/pricing.md` for why a dollar cost is not computed from these yet. |
+| `model` / `size` / `quality` | The values Ofox actually used to generate the image — may not always exactly echo what was requested (e.g. `auto` resolving to a concrete value). The script prints these from the response, not from the request, for exactly this reason. **`model` is not always sent**: `openai/gpt-image-2` omits it entirely, so the script falls back to the requested id and flags that with `MODEL_SOURCE request`; when the field *is* present and names a different model, that one wins for both display and pricing. See `references/pricing.md` § "Which-model trap". |
+| `usage.input_tokens` / `usage.output_tokens` / `usage.total_tokens` | Real token counts for this specific generation. The script prints these directly (`USAGE_INPUT_TOKENS`/`USAGE_OUTPUT_TOKENS`/`USAGE_TOTAL_TOKENS`) — never estimate or invent these numbers. It also multiplies them by the model's published rates into an `IMAGE_COST` line; `references/pricing.md` has the formula and the invoice it was verified against. |
 
 There is no documented `output_format`/file-format field in the response
 body itself — if you need to know the actual format Ofox produced and you

@@ -4,6 +4,19 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.6.1 — the image step usually *can* be priced now
+
+Docs only. Phase 1 of the approval table told the agent to **expect** "cannot
+be predicted" for the character image, because when 1.6.0 shipped only
+`google/gemini-3.1-flash-image` had a measured token anchor and the chain's
+default did not. `ofox-image-core` 1.3.0 measured the chain's top two models,
+so the dry-run now prints a real `ROUGH` figure (~$0.027) in the normal case.
+Instructing an agent to write "cannot be predicted" into an approval table when
+a number was printed is the opposite of the honesty this gate exists for. The
+"cannot be predicted" branch is still documented — it is what happens whenever
+the chain resolves to an unmeasured model — just no longer described as the
+expected one.
+
 ## 1.6.0 — stop hardcoding the image model; two approvals, not one
 
 **Behavior change: `--model` is no longer passed to `ofox-image-core`.** This

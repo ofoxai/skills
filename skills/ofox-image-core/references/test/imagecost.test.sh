@@ -137,19 +137,19 @@ fi
 
 # Three shapes of "no echo": absent key, explicit null, empty string. All three
 # are silence, not contradiction.
-for shape in absent null empty; do
+for shape in absent explicitly-null empty; do
   case "$shape" in
     absent) body='{"data":[],"usage":{}}' ;;
-    null) body='{"model":null,"data":[]}' ;;
+    explicitly-null) body='{"model":null,"data":[]}' ;;
     empty) body='{"model":"","data":[]}' ;;
   esac
   RESPONSE_MODEL=""
   RESPONSE_MODEL_SOURCE=""
   resolve_response_model "$GPT" "$body" 2>"$ERRLOG"
   if [ "$RESPONSE_MODEL" = "$GPT" ] && [ "$RESPONSE_MODEL_SOURCE" = "request" ]; then
-    pass "a $shape 'model' field falls back to the requested id, marked 'request'"
+    pass "an $shape 'model' field falls back to the requested id, marked 'request'"
   else
-    fail "a $shape 'model' field was mishandled" \
+    fail "an $shape 'model' field was mishandled" \
       "model='$RESPONSE_MODEL' source='$RESPONSE_MODEL_SOURCE'"
   fi
   if [ "$RESPONSE_MODEL" = "unknown" ]; then
@@ -228,57 +228,6 @@ if image_cost_for "fake/model" 79 1120 >/dev/null 2>&1; then
   fail "priced a model with no input rate" "a partial cost is still a wrong cost"
 else
   pass "a missing input rate yields no figure, not a partial one"
-fi
-
-echo
-echo "=== resolve_response_model: a response with no 'model' field falls back to the requested id ==="
-# Regression case: openai/gpt-image-2's real response has no top-level
-# 'model' field at all. The old code took jq's '// "unknown"' fallback
-# literally, priced against the string "unknown", found no rates, and two
-# real paid calls printed no IMAGE_COST even though nothing else was wrong.
-got="$(resolve_response_model "openai/gpt-image-2" "" 2>/dev/null)"
-if [ "$got" = "openai/gpt-image-2" ]; then
-  pass "empty response model -> falls back to the requested id ($got)"
-else
-  fail "empty response model did not fall back" "want openai/gpt-image-2, got '$got'"
-fi
-note="$(resolve_response_model "openai/gpt-image-2" "" 2>&1 >/dev/null)"
-if [ -z "$note" ]; then
-  pass "falling back to the requested id prints no NOTE (nothing upstream to report)"
-else
-  fail "unwarranted NOTE on the fallback path" "$note"
-fi
-
-echo
-echo "=== resolve_response_model: a response that echoes a DIFFERENT id is reported as-is ==="
-# The other branch, and the one that must never collapse into the first:
-# upstream actually routed to a different model (fallback/downgrade). Silently
-# rewriting that back to the requested id would misprice the run and hide a
-# routing change the caller has no other way to see.
-got="$(resolve_response_model "openai/gpt-image-2" "some/other-model" 2>/dev/null)"
-if [ "$got" = "some/other-model" ]; then
-  pass "a differing echoed id is reported verbatim, not overwritten ($got)"
-else
-  fail "a differing echoed id was overwritten" "want some/other-model, got '$got'"
-fi
-note="$(resolve_response_model "openai/gpt-image-2" "some/other-model" 2>&1 >/dev/null)"
-case "$note" in
-  *"upstream ran 'some/other-model', not the requested 'openai/gpt-image-2'"*)
-    pass "a differing echoed id prints a NOTE naming both models"
-    ;;
-  *)
-    fail "no NOTE (or a wrong one) on a differing echoed id" "$note"
-    ;;
-esac
-
-echo
-echo "=== resolve_response_model: a response that echoes the SAME id is silent ==="
-got="$(resolve_response_model "openai/gpt-image-2" "openai/gpt-image-2" 2>/dev/null)"
-note="$(resolve_response_model "openai/gpt-image-2" "openai/gpt-image-2" 2>&1 >/dev/null)"
-if [ "$got" = "openai/gpt-image-2" ] && [ -z "$note" ]; then
-  pass "a matching echoed id passes through with no NOTE"
-else
-  fail "matching echoed id path misbehaved" "model='$got' note='$note'"
 fi
 
 echo
