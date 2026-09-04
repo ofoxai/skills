@@ -4,6 +4,55 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.4.0 — the priority chain's order reversed: `gpt-image-2` first
+
+**`MODEL_CHAIN` now resolves to `openai/gpt-image-2` by default, not
+`microsoft/mai-image-2.5-flash`.** New order:
+`openai/gpt-image-2 microsoft/mai-image-2.5-flash
+google/gemini-3.1-flash-lite-image microsoft/mai-image-2.5`.
+
+This is a deliberate reversal of a deliberate decision, not an unreviewed
+reorder. On 2026-09-02, with `gpt-image-2` already shown to cost ~4.5x less
+per image than `mai-image-2.5-flash` despite its higher per-token rate
+(196 output tokens against 1024, measured that day), the repo owner looked
+at both figures and kept `mai-image-2.5-flash` first anyway — recorded in
+`references/token-anchors.json`'s chain-order history note, along with the
+instruction that the next person who wanted to reorder the chain should
+raise it first. On 2026-09-04 the repo owner did exactly that and asked for
+`gpt-image-2` first instead. This release carries out that request.
+
+- **`SKILL.md`'s priority-chain table is now ranked by measured cost per
+  image**, not by the rate card's per-output-token price — the two rankings
+  disagree, and the table used to be ordered by the wrong one. A new "The
+  2026-09-04 reversal" subsection records the history above in the skill's
+  own docs, not only here.
+- **`MODEL_SOURCE request` is now the common case for a default `generate`
+  call**, not an edge case — `openai/gpt-image-2` never echoes a `model`
+  field, and it is now the model a default call resolves to.
+- **A new, unrelated `SIZE` finding surfaced while re-checking this
+  default**: `microsoft/mai-image-2.5-flash` — now second in the chain —
+  was found, through three real calls made by a downstream scenario skill,
+  to disagree with itself on `--size` three ways at once (requested
+  `1792x1024`, response echoed `1354x774`, saved file `1344x768`), not just
+  the two-way mismatch already documented for `google/gemini-3.1-flash-image`.
+  Neither `SIZE` finding has been checked against `gpt-image-2`; both
+  `SKILL.md` and `references/pricing.md` now say so and ask for a fresh
+  observation the next time a scenario skill generates with the new
+  default. `gpt-image-2` also has no generated-output samples in this repo
+  at all yet — its measured figures are token counts, not a look at what it
+  draws.
+- **Test coverage moved with the default**: `dryrun.test.sh`'s assertions
+  that the default `generate --dry-run` resolves to and prices the chain's
+  preferred model now target `gpt-image-2`'s own anchor (196 tokens, ~0.6
+  cents) instead of `mai-image-2.5-flash`'s; the anti-borrow check now
+  guards against either previous default's token count (1120 or 1024)
+  leaking into the new one's estimate.
+- `references/token-anchors.json`'s `_why_the_cheapest_measured_model_is_not_first`
+  note is renamed `_chain_order_history` and now records both decisions —
+  keeping mai-flash first on 2026-09-02, then reversing that on 2026-09-04 —
+  rather than only the first one. The rule it carries is unchanged: raise a
+  reorder before making it.
+
 ## 1.3.0 — the chain's top models are measured, and a missing `model` echo no longer costs you the cost
 
 **Bug fix: `openai/gpt-image-2` runs printed no `IMAGE_COST` at all.** Its

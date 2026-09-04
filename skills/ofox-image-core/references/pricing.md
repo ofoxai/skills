@@ -121,6 +121,29 @@ otherwise.
 first written the rate question was open and this was recorded as "either
 ~$0.0034 or ~$0.067"; the invoice check confirmed the higher reading.)
 
+### `mai-image-2.5-flash`'s own `SIZE` mismatch is three-way, not two
+
+The Gemini gotcha above is a two-way mismatch: requested size vs. actual
+size, with the response's echo agreeing with the request and both wrong.
+`microsoft/mai-image-2.5-flash` — the model this task moved to second in the
+chain — has a worse version of the same problem, found through three real,
+paid calls made by a scenario skill built on this one (all requesting
+`--size 1792x1024`): the response's own `SIZE` line, and the actual saved
+file, and the original request each disagreed. Requested `1792x1024`,
+response echoed `SIZE 1354x774`, saved file `1344x768` (ratio 1.75) — three
+different numbers, not the two the Gemini case shows. Evidence: the `refs/`
+entries of `content/ofox-cases/{anime-rooftop-confession,
+yunqi-sparkling-ad, sneaker-motion-ad}/case.json` in the downstream
+`home-page` project. Full writeup: `SKILL.md`'s `SIZE` gotcha section.
+
+**This has not been checked against `openai/gpt-image-2`**, the model now
+first in the chain — both `SIZE` findings above were observed on other
+models, so whether `gpt-image-2` behaves like Gemini (ignores the request,
+one consistent wrong answer), like `mai-image-2.5-flash` (three
+disagreeing numbers), or correctly, is unknown as of this reorder. Re-observe
+it the next time a scenario skill generates an image with the new default,
+rather than assuming either prior finding carries over.
+
 ## Pre-flight estimates: the token anchor table
 
 The formula above needs `usage.output_tokens`, which does not exist until the
@@ -144,9 +167,11 @@ The sample counts here must match `samples` in `token-anchors.json` — that fil
 is what the script actually reads, this table only explains it. When they
 disagree, the JSON wins and this table is the stale one.
 
-The chain's **preferred** and **second** models (`mai-image-2.5-flash` and
-`gpt-image-2`) are now both measured, so a default `generate --dry-run` gives
-a rough number instead of "cannot be predicted". The **"invoice-checked?"**
+The chain's **preferred** and **second** models (`gpt-image-2` and
+`mai-image-2.5-flash`, in that order since the 2026-09-04 reorder — see
+"Decision record: the chain was reordered on this finding" below) are both
+measured, so a default `generate --dry-run` gives a rough number instead of
+"cannot be predicted". The **"invoice-checked?"**
 column is a separate, weaker-or-stronger claim than the token count next to
 it — do not conflate the two:
 
@@ -166,13 +191,23 @@ it — do not conflate the two:
   invoice line is checked against each one. Do not flip either `false` to
   `true` without one.
 
-**Interesting side note, not yet acted on**: `gpt-image-2`'s per-token rate is
-15% *higher* than `mai-image-2.5-flash`'s, but it uses 196 output tokens
-against 1024 — so a single image from `gpt-image-2` is actually **~4.5x
-cheaper** than one from `mai-image-2.5-flash`, the opposite of what the
-priority chain (ordered by per-token rate) implies. The chain is not
-reordered by this task; it is left here as a finding for whoever next revisits
-`MODEL_CHAIN`.
+**Decision record: the chain was reordered on this finding.** `gpt-image-2`'s
+per-token rate is 15% *higher* than `mai-image-2.5-flash`'s, but it uses 196
+output tokens against 1024 — so a single image from `gpt-image-2` is actually
+**~4.5x cheaper** than one from `mai-image-2.5-flash`, the opposite of what a
+chain ordered by per-token rate implies.
+
+On 2026-09-02, with this finding already in front of them, the repo owner
+looked at both figures and deliberately kept `mai-image-2.5-flash` first —
+see `token-anchors.json`'s chain-order history note for the reasoning at the
+time, and its instruction that the next person who wanted to reorder the
+chain should raise it first rather than doing it quietly.
+
+**On 2026-09-04 the repo owner did exactly that** and asked for
+`openai/gpt-image-2` first instead. `MODEL_CHAIN` in `ofox-image.sh` and the
+chain table in `SKILL.md` now reflect that request. Cost was one input to
+this decision, not the only one, on both occasions — the reasoning and the
+date behind each call are the part worth keeping, not just the final order.
 
 **Do not fill an unmeasured row by scaling another model's token count.**
 Different vendor, different tokeniser, no reason to expect a similar count —

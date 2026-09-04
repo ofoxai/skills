@@ -137,22 +137,42 @@ DOCUMENTED_MODELS="openai/gpt-image-2 google/gemini-3.1-flash-image bailian/qwen
 # a model by calling this script, never by keeping its own copy of the list:
 # a second copy is a second thing to forget to update when prices move.
 #
-# Cheapest first, by the catalog's output_image rate (checked 2026-09-02):
+# Ranked by measured cost PER IMAGE, not by the catalog's per-output-token
+# rate — the two rankings disagree here. openai/gpt-image-2 costs 15% more
+# per output token than microsoft/mai-image-2.5-flash, but spends only 196
+# output tokens on an image against mai-flash's 1024 (measured 2026-09-02,
+# see references/token-anchors.json), which more than cancels the higher
+# per-token rate out: ~0.6 cents/image against ~2.67 cents/image, gpt-image-2
+# cheaper by about 4.5x. Do not re-derive this order from the rate card
+# alone — the comparable figure is rate x that model's own measured token
+# count, and google/gemini-3.1-flash-lite-image and microsoft/mai-image-2.5
+# below have no per-image measurement yet, only the per-token rate.
 #
-#   microsoft/mai-image-2.5-flash        $0.000026 / output token   preferred
-#   openai/gpt-image-2                   $0.000030                  tie, ranked by preference
-#   google/gemini-3.1-flash-lite-image   $0.000030                  tie, last resort of the two
-#   microsoft/mai-image-2.5              $0.000047                  same vendor, better quality
+#   openai/gpt-image-2                   ~0.6 cents/image     preferred
+#   microsoft/mai-image-2.5-flash        ~2.67 cents/image    second
+#   google/gemini-3.1-flash-lite-image   $0.000030/token      no per-image figure yet
+#   microsoft/mai-image-2.5              $0.000047/token      same vendor, better quality
+#
+# History, kept so a reorder never reads as someone quietly sneaking a
+# preference through: on 2026-09-02, with both cents-per-image figures above
+# already measured, the repo owner looked at them and deliberately kept
+# microsoft/mai-image-2.5-flash first (see references/token-anchors.json's
+# chain-order history note for that reasoning, and its instruction that the
+# next person who wanted to reorder the chain should raise it first rather
+# than doing it quietly). On 2026-09-04 the repo owner did exactly that and
+# asked for openai/gpt-image-2 first instead — this is that request, not an
+# unreviewed reordering. See references/pricing.md for the full record.
 #
 # It is a PRIORITY, not a lock: --model <id> still pins any image model Ofox
 # serves, including ones far more expensive than anything here. The chain only
 # decides what happens when nobody picked.
 #
-# google/gemini-2.5-flash-image also sits at $0.000030 and is deliberately not
-# in the chain — three entries at the same price buys nothing over two.
-# The openai/gpt-5* family's $0.000032 is a text model's incidental image
-# output, not an image model, and is not a candidate at all.
-MODEL_CHAIN="microsoft/mai-image-2.5-flash openai/gpt-image-2 google/gemini-3.1-flash-lite-image microsoft/mai-image-2.5"
+# google/gemini-2.5-flash-image also sits at $0.000030/token and is
+# deliberately not in the chain — three entries at the same per-token price
+# buys nothing over two. The openai/gpt-5* family's $0.000032 is a text
+# model's incidental image output, not an image model, and is not a
+# candidate at all.
+MODEL_CHAIN="openai/gpt-image-2 microsoft/mai-image-2.5-flash google/gemini-3.1-flash-lite-image microsoft/mai-image-2.5"
 
 # Set by resolve_model(): the id that will actually be used, plus — when the
 # preferred model was skipped — what was skipped, why, and how the price

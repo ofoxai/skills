@@ -2,11 +2,11 @@
 name: ofox-image-core
 description: Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
 license: MIT
-version: "1.3.0"
+version: "1.4.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.3.0"
+  version: "1.4.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -56,23 +56,26 @@ model it resolves to **right now**. No API key needed — `GET /v1/models` is
 public.
 
 `--model` is optional. Omit it (or pass `auto`) and the script walks a
-cheapest-first chain and uses the first model that is actually available:
+cost-per-image-ranked chain and uses the first model that is actually
+available:
 
-| | Model | Per output token | Why it is here |
+| | Model | Cost per image (measured) | Why it is here |
 |---|---|---|---|
-| 1 | `microsoft/mai-image-2.5-flash` | 0.000026 | cheapest image model Ofox serves |
-| 2 | `openai/gpt-image-2` | 0.000030 | tied on price, preferred of the tied set |
-| 3 | `google/gemini-3.1-flash-lite-image` | 0.000030 | tied on price, the other one |
-| 4 | `microsoft/mai-image-2.5` | 0.000047 | same vendor as (1), when quality matters more |
+| 1 | `openai/gpt-image-2` | ~0.6 cents | cheapest per image, despite the higher per-token rate below — see the warning |
+| 2 | `microsoft/mai-image-2.5-flash` | ~2.67 cents | second cheapest per image; was the chain's preferred model through 1.3.0 |
+| 3 | `google/gemini-3.1-flash-lite-image` | not measured | tied with (1) on the per-token rate, but no per-image figure recorded yet |
+| 4 | `microsoft/mai-image-2.5` | not measured | same vendor as (2), when quality matters more |
 
-⚠️ **"Per output token" is not the same ranking as "per image", and this table
-is ordered by the wrong one.** Measured 2026-09-02: `mai-image-2.5-flash`
-spends 1024 output tokens on an image, `gpt-image-2` spends 196. So the
-15%-more-expensive-per-token model is **4.5x cheaper per image**
-(0.595 cents vs 2.6694 cents). The chain has **not** been reordered on two samples
-per model, but do not re-derive its ordering from the rate card either — the
-comparable figure is rate x that model's own measured token count. Full numbers
-and the caveats on them: `references/pricing.md`.
+⚠️ **This table is ranked by measured cost per image, not by the rate card's
+per-output-token price** — the two rankings disagree here. Measured
+2026-09-02: `mai-image-2.5-flash` spends 1024 output tokens on an image,
+`gpt-image-2` spends 196. So the 15%-more-expensive-per-token model is
+**4.5x cheaper per image** (0.6 cents vs 2.67 cents), and that measurement is
+exactly why the chain was reordered — see "The 2026-09-04 reversal" below.
+**Do not re-derive the chain's order from the rate card alone** — the
+comparable figure is rate x that model's own measured token count, and rows
+3–4 have no per-image measurement to rank by yet, only the per-token rate.
+Full numbers and the caveats on them: `references/pricing.md`.
 
 **The chain is defined in exactly one place** — `MODEL_CHAIN` in
 `references/ofox-image.sh` — and every skill built on this one resolves a
@@ -84,6 +87,38 @@ without invalidating this table's argument.
 It is a **priority, not a lock**. `--model <id>` still pins any image model
 Ofox serves, including far more expensive ones. The chain only decides what
 happens when nobody picked.
+
+### The 2026-09-04 reversal
+
+`MODEL_CHAIN`'s order has changed exactly once, and the change is recorded
+here so it never reads as someone quietly sneaking a preference through.
+
+On 2026-09-02, with both `mai-image-2.5-flash`'s and `gpt-image-2`'s
+per-image costs already measured (the table above), the repo owner looked at
+the two figures and **deliberately kept `mai-image-2.5-flash` first** —
+recorded at the time in `references/token-anchors.json`'s chain-order
+history note, together with the instruction that whoever next wanted to
+reorder the chain should raise it first rather than doing it quietly. Cost
+was one input to that choice, not the only one.
+
+**On 2026-09-04 the repo owner raised it, and asked for `openai/gpt-image-2`
+first instead.** `MODEL_CHAIN` and the table above now reflect that request.
+This is the reversal it asked for, not an unreviewed reordering — and the
+2026-09-02 rule is still in force for the next person who wants to change
+this again: raise it before you reorder it.
+
+**`gpt-image-2` has no output samples in this repo yet.** The token count
+behind its ~0.6-cent-per-image figure is real (measured 2026-09-02, three
+calls, `references/token-anchors.json`), but that is a token count, not a
+look at what the model actually draws — no scenario skill built on this one
+has generated a real deliverable with it so far. Every existing
+opening-frame / concept image produced through this skill was generated with
+`mai-image-2.5-flash` (see the `SIZE` gotcha below for where; the same
+`content/ofox-cases/*/refs/` paths). The first time a scenario skill
+generates an image with the new default, look at the result before assuming
+it matches what `mai-image-2.5-flash` would have produced — pin `--model
+microsoft/mai-image-2.5-flash` explicitly if the quality turns out to
+matter more than the price for that use case.
 
 **Fallback is reported, never silent.** If the preferred model is missing from
 the model list, doesn't serve `/v1/images/generations`, or is deprecated, the
@@ -217,9 +252,12 @@ different reasons:
 - `response` — the API echoed it. Normal.
 - `request` — the response carried no `model` field, so the id is the one that
   was **requested**, not one the API confirmed. `openai/gpt-image-2` does this
-  on every call. The cost is still computed, at that model's published rates.
-  Relay it as "the API didn't echo a model name; priced as the model we asked
-  for" rather than presenting it as confirmed.
+  on every call — and since it became the chain's preferred model on
+  2026-09-04, **`MODEL_SOURCE request` is now the common case for a default
+  `generate` call, not an edge case that only shows up when someone pins
+  `gpt-image-2` explicitly.** The cost is still computed, at that model's
+  published rates. Relay it as "the API didn't echo a model name; priced as
+  the model we asked for" rather than presenting it as confirmed.
 
 `MODEL_REQUESTED` appears only when upstream ran a **different** model from the
 one asked for (routing, aliasing, a silent downgrade). When it appears, `MODEL`
@@ -264,8 +302,26 @@ size. The actual saved file, verified with `file` and
 `sips -g pixelWidth -g pixelHeight`, is really **1024x1024**.
 `google/gemini-3.1-flash-image` appears to always generate at its native
 1024x1024 resolution and just echoes back whatever `size` was requested,
-regardless of what it actually produced. Unconfirmed for
-`openai/gpt-image-2` / `bailian/qwen-image-3.0-pro`.
+regardless of what it actually produced.
+
+**`microsoft/mai-image-2.5-flash` has its own version of this, and it is
+worse than a two-way mismatch — it is a three-way one.** Three real,
+paid calls through a scenario skill built on this one (all `mai-image-2.5-flash`,
+requesting `--size 1792x1024`) each printed a *different* `SIZE` from what
+was requested, and the saved file differed from both: requested `1792x1024`,
+response echoed `SIZE 1354x774`, actual saved file `1344x768` (ratio 1.75).
+None of the three numbers agree with each other. Evidence: the `refs/`
+entries in `content/ofox-cases/{anime-rooftop-confession,
+yunqi-sparkling-ad, sneaker-motion-ad}/case.json` in the `home-page`
+project (a downstream consumer of this skill, not part of this repo).
+
+**Neither of these findings has been checked against `openai/gpt-image-2`.**
+Both were observed on models other than the one now first in the chain, so
+whether `gpt-image-2` echoes a trustworthy `SIZE`, ignores the request like
+Gemini, or mismatches three ways like mai-flash is an open question as of
+this reorder — re-observe it the next time a scenario skill generates an
+image with the new default. `bailian/qwen-image-3.0-pro` remains unconfirmed
+too.
 
 **If a caller needs a guaranteed output size, don't trust the `SIZE` line**
 — check the real dimensions of the file at `IMAGE_PATH` directly (`file
