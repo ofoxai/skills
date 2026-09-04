@@ -4,6 +4,55 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.10.0 — the transition-mix rule confirmed, the envelope opened up, and a movement floor for the one-take
+
+Docs only; no script changes. Four accepted short-drama clips and one
+rejected anime clip, generated 2026-09-03/04, settle three things this skill
+was previously hedging about and add one it had no warning for. Cross-scenario
+detail lives in `ofox-video-core`'s shared references (1.14.0); this file
+carries the scenario's own half.
+
+- **"Choosing a transition, not defaulting to a cut" now shows six jobs, not
+  two.** Ordered by hard-cut share of the boundaries: 3-of-9 rendered **none**
+  of its three hard cuts, while 3-of-8, 3-of-6 and 5-of-7 rendered all of
+  theirs, as did two commerce jobs at 4-of-4 and 6-of-6. The direction is
+  settled — **write hard cuts as at least half the boundaries when the beat
+  needs a cutting rhythm** — and the threshold is still unknown, since the
+  failing and passing cases are one boundary apart.
+- **A verification rule to go with it**: check a draft by reading frames, not
+  by counting a scene detector's hits. At threshold 0.3 the detector cannot
+  see a cut between two shots in the same place under the same light, and it
+  missed the single most important cut in each of two accepted clips —
+  `41f87ac7-d7a6-4c8c-8efd-feb7bdc4818d` at 9.5s and
+  `036ac3a8-6f68-47ad-a553-86a29aa3e5b8` at 9s.
+- **"Shots, cuts and jobs" is rewritten around the measured envelope**: up to
+  10 shots in 30 seconds with up to 6 hard cuts, at 480p and 720p. The caveat
+  this section used to carry — that the two verified runs were silent while
+  every real short-drama job has lines in it — is closed: four of the six
+  jobs are short drama with audio on, and `036ac3a8` carried five lines across
+  seven shots with all seven rendering in order. What remains unmeasured is
+  named, including a single line split across a cut.
+- **New: the one-take registers have a movement floor.** Job
+  `16023efe-48d6-45fe-8fd8-f5c6fbfe6519` (20s, one continuous shot, zero cuts,
+  characters stable) was rejected as too static, because its whole movement
+  plan was one very slow push while the actors held a standing position. The
+  `Camera` question's `Travelling one take` option, the shot-density table row
+  and a new block under "Shot density" now say what the register requires:
+  each phase must arrive somewhere the previous one could not see, movement is
+  written as travel rather than as distance-closing, and a beat that genuinely
+  happens on one face wants the **held take** instead.
+- **The `AVOID` slot's text items are labelled a backstop, not a defence.**
+  A period or festival setting needs the lettered surfaces composed out of the
+  shots — the strongest possible `no legible text` still returned sign-like
+  shapes on a neon street (`41f87ac7`), while a New Year courtyard with
+  couplets in five of seven shots stayed clean by composition (`036ac3a8`).
+- **The `SOUND` slot defaults music to none**, since asking this model for a
+  scored cue has failed output moderation on audio copyright (unbilled).
+- Five new rows in the failure table: hard cuts that did not happen, a
+  detector reporting fewer cuts than were written, an inert one-take, invented
+  lettering, and the ±1.5s cut-placement expectation with the measured fact
+  that the deviation does not accumulate along the timeline.
+
 ## 1.9.0 — a duration budget, so the exciting part stops paying for the ending
 
 Docs only; no script changes. Another correction from a real clip: the

@@ -228,7 +228,7 @@ header manifest.
 <M–Ts>  … <ending state — see "Endings">
 
 <CAMERA / TEXTURE SUPPLEMENT: lens, depth of field, what stays in focus>
-<AUDIO: ambience list; music in/out points; dialogue language; or "no music", "no dialogue">
+<AUDIO: ambience list; recorded sfx tied to actions; dialogue language; or "no music", "no dialogue" — a generated music cue risks output moderation on copyright, see "Asking for music can fail output moderation on copyright">
 <CONSISTENCY LOCK — see "Consistency locks and the negative list">
 <NEGATIVE LIST — see "Consistency locks and the negative list">
 ```
@@ -325,10 +325,24 @@ repo's first real short-drama job, `38ca8311-5b2d-47d5-a45d-e8ebea0e6312`,
 2026-09-03, 20s at 480p, four static shots, cuts landing where they were
 written, discarded for being plain).
 
-Set against this, the Ofox-verified envelope is narrow: three shots in eight
-seconds ("Several shots in one job"). Every count above three cuts in one
-job is gallery practice, so a first attempt at one is an experiment and
-should be priced as one.
+**The one-take has the same failure mode, and it is easier to walk into.**
+Job `16023efe-48d6-45fe-8fd8-f5c6fbfe6519` (2026-09-04, 20s at 720p, one
+continuous shot, an attached first frame, zero detected cuts) executed
+exactly as written and was rejected as too static: its only camera movement
+was a single very slow push, and the actors held one standing position
+throughout. Read against cases 2, 6 and 8 in the table above — all one-takes,
+all accepted — the difference is that **their cameras cross space** (a stage,
+three club rooms, four locations) rather than closing distance in place. A
+slow push is a beat inside a one-take, not the movement plan for one. Choose
+the one-take when the beat has somewhere to go.
+
+Set against this, the Ofox-measured envelope for cuts inside one job reaches
+**10 shots in 30 seconds**, and separately **up to 6 hard cuts** among a
+job's boundaries, at 480p and 720p, with or without an attached first frame
+("Several shots in one job" has the six jobs and which of them reached which
+maximum). Past that — more shots, more hard cuts, 1080p, the
+`volcengine` upstream — is gallery practice, so a first attempt is an
+experiment and should be priced as one.
 
 ### Two things a timestamp can mean
 
@@ -402,44 +416,91 @@ notations, to about **±1 second**; segments of 2–3 seconds were honoured; and
 a character described once in a manifest survived three shots on text alone,
 with no image attached.
 
-**Not covered by those two runs, and therefore not claimed here**: clips
-near the 30-second ceiling or with more than three shots (case 1's nine cuts
-in 30s stays gallery practice); dialogue running across a cut; any resolution
-other than 480p; the `volcengine` upstream. Treat a first attempt at any of
-those as an experiment, and price it as one.
+**Not covered by those two runs**: clips near the 30-second ceiling or with
+more than three shots; dialogue running across a cut; any resolution other
+than 480p; the `volcengine` upstream. Six later jobs cover most of that list
+— read the next subsection before treating any of it as unmeasured. What
+neither those two nor the six touch is still an experiment, and should be
+priced as one.
 
-### Two 30-second jobs past that envelope: the mix, not the label, decided
+### Past that envelope: six jobs, and what the mix does to a boundary
 
-The three-shot/8-second envelope above is deliberately narrow. Two more
-`bytedance/seedance-2.5` jobs, both 30 seconds and both scene-detected at
-threshold 0.3 (and again at a looser 0.12), go one step past it — still
-first attempts each, not a settled rule, and the only two data points anyone
-has yet for what a longer timeline with a *mix* of hard cuts and named
-in-camera transitions actually does.
+The three-shot/8-second envelope above is deliberately narrow. Six
+`bytedance/seedance-2.5` jobs now sit past it, all pinned to `byteplus`, all
+scene-detected at threshold 0.3 and then read frame by frame. Together they
+widen the measured envelope and settle the *direction* of one rule; they do
+not turn either into a threshold.
 
-| Job | Resolution | Boundaries | Written mix | What threshold-0.3 detection found |
+| Job | Length / res / mode | Boundaries | Written mix | What the frames show |
 |---|---|---|---|---|
-| `844c9145-9b10-4335-9fdc-ec4937793a2f` | 480p | 8 | 3 hard cuts, 5 named continuous (a pass-through, two occlusions, a no-cut tilt, a no-cut pull-back) | all 3 hard cuts detected within about 1.5s of their stamps; 4 of the 5 continuous boundaries stayed continuous (undetected); the fifth (the pull-back) triggered a detection that may be the pull-back's own large frame change rather than a cut |
-| `4e5c9581-d462-443b-9663-b1aa6d72f527` | 720p | 9 | 3 hard cuts, 6 named continuous (three occlusions, a pass-through, a speed ramp used as a transition, a no-cut pull-back) | **zero** of the 3 written hard cuts detected; the entire 30 seconds read as one continuous flow. At the looser threshold 0.12, 9 brightness/motion changes turned up, none aligned cleanly with the written hard-cut stamps |
+| `844c9145-9b10-4335-9fdc-ec4937793a2f` | 30s, 480p, t2v | 8 | 3 hard, 5 continuous | all 3 hard cuts within about 1.5s of their stamps; 4 of the 5 continuous boundaries stayed continuous; the fifth (a no-cut pull-back) triggered a detection that may be its own large frame change rather than a cut |
+| `4e5c9581-d462-443b-9663-b1aa6d72f527` | 30s, 720p, t2v | 9 | 3 hard, 6 continuous | **zero of the 3 written hard cuts**; the whole 30 seconds read as one continuous flow. At the looser threshold 0.12, 9 changes turned up, none aligned with a written hard-cut stamp |
+| `41f87ac7-d7a6-4c8c-8efd-feb7bdc4818d` | 20s, 720p, t2v | 7 | 5 hard, 2 continuous | all 5 hard cuts landed, two of them visible only frame by frame; 8 of 8 shots in the written order; the one written occlusion (2s) rendered as a plain hard cut instead |
+| `036ac3a8-6f68-47ad-a553-86a29aa3e5b8` | 20s, 720p, t2v | 6 | 3 hard, 3 continuous | 7 of 7 shots in the written order, carrying five lines of dialogue; the detector reported 2 boundaries, and the 9s hard cut was visible only frame by frame |
+| `7ae7d49e-7eb9-4165-9d95-09cd525d53ed` | 15s, 720p, **i2v** | 4 | 4 hard, 0 continuous | all 4 cuts present *and* the attached first frame held across them (see "Reference assets as visual anchors"); the detector reported 2 of the 4 |
+| `ac927785-92ef-4e28-97b9-ff8172ec5554` | 20s, 720p, **i2v** | 6 | 6 hard, 0 continuous | all 6 present; 5 detected within about 0.3s of their stamps, the 6th visible only frame by frame |
 
-Read side by side, the two jobs contradict each other on the one claim
-either alone would support. The first reads as "an explicitly named
-boundary renders as named" — its hard cuts landed, its continuous
-boundaries stayed continuous. The second breaks that: the same explicit
-`HARD CUT` label, in the same model at the same duration, rendered as
-nothing of the kind. The only variable that moved between the two jobs is
-the mix — 5-of-8 boundaries named continuous in the first, 6-of-9 in the
-second — so the working hypothesis is that **a boundary's rendering is not
-decided independently of the rest of the timeline**: a timeline weighted
-enough toward continuous transitions can pull an explicitly labeled hard cut
-toward continuous along with it. This is two samples, not a threshold —
-nobody knows where the mix stops holding a hard cut as a hard cut, and the
-gap between 5-of-8 and 6-of-9 is small enough that the real trigger could be
-something neither job isolates on its own (the boundary count, the
-resolution, the specific transition kinds used). If a real cutting rhythm
-matters to the shot, weight the mix toward hard cuts rather than assuming a
-named `HARD CUT` is safe on its own, and check a 480p draft's actual cut
-points before paying for a longer or higher-resolution job.
+**What the six add to the envelope.** Measured inside one job now: durations
+of 8, 15, 20 and 30 seconds; 3 to 10 shots; up to **6 hard cuts** — the last
+two maxima come from different jobs, the 10-shot one having 3 hard cuts and
+the 6-hard-cut one 7 shots; 480p and 720p; dialogue spoken in several shots
+of one clip (`036ac3a8`, five lines over seven shots); and — on `7ae7d49e`
+and `ac927785` — **several cuts in a job that also carries a
+`--frame-first-image`**, which no run in this repo had exercised before and
+which is the normal shape for `seedance-anime-drama` and both commerce
+skills. **Still unmeasured**: more than 10 shots or more than 6 hard cuts in
+one job; 1080p; the `volcengine` upstream; and one line of dialogue split
+across a cut — the tooling used here cannot hear audio, so word-level
+content is unchecked in every run above.
+
+**The mix decides the boundary, and the direction is settled even though the
+threshold is not.** Read side by side, the first two jobs contradict each
+other on the one claim either alone would support: the same explicit `HARD
+CUT` label, same model, same duration, rendered as written in one and as
+nothing of the kind in the other. The four later jobs break the tie. Ordered
+by hard-cut share of the boundaries:
+
+| Hard-cut share | Job | Hard cuts that rendered as cuts |
+|---|---|---|
+| 3 of 9 | `4e5c9581` | **0 of 3** |
+| 3 of 8 | `844c9145` | 3 of 3 |
+| 3 of 6 | `036ac3a8` | 3 of 3 |
+| 5 of 7 | `41f87ac7` | 5 of 5 |
+| 4 of 4 | `7ae7d49e` | 4 of 4 |
+| 6 of 6 | `ac927785` | 6 of 6 |
+
+So **a boundary's rendering is not decided independently of the rest of the
+timeline** — five consistent samples against one, which is enough to act on:
+a timeline weighted far enough toward continuous transitions can pull an
+explicitly labeled hard cut toward continuous along with it, and **weighting
+the mix toward hard cuts is what buys a cutting rhythm.** It is not enough
+to name the threshold. The gap between 3-of-8 (held all three) and 3-of-9
+(lost all three) is a single boundary, and with six samples the real trigger
+could still be the boundary count, the resolution, or the particular
+transition kinds rather than the ratio itself. Check the cut points on a
+480p draft — reading frames, per the next subsection — before paying for a
+longer or higher-resolution take.
+
+### Checking the cuts: read frames, never a detector count alone
+
+Scene detection at threshold 0.3 under-reports cuts, and it does so in one
+predictable way: **two shots in the same place under the same light have too
+little pixel difference to trigger it.** Four of the six runs above hit this,
+which makes it the normal case for a dialogue scene rather than a curiosity.
+
+| Job | What the detector missed | What the frames show |
+|---|---|---|
+| `41f87ac7` | the 9.5s hard cut — his close-up to her close-up, the turn the whole scene is built on — and again at 17s | t=9.0s is still him speaking, t=9.5s is already her reaction |
+| `036ac3a8` | the 9s hard cut, the mother's close-up to the son's | t=8.5s is the mother, t=9.0s is the son |
+| `7ae7d49e` | 2 of its 4 cuts | all four are there; the same product under the same studio light sits on both sides of each |
+| `ac927785` | the 10.5s boundary, the entry into the slow-motion shot | the shot size changes visibly across it |
+
+So a detector count is where a check starts, never where it ends. Sample the
+delivered file (1–2 fps is enough) and read the frames either side of every
+written stamp. A missing detection on a shot/reverse-shot pair says nothing
+about whether that cut happened — and a detection *reported* inside a written
+continuous boundary may be the camera move's own frame change rather than a
+cut, which is what `844c9145`'s no-cut pull-back above looks like.
 
 ### Where `chain` fits
 
@@ -580,6 +641,14 @@ From cases 28, 3, 22.
 | **Escalation curve** | `Emotional path: tense preparation → hears the familiar greeting → brief wavering → wry smile as cover → resolute declaration → restrained exit` · `Her emotional progression moves from concentration to wonder, then finally to freedom` · `starts with mysterious slow motion … as the rhythm builds, the editing speeds up. Ends on a powerful close-up` · `heat and sweat escalate from start to finish` | 3, 8, 61, 31, 30 |
 | **Sound carries the segment change** | `The sound transitions from overwhelming club techno, to muffled bass and corridor ambience, to distant low-frequency vibration outside` · `SOUND DESIGN: Iceland: … London: … Paris: …` | 6, 8 |
 
+⚠️ **The "Cut on the beat" row is evidence, not a phrase bank to copy from.**
+Five of its seven phrasings ask the model to generate music, which is exactly
+what failed output moderation on copyright in this repo (see "Asking for music
+can fail output moderation on copyright" under "Dialogue and sound"). The
+gallery cases wrote them; the one Ofox job that did came back refused. If a
+cut needs to land on something, land it on a visible action or a recorded
+sound effect, and leave the music to an editor afterwards.
+
 Two overall shapes recur. Ads: **hook → showcase → physical-event climax in
 slow motion → hero freeze** (cases 12, 14, 15). UGC-style clips: **a flat
 action chain with no climax**, ending "naturally, not promotionally" (cases
@@ -589,7 +658,7 @@ vocabulary is shared.
 ### Pacing line to copy
 
 ```
-Each segment shows one action only. <Climax event> drops into slow motion for one second, then returns to speed. Cuts land on the music's strong beats. Hold the final frame for one second.
+Each segment shows one action only. <Climax event> drops into slow motion for one second, then returns to speed. Cuts land on the action's sharpest moments, not on a generated music cue. Hold the final frame for one second.
 ```
 
 From cases 18, 12, 41, 29.
@@ -645,6 +714,43 @@ A negative list is where you forbid **the style you are not making**: a
 live-action prompt excludes animation and sketch (case 1); an animation prompt
 excludes photorealism and game CG (cases 11, 44); a UGC prompt excludes
 cinematic grading (case 25).
+
+### Unwanted text is designed out of the set, not forbidden in the list
+
+`no subtitles, no on-screen text, no watermarks` is the most-written item in
+the gallery's negative lists, and on Ofox it is **only partly obeyed**.
+Measured across four jobs, the thing that actually decides whether invented
+signage shows up is the set — whether the frame contains a surface that
+lettering can grow on — not how strongly the prompt forbids it.
+
+| Job | Set | Negative list | Result |
+|---|---|---|---|
+| `41f87ac7-d7a6-4c8c-8efd-feb7bdc4818d` | a 1930s neon street at night | the strongest wording available: signs, street signs, posters, characters in **any** language named individually, deep background included, with an instruction to render them as blurred light only | sign-like characters still appeared on the neon street in the closing wide. The two concept images for the same job produced legible signage under the same instruction |
+| `036ac3a8-6f68-47ad-a553-86a29aa3e5b8` | a New Year courtyard — door couplets and paper cuts everywhere by definition | ordinary | **worked** — five of the seven shots had couplets in frame and none produced readable text, because every shot handled them by composition instead (below) |
+| `7ae7d49e-7eb9-4165-9d95-09cd525d53ed` | near-black studio, no street, no shelf, no wall | ordinary | zero invented text |
+| `ac927785-92ef-4e28-97b9-ff8172ec5554` | bright empty studio, plus a product that carries brand marks by convention | ordinary, plus one explicit constraint on the one known blemish | zero invented text; the small coloured patch on the product was never resolved into a wordmark |
+
+Two workable defences, both structural:
+
+- **Remove the surface it would sit on.** A set with nothing for lettering
+  to sit on cannot invent lettering (`7ae7d49e`, `ac927785`). That is a
+  location decision made while choosing the set, not a line in the prompt.
+- **Compose the text out of each shot when the subject requires it.** For
+  `036ac3a8`, all seven shots were planned around the couplets, each with its
+  own device: pushed to the frame edge and softened by dusk light; the doorway
+  framed out entirely; the two core close-ups given backgrounds with **no
+  text-bearing surface at all** (a woodpile and lantern light); far edge plus
+  shallow depth of field; half occluded by the father's shoulder; outer-edge
+  crop washed out by warm flare. Every one held — the delivered close-up's
+  background is a blurred wall and one soft red edge with nothing readable in
+  it.
+
+So for a text-dense subject, **move the lettered surfaces out of the depth of
+field or out of the frame while writing the shots** — the negative list is a
+backstop, not the defence. The same asymmetry runs the other way for text you
+*want*: lock it in an attached first frame and let the video preserve it
+rather than render it from scratch (see "Reference assets as visual
+anchors").
 
 ### Closing block to copy
 
@@ -724,11 +830,45 @@ Official cases 1 and 2 carry no sound block at all (case 1 has dialogue lines
 only). That is also a valid choice; if you take it, make sure
 `--generate-audio` is set the way the user expects.
 
+### Asking for music can fail output moderation on copyright
+
+**Output moderation checks the audio track, not only the picture** — measured
+once, 2026-09-04. A `bytedance/seedance-2.5` ad prompt whose `AUDIO` block
+asked for "one sustained low cello note" and "a soft bell chime" came back
+`failed` with `error.code: output_moderation_failed` and the upstream message
+`the output audio may be related to copyright restrictions` (job
+`1ff72400-0f30-4be1-a417-f52d43955d09`). **Nothing was billed** — the
+response carried no `usage` field, exactly as `api-params.md` records for
+that code. Removing the music and keeping only recorded sound effects passed
+on the next run, same model, same shots, same first frame (job
+`7ae7d49e-7eb9-4165-9d95-09cd525d53ed`, 3.60 dollars).
+
+One sample, so the trigger is not pinned down: whether it was the named
+instrument, the word for a musical phrase, or the generated audio itself
+being matched against something is unknown. What is known is the shape of a
+prompt that passed and one that did not, and that the failure costs a
+round-trip rather than money.
+
+The workable form, used from the start on the next job in the same category
+and also clean (`ac927785-92ef-4e28-97b9-ff8172ec5554`):
+
+```
+AUDIO: <room tone>, <two or three recorded sounds tied to visible actions: the cap breaking its seal, fabric, a footfall in dust>. No music.
+AVOID: … score, soundtrack, instrumental, melody, rhythm track, percussion, <named instruments: cello, strings, piano, bell, chime>, humming, singing.
+```
+
+Naming the instruments and the words for a music bed in **both** blocks is
+what those two runs did; a single `no music` line has not been tested on its
+own. This is also closer to how the work is really done — an ad's music is
+laid in afterwards — so the gallery's `Music in/out points` row above is a
+pattern to borrow from platforms other than this one, not a safe default
+here.
+
 ### Dialogue and sound block to copy
 
 ```
 <Speaker> (<accent / tone>): "<line, in the language to be spoken>" — <delivery: quiet / no anger / breathless>; on "<word>" <the face or a hand does one thing>.
-SOUND: <ambience 1>, <ambience 2>, <sfx tied to an action>. Music <enters at … / drops out at … / none>. [No narration. No subtitles.]
+SOUND: <ambience 1>, <ambience 2>, <sfx tied to an action>. Music <none — recommended, see "Asking for music can fail output moderation on copyright" above | enters at … / drops out at …, only if the user accepts that same risk>. [No narration. No subtitles.]
 ```
 
 From cases 3, 7, 20, 38.
@@ -762,6 +902,41 @@ in this repo**. The reference is attached either way; the untested part is
 whether the model maps the token to the attachment by position. Write the
 role sentence so it still reads correctly as plain text ("image 1 provides
 …").
+
+### What a frame lock actually holds, measured
+
+Three `bytedance/seedance-2.5` runs on `byteplus`, all 720p, all with a
+generated image passed as `--frame-first-image`. What they show is that the
+lock is not just an opening instant — it holds the attached appearance for
+the whole clip, and it survives both cuts and a person walking into frame.
+
+| Job | Shape | What the frames show |
+|---|---|---|
+| `16023efe-48d6-45fe-8fd8-f5c6fbfe6519` | 20s, one continuous shot, anime | the delivered first frame matches the fed image on composition, both characters, wardrobe, the wire fence, the sunset, the distant town and the falling petals; no identity drift for the full 20s |
+| `7ae7d49e-7eb9-4165-9d95-09cd525d53ed` | 15s, 5 shots, 4 hard cuts, a product | the first frame held **and** all four cuts happened — the two do not trade off. The wordmark on the product's label stayed legible and in the frame's own typeface, across every shot |
+| `ac927785-92ef-4e28-97b9-ff8172ec5554` | 20s, 7 shots, 6 hard cuts, a product, with a person entering at 4s and in frame for seven or eight seconds | a three-way comparison of the input image, the delivered first frame and t=19.6s has the product's colour blocking identical in all three. **The lock did not decay over 20 seconds, and the seven or eight seconds with a person in frame did not pull it off.** |
+
+Two consequences worth naming:
+
+- **It is the reliable way to get specific lettering into a clip.** Text
+  rendered from a description is the classic failure; text approved on a
+  still and then *preserved* is a different task, and `7ae7d49e` did it.
+  Read the wordmark on the image at full size before spending on the video.
+- **Measure the image file; don't trust the numbers around it.** The output
+  ratio follows the attached image (`adaptive`, forced — see "API
+  constraints that decide the route"), and on all three of the image runs
+  behind the table the requested size, the size the image API reported and
+  the file's real dimensions were three different numbers (requested
+  1792x1024, reported 1354x774, file 1344x768). Cropping that file to
+  1344x756 — cropping only, never padding — is what produced an exact
+  1280x720 clip; feeding it uncropped delivers 1.75:1 instead. Read the real
+  pixels (`sips -g pixelWidth -g pixelHeight <file>`, `identify <file>`) and
+  crop before generating.
+
+Attaching a frame does **not** move the job to the dearer video-to-video
+tier: `16023efe` and `ac927785` each billed 4.80 dollars for 20s at 720p,
+which is the t2v rate of 24 cents/s, not v2v's 30 cents/s. Only a *video*
+input does that (`pricing.md`).
 
 ### Sentence patterns for pointing at an asset
 
@@ -809,12 +984,19 @@ photo of a real product — it can be wrong in the same ways the video can
 All from `api-params.md`; listed here because they change which of the two
 semantics you can use.
 
-- **Real people are refused by `bytedance/seedance-2.5` image-to-video**
-  (`input_moderation_failed` at submission; verified; nothing billed).
-  Criteria 1 and 3 are therefore unavailable on the `frame_images` path for
-  live-action humans; anime, illustration, product and landscape frames are
-  unaffected. Gallery cases with a real person in an i2v prompt (20, 24, 40)
-  came from other platforms and say nothing about Ofox behaviour.
+- **A photoreal person in the attached image is refused by
+  `bytedance/seedance-2.5` image-to-video** (`input_moderation_failed` at
+  submission; verified; nothing billed), so criteria 1 and 3 are unavailable
+  on the `frame_images` path for a live-action human. It is a rule about the
+  **attached picture only**: a non-photoreal character frame passes (measured
+  on job `16023efe-48d6-45fe-8fd8-f5c6fbfe6519`, an anime pair), and a
+  photoreal person **generated from the prompt text** is fine either way —
+  five 20–30s text-to-video jobs full of them all completed. Which means the
+  useful shape is: lock the object in the frame, write the person in text.
+  The full statement of that route, with job ids, is under "Real-person
+  reference images are refused by seedance-2.5 image-to-video" in
+  `api-params.md`. Gallery cases with a real person in an i2v prompt (20, 24,
+  40) came from other platforms and say nothing about Ofox behaviour.
   `--real-person true` exists for authorised references; whether it lifts the
   refusal on 2.5 is **untested here**.
 - **`frame_images` and `input_references` are mutually exclusive.** One job
@@ -870,12 +1052,15 @@ other common choice. When you state it:
 
 Pair the ending with its sound: a freeze with the closing music (case 5), a
 pull-back as the score resolves (`ending on a clean resolved note`, case 26),
-a fade after the final push-in (case 24).
+a fade after the final push-in (case 24). On Ofox, treat the music and the
+score in the first two as something laid in afterward by an editor, not
+asked of the model — see "Asking for music can fail output moderation on
+copyright".
 
 ### Ending line to copy
 
 ```
-<T-2 – T s>: <the last action completes>. The camera <settles / pulls back to a wide / pushes in on the product>; hold the final frame for one second [as the music resolves | in silence].
+<T-2 – T s>: <the last action completes>. The camera <settles / pulls back to a wide / pushes in on the product>; hold the final frame for one second [as the last sound fades | in silence] — a music resolve is a real ending too, but leave it to an editor afterward rather than asking the model for it, see "Asking for music can fail output moderation on copyright".
 ```
 
 From cases 29, 26, 24, 5.
@@ -894,7 +1079,10 @@ From cases 29, 26, 24, 5.
    `one continuous shot` (cases 3, 6, 8 against 1, 22) — and **named a
    transition kind at each boundary on purpose**: nine kinds exist, a hard cut
    is one of them, and an unnamed boundary becomes one by default (see
-   "Transitions").
+   "Transitions"). If a cutting rhythm is the point, hard cuts hold every
+   boundary they are written on in the measured jobs where they are at least
+   3 of 8 of the boundaries, and held none in the one job below that (see
+   "Past that envelope").
 5. **Every segment runs time → shot size / position → action → dialogue →
    sound** (cases 1, 7, 22).
 6. **Dialogue is speaker + quoted line + delivery note, in the language to be
@@ -905,10 +1093,17 @@ From cases 29, 26, 24, 5.
 8. **Every attached asset has a role sentence** ("image1 provides X; ignore
    Y"), and the job uses **either** a frame lock **or** identity references,
    never both (cases 34, 40; `api-params.md`).
-9. **No real person in a `bytedance/seedance-2.5` frame; aspect ratio decided
-   before any image is generated** — adaptive follows the image
-   (`api-params.md`).
+9. **No photoreal person in a `bytedance/seedance-2.5` attached frame** —
+   people generated from the prompt text are fine; **aspect ratio decided
+   before any image is generated**, and the image file's real pixels
+   measured and cropped, since adaptive follows the image
+   (`api-params.md`, "What a frame lock actually holds, measured").
 10. **An ending is stated** — freeze, black, pull-back or fade — paired with
-    its sound (cases 5, 26, 24).
+    its sound (cases 5, 26, 24). If the sound includes music the model has to
+    invent, expect `output_moderation_failed` on copyright (see "Asking for
+    music can fail output moderation on copyright").
 
-Then `--dry-run`, the cost table, and a yes — `approval-gate.md`.
+Then `--dry-run`, the cost table, and a yes — `approval-gate.md`. Afterwards,
+check the delivered file by reading frames, not by counting a scene
+detector's hits — "Checking the cuts: read frames, never a detector count
+alone".

@@ -4,6 +4,64 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.9.0 — a model *and* a locked product, no generated music, and the envelope this scenario measured itself
+
+Docs only; no script changes. Two accepted 720p ad clips (2026-09-04, jobs
+`7ae7d49e-7eb9-4165-9d95-09cd525d53ed` and
+`ac927785-92ef-4e28-97b9-ff8172ec5554`) plus one unbilled refusal
+(`1ff72400-0f30-4be1-a417-f52d43955d09`) between them fix a landmine in
+Template A, open a route the skill had documented only as a restriction, and
+retire a stale envelope warning.
+
+- **Template A's AUDIO slot was the shape that gets refused.** It read
+  `<upbeat | cinematic | minimal> instrumental; percussion hits synced to <the
+  climax event>`, copied from gallery cases 12 and 14. Asking this model for
+  music failed `output_moderation_failed` with `the output audio may be
+  related to copyright restrictions` — not billed — and the same ad with
+  recorded sound only passed. The slot is now room tone plus two or three
+  diegetic sounds, AVOID names the music words, and "4. No dialogue, no music
+  — but a sound block" replaces the old advice to write the music's character.
+- **The AUDIO-slot fix above did not originally reach every other place the
+  same shape appeared, and this release now closes those too**: the worked
+  example (adapted from case 12) still had `AUDIO: upbeat instrumental; the
+  downbeat lands on the cut-in and on the snap`, plus a `HOOK` line and a
+  `CLOSE` line both keyed to a music beat — exactly the pattern that failed
+  on `1ff72400`. It now uses recorded sound only, with a note explaining that
+  its audio direction is a deliberate departure from case 12's own scored
+  cue, not a translation of it. Template A's `HOOK`/`TRANSITION`/`CLOSE`
+  option lists, Template B's compact skeleton, the brief's traceability
+  table and the UGC-variant comparison table are updated the same way, so no
+  live template in this skill still offers a music-beat option as a thing to
+  write into a prompt.
+- **New "A model *and* a locked product: the route that works."** "The
+  reference frame cannot contain a real person" is not "the video cannot
+  contain a real person": the refusal is a check on the attached picture at
+  submission, and photoreal people generated from prompt text pass routinely
+  (five 20–30s jobs). So attach a frame of the **product alone** and write the
+  person into the timeline — measured end to end on `ac927785`, where a
+  runner was in frame for seven or eight seconds and the product's colours
+  were still identical at t=19.6s. The route locks the product, not the
+  person; that limit is stated too. `--real-person true` remains untested on
+  2.5.
+- **New slot note: order the framing so the risky anatomy stays small.** The
+  same job came back with no deformation, and what it did differently was the
+  escalation — foot, then hand and lower leg, then knee, then the full figure
+  exactly once and that once distant, from behind, head turned away — with
+  focus on the product in all seven shots and never on the person.
+- **New "5. Text on screen: lock it, or design it out."** Text you want is
+  reliable when it exists on the attached frame and the clip only preserves it
+  (`7ae7d49e` closed on a legible wordmark in the frame's own typeface). Text
+  you don't want is removed by the set: both ads returned zero invented
+  signage because neither studio contained a surface lettering could sit on.
+- **The four-or-five-beat warning is retired.** The Ofox-measured envelope
+  now reaches 20 seconds, 7 shots and 6 hard cuts **with a first frame
+  attached** — this scenario's own two jobs did it — so Template A's beats are
+  inside what has been run. "Several shots" carries the two-row evidence table
+  and names what is still unmeasured.
+- Three new failure-table rows (audio-copyright refusal, a refused frame when
+  a person is needed, invented signage) and a rewritten cut-count row that
+  points at the transition mix rather than the shot count.
+
 ## 1.8.0 — a travelling camera option, a transition menu, and the beat count as a floor
 
 Docs only; no script changes. Same review as `seedance-short-drama` 1.8.0,

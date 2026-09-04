@@ -344,7 +344,7 @@ script), and **always** also prints `error.message` when present, labeled
 | 502 | `upstream_error` / `route_error` | Provider-side failure. |
 | 500 | `internal_error` | Platform-side failure. |
 | 400 | `input_moderation_failed` | The **input** image/video was rejected before generation — most often a real person's face. Distinct from `output_moderation_failed` below: this happens at submission, so nothing was generated and nothing was billed. |
-| n/a (seen on a terminal `failed` job, not a create-time HTTP error) | `output_moderation_failed` | The generated **output** failed a post-generation content check — happens *after* the job ran, not at submission, so it cannot be caught by client-side validation. Verified: the response's `usage` field is `null`/absent, so **this job is not billed**. Safe to retry with a brand-new `generate` call using a different prompt/reference — that's a new request, not a resubmission of the failed one. |
+| n/a (seen on a terminal `failed` job, not a create-time HTTP error) | `output_moderation_failed` | The generated **output** failed a post-generation content check — happens *after* the job ran, not at submission, so it cannot be caught by client-side validation. Verified: the response's `usage` field is `null`/absent, so **this job is not billed**. Safe to retry with a brand-new `generate` call using a different prompt/reference — that's a new request, not a resubmission of the failed one. **The check covers the audio track as well as the picture**: job `1ff72400-0f30-4be1-a417-f52d43955d09` (2026-09-04) failed this way on a prompt that asked for a cello note and a bell chime, with `Upstream message: the output audio may be related to copyright restrictions`; dropping the music and keeping only recorded sound effects passed on the next run. See "Asking for music can fail output moderation on copyright" in `prompt-structure.md`. |
 
 `real_person: true` image validation failures (checked when Ofox fetches
 the reference image, not by this script): `bad_data_uri`, `download_failed`,
@@ -365,19 +365,39 @@ Nothing is generated and nothing is billed. This is a **submission-time**
 rejection, unlike `output_moderation_failed` which happens after a job has
 already run.
 
-What this means in practice:
+**The rule is about the attached picture, not about the video's content.**
+That distinction is easy to lose and expensive to lose, because losing it
+rules out work the API is perfectly happy to do. Measured, all on
+`bytedance/seedance-2.5` via `byteplus`:
 
-- Any workflow that carries a photoreal human between shots (chaining a
-  short-drama sequence, reusing a live-action character reference) hits this
-  wall on Seedance 2.5.
+| What | Status | Evidence |
+|---|---|---|
+| A photoreal person **in the attached frame** | refused at submission, nothing billed | verified 2026-08-30, the response above |
+| A **non-photoreal** character in the attached frame | fine | job `16023efe-48d6-45fe-8fd8-f5c6fbfe6519` — an anime pair as `--frame-first-image`, 20s 720p, completed and billed $4.80 |
+| A photoreal person **generated from the prompt text**, no image attached | fine | five text-to-video jobs of 20–30s built entirely around photoreal people, all completed: `844c9145-9b10-4335-9fdc-ec4937793a2f`, `4e5c9581-d462-443b-9663-b1aa6d72f527`, `41f87ac7-d7a6-4c8c-8efd-feb7bdc4818d`, `036ac3a8-6f68-47ad-a553-86a29aa3e5b8`, `38ca8311-5b2d-47d5-a45d-e8ebea0e6312` |
+| A photoreal person **generated from the prompt text, in a job that also attaches an object-only frame** | fine | job `ac927785-92ef-4e28-97b9-ff8172ec5554` — first frame holds a product with no person, no foot and no sock in it; a model enters from 4s and stays in frame for seven or eight seconds; 20s 720p, completed and billed $4.80 |
+
+So the productive route for "this exact product, and a person using it" is
+the last row: **attach a frame of the object alone so it passes input
+moderation, and write the person in the prompt text.** The object's
+appearance is locked by the frame; the person is generated freshly, which is
+allowed. `seedance-ad-creative` states this as its own route with the
+framing discipline that goes with it.
+
+The rest of what this means in practice:
+
+- Any workflow that carries a photoreal human **between shots** — chaining a
+  short-drama sequence, reusing a live-action character reference as a frame
+  — still hits this wall on Seedance 2.5. Cross-job consistency for a
+  live-action character stays text-only.
 - Non-photoreal references are unaffected — illustration, anime, product
-  shots, landscapes. This is why `seedance-anime-drama`, which reuses an
-  anime character sheet as a first frame, works fine.
+  shots, landscapes. That is why `seedance-anime-drama`, which reuses a
+  generated anime frame, works; the measurement is the second row above.
 - `real_person: true` exists precisely for authorized real-person references
   and routes them through Ofox's privacy-preserving preprocessing. Ofox
   documents that path for `bytedance/seedance-2.0`. **Whether it lifts this
-  restriction on 2.5 has not been tested here** — do not assume it does
-  without a real call.
+  restriction on 2.5 has not been tested here** — nothing in the table above
+  exercises it, and it must not be described as a known workaround.
 
 The script maps `input_moderation_failed` to this explanation and names both
 options rather than leaving a bare error code.

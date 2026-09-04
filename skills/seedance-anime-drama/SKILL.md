@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.8.0"
+version: "1.9.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.8.0"
+  version: "1.9.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -107,16 +107,29 @@ case 11 asks for ten shots in 24s, case 18 for eight segments in 30s,
 official case 29 for four shots in 15s. Write the timestamps as cut
 boundaries and keep **2–5 seconds per shot**.
 
-The measured evidence is narrower than the gallery's practice: two real runs
-on 2026-09-03, `bytedance/seedance-2.5` on `byteplus`, 8 seconds, 480p, 16:9,
-`--generate-audio false`, **no image attached**, three shots each, which cut
-at the written timestamps to about ±1 second. Job ids and the frame-by-frame
-reading are under "Several shots in one job" in
-`../ofox-video-core/references/prompt-structure.md`, together with what those
-runs did not cover. One item on that list matters most here: both were
-text-to-video, so **a multi-cut job that also carries a
-`--frame-first-image` — this skill's normal shape — is untested.** Treat the
-first one as an experiment and price it as one.
+The measured envelope is **up to 10 shots in 30 seconds**, and separately
+**up to 6 hard cuts** among one job's boundaries, at 480p and 720p, with cuts
+landing within about ±1.5 seconds of their stamps. Job ids and the frame-by-frame readings are
+under "Several shots in one job" in
+`../ofox-video-core/references/prompt-structure.md`.
+
+The item that used to matter most here is now closed: **a multi-cut job
+that also carries a `--frame-first-image` — this skill's normal shape — has
+been run twice**, at 15s/5 shots/4 cuts and 20s/7 shots/6 cuts (jobs
+`7ae7d49e-7eb9-4165-9d95-09cd525d53ed` and
+`ac927785-92ef-4e28-97b9-ff8172ec5554`, both `seedance-ad-creative` product
+clips). Every cut happened *and* the attached frame held across all of them,
+so the two do not trade off. What still has no measurement in this skill's
+own shape is a multi-cut job on an **anime** frame — the frame-lock run here
+was a single continuous take (`16023efe-48d6-45fe-8fd8-f5c6fbfe6519`) — but
+the mechanism is the same, and the remaining gap is the art style, not the
+cutting. Past 10 shots or 6 hard cuts, or at 1080p, treat a first attempt as
+an experiment and price it as one.
+
+One warning that comes with the one-take run: `16023efe` was rejected for
+being static — a 20-second single take whose only movement was a very slow
+push. If you pick one shot, make the camera **cross space**; the measurement
+is under "Shot density, measured per case" in the shared file.
 
 Three ways to lay a sequence out, and they compose:
 
@@ -167,7 +180,7 @@ shot, 9:16, in a 90s hand-drawn look, keep her lines" has settled every axis
 | 2 | must-ask | `Aspect` | The clip's shape follows the image (adaptive), so the image has to be made at the target ratio. Where will it be watched? | `9:16 vertical (recommended)` — mobile feeds / `16:9 landscape` — web, YouTube; the gallery's anime cases that state a ratio are 16:9 (cases 9, 18, 44) / `1:1 square` — grid feeds | No platform word and no ratio. **Before Approval 1**, and with **no "Let the AI decide"** — this is the axis a paid image freezes, so it is the one thing a blanket "you decide" does not cover. If the user still declines to choose, take 9:16, mark it `(AI's pick)` in the recap, and say in the same message that changing it later means paying for a second image. |
 | 3 | ask-if-open | `Style` | Which animation look? It goes into the image and into every shot. | `Modern theatrical cel-shaded (recommended)` — clean line, flat vibrant colour, soft glow; the safest match for a contemporary excerpt, and the closest to the gallery's cel-shaded hybrid (case 18) / `Hand-drawn 90s TV anime` — fine ink lines, dramatic shadow, soft VHS grain, teal-and-orange (case 61) / `3D-stylised anime` — rounded appealing designs, sparkle and particle glow (case 10); swap in `Pixel 8-bit` (case 29) or `American retro cartoon, halftone dots` (case 11) when the story suggests it / `Let the AI decide` | No style word in the input. No school dominates the gallery — the recommendation is a convention, not a measured winner. |
 | 4 | follow-up | `Sheet` | Several shots — confirm the design on a sheet before the opening frames? | `Sheet first (recommended)` — one extra image; catches a wrong design before N frames and N shots are paid / `Straight to shot 1's opening frame` — later frames copy its description word for word / `I have a character image` — give the path | Only when Q1 answered several shots. |
-| 5 | ask-if-open | `Sound` | Lines, or ambience and music only? | `Dialogue in the excerpt's language (recommended)` / `No dialogue` — ambience and score only / `Let the AI decide` | Only when the excerpt is narration without quoted speech. Quoted lines present: dialogue on, no question. |
+| 5 | ask-if-open | `Sound` | Lines, or ambience only? | `Dialogue in the excerpt's language (recommended)` / `No dialogue` — ambience and keyed sound effects, with any score added afterwards in an editor / `Let the AI decide`. Neither option asks the model to generate music: that has failed output moderation on audio copyright here (unbilled) | Only when the excerpt is narration without quoted speech. Quoted lines present: dialogue on, no question. |
 
 If more than four are open, ask `Shots`, `Aspect`, `Style`, `Sound`; `Sheet`
 is the follow-up. Never asked: the language of the lines, resolution, video
@@ -271,7 +284,7 @@ RULES — quiet: one action per segment, long enough to read. No fast cutting, n
 [<segment title>, <a>–<b>s] … (each segment raises the stakes or the feeling one step)
 [Ending, <x>–<T>s] <terminal pose: faces the lens | freeze | slow pull-back to a wide | arm raised>; hold one second.
 
-AUDIO: <music, one line> / <ambience> / <character sounds with a qualifier: laughter (pure joy, not mocking)> / <keyed sfx> / <what remains at the end> — or: No BGM, no narration, no subtitles.
+AUDIO: <ambience> / <character sounds with a qualifier: laughter (pure joy, not mocking)> / <keyed sfx> / <what remains at the end> — or: No BGM, no narration, no subtitles. <Music only if the user accepts the risk: a prompt asking the model for a scored cue has failed `output_moderation_failed` on audio copyright, unbilled — see "Asking for music can fail output moderation on copyright" in the shared file.>
 CONSISTENCY: <tag>'s face, facial proportions, skin tone, body type, hairstyle and colour, <accessory>, <clothing items> identical in every shot; strictly no random character changes; never change the visual style.
 AVOID: subtitles, watermarks, logos; fast cutting and jump cuts (quiet scenes); photorealism, 3D game CG, plastic skin <or whichever school you are not making>; identity drift.
 <Closing quality line: restate the school, expressive facial animation, <camera texture>, character design consistent throughout.>
@@ -291,7 +304,7 @@ What each anime slot is for, and where it comes from:
 | **One action per segment** (quiet and process scenes) | `Show only one salon action at a time … No fast cutting. No time-lapse. No jump cuts.` | 18 |
 | **Consistency sentence with invariants** | `face, facial proportions, skin tone, body type, hairstyle, hair colour, all visible accessories, clothing`; `strictly no random character changes`; `keep the stylist and the customer consistent throughout` | 44, 61, 18 |
 | **Sequel block** | `must be the same … continuing the fight from PART 1`; PART 1's final frame re-described in words as this clip's first; `no re-positioning, no re-facing, no slow preparation` — the text-level complement to `chain` across sessions | 44 |
-| **`AUDIO` block** | itemised: music / ambience / character sounds with a qualifier / keyed sfx / what remains at the end; or `No BGM, no narration, no subtitles` | 10, 44, 11 |
+| **`AUDIO` block** | itemised: ambience / character sounds with a qualifier / keyed sfx / what remains at the end; or `No BGM, no narration, no subtitles`. The gallery's music lines (case 10's music box, case 11's score) are the one part not to copy — an ad prompt asking for a cello note and a bell chime failed output moderation on audio copyright here, unbilled | 10, 44, 11 |
 | **`AVOID`** | subtitles, watermarks, logos; fast cutting, jump cuts; `never make him realistic`, `no face swap, no AI plastic skin, no 3D, no game CG`; random character changes | 18, 44, 61, 11 |
 
 ### Choosing a transition, not defaulting to a cut
@@ -317,18 +330,25 @@ convention, and the phrasing to borrow is in the shared table.
 
 ### Worked example — adapted from case 10 (translated): 30 seconds, four segments, no dialogue
 
+Case 10's own sound design is a music-box melody with strings and bells. This
+version keeps everything else and replaces the scored cue with diegetic sound
+only, because asking this model for music has failed output moderation on
+audio copyright here (unbilled; shared file, "Asking for music can fail
+output moderation on copyright"). A score can be laid over the delivered clip
+afterwards, which is where case 10's melody would have to come from anyway.
+
 ```
 STYLE: dreamlike cinematic anime, 3D-stylised with rounded, appealing designs; continuous sparkle and magic particles; golden-hour light, warm palette, bright cheerful colour.
 THE GIRL: early teens, small and light; large round amber eyes, a soft round face; chestnut hair in two low bunches tied with pale-yellow ribbons; a cream sundress with a sky-blue sash; open, delighted. Referred to as "the girl".
 SCENE: a magic garden at golden hour — tall glowing flowers, drifting motes of light, soft grass, a distant hedge in haze.
 RULES — quiet: one action per segment, long enough to read. No fast cutting, no time-lapse, no jump cuts. Single character, no dialogue.
 
-[Opening, 0–6s] Wide shot of the garden, light motes hanging in the air. The girl sits alone on the grass, looks up at the sky, and a bright smile breaks. Soft music begins. The camera slowly orbits her.
+[Opening, 0–6s] Wide shot of the garden, light motes hanging in the air. The girl sits alone on the grass, looks up at the sky, and a bright smile breaks. The camera slowly orbits her.
 [Delight, 6–15s] Medium shot. She springs up and turns once with her arms out; the garden answers — the flowers glow brighter, petals lift and circle her. She laughs (pure joy, not mocking; subtle, not over the top). The camera follows her.
 [Wonder, 15–24s] Close-up. A small glowing bird lands on her fingertip; she goes still, eyes wide, then breathes out a smile. Behind her the light deepens toward gold. The camera drifts in a few centimetres.
-[Ending, 24–30s] The camera pulls back slowly, showing how small she is in the vast garden. The music reaches a soft peak. Freeze on this moment of quiet joy.
+[Ending, 24–30s] The camera pulls back slowly, showing how small she is in the vast garden. Freeze on this moment of quiet joy.
 
-AUDIO: music-box melody with strings and soft bells / petals rustling, a faint magic chime / her laughter (pure joy) / the bird's small trill / at the end only the music and a light breeze remain.
+AUDIO: petals rustling, grass under her feet, a faint chime as the flowers brighten / her laughter (pure joy) / the bird's small trill and wingbeat / at the end only a light breeze remains. No music, no score, no instruments, no humming, no singing.
 CONSISTENCY: the girl's face, proportions, skin tone, hair bunches and ribbons, cream sundress and blue sash identical in every segment; strictly no random character changes; never change the visual style.
 AVOID: subtitles, watermarks, logos; fast cutting, jump cuts; photorealism, game CG, plastic skin; identity drift.
 Dreamlike cinematic anime, expressive facial animation, soft cinematic depth of field, character design consistent throughout.
@@ -346,7 +366,7 @@ performance, not cuts.
 Start exactly on the opening frame. <Tag>, <appearance in one clause>, <place and light>. <School>, <texture layer>.
 One shot, <T> seconds. <Shot size and movement>. <Tag> <action A → B → C>; <the environment answers>. [<Tag>: "<line>" — <delivery>.]
 <Ending: faces the lens | freeze | the camera settles>; hold one second.
-AUDIO: <music> / <ambience> / <keyed sfx> — or No BGM. CONSISTENCY: <tag>'s face, hair, <accessory>, <outfit> unchanged. AVOID: subtitles, watermarks; <the school you are not making>; identity drift.
+AUDIO: <ambience> / <keyed sfx> / <what remains at the end> — no music, no score, no instruments. CONSISTENCY: <tag>'s face, hair, <accessory>, <outfit> unchanged. AVOID: subtitles, watermarks; <the school you are not making>; identity drift.
 ```
 
 Adapted from case 10's opening (translated), 8 seconds, from an opening frame
@@ -356,7 +376,7 @@ of the girl on the grass:
 Start exactly on the opening frame. The girl — chestnut hair in two low bunches with pale-yellow ribbons, cream sundress, blue sash — sits alone on the grass of a magic garden at golden hour, light motes drifting. Dreamlike cinematic anime, 3D-stylised, rounded appealing designs, soft glow.
 One shot, 8 seconds. Wide shot; the camera slowly orbits her a quarter turn. She looks up at the sky, a bright smile breaks, and the nearest flowers glow brighter in answer; two petals lift and drift past the lens.
 The camera settles as the smile holds; hold one second.
-AUDIO: a music-box melody begins softly / petals rustling, a faint magic chime / no dialogue. CONSISTENCY: her face, hair bunches, ribbons, sundress and sash unchanged. AVOID: subtitles, watermarks; photorealism, game CG; identity drift.
+AUDIO: petals rustling, grass shifting, a faint chime as the flowers brighten / no dialogue / no music, no score, no instruments. CONSISTENCY: her face, hair bunches, ribbons, sundress and sash unchanged. AVOID: subtitles, watermarks; photorealism, game CG; identity drift.
 ```
 
 ## Step 1: generate the image the shot will actually start from
@@ -455,8 +475,24 @@ because nothing is wrong — it just costs more than it needs to.
 
 Whichever model runs, **don't promise the user a specific output resolution**,
 and don't trust the printed `SIZE` line for the ratio — check the delivered
-file's real dimensions and crop or pad it. The measured reason is in the
-failure table's `SIZE` row and in `ofox-image-core`'s size gotcha.
+file's real dimensions and crop it. Measured on three image runs whose frames
+then went into video (2026-09-04): a request for `1792x1024` came back with
+the API reporting `1354x774` while the file on disk was `1344x768` — three
+numbers, none of them matching, all three times. Cropping that file to
+`1344x756` (cropping only, never padding, so nothing is invented at the
+edges) is what produced an exact `1280x720` clip; feeding it uncropped
+delivers 1.75:1, which then sits letterboxed in a 16:9 frame. Use
+`sips -g pixelWidth -g pixelHeight <file>` or `identify <file>`, not the
+`SIZE` line. More in the failure table's `SIZE` row and in
+`ofox-image-core`'s size gotcha.
+
+The video that came out of that cropped frame is also the proof the lock
+works: job `16023efe-48d6-45fe-8fd8-f5c6fbfe6519`'s first delivered frame
+matched the fed image on composition, both characters, wardrobe, the fence,
+the sunset and the falling petals — and the two later product jobs show the
+lock holding for a full 20 seconds and across six hard cuts ("What a frame
+lock actually holds, measured" in the shared file). This is what
+`--frame-first-image` buys over a repeated text description.
 
 Take the printed `IMAGE_PATH` (an absolute path) and **show it to the user
 as its own standalone line** — say whether it is the shot's opening frame or
@@ -657,8 +693,10 @@ This table carries three things the first one could not:
 - **the running total** across both phases.
 
 Attaching `--frame-first-image` does **not** move the job to the more
-expensive v2v tier: a real image-to-video run billed 4s at 11 cents/s at 480p,
-the t2v rate, not v2v's 14 cents/s. Only a *video* input does that, and this
+expensive v2v tier, now measured at both resolutions anyone here uses: 4s at
+11 cents/s at 480p, and 20s at 24 cents/s at 720p — $4.80 on job
+`16023efe-48d6-45fe-8fd8-f5c6fbfe6519`, the t2v rate, where v2v at 720p
+would have been 30 cents/s. Only a *video* input moves the tier, and this
 skill never sends one. The script picks the tier; take it from the dry run
 rather than assuming either way.
 

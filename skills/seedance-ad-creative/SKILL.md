@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.8.0"
+version: "1.9.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.8.0"
+  version: "1.9.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -128,7 +128,7 @@ Every answer has to be findable in the prompt or the flags.
 |---|---|
 | Photo: yes, path | `--frame-first-image PATH`, and the anchor sentence at the top of the prompt (`Begin with the exact composition of the reference image …`) |
 | Photo: no | a text-only PRODUCT block; `--aspect-ratio` becomes effective |
-| Tone | the STYLE and COLOR PALETTE lines of the header, the music line in AUDIO, and the segment pacing (Luxury: 5s segments, slow moves; Playful: 3s segments, cuts on the beat) |
+| Tone | the STYLE and COLOR PALETTE lines of the header, and the segment pacing (Luxury: 5s segments, slow moves; Playful: 3s segments, cut-driven pace) |
 | Camera | the SHOWCASE segment's camera sentence in Template A |
 | Aspect | `--aspect-ratio` on text-to-video; the crop/pad step on the photo before image-to-video |
 | Duration | `--duration`, and the timestamps in the timeline |
@@ -179,10 +179,13 @@ gallery's ads run 5 shots in 20s (case 15, 4s each) up to 9 `CUT`s in one
 generation (case 14), and case 26 runs seven segments in 30s — so a 30s spot
 written as five 6-second beats is the slowest ad in the set. Split a beat into
 two shots rather than holding one for six seconds; the per-case counts are in
-"Shot density, measured per case" in the shared file. Against that, the
-Ofox-verified envelope is three shots in eight seconds (see "Several shots:
-timestamps inside one job, `chain` across jobs" below), so any count above
-three cuts is gallery practice and a first attempt at it is an experiment.
+"Shot density, measured per case" in the shared file. The Ofox-measured
+envelope now reaches **20 seconds, 7 shots and 6 hard cuts in one job, with a
+first frame attached** — this scenario's own two jobs did it (see "Several
+shots: timestamps inside one job, `chain` across jobs" below) — so Template
+A's four or five beats are inside what has been run, not past it. Above 7
+shots or 6 cuts is still gallery practice, and a first attempt there is an
+experiment.
 
 ```
 [FORMAT: <N> seconds, <16:9 | 9:16 | 1:1>, hard cuts on the timestamps.]            — optional; must match the flags
@@ -193,17 +196,17 @@ PRODUCT: <shape> <material and finish> <colour> <product name>, <label text in q
          [image1 provides the product exactly — <shape, label, cap, colour>; ignore its background.]                     (cases 12, 24)
 SCENE: <backdrop>, <one or two props framing the shot>, <light: saturated studio key with a warm rim | golden hour | single hard key>.
 
-0–<3–5>s    HOOK — <one visual focus: a macro of one ingredient | the cap | the clock face>; <one strong move: the music downbeat hits as we cut in | low-angle dolly-in | a white flash freezes the frame | layers unfold>.   (cases 12, 13, 15, 14)
-<TRANSITION between any two beats — name a kind; a hard cut is one of nine and an unnamed boundary becomes one: HARD CUT on the downbeat. | The camera plunges through <the gears / the pour / the open lid> into the next beat. (case 13) | <The product / the blade / a hand> sweeps past the lens and the camera comes out of the occlusion on <the next arrangement>. (the phrasing is cases 2, 8, 41, none of them ads) | A white flash freezes the frame, then <the next pose>. (case 15) | An extreme speed ramp carries <the event> into <the next beat>. (case 15) | Without cutting, <the array reassembles in frame>.>
+0–<3–5>s    HOOK — <one visual focus: a macro of one ingredient | the cap | the clock face>; <one strong move: a hard cut lands as the detail completes its motion | low-angle dolly-in | a white flash freezes the frame | layers unfold>.   (cases 12, 13, 15, 14)
+<TRANSITION between any two beats — name a kind; a hard cut is one of nine and an unnamed boundary becomes one: HARD CUT. | The camera plunges through <the gears / the pour / the open lid> into the next beat. (case 13) | <The product / the blade / a hand> sweeps past the lens and the camera comes out of the occlusion on <the next arrangement>. (the phrasing is cases 2, 8, 41, none of them ads) | A white flash freezes the frame, then <the next pose>. (case 15) | An extreme speed ramp carries <the event> into <the next beat>. (case 15) | Without cutting, <the array reassembles in frame>.>
 <>–<>s      SHOWCASE — <arrangement: a strict geometric array of the variants | <tag> holds the product toward the lens, steam rising | the camera orbits the product 30 degrees>; cut to close-ups of <two or three details>.   (cases 12, 14, 24)
 <>–<>s      CLIMAX — <one physical event: the biscuit snaps | the broth erupts | the blade sweeps past the lens>; drops into slow motion for one second — <micro-detail: the filling bursts, crumbs fly, droplets hang> — then back to speed.   (cases 12, 14, 15)
 [<>–<>s     VARIATION — back at full tempo, <a second arrangement>.]                                                        (case 12)
-<>–<N>s     CLOSE — product hero frame, <centered | in slow motion>; [the slogan "<text>" enters word by word on the beat;] [the logo per image2 in the last second;] hold the final frame.   (cases 12, 13, 14, 15)
+<>–<N>s     CLOSE — product hero frame, <centered | in slow motion>; [the slogan "<text>" enters word by word, one word per cut;] [the logo per image2 in the last second;] hold the final frame.   (cases 12, 13, 14, 15)
 
 CAMERA: handheld energy and high-speed slow motion on the <climax>; smooth static holds on the <showcase>; cinematic shallow depth of field throughout.   (case 14)
-AUDIO: <upbeat | cinematic | minimal> instrumental; percussion hits synced to <the climax event>; SFX: <snap | pour | sizzle>; no dialogue. [One playful vocal ad-lib on the last shot.]   (cases 12, 14)
+AUDIO: <room tone of the set>; <two or three recorded sounds tied to visible actions: the cap breaking its seal, the snap, fabric, a footfall in dust>; no dialogue. No music — see "4. No dialogue, no music — but a sound block" below.   (jobs 7ae7d49e, ac927785)
 CONSISTENCY: the product's shape, label, colours and proportions stay identical in every shot[; <tag>'s face, hair and wardrobe do not change].   (cases 24, 15)
-AVOID: dialogue, subtitles, on-screen text other than the slogan card, watermarks, jitter, identity drift, wardrobe change, warped hands, extra limbs.   (cases 15, 24, 14)
+AVOID: dialogue, subtitles, on-screen text other than the slogan card, watermarks, jitter, identity drift, wardrobe change, warped hands, extra limbs; music, score, soundtrack, instrumental, melody, rhythm track, percussion, <named instruments: cello, strings, piano, bell, chime>, humming, singing.   (cases 15, 24, 14; the music items are jobs 1ff72400 / 7ae7d49e)
 ```
 
 Notes on the slots:
@@ -224,13 +227,40 @@ Notes on the slots:
   catch the light → held beside the face → push in on the product, fade.
 - **A person interacting with the product** (case 14): one CHARACTER block,
   then the tag in every segment (`the model holds the bowl toward the lens
-  with both hands, steam rising`). **Describe the person in text** — a
-  reference frame containing a photoreal person is refused at submission
-  (see `If the user has an actual product photo` below). Gallery cases 15
-  and 24 attached real-person images on other platforms; do not read them as
-  Ofox behaviour.
+  with both hands, steam rising`). **Describe the person in text** — and note
+  that this is a full route, not a consolation prize: see "A model *and* a
+  locked product: the route that works" below. Gallery cases 15 and 24
+  attached real-person images on other platforms; do not read them as Ofox
+  behaviour.
+- **Order the framing so the risky anatomy stays small.** A person in an ad
+  is where hands, faces and limb counts go wrong. Job
+  `ac927785-92ef-4e28-97b9-ff8172ec5554` (20s, 7 shots, a runner and a shoe)
+  came back with no deformation at all, and the thing it did differently was
+  the order: **foot → hand and ankle and lower leg → lower leg and knee →
+  the foot again in slow motion → full body exactly once, and that once
+  distant, from behind, head turned away → the set empty again.** Focus stayed
+  on the product in all seven shots and never on the person. So: escalate how
+  much of the body is in frame, keep the full figure to one distant shot, and
+  never make a hand or a face the focal point. Avoiding people entirely is
+  not the only option.
+- **Do not ask the model for music.** The AUDIO slot above used to read
+  `<upbeat | cinematic | minimal> instrumental; percussion hits synced to
+  <the climax event>` — copied from cases 12 and 14, and **that is the shape
+  that got refused here**. A prompt asking for "one sustained low cello note"
+  and "a soft bell chime" came back `failed` with
+  `error.code: output_moderation_failed` and the upstream message `the output
+  audio may be related to copyright restrictions` (job
+  `1ff72400-0f30-4be1-a417-f52d43955d09`, 2026-09-04). Nothing was billed.
+  Keeping only recorded, diegetic sound and naming the music words in AVOID
+  passed on the next run (`7ae7d49e-7eb9-4165-9d95-09cd525d53ed`); the next
+  ad in the same batch wrote it that way from the start and was also clean
+  (`ac927785-92ef-4e28-97b9-ff8172ec5554`). One refused sample, so the exact
+  trigger is unknown — but a real ad's music is laid in afterwards anyway, so
+  the cost of complying is nothing. Detail: "Asking for music can fail output
+  moderation on copyright" in the shared file.
 - **Slot pacing by tone**: Luxury runs 5s segments and slow moves (case 13);
-  Playful runs 3s segments and cuts on the downbeat (cases 12, 14).
+  Playful runs 3s segments and cuts on the downbeat — the *cuts*, not the
+  music the downbeat came from (cases 12, 14).
 - **Four or five beats is one or two beyond what has been verified here.**
   Cuts inside one job were tested on Ofox at three shots in an 8-second clip
   (see Several shots below); the gallery's five-to-nine-shot ads ran on
@@ -247,10 +277,10 @@ file, `The vendor's own formula (ByteDance first-party)`).
 
 ```
 <Product> <one action or event> on <backdrop>; <tone archetype>, <capture anchor>. [image1 provides the product exactly.]
-0–3s: <a macro of one detail>; the music downbeat hits as we cut in.
+0–3s: <a macro of one detail>; a hard cut lands as it completes its motion.
 3–7s: <the physical event> in slow motion — <micro-detail>; rim light along the edge.
 7–10s: product hero frame, centered; [the slogan "<text>" | the logo per image2 in the last second;] hold the final frame.
-<light line>. <palette line>. Music on the beat; no dialogue. No subtitles, no watermarks, no jitter.
+<light line>. <palette line>. No music; ambient/SFX only; no dialogue. No subtitles, no watermarks, no jitter.
 ```
 
 ### Worked example — adapted from case 12 (translated), timestamps added
@@ -262,6 +292,17 @@ clips; Ofox allows one video reference, so this version keeps only the
 image. Word choice is ours; the beat order, the snap-in-slow-motion climax,
 the word-by-word slogan and the scatter ending are the original's.
 
+Case 12's own audio direction is an upbeat instrumental with the cuts synced
+to its downbeat. **That part is not carried over here** — this version
+replaces the scored cue with recorded sound only, because asking this model
+for music has failed output moderation on audio copyright here (unbilled;
+see "4. No dialogue, no music — but a sound block" above, and "Asking for
+music can fail output moderation on copyright" in the shared file). A score
+can be laid over the delivered clip afterwards, which is where case 12's
+instrumental would have to come from anyway — so, unlike the rest of this
+adaptation, the AUDIO line and the beat-timed cues below are a deliberate
+departure from the original, not a translation of it.
+
 ```
 FORMAT: 20 seconds, 16:9, hard cuts on the timestamps.
 STYLE: bright, multicoloured snack commercial; clean, premium, strongly rhythmic; glossy high-speed capture.
@@ -269,16 +310,16 @@ COLOR PALETTE: strawberry red, mango yellow, blueberry violet and kiwi green on 
 PRODUCT: rectangular fruit-filled biscuits in four flavours, each beside its fruit; image1 provides the strawberry variant's exact packaging and filling colour.
 SCENE: white seamless backdrop, the fruit as the only props, saturated studio key light with a warm rim.
 
-0–3s    HOOK — a single strawberry fills the frame in macro; the music downbeat hits as we cut in.
+0–3s    HOOK — a single strawberry fills the frame in macro; the cut lands as it rotates to catch the key light.
 3–9s    SHOWCASE — the four biscuits and their fruits in a strict geometric array, orderly and bright; cut to a close-up of each variant.
 9–13s   CLIMAX — one biscuit snaps; the instant drops into slow motion, the fruit filling bursts open and crumbs fly; back to speed.
 13–16s  VARIATION — full tempo again, the biscuits in a horizontal row.
-16–20s  CLOSE — the words "One bite of crispness, a heart full of delight" enter word by word on the beat; product freeze frame, centered; biscuits and fruit scatter outward.
+16–20s  CLOSE — the words "One bite of crispness, a heart full of delight" enter word by word, one per quick cut; product freeze frame, centered; biscuits and fruit scatter outward.
 
 CAMERA: handheld energy on the snap, smooth static holds on the arrays, shallow depth of field throughout.
-AUDIO: upbeat instrumental; the downbeat lands on the cut-in and on the snap; SFX: a crisp snap; no dialogue.
+AUDIO: studio room tone; SFX: the biscuit's snap, crumbs scattering, fruit skin catching the light; no dialogue. No music.
 CONSISTENCY: packaging colours, biscuit shape and filling colour identical in every shot.
-AVOID: dialogue, subtitles, on-screen text other than the slogan, watermarks, jitter.
+AVOID: dialogue, subtitles, on-screen text other than the slogan, watermarks, jitter, music, score, instrumental, percussion.
 ```
 
 ### UGC variant
@@ -297,10 +338,10 @@ Template A; these slots change:
 | STYLE | commercial + studio anchor | `realistic UGC-style … filmed on a smartphone`, `handheld`, `authentic, imperfect, no polished commercial look` | 24, 25, 27 |
 | Device line (new) | — | where the phone is (`selfie mode` · `propped on a gym bench, slightly low angle` · `handheld`) plus its flaws: `autofocus hunting, exposure shifts, compression artifacts, mild sharpening` | 25, 27 |
 | Anchors | product image | a person image **and** each product piece, locked item by item — real-person frames are refused on Seedance 2.5 image-to-video, so on Ofox this is a text-described person | 24 |
-| HOOK | macro + downbeat | the person enters the scene, or the first line to camera | 24, 27 |
+| HOOK | macro + a hard cut on the motion | the person enters the scene, or the first line to camera | 24, 27 |
 | CLIMAX | physical event in slow motion | none — a flat action chain (unbox → turn → try on → catch the light) | 24 |
 | Dialogue | none | one quoted line per beat (a review), or a single closing line that is `spontaneous, slightly breathless, not scripted` | 24, 25 |
-| AUDIO | music + SFX on the beat | an ambience list (`natural gym ambience only`, eight sounds named); no music or low music | 25, 26 |
+| AUDIO | room tone + SFX, no music | an ambience list (`natural gym ambience only`, eight sounds named); no music or low music | 25, 26 |
 | CLOSE | hero freeze + slogan | `holds them beside her face` + push in + fade · walks out of frame while `the camera continues recording for a moment` · `not promotional` | 24, 25, 26 |
 | AVOID | text, jitter, drift | adds `cinematic color grading, beauty filters, artificial skin smoothing, dramatic slow motion, music, perfect lighting` — the opposite of this skill's default look | 25 |
 | Aspect | 16:9 | 9:16 appears (case 27); 16:9 also (cases 24–26) | 27 |
@@ -369,14 +410,41 @@ The negative list is where you name the tone you are *not* making — a Luxury
 prompt excludes `cartoonish, oversaturated`; a UGC prompt excludes
 `cinematic color grading` (case 25).
 
-### 4. No dialogue — but a sound block
+### 4. No dialogue, no music — but a sound block
 
 Cinematic ad clips carry no speech (cases 12, 13, 15; case 14 allows one
 vocal ad-lib), so say `no dialogue` to steer away from voice generation. Do
-not stop there: the collected ads write an AUDIO line — the music's
-character, percussion hits synced to the climax event, and the SFX that
-event makes (case 14). Shape and phrases: the shared file's `Dialogue and
-sound`.
+not stop there: write an AUDIO line, but write it as **room tone plus two or
+three recorded sounds keyed to visible actions** — the cap breaking its seal,
+the snap, a footfall in dust — and exclude music explicitly.
+
+**The music half of case 14's AUDIO line does not transfer to Ofox.** A
+prompt asking for a cello note and a bell chime failed
+`output_moderation_failed` with `the output audio may be related to
+copyright restrictions` (job `1ff72400-0f30-4be1-a417-f52d43955d09`, not
+billed); the same ad without music passed
+(`7ae7d49e-7eb9-4165-9d95-09cd525d53ed`). Score goes in afterwards, in an
+editor, the way it does on a real spot. Shape and phrases: the shared file's
+`Dialogue and sound`, and `Asking for music can fail output moderation on
+copyright` for the measurement.
+
+### 5. Text on screen: lock it, or design it out
+
+Two measured facts pull in opposite directions, and both are usable.
+
+- **Text you want** — a brand name, a wordmark — is reliable if it exists on
+  the attached first frame and the video only has to preserve it. Job
+  `7ae7d49e` closed on a legible wordmark in the frame's own typeface,
+  because the label was approved on the still first. Rendering the same text
+  from a description is the classic failure; read the label at full size
+  before spending on the clip.
+- **Text you don't want** is best removed by the set, not by the negative
+  list. Both ads in this batch produced **zero** invented signage, and the
+  reason is that a near-black studio and an empty bright studio contain no
+  surface lettering could sit on. Compare a job on a neon street whose AVOID
+  list named signs, posters and characters in any language and still returned
+  sign-like shapes (`41f87ac7`). Detail: `Unwanted text is designed out of
+  the set, not forbidden in the list` in the shared file.
 
 ### If the user has an actual product photo
 
@@ -421,12 +489,41 @@ If the reference image includes an actual person (e.g. a spokesperson or
 model in the shot, not just the product), Seedance 2.5 image-to-video
 refuses it at submission (`input_moderation_failed`, nothing billed).
 `--real-person true` exists for authorised references per the API contract,
-but whether it lifts the refusal on 2.5 is untested here; the safer route is
-to describe the person in text and lock only the product to the image. The
+but whether it lifts the refusal on 2.5 is untested here. The
 `--real-person` path validates the image server-side and can fail with
 `bad_data_uri`/`download_failed`/`unreachable`/`not_image`/`too_large` if
 the image isn't a small, valid file the API can use — see the failure table
 below.
+
+### A model *and* a locked product: the route that works
+
+**"The reference frame cannot contain a real person" is not "the video
+cannot contain a real person."** The refusal is a check on the picture you
+attach, at submission. What the model generates from your text is a separate
+question, and photoreal people generated from text pass routinely — five
+20–30 second text-to-video jobs built entirely around them completed in this
+repo (`844c9145`, `4e5c9581`, `41f87ac7`, `036ac3a8`, `38ca8311`).
+
+So a request for "our exact product, worn/held/used by a model" is not
+blocked. It splits:
+
+| Half | How |
+|---|---|
+| The product must be exactly right | attach it as `--frame-first-image` — **with no person and no part of one anywhere in that image**, hands, feet and socks included, so it clears input moderation |
+| A person must appear | write them into the timeline as text, entering after the product has been established |
+
+Measured end to end on job `ac927785-92ef-4e28-97b9-ff8172ec5554` (20s, 720p,
+7 shots, 6 hard cuts): the first frame held a shoe alone, a runner entered at
+4s and stayed in frame for seven or eight seconds, and a three-way comparison
+of the input image, the delivered first frame and t=19.6s shows the product's
+colour blocking identical in all three — **the frame lock neither expired
+over 20 seconds nor drifted while a person was on screen.** Pair this with
+the framing-order rule in Template A's slot notes, which is what kept that
+model free of deformation.
+
+What this route does **not** give you: consistency of the *person* across
+jobs. They are generated fresh each time, so a second clip is a different
+model wearing the same shoe. Only the product is locked.
 
 ## Recommended defaults
 
@@ -436,7 +533,7 @@ below.
 | `--duration` | `10` when the user gives no length; otherwise the user's number | 10s is a cheap, readable draft length. **Every gallery ad prompt with a stated length runs 20–30s** (cases 13, 15, 25, 26, 27; case 12 rendered at 26s), and Template A needs 15s or more for its four beats. When the user gave no duration, say in the brief recap that the collected ads run longer and offer 15–20s as a row; Seedance 2.5 accepts 4–30 |
 | `--resolution` | `1080p` for a deliverable brand asset; `720p` as a cheaper draft/preview pass | brand assets are usually published, so higher fidelity is worth the extra cost — show both as rows in the cost table rather than asking (see the approval gate below) |
 | `--aspect-ratio` | `16:9` (landscape) unless the brief set another — **pure text-to-video only** | cinematic/hero framing for websites and YouTube; `9:16` for a vertical social cut, `1:1` for feed placements. **Does not apply once an image is attached** with the default model — `ofox-video-core` forces `adaptive` in that case (see above) |
-| `--generate-audio` | `true` (server default, no flag needed) | ambient/music track; the prompt says "no dialogue" and carries an AUDIO line |
+| `--generate-audio` | `true` (server default, no flag needed) | ambient/SFX track — no music, per the AUDIO line; the prompt says "no dialogue" and carries an AUDIO line |
 
 ## Which upstream renders it
 
@@ -457,15 +554,26 @@ to `byteplus`, 8s, 480p, 16:9, `--generate-audio false`, **pure
 text-to-video with no image attached**. Both rendered all three shots with
 hard cuts landing within about one second of the written timestamps — one in
 the bare `0-3s: … Hard cut. 3-6s: …` form, one with a header manifest and
-`SHOT N (a-bs)` + `HARD CUT`. **Not covered by those two runs**: more than
-three shots, clips longer than 8 seconds, an attached reference image,
-dialogue running across a cut, any resolution other than 480p, the
-`volcengine` upstream. The record is in the shared file's `Several shots in
-one job`. The gallery's ad prompts run five to nine shots in one generation
-(case 14: nine `CUT`s; case 26: seven segments) on unrecorded platforms —
-treat any count above three as gallery practice on this path until tested,
-Template A's own four or five beats included, and price a first attempt as
-an experiment.
+`SHOT N (a-bs)` + `HARD CUT`.
+
+**This scenario has since pushed that envelope out itself, on the axes ads
+actually use.** Two accepted 720p jobs, both `bytedance/seedance-2.5` on
+`byteplus`, both with a generated product image attached as
+`--frame-first-image`:
+
+| Job | Shape | Result |
+|---|---|---|
+| `7ae7d49e-7eb9-4165-9d95-09cd525d53ed` | 15s, 5 shots, 4 hard cuts, hook/showcase/climax/close | all 4 cuts happened and the first frame held across them; the wordmark on the label stayed legible and in the frame's own typeface |
+| `ac927785-92ef-4e28-97b9-ff8172ec5554` | 20s, 7 shots, 6 hard cuts, a model entering mid-clip | all 6 present; 5 detected within about 0.3s of their stamps, the 6th visible frame by frame |
+
+So four or five beats is inside the measured envelope, and so is **an
+attached reference image combined with multiple cuts**, which the two 2026-09-03
+runs did not cover. **Still not covered**: more than 7 shots or 6 cuts in one
+job, 1080p, the `volcengine` upstream. The full record, including the reason
+a written `HARD CUT` can still soften, is in the shared file's `Several shots
+in one job`. The gallery's densest ads (case 14: nine `CUT`s; case 26: seven
+segments) ran on unrecorded platforms — treat a count above 7 shots as
+gallery practice and price a first attempt as an experiment.
 
 **`chain` carries the last frame of one job into the first frame of the
 next**, then joins the clips into one file. Use it when the sequence exceeds
@@ -670,10 +778,13 @@ plus the ad-creative-specific ones:
 | Exit `3`, `error.code: input_moderation_failed` on an image-to-video job | The reference frame contains a photoreal person — refused at submission on Seedance 2.5, nothing billed | Describe the person in text and lock only the product to the image; or crop the person out of the reference |
 | Exit `3`, job ends `failed`, or `invalid_request` on create, with no other error code hint | Likely a moderation rejection: prompts referencing a real celebrity/spokesperson likeness without consent, another brand's trademarked logo, or copyrighted characters are commonly rejected | Remove the flagged real-person/trademark/copyrighted reference from the prompt (or reference image), then call `generate` again — this is a **new** request, not a resubmission of the failed one, so it's safe to retry immediately |
 | Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated **output** failed a post-generation content check — happens after the job ran, not at submission. Not billed (no `usage` field on the response) | Retry with a brand-new `generate` call using a different prompt or reference image — a new request, not a resubmission of the failed one, so it's safe |
+| Exit `3`, job ends `failed`, `error.code: output_moderation_failed`, upstream message mentions **audio** copyright | The AUDIO block asked the model to generate music — measured on job `1ff72400-0f30-4be1-a417-f52d43955d09` with a cello note and a bell chime. Not billed | Rewrite AUDIO as room tone plus recorded sounds only, add the music words to AVOID, and re-run — a new request, safe immediately. See "4. No dialogue, no music — but a sound block" |
+| A real person is needed in the ad and the attached frame is refused | The frame itself contains the person. The refusal is about the attached picture, not the clip's content | Attach a frame of the **product alone** and write the person into the timeline as text — see "A model *and* a locked product: the route that works" |
+| Invented signage or garbled lettering in the background | The negative list was relied on to remove it; on Ofox it is only partly obeyed | Change the set, not the wording: a background with no surface lettering can sit on returns zero text. See "5. Text on screen: lock it, or design it out" |
 | Exit `1`, `references_conflict` | `--frame-first-image` and an `input_references` array in `--extra-json` in the same job | Pick one meaning — first frame, or identity references — and drop the other |
 | `bad_data_uri` / `download_failed` / `unreachable` / `not_image` / `too_large` | `api-params.md` documents these as `real_person: true` image-validation failures, raised when Ofox fetches the reference image: it isn't a small, valid image the API can use (a remote URL that isn't publicly reachable, or a local file that failed to read/encode) | Prefer a local file (auto-base64'd, more reliable than some remote URLs — see above); confirm it's a real image file under the size limit and retry |
 | Product label text or logo looks distorted/illegible in the result | Pure text-to-video can't render fine label detail reliably | Switch to image-to-video with `--frame-first-image` pointing at the real product photo instead of describing the label in text |
-| The clip did not cut where the timestamps said, or cut fewer times than written | Cuts inside one job are verified only up to three shots in 8s at 480p; more shots or longer clips are gallery practice, not tested here | Reduce the shot count, lengthen the segments to 3–5s, or split the sequence across `chain` jobs |
+| The clip did not cut where the timestamps said, or cut fewer times than written | Above 7 shots / 6 hard cuts in one job is past what has been measured here. Below that, the usual cause is the transition mix: a timeline weighted toward named continuous transitions can soften a written `HARD CUT` too | Keep hard cuts the majority of the boundaries, stay within 7 shots, and read the frames of a 480p draft rather than a detector's count — see `Past that envelope` and `Checking the cuts` in the shared file |
 | Exit `4`, timed out waiting for completion | Job is still running upstream, not failed | Do **not** re-run `generate`; run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID` using the job id printed before the timeout |
 | Exit `5`, ambiguous network failure on create | No HTTP response received at all — can't tell if a job was created | Do not guess or retry `generate`; tell the user to check `https://app.ofox.ai` for a job that may already be running, per `ofox-video-core`'s no-resubmit rule |
 

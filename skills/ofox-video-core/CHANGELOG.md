@@ -4,6 +4,77 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.14.0 — seven real clips' worth of measurements folded into the two shared references
+
+Docs only; no script changes. Eight jobs produced between 2026-09-03 and
+2026-09-04 (five short dramas, one anime shot, two product ads, about $36 of
+generation) had their findings sitting only in the case records that shipped
+with them. This release moves the cross-scenario half of those findings into
+`prompt-structure.md` and `api-params.md`, where the skills that need them
+already point.
+
+- **`prompt-structure.md`, "Several shots in one job"**: the two-job section
+  is now **"Past that envelope: six jobs, and what the mix does to a
+  boundary."** The measured envelope inside one job grows from three shots in
+  eight seconds to **10 shots in 30 seconds with up to 6 hard cuts**, at 480p
+  and 720p, **with or without an attached first frame** — the image-plus-cuts
+  combination (`7ae7d49e-7eb9-4165-9d95-09cd525d53ed` at 15s/5 shots/4 cuts,
+  `ac927785-92ef-4e28-97b9-ff8172ec5554` at 20s/7 shots/6 cuts) had no
+  measurement here before and is the normal shape for three scenario skills.
+  Dialogue in several shots of one clip is covered too
+  (`036ac3a8-6f68-47ad-a553-86a29aa3e5b8`, five lines over seven shots).
+- **The transition-mix rule is upgraded from a two-sample hypothesis to a
+  direction, with the sample count still on it.** Ordered by hard-cut share:
+  3-of-9 lost all three hard cuts, while 3-of-8, 3-of-6, 5-of-7, 4-of-4 and
+  6-of-6 kept every one. Five consistent samples against one is enough to act
+  on — weight the mix toward hard cuts when a cutting rhythm matters — and
+  still not enough to name a threshold, since the gap between the failing and
+  passing cases is a single boundary.
+- **New "Checking the cuts: read frames, never a detector count alone."**
+  Scene detection at threshold 0.3 cannot see a cut between two shots in the
+  same place under the same light, which is exactly shot/reverse-shot. It
+  missed the pivotal cut in two accepted clips (`41f87ac7` at 9.5s,
+  `036ac3a8` at 9s) and under-reported two more (`7ae7d49e`, `ac927785`). A
+  count is where a check starts, not where it ends.
+- **New "Unwanted text is designed out of the set, not forbidden in the
+  list"** under "Consistency locks and the negative list". `no legible text`
+  written as strongly as it can be still returned sign-like shapes on a neon
+  street (`41f87ac7`), while a New Year courtyard with couplets in five of
+  seven shots stayed clean by composition alone (`036ac3a8`) and two studio
+  ads with no surface for lettering to sit on returned zero invented text.
+  The negative list is a backstop; the set is the defence.
+- **New "Asking for music can fail output moderation on copyright"** under
+  "Dialogue and sound". A prompt asking for a cello note and a bell chime
+  came back `failed` / `output_moderation_failed` with `the output audio may
+  be related to copyright restrictions` (`1ff72400-0f30-4be1-a417-f52d43955d09`,
+  **not billed**); the same ad with recorded sound only passed. One sample,
+  so the trigger is not pinned down; the workable form is written out.
+- **New "What a frame lock actually holds, measured"** under "Reference
+  assets as visual anchors". A `--frame-first-image` holds appearance for the
+  whole clip, not just the opening instant: no drift over 20 seconds, across
+  six hard cuts, or while a person is in frame for seven or eight seconds of
+  it (`ac927785`, three-way frame comparison). It is also the reliable way to
+  get specific lettering into a clip. And the image file's real pixels have
+  to be measured and cropped — requested size, reported size and file size
+  were three different numbers on all three image runs behind the section.
+- **`api-params.md`, the real-person section**: the refusal is now stated as
+  a rule about **the attached picture only**, with a four-row evidence table.
+  A non-photoreal frame passes (`16023efe-48d6-45fe-8fd8-f5c6fbfe6519`), a
+  photoreal person generated from prompt text passes (five 20–30s jobs), and
+  the two combine — an object-only frame plus a person written in text
+  (`ac927785`). `--real-person true` on 2.5 remains untested and is now
+  labelled as something that must not be described as a workaround.
+- **`api-params.md`, the `output_moderation_failed` row** records the audio
+  trigger with its job id.
+- **`prompt-structure.md`, "Shot density, measured per case"**: the one-take
+  registers get the failure mode that matches the static-cut-list one already
+  there — a 20-second single take whose only movement was a very slow push
+  was rejected as inert (`16023efe`), where the accepted gallery one-takes all
+  cross space.
+- The "Quick checklist" items on transitions, real people, endings and the
+  closing line now carry these, so a prompt written straight off the
+  checklist inherits them.
+
 ## 1.13.0 — a second finding on hard cuts, and a second round for a published deliverable
 
 Docs only; no script changes. Both additions trace back to one accepted-but-

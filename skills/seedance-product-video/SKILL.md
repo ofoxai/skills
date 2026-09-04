@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.8.0"
+version: "1.9.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.8.0"
+  version: "1.9.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -439,13 +439,21 @@ to `byteplus`, 8s, 480p, 16:9, `--generate-audio false`, **pure
 text-to-video with no image attached**. Both rendered all three shots with
 hard cuts landing within about one second of the written timestamps — one in
 the bare `0-3s: … Hard cut. 3-6s: …` form, one with a header manifest and
-`SHOT N (a-bs)` + `HARD CUT`. **Not covered by those two runs**: more than
-three shots, clips longer than 8 seconds, an attached reference image (this
-skill's usual route), dialogue running across a cut, any resolution other
-than 480p, the `volcengine` upstream. The record is in the shared file's
-`Several shots in one job`. **The full template's four segments sit one
-beyond that**: say so in the recap when you use all four, and fall back to
-three if the cut count matters more than the accessory pan.
+`SHOT N (a-bs)` + `HARD CUT`.
+
+**Those two runs no longer set the ceiling, and the route this skill actually
+uses has since been measured.** Two accepted `seedance-ad-creative` jobs at
+720p attached a generated product image as `--frame-first-image` and cut
+inside the same job: `7ae7d49e-7eb9-4165-9d95-09cd525d53ed` (15s, 5 shots, 4
+hard cuts) and `ac927785-92ef-4e28-97b9-ff8172ec5554` (20s, 7 shots, 6 hard
+cuts). Every written cut happened, and in both the attached frame held the
+product's shape and colours across all of them — on the second, verified as
+far as t=19.6s. So **the full template's four segments are inside the
+measured envelope, image attached and all**; there is no need to fall back to
+three, and no need to hedge about it in the recap. Still unmeasured: more
+than 10 shots or 6 hard cuts in one job, 1080p, the `volcengine` upstream.
+The record, including the reason a written `HARD CUT` can still soften, is in
+the shared file's `Several shots in one job`.
 
 **`chain` carries the last frame of one job into the first frame of the
 next**, then joins the clips into one file. Use it when the sequence exceeds
@@ -683,7 +691,7 @@ plus the product-video-specific ones:
 | Product shape, printed text, or logo looks distorted or inaccurate in the result | Pure text-to-video was used for a real SKU instead of a real reference photo | Switch to image-to-video with `--frame-first-image` pointing at the real product photo — for a real SKU the photo is required, not preferred (see the photo section); for a category prototype, tighten the PRODUCT block instead |
 | Background isn't plain, or shows props/shadows from the original photo | The prompt didn't state the background explicitly, or the source photo's busy background carried through | Add the SCENE line verbatim ("pure white surface and backdrop, no props, no shadows on the backdrop"); a reference photo with a cluttered background can still bleed through in image-to-video since the model anchors on that image |
 | The output is the photo's shape, not the platform's ratio | The photo was attached without being cropped or padded first; `adaptive` follows the image | Crop or pad the photo to the brief's ratio and generate again — a new job, billed again, which is why `Aspect` is asked before generating |
-| The clip did not cut where the timestamps said, or ran the four segments as fewer | Cuts inside one job are verified only up to three shots in 8s at 480p | Drop to three segments, or run the extra segment as a second `chain` shot |
+| The clip did not cut where the timestamps said, or ran the four segments as fewer | Four segments are inside the measured envelope, so the usual cause is not the count — a timeline weighted toward named continuous transitions can soften a written `HARD CUT` too | Keep the boundaries as hard cuts (this scenario has no reason to write in-camera transitions), then re-check the draft by reading frames rather than a scene detector's count — see `Checking the cuts` in the shared file |
 | Exit `4`, timed out waiting for completion | Job is still running upstream, not failed | Do **not** re-run `generate`; run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID` using the job id printed before the timeout |
 | Exit `5`, ambiguous network failure on create | No HTTP response received at all — can't tell if a job was created | Do not guess or retry `generate`; tell the user to check `https://app.ofox.ai` for a job that may already be running, per `ofox-video-core`'s no-resubmit rule |
 | Exit `6`, `--out-dir` could not be created or entered | Local filesystem problem (bad path, permissions), not an API problem | The job itself is unaffected — do not re-run `generate`; fix `--out-dir` and re-run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID --out-dir <a writable directory>` |

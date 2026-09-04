@@ -4,6 +4,41 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.9.0 — the multi-cut-plus-frame combination is measured, the crop rule is measured, and the one-take has a movement floor
+
+Docs only; no script changes. One rejected anime clip
+(`16023efe-48d6-45fe-8fd8-f5c6fbfe6519`, 20s 720p, rejected on subject matter
+and pacing while every technical result held) and two accepted product ads
+that share this skill's mechanism close three gaps here.
+
+- **"A multi-cut job that also carries a `--frame-first-image` is untested"
+  was this skill's own words about its normal shape, and it is no longer
+  true.** It has now been run twice — 15s/5 shots/4 cuts and 20s/7 shots/6
+  cuts (`7ae7d49e-7eb9-4165-9d95-09cd525d53ed`,
+  `ac927785-92ef-4e28-97b9-ff8172ec5554`) — with every cut happening *and*
+  the frame holding across all of them. "Shots, cuts and jobs" now states the
+  measured envelope (10 shots in 30s, up to 6 hard cuts) and narrows the
+  remaining gap to the art style rather than the cutting.
+- **The frame lock is measured, and so is the crop it needs.** This skill's
+  own run matched the fed image on composition, both characters, wardrobe,
+  fence, sunset and petals. The `--size` warning is now a measurement rather
+  than a caution: a request for `1792x1024` came back with the API reporting
+  `1354x774` and the file on disk at `1344x768` — three numbers, none
+  matching, on all three image runs. Cropping to `1344x756` produced an exact
+  `1280x720` clip; feeding it uncropped delivers 1.75:1.
+- **`--frame-first-image` is confirmed at the t2v rate at 720p as well as
+  480p**: 20s billed $4.80 ($0.24/s), where v2v would have been $0.30/s.
+- **New warning: a one-shot clip needs the camera to cross space.** The
+  rejected run's whole movement plan was one very slow push while the actors
+  held a standing position; the accepted gallery one-takes all travel. The
+  measurement is in the shared file's "Shot density, measured per case".
+- **Music is out of the templates and out of the brief.** Asking this model
+  for a scored cue has failed output moderation on audio copyright (unbilled,
+  on an ad job), so the `AUDIO` slot in both templates, the `AUDIO` row of the
+  slot table, the `Sound` question and both worked examples now use diegetic
+  sound only and say where a score belongs — an editor, afterwards. Case 10's
+  music-box melody is called out as the one part of that prompt not to copy.
+
 ## 1.8.0 — a transition menu on the template line, and a shot count to aim at
 
 Docs only; no script changes. This follows the same review that produced

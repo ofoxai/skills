@@ -4,6 +4,29 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.9.0 — the four-segment template is inside the measured envelope
+
+Docs only; no script changes. This skill's caution about its own full
+template — "the full template's four segments sit one beyond that", meaning
+beyond three shots in an 8-second 480p clip with no image attached — was
+accurate when written and is now stale.
+
+- **"Several shots: timestamps inside one job" is updated with the route this
+  skill actually uses.** Two accepted `seedance-ad-creative` jobs at 720p
+  attached a generated product image as `--frame-first-image` and cut inside
+  the same job: `7ae7d49e-7eb9-4165-9d95-09cd525d53ed` (15s, 5 shots, 4 hard
+  cuts) and `ac927785-92ef-4e28-97b9-ff8172ec5554` (20s, 7 shots, 6 hard
+  cuts). Every written cut happened, and the attached frame held the product's
+  shape and colours across all of them — on the second, verified as far as
+  t=19.6s, which is the property a catalog clip depends on. So four segments
+  need no fallback and no hedge in the recap. What is still unmeasured (past
+  10 shots or 6 hard cuts, 1080p, the `volcengine` upstream) is named.
+- **The failure-table row for missing cuts now points at the transition mix
+  rather than the shot count**, and at reading frames instead of trusting a
+  scene detector's count — detection at threshold 0.3 under-reports cuts
+  between shots of the same subject under the same light, which is every cut
+  in a studio product clip.
+
 ## 1.8.0 — the segmented template's timestamps didn't scale, and ACCESSORIES could go negative
 
 Docs only; no script changes. Prompted by an audit of every scenario

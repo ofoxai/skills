@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), or for anything not involving people/dialogue.
 license: MIT
-version: "1.9.0"
+version: "1.10.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.9.0"
+  version: "1.10.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -73,19 +73,27 @@ joined by hard cuts**. Write the timestamps as cut boundaries — `SHOT 2
 (3-6s): … HARD CUT.` — and on the runs measured so far Seedance 2.5 cuts
 there. Default to **2–5 seconds per shot**.
 
-The evidence is exactly two real runs, 2026-09-03: `bytedance/seedance-2.5`
-on `byteplus`, 8 seconds, 480p, 16:9, `--generate-audio false`, no image
-attached, three shots and two hard cuts each, in two different notations.
-Both cut at the written stamps to about ±1 second, and the character
-described once in a manifest survived all three shots on text alone. The job
-ids, the prompts and the frame-by-frame reading are under "Several shots in
-one job" in `../ofox-video-core/references/prompt-structure.md`; that section
-also lists what those two runs did **not** cover — clips near 30 seconds or
-with more than three shots, dialogue running across a cut, any other
-resolution, the `volcengine` upstream. Add one more for this skill: those
-runs were silent, and every real short-drama job has audio on with lines in
-it. A first attempt outside that envelope is an experiment — say so, and
-price it as one.
+The measured envelope, as of 2026-09-04, is **up to 10 shots in 30 seconds**,
+and separately **up to 6 hard cuts** among one job's boundaries — the two
+maxima are from different jobs — at 480p and 720p, on
+`bytedance/seedance-2.5` pinned to `byteplus`. Four of those jobs are short
+drama with the audio on and lines in it (`844c9145`, `4e5c9581`, `41f87ac7`,
+`036ac3a8`), which closes the caveat this section used to carry — the first
+two measured runs were silent, and speech turned out not to disturb the cut
+structure: `036ac3a8` carried five lines across seven shots and rendered all
+seven in order. Cuts land within about ±1.5 seconds of their stamps, and a
+character described once in a manifest survives every shot on text alone,
+with no image attached. The job ids and the frame-by-frame readings are
+under "Several shots in one job" in
+`../ofox-video-core/references/prompt-structure.md`.
+
+**Still outside the envelope**: more than 10 shots or more than 6 hard cuts
+in one job, 1080p, the `volcengine` upstream, and a single line of dialogue
+split across a cut — the tooling used here cannot hear audio, so no run
+above has had its words checked, only their presence and timing. A first
+attempt outside that envelope is an experiment — say so, and price it as
+one. And inside it, a written `HARD CUT` is still not self-guaranteeing;
+see "Choosing a transition, not defaulting to a cut" below.
 
 If you mean beats inside one held shot rather than cuts, declare `one
 continuous shot` in the first sentence; without it a timestamped list reads
@@ -149,7 +157,7 @@ every axis — write the prompt.
 | 1 | must-ask | `Beat` | Which beat gets this clip? One job holds 4–30 seconds. | Two or three beats extracted from the script, each named by its turning line or action (`Kitchen confrontation — "Where were you last night?"`, `She walks out — no lines`); recommended = the one with the clearest reversal. **No "Let the AI decide" here** — a must-ask axis never gets one, and no model can tell which beat the user meant. If they answer "you pick" in free text, choose the strongest beat, name it in the recap, and let the gate be the check | The script spans more than one scene or more than about 30s of action. A single beat: skip. |
 | 2 | ask-if-open | `Aspect` | Where will it be watched? Vertical and landscape are different framings, not a crop. | `9:16 vertical (recommended)` — mobile short-drama feeds, the default below / `16:9 landscape` — web and YouTube; the gallery's own short-drama sample is mostly landscape (5 of the 6 cases that state a ratio) / `Let the AI decide` | No platform word and no ratio in the input. |
 | 3 | ask-if-open | `Arc` | How does the feeling move across the clip? It decides the shots. | Two or three arrow chains built from the script (`braced → hears him → wavers → wry smile → "We're done." → steps back`, adapted from case 3; `calm → the lie lands → silence → she leaves`); recommended = the one the lines support most directly / `Let the AI decide` | Lines with no stage directions and no tone word. Stage directions present: skip. |
-| 4 | ask-if-open | `Camera` | How is the beat shot? This one answer decides what the camera does **and** how many shots there are. | Put the register that fits the beat first and mark it `(recommended)` — the travelling take when the beat has somewhere to go (two rooms, a corridor, a doorway, a street), the cut list when it jumps between faces, hands and details, the held take when everything happens on one face. `Travelling one take` — no cuts; the camera moves with them and each new view arrives from behind an occlusion or through a gap; 3–5 phases of 5–8s (cases 2, 6, 8) / `Multi-shot cut list` — a new shot size and camera position at every timestamp, 2–5s a shot, so 4–10 shots in 20–30s (cases 1, 11, 14) / `Held take` — locked, or a breathing handheld, on one or two faces; the reframing comes from an actor moving rather than the lens (cases 3, 22) / `Let the AI decide` | No camera word in the input. |
+| 4 | ask-if-open | `Camera` | How is the beat shot? This one answer decides what the camera does **and** how many shots there are. | Put the register that fits the beat first and mark it `(recommended)` — the travelling take when the beat has somewhere to go (two rooms, a corridor, a doorway, a street), the cut list when it jumps between faces, hands and details, the held take when everything happens on one face. `Travelling one take` — no cuts; the camera **crosses space** and each new view arrives from behind an occlusion or through a gap; 3–5 phases of 5–8s (cases 2, 6, 8). Only offer it when the beat has somewhere to go — a take that closes distance in place comes back static (job `16023efe`, below) / `Multi-shot cut list` — a new shot size and camera position at every timestamp, 2–5s a shot, so 4–10 shots in 20–30s (cases 1, 11, 14) / `Held take` — locked, or a breathing handheld, on one or two faces; the reframing comes from an actor moving rather than the lens (cases 3, 22) / `Let the AI decide` | No camera word in the input. |
 | 5 | follow-up | `Lines` | The lines overrun this duration's budget (tiers below). | `Extend to <N> seconds (recommended)` — keeps every line; state N / `Trim to budget` — the cut lines are shown before the cost table / `Let the AI decide` | Only when the dialogue exceeds its tier for the chosen duration. |
 | 6 | ask-if-open | `Drafts` | Several takes to choose from, or one final? | `One 720p final on seedance-2.5 (recommended)` / `Four 480p drafts on seedance-2.0-mini, then the final` — a different model is a different look, not only a different price; see "Several takes to choose from" / `Let the AI decide` | Only when the user asks for versions, or says they are unsure what they want. |
 | 7 | ask-if-open (round two) | `Pacing` | Where do the seconds go? The payoff decides it — a fight's payoff is the middle of the clip, a dialogue beat's can be the last line. | `Weight the core (recommended)` — setup and close stay near the "Action / spectacle" row of "Duration budget" below; most of the runtime goes to the fight or the exchange itself / `Weight the close` — the payoff is the last line or action, so the close gets real time, near the "Dialogue / slice-of-life" row / `Let the AI decide` | Only in round two (a published deliverable — see `creative-brief.md`), and only when the beat has a clear "main event" whose share of the runtime the request leaves open. |
@@ -253,7 +261,7 @@ SHOT 2 (<a>–<b>s): … [<Tag A> (<tone>): "<line>" — <delivery: quiet, no an
 SHOT <N> (<x>–<T>s): … <ending state: hold on her face for one second | hard cut to black at the peak | the camera settles and the clip runs on a moment>.
 
 CAMERA: <movement — not optional, and `static` is one of its values rather than the absence of one: locked with a breathing sway | close handheld follow just behind and beside her | slow push from the two-shot into a close-up | a half-turn orbit | travels with her from <space 1> through <space 2>; state it per shot when it changes>, <lens: 70–100mm medium telephoto | 24mm wide>, <depth of field>, focus stays on <tag A>'s eyes; <axis rule: one eye-line axis, never crossed>.
-SOUND: <room tone>, <two diegetic sounds tied to actions: door click, fabric>; music <none | enters at <t> | drops out at <t>>. Dialogue in <language>, mouths matched to it.
+SOUND: <room tone>, <two diegetic sounds tied to actions: door click, fabric>; music <none — the default here, since asking this model for a scored cue has failed output moderation on audio copyright (unbilled); see "Asking for music can fail output moderation on copyright" in the shared file | enters at <t> | drops out at <t>, only if the user accepts that same risk>. Dialogue in <language>, mouths matched to it.
 CONSISTENCY: <tag A>'s face, hairstyle, <accessory>, <clothing items> identical in every shot; <tag B>'s <items>; positions and light direction do not change.
 AVOID: subtitles, on-screen text, watermarks; extra or warped limbs; CGI look, plastic skin, skin smoothing; <the cuts you forbid: jump cuts, dissolves | shot/reverse-shot when one continuous shot>; theatrical over-acting, sudden tears.
 ```
@@ -271,7 +279,7 @@ What each short-drama slot is for, and where it comes from:
 | Separate `SOUND` block | Room tone plus two or three sounds keyed to actions; music in and out points | 3, 4, 7, 6 |
 | `TRANSITION` line between shots | Nine kinds exist and only one of them is a cut; naming a kind is what stops a timeline from becoming a list of held frames spliced together | 2 (the back-flags sweep past the lens and the camera comes out on the other actor), 3 (she is revealed from behind his out-of-focus silhouette), 8 (an ice crevice and a roof each carry one transition), 7 (`Cut to` / `Cut back inside`) |
 | `CAMERA` movement field | The camera has to be doing something specific, even when that something is holding still; without the field the prompt tends to come back as "locked, no push, no zoom" in every shot | 6 (`close handheld follow shot, staying just behind and slightly beside her`), 8 (a movement phase per segment), 2 (orbit into the next actor), 3 (locked, deliberately) |
-| `AVOID` — the short-drama items | subtitles / text / watermarks (6 of 11); CGI or plastic skin (1, 4, 20); over-acting (3, 20); the transitions you are not making (3, 8) | 4, 5, 20 |
+| `AVOID` — the short-drama items | subtitles / text / watermarks (6 of 11); CGI or plastic skin (1, 4, 20); over-acting (3, 20); the transitions you are not making (3, 8). **Its text items are a backstop, not a defence** — a period or festival setting (a neon street, a courtyard at New Year, a shopfront) needs the lettered surfaces composed out of the shots themselves, per "Unwanted text is designed out of the set, not forbidden in the list" in the shared file; jobs `41f87ac7` and `036ac3a8` are the two sides of that | 4, 5, 20 |
 | Clothing with colour and material | The one appearance field every gallery prompt that describes a character writes; age, build, hair, eyes appear as needed | 1, 3, 4, 5, 7, 8 |
 
 Camera choices that recur in this category, all in the shared "Camera
@@ -313,25 +321,44 @@ them is a cut list whether or not that was the intent — the same mistake as
 leaving the `CAMERA` movement field empty, one line further down.
 
 **Naming a `HARD CUT` is not a guarantee it renders as one, and the reason is
-the rest of the timeline, not that boundary alone.** Two 30-second
-`bytedance/seedance-2.5` jobs on Ofox point opposite ways at threshold-0.3
-scene detection: job `844c9145-9b10-4335-9fdc-ec4937793a2f` (8 boundaries, 3
-hard cuts against 5 named continuous transitions) had all three written hard
-cuts land within about 1.5s of their stamps; job
-`4e5c9581-d462-443b-9663-b1aa6d72f527` (9 boundaries, 3 hard cuts against 6
-named continuous transitions) had **zero** of its three written hard cuts
-detected — the whole clip rendered as one continuous flow instead. The only
-thing that moved between the two jobs is the mix. The full reading of both
-runs, including what it does and does not establish, is under "Several shots
-in one job" in `../ofox-video-core/references/prompt-structure.md`. Two
-samples are not a threshold: don't treat a `HARD CUT` label as safe on its
-own once continuous transitions are close to or past half the boundaries in
-that job, and check where the cuts actually land on a 480p draft before
-paying for a longer or higher-resolution take. What this does not establish:
-whether the softened cuts are what made the accepted clip above read, in the
-repository owner's words, as not well connected — that is a plausible
-follow-on hypothesis, not a tested finding, and this repo has no measurement
-of viewer-perceived coherence to test it against.
+the rest of the timeline, not that boundary alone.** Six
+`bytedance/seedance-2.5` jobs now bear on this, four of them short drama.
+Ordered by how large a share of the boundaries were written as hard cuts:
+
+| Hard-cut share | Job | Hard cuts that rendered as cuts |
+|---|---|---|
+| 3 of 9 | `4e5c9581-d462-443b-9663-b1aa6d72f527` (30s) | **0 of 3** — the whole clip read as one continuous flow |
+| 3 of 8 | `844c9145-9b10-4335-9fdc-ec4937793a2f` (30s) | 3 of 3, within about 1.5s of their stamps |
+| 3 of 6 | `036ac3a8-6f68-47ad-a553-86a29aa3e5b8` (20s) | 3 of 3, all seven shots in the written order |
+| 5 of 7 | `41f87ac7-d7a6-4c8c-8efd-feb7bdc4818d` (20s) | 5 of 5 |
+
+The two commerce jobs at 4-of-4 and 6-of-6 kept every cut as well. So the
+direction is settled even though the threshold is not: **a boundary's
+rendering is not decided independently of the rest of the timeline, and
+weighting the mix toward hard cuts is what buys a cutting rhythm.** Five
+consistent samples against one is enough to act on; the gap between 3-of-8
+(held all three) and 3-of-9 (held none) is a single boundary, so nobody knows
+where the line is, and the trigger could still be the boundary count, the
+resolution or the particular transition kinds. The full reading is under
+"Several shots in one job" in
+`../ofox-video-core/references/prompt-structure.md`.
+
+Two working rules follow. **Write hard cuts as at least half the boundaries
+when the beat needs a cutting rhythm**; if the brief's `Camera` answer was
+the cut list, that is what it asked for. And **check the draft by reading
+frames, not by counting a scene detector's hits** — at threshold 0.3 the
+detector misses a cut between two shots in the same place under the same
+light, which is exactly what shot/reverse-shot is. It missed the single most
+important cut in each of two accepted clips: `41f87ac7` at 9.5s (his
+close-up to hers) and `036ac3a8` at 9s (the mother's close-up to the son's),
+both plainly visible frame by frame. "Checking the cuts: read frames, never
+a detector count alone" in the shared file has the method.
+
+What none of this establishes: whether the softened cuts are what made the
+30-second clip above read, in the repository owner's words, as not well
+connected — that is a plausible follow-on hypothesis, not a tested finding,
+and this repo has no measurement of viewer-perceived coherence to test it
+against.
 
 ### Shot density — pick a register, then count
 
@@ -343,7 +370,7 @@ short-drama targets read off them.
 | Register | Per shot | 20s | 30s | Measured on |
 |---|---|---|---|---|
 | **Held take** — one or two faces, the camera stays put | performance beats of 1–3s inside one frame, no cuts | 1 shot | 1 shot | case 3: eight beats in 15s |
-| **Travelling one take** — no cuts; the camera moves through the space and an occlusion or a pass-through carries each new view | 5–8s a phase | 3–4 phases | 4–5 phases | case 2: 3 phases in 20s; case 6: 4 phases and three spaces in 30s; case 8: 5 phases and four locations in 30s |
+| **Travelling one take** — no cuts; the camera moves through the space and an occlusion or a pass-through carries each new view | 5–8s a phase, each phase arriving somewhere the previous one could not see | 3–4 phases | 4–5 phases | case 2: 3 phases in 20s; case 6: 4 phases and three spaces in 30s; case 8: 5 phases and four locations in 30s |
 | **Multi-shot cut list** — a new size and position at every stamp | 3–5s | 4–6 shots | 6–9 shots | case 1: 9 shots in 30s; case 18: 8 in 30s; case 22: 6 in 30s |
 | **Spectacle, beat-driven** — cuts on the action, the line or the music | 2–3s | 7–10 shots | 10–13 shots | case 11: 10 shots in 24s; case 34: 13 cuts in 30s |
 
@@ -358,11 +385,30 @@ landing on 5/10/15s as written, consistent characters, clean Mandarin
 delivery): technically correct on every axis and discarded for being plain.
 That run is why this subsection and the `Camera` register question exist.
 
-Above three cuts in one job is past what has been verified on Ofox — three
-shots in eight seconds, "Shots, cuts and jobs" above. The two dense registers
-are gallery practice, not Ofox measurements: price a first attempt as an
-experiment, and check where the cuts actually landed on a 480p draft before
-paying for the final.
+**The one-take rows have a floor of their own, and it is about movement, not
+shot count.** A single 20–30 second take needs the camera to *travel* — cases
+2, 6 and 8 cross a stage, three club rooms and four locations respectively.
+Measured against that on 2026-09-04: job
+`16023efe-48d6-45fe-8fd8-f5c6fbfe6519` (20s, 720p, one continuous shot, zero
+detected cuts, characters stable throughout) was rejected as too static,
+because its whole movement plan was one very slow push while the actors held
+a standing position. So when writing this register:
+
+- give each 5–8s phase **a view the previous phase could not see** — through a
+  doorway, past an occlusion, around a corner, from the other side of a room;
+- write the movement as travel (`the camera walks with her out of the kitchen
+  and into the corridor`), not as distance-closing (`a very slow push`). A
+  push is a beat inside a phase, never the plan for the take;
+- if the beat genuinely happens in one place on one face, the register you
+  want is the **held take** with performance beats — that is what case 3 is,
+  at 15 seconds, and it does not pretend to travel.
+
+Cut counts here are inside the measured envelope: 10 shots in 30 seconds, and
+up to 6 hard cuts in one job, have both been run on Ofox ("Shots, cuts and
+jobs" above). The `spectacle` row's 10–13 cuts in 30s is still gallery practice —
+price a first attempt as an experiment — and on every register, check where
+the cuts actually landed on a 480p draft, **by reading frames rather than a
+detector count**, before paying for the final.
 
 ### Duration budget — spend the seconds where the beat is
 
@@ -786,7 +832,11 @@ plus the short-drama-specific ones:
 | Exit `3`, job ends `failed`, or `invalid_request` on create, with no other error code hint | Likely a moderation rejection: prompts describing real/identifiable public figures, sexual content, or graphic violence are commonly rejected before or during generation | Rewrite the prompt: use a generic character description instead of naming a real person, tone down graphic detail, then call `generate` again — this is a **new** request with a new prompt, not a resubmission of the failed one, so it's safe to retry immediately |
 | The clip renders exactly as written and still looks like nothing — held frames spliced together, no reason to keep watching | Every shot 5s or longer, every `CAMERA` movement static, and every boundary a bare hard cut: the slowest point of "Shot density — pick a register, then count", reached by writing the template's defaults instead of choosing a register | Re-ask the brief's `Camera` question, take the register the beat actually wants, then rewrite: more shots at 2–3s, or one travelling take, and a named transition kind at each boundary. This is a new prompt, so it is a new cost table |
 | Generated speech sounds rushed, garbled, or cut off | Too many words for the clip's tier — see "Dialogue budget — two tiers" | Extend `--duration` (within 4–30s) or trim the lines; never compress the delivery |
-| A cut lands up to a second off its timestamp | Expected: the verified runs placed cuts within about ±1s of the written stamps | Give each shot 2s or more of slack around a line; if a cut must be frame-exact, generate the shots as separate jobs |
+| A cut lands up to a second off its timestamp | Expected: the measured runs placed cuts within about ±1.5s of the written stamps, and the deviation does not accumulate along the timeline (`844c9145`: late at the second boundary, back on time at the third) | Give each shot 2s or more of slack around a line; if a cut must be frame-exact, generate the shots as separate jobs |
+| The written `HARD CUT`s did not happen at all — the clip reads as one flowing take | The transition mix: the one measured job that lost every hard cut had them at only 3 of 9 boundaries (`4e5c9581`), while five jobs at 3-of-8 or better kept all of theirs | Rewrite with hard cuts as at least half the boundaries, then re-check. This is a new prompt, so a new cost table |
+| A scene detector reports fewer cuts than were written, and the clip looks fine | Not a defect in the clip — detection at threshold 0.3 cannot see a cut between two shots in the same place under the same light, i.e. exactly shot/reverse-shot. Missed the pivotal cut in both `41f87ac7` and `036ac3a8` | Read frames either side of every written stamp instead of trusting the count — "Checking the cuts: read frames, never a detector count alone" in the shared file |
+| A one-take clip renders perfectly and still feels inert | The take closes distance in place instead of crossing space — measured on `16023efe` (20s, one very slow push, rejected) | Rewrite the phases so each one arrives somewhere the last could not see, or switch register to a held take with performance beats. New prompt, new cost table |
+| Garbled or invented lettering on signs, couplets or shopfronts | The `AVOID` list was relied on; on Ofox it is only partly obeyed even at its strongest (`41f87ac7`) | Compose the lettered surfaces out — edge of frame, out of frame, occluded, or a background with no text-bearing surface at all, which is how `036ac3a8` kept five couplet shots clean |
 | Character's appearance drifts between two clips of the "same" script | Each `generate` call is stateless — no persistent character memory | Reuse the exact same character block word for word and keep the `CONSISTENCY` line in every prompt for that script |
 | Exit `4`, timed out waiting for completion | Job is still running upstream, not failed | Do **not** re-run `generate`; run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID` using the job id printed before the timeout |
 | Exit `5`, ambiguous network failure on create | No HTTP response received at all — can't tell if a job was created | Do not guess or retry `generate`; tell the user to check `https://app.ofox.ai` for a job that may already be running, per `ofox-video-core`'s no-resubmit rule |
