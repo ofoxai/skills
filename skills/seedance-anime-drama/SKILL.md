@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.9.0"
+version: "1.9.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.9.0"
+  version: "1.9.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -236,7 +236,7 @@ Brief
 - Aspect: 9:16 (inferred from "for Reels") — the image will be generated at 9:16
 - Style: hand-drawn 90s TV anime, fine ink lines, soft VHS grain (AI's pick)
 - Sound: dialogue in Japanese, as written in the excerpt (inferred from the quoted lines)
-- Image: quality standard, chain default model — row 1; video 8s 720p — row 2 (defaults)
+- Image: quality high, chain default model — row 1; video 8s 720p — row 2 (defaults)
 ```
 
 ## Prompt template
@@ -423,14 +423,29 @@ There is no second shot to stay consistent with, so a sheet buys nothing.
 ```bash
 bash ../ofox-image-core/references/ofox-image.sh generate \
   --prompt "<character description>, <the shot's opening moment: setting, pose, camera angle>, <school + texture layer from the brief>, <the brief's ratio as a composition instruction, e.g. vertical 9:16 composition>, cinematic composition, no text, no panels, single illustration" \
-  --quality standard \
+  --quality high \
+  --target-aspect <the brief's ratio, e.g. 9:16> \
   --out-dir <a directory for this project's generated assets>
 ```
 
 The `no text, no panels, single illustration` tail is what keeps the model
-from drifting back into sheet mode — it is not optional padding. The ratio
-goes in the prompt because `--size` is not a guarantee on every image model
-(see below) — check the delivered file and crop or pad it before Step 2.
+from drifting back into sheet mode — it is not optional padding.
+
+**`--target-aspect` is not optional on an opening frame**, and it is why the
+hand-crop this section used to describe is gone. The ratio goes in the prompt
+as a *composition* instruction because it changes how the character is framed
+— but the delivered pixels are settled by the flag, which since
+`ofox-image-core` 1.7.0 measures the written file and centre-crops it to
+exactly that ratio, failing loudly rather than delivering something close.
+The size enum this API accepts contains no 16:9 or 9:16 entry at all
+(`1792x1024` is 1.75, `1024x1792` is 0.5714), so the crop is structural, not
+a fallback for a model that misbehaves — and an attached frame forces
+`aspect_ratio: adaptive`, which means a wrong-ratio image is charged at the
+price of the clip it opens. `IMAGE_PATH` is the cropped file, so Step 2
+attaches it unchanged; the API's untouched bytes stay alongside as
+`IMAGE_PATH_UNCROPPED`. Needs `ffmpeg`/`ffprobe`, checked before anything is
+spent. Detail: `ofox-image-core`'s "The size enum cannot express 16:9 or
+9:16".
 
 **Several shots, `Sheet first`** — generate the sheet once, show it to the
 user, and get the design confirmed. Then write **each shot's own opening
@@ -441,9 +456,34 @@ own frame. The sheet is a checking artifact; it is never passed to
 ```bash
 bash ../ofox-image-core/references/ofox-image.sh generate \
   --prompt "<character description>, <school + texture layer>, character reference sheet, plain neutral background, front-facing full body" \
-  --quality standard \
+  --quality medium \
   --out-dir <a directory for this project's generated assets>
 ```
+
+**Why the two commands pass different `--quality` values.** The opening frame
+*is* the clip's first frame, so its fidelity carries into the deliverable —
+`high` is what the one real run of this step used. A sheet is a checking
+artifact that never reaches a video and is discarded once the design is
+confirmed, so `medium` is enough for a human to read a wrong wardrobe or a
+missing accessory off it.
+
+The sheet command also passes no `--target-aspect`, and that is deliberate
+rather than an omission: the sheet is never attached to a video job, so its
+ratio decides nothing. The flag is mandatory only where the frame's ratio
+becomes a clip's ratio.
+
+Neither is `standard`, which this skill passed until 1.9.1 and which the
+chain's current head refuses outright: `openai/gpt-image-2` accepts only
+`low`, `medium`, `high` and `auto` — its own enumeration, read off an HTTP
+400 on 2026-09-04, `Invalid value: 'standard'. Supported values are: 'low',
+'medium', 'high', and 'auto'`, nothing billed. Since `ofox-image-core` 1.7.0
+that combination is rejected locally instead, exit `1` with no network call,
+so a `--dry-run` catches it for free. That is not a change in this skill —
+`microsoft/mai-image-2.5-flash` accepts `standard`, and these commands worked
+verbatim until `ofox-image-core` made `gpt-image-2` the chain head on
+2026-09-04. Pass one of the four accepted values, or pin `--model
+microsoft/mai-image-2.5-flash` when that model's look is what you want.
+Costs, and which of them is measured, are in Approval 1 below.
 
 **Several shots, `Straight to shot 1`** — generate shot 1's opening frame as
 in the one-shot case, show it, and write the later frames from the same
@@ -458,9 +498,12 @@ becomes an opening frame or an identity reference is the next subsection.
 `bytedance/seedance-2.5` forces `aspect_ratio: adaptive` whenever an image is
 attached, so the clip comes out at **the image's** aspect ratio, whatever
 `--aspect-ratio` says. That is why the brief asks for the ratio **before**
-Approval 1: generate the image at the target shape, or crop/pad it before Step
-2 — there is no flag that fixes it afterwards, and fixing it by regenerating
-is a second image bill.
+Approval 1: the image has to be delivered at the target shape, which is what
+`--target-aspect` on the Step 1 command is for. There is no video flag that
+fixes it afterwards, and fixing it by regenerating is a second image bill —
+followed by a second *video* bill, since the clip already came out the wrong
+shape. A user-supplied image is the one case you crop yourself, and it is
+cropping only, never padding.
 
 **Don't pass `--model` here.** `ofox-image-core` resolves one from its
 cheapest-first priority chain — defined in exactly one place, its
@@ -474,20 +517,39 @@ its own model id buys you: prices move, the copy doesn't, and nobody notices
 because nothing is wrong — it just costs more than it needs to.
 
 Whichever model runs, **don't promise the user a specific output resolution**,
-and don't trust the printed `SIZE` line for the ratio — check the delivered
-file's real dimensions and crop it. Measured on three image runs whose frames
-then went into video (2026-09-04): a request for `1792x1024` came back with
-the API reporting `1354x774` while the file on disk was `1344x768` — three
-numbers, none of them matching, all three times. Cropping that file to
-`1344x756` (cropping only, never padding, so nothing is invented at the
-edges) is what produced an exact `1280x720` clip; feeding it uncropped
-delivers 1.75:1, which then sits letterboxed in a 16:9 frame. Use
-`sips -g pixelWidth -g pixelHeight <file>` or `identify <file>`, not the
-`SIZE` line. More in the failure table's `SIZE` row and in
-`ofox-image-core`'s size gotcha.
+and don't trust the printed `SIZE` line for the ratio. Since
+`ofox-image-core` 1.7.0 you do not have to do the measure-and-crop by hand
+either — `--target-aspect`, on every command above, measures the written file
+and crops it — but the underlying mess is worth knowing, because it is what
+the flag exists to absorb and what `SIZE_ACTUAL` in the output reports.
+**How far off `SIZE` lands depends on which model the chain resolved**, and
+both cases are measured:
 
-The video that came out of that cropped frame is also the proof the lock
-works: job `16023efe-48d6-45fe-8fd8-f5c6fbfe6519`'s first delivered frame
+- `microsoft/mai-image-2.5-flash`, the chain's head until 2026-09-04, on
+  three runs whose frames then went into video: a request for `1792x1024`
+  came back with the API reporting `1354x774` while the file on disk was
+  `1344x768` — three numbers, none of them matching, all three times.
+  Cropping that file to `1344x756` (cropping only, never padding, so nothing
+  is invented at the edges) is what produced an exact `1280x720` clip;
+  feeding it uncropped delivers 1.75:1, which then sits letterboxed in a 16:9
+  frame.
+- `openai/gpt-image-2`, the head since then, on **one** run at the same
+  requested size: the request, the response's `SIZE` echo and the file's real
+  pixels all read `1792x1024`. One run, so do not read it as a guarantee.
+
+Honouring the request is not the same as a usable ratio, which is why the
+crop step survives either way: `1792x1024` is 1.75, not 16:9, so that frame
+still had to be cropped to `1792x1008` before it was attached. The size enum
+has no 16:9 or 9:16 entry on any model, so no `--size` value avoids it. Read
+`SIZE_ACTUAL` rather than `SIZE`, and if you are cropping by hand for some
+reason, use `sips -g pixelWidth -g pixelHeight <file>` or
+`identify <file>` — cropping only, never padding. More in the failure table's
+`SIZE` row and in `ofox-image-core`'s "The size enum cannot express 16:9 or
+9:16".
+
+The video that came out of the first bullet's `1344x756` crop is also the
+proof the lock works: job
+`16023efe-48d6-45fe-8fd8-f5c6fbfe6519`'s first delivered frame
 matched the fed image on composition, both characters, wardrobe, the fence,
 the sunset and the falling petals — and the two later product jobs show the
 lock holding for a full 20 seconds and across six hard cuts ("What a frame
@@ -643,8 +705,13 @@ carries it forward unchanged unless the user revised the design.
 ```bash
 bash ../ofox-image-core/references/ofox-image.sh generate --dry-run \
   --prompt "<character description + opening moment + style>" \
-  --quality standard --out-dir ./assets
+  --quality high --target-aspect <the brief's ratio> --out-dir ./assets
 ```
+
+Dry-run it with the **same** `--target-aspect` the real call will use, not
+without it: the flag resolves which `--size` gets requested, and the size is
+half of what the estimate is priced at. Quoting a run without the flag and
+then generating with it is a table for a different request.
 
 The table row: the `MODEL` line from that output (the chain has already
 resolved it — never write "the default"), type `image`, the quality and size
@@ -652,13 +719,37 @@ you passed, quantity 1, and whatever the `Estimated cost:` line says. With
 `Sheet first` there are two image rows — the sheet and the first opening
 frame — and say that later frames add one row each.
 
-**Copy that line; do not compute your own.** Since 2026-09-02 the chain's
-preferred model is measured, so the usual answer here is a real figure
-labelled `ROUGH` (about 2.7 cents for `microsoft/mai-image-2.5-flash`) —
-relay it with the word ROUGH intact. If the chain resolves to a model nobody
-has measured, the line says "cannot be predicted" instead; the shared gate's
-"When there is no estimate" says what to do with that, and the answer is
-still to show the table and wait for a yes.
+**Copy that line verbatim, label and all — do not substitute a figure of
+your own.** The chain's head has been `openai/gpt-image-2` since 2026-09-04,
+and it has two real measured points: about **0.6 cents** at `--quality low
+--size 1024x1024`, and **15.4 cents** at `--quality high --size 1792x1024`
+(5063 output tokens, the job's own reported `IMAGE_COST`). A 26x spread from
+two flags, and on 2026-09-04 the cheap end of it was quoted for a frame that
+billed the dear end.
+
+Since `ofox-image-core` 1.7.0 the script does that arithmetic itself: it
+quotes the measured point matching the request's own `--quality`/`--size`
+pair, and where no point matches it quotes the **dearest** one, labelled
+`ROUGH UPPER BOUND` with the pair it borrowed from named on the same line.
+Which of the two you get here depends on the brief's ratio, and both are
+correct:
+
+- `--quality high --target-aspect 16:9` resolves `--size` to `1792x1024`,
+  which *is* a measured pair — a plain `ROUGH ~$0.1519`.
+- `--quality high --target-aspect 9:16` resolves to `1024x1792`, and
+  `--quality medium` for a sheet names no size at all. Neither has ever been
+  measured, so both come back as the `UPPER BOUND` at the same 15.4-cent
+  ceiling.
+
+Relay whichever line you get, with its label. Say "ceiling" in the table when
+it says `UPPER BOUND`, and add that the real bill may land well under it —
+but do not replace it with a guess at what `medium` or a portrait frame would
+cost, and do not drop it to the 0.6-cent point because that looks closer to
+the request. Nothing is interpolated between two measured points. If the
+chain resolves to a model nobody has measured at all, the line says "cannot
+be predicted" instead; the shared gate's "When there is no estimate" says
+what to do with that, and the answer is still to show the table and wait for
+a yes.
 
 Say plainly that this is paid **once per character** (once per frame when
 several shots each get their own) — generating N shots of that character
@@ -726,7 +817,7 @@ fewer words, never a faster delivery.
 | `--resolution` | `720p` | detail on line art and faces at a reasonable cost; `1080p` only for a hero shot the user will publish |
 | `--aspect-ratio` | not passed — `adaptive` follows the image; the ratio is settled by the brief before the image exists | see "The opening frame decides the output's shape" |
 | `--generate-audio` | `true` (server default) unless the brief's `Sound` answer is `No dialogue` and the user wants silence; ambience and score still need it on | dialogue needs an audio track |
-| image `--quality` | `standard` | the frame is a starting point, not the deliverable |
+| image `--quality` | `high` for an opening frame; `medium` for a design sheet | the opening frame is the clip's literal first frame, so its fidelity reaches the deliverable; a sheet is discarded once the design is confirmed. **Not `standard`** — the chain's head (`openai/gpt-image-2`) rejects it at submission, accepting only `low`, `medium`, `high`, `auto` |
 
 ## Several takes to choose from
 
@@ -861,8 +952,11 @@ count):
 # Step 1 — the shot's OPENING FRAME, not a sheet (--model omitted on purpose: the chain resolves it)
 bash ../ofox-image-core/references/ofox-image.sh generate \
   --prompt "A teenage girl, silver bob haircut, navy school uniform with a red ribbon, sharp green eyes, standing at the edge of a school rooftop at sunset, wind in her hair, seen from a low medium shot with the city behind her; modern theatrical anime, cel-shaded, vibrant colours; vertical 9:16 composition; cinematic composition, no text, no panels, single illustration" \
-  --quality standard \
+  --quality high \
+  --target-aspect 9:16 \
   --out-dir ./assets
+# IMAGE_PATH is the cropped, exactly-9:16 file — that is the one Step 2 attaches.
+# IMAGE_PATH_UNCROPPED is the API's untouched bytes, kept for a human who wants a different crop.
 
 # Step 2 — the shot, opening on that exact frame (the SAME absolute IMAGE_PATH Step 1 printed)
 bash ../ofox-video-core/references/ofox-video.sh generate \
@@ -898,11 +992,12 @@ plus this skill's own:
 |---|---|---|---|
 | 1 (image) | Exit `1`, no network call made | Missing `--quality`, bad `--model`, or `--n` combined with Gemini | Fix the flag per the error message and re-run `generate` — free to retry, nothing was submitted |
 | 1 (image) | Exit `2` | `curl`/`jq` missing, or `OFOX_API_KEY` not set | Re-run `ofox-image-core`'s `check` and follow its install/signup guidance |
+| 1 (image) | Exit `1`, `--quality '<v>' is not accepted by '<model>'`, no network call | `--quality standard` was passed and the chain resolved to `openai/gpt-image-2`, which accepts only `low`, `medium`, `high`, `auto`. Every command in this skill passed `standard` until 1.9.1, and they broke the day `ofox-image-core` made that model the chain head (2026-09-04) — not from anything changing here. Until `ofox-image-core` 1.7.0 this surfaced as exit `3` / HTTP 400 at submission (still unbilled); 1.7.0 validates `--quality` against the resolved model, so it is now caught locally, including under `--dry-run` | Pass `high` (an opening frame) or `medium` (a sheet), or pin `--model microsoft/mai-image-2.5-flash`, which does accept `standard`. Free to retry — nothing was submitted and nothing was charged |
 | 1 (image) | Exit `3`, `error.type: invalid_request_error` | The request was rejected as malformed/unsupported. The confirmed error shape is `{"error":{"message","type","code"}}` — `error.code` is just the HTTP status as a number here, `error.type` is the real classifier | Read the printed `Upstream message`, fix the prompt/flags, retry — a rejected request has not been confirmed to bill |
 | 1 (image) | Exit `4` | `--out-dir` could not be created or entered | Caught before any network call, so no money was spent finding this out. Fix `--out-dir` and retry |
 | 1 (image) | Exit `5`, ambiguous network failure | No HTTP response at all — this is a synchronous, no-job-id API, so there's nothing to poll afterward | Do not guess or retry blindly; check `https://app.ofox.ai`'s usage/billing history first |
 | 1 (image) | The image is a multi-panel sheet with labels when an opening frame was wanted | The prompt lacked the `no text, no panels, single illustration` tail, or said "reference sheet" | Regenerate as an in-scene single illustration; do not pass the sheet to `--frame-first-image` |
-| 1 (image) | `SIZE` in the printed output doesn't match what you asked for | Verified for `google/gemini-3.1-flash-image`: it always generates at its native 1024x1024 and just echoes back the requested `size`. No other image model's `--size` handling has been confirmed either way, so treat the `SIZE` line as unverified for whichever model the chain resolved | Don't promise the user a specific size; if a guaranteed size matters, check the real file's dimensions (`file <path>` / `sips -g pixelWidth -g pixelHeight <path>`), not the `SIZE` line, and crop/pad to the ratio the brief settled |
+| 1 (image) | `SIZE` in the printed output doesn't match what you asked for | Three models, three behaviours: `google/gemini-3.1-flash-image` always generates at its native 1024x1024 and echoes the requested `size`; `microsoft/mai-image-2.5-flash` disagrees three ways (requested `1792x1024`, echoed `1354x774`, file `1344x768`, on three runs); `openai/gpt-image-2` matched exactly, on one run. So `SIZE` is unverified whichever model the chain resolved — see "The opening frame decides the output's shape" | Read `SIZE_ACTUAL`, measured from the written file, not `SIZE`. Don't promise the user a specific resolution; for a guaranteed *ratio* pass `--target-aspect` (or `--target-size`) so the script crops it — that is not a workaround, since the size enum has no 16:9 or 9:16 entry on any model. Cropping only, never padding |
 | 2 (video) | Exit `1`, no network call made | Bad `--duration`/`--resolution`, or missing `--prompt` | Fix the flag per the error message and re-run `generate` — free to retry, nothing was submitted |
 | 2 (video) | Exit `1`, `references_conflict` | Both `--frame-first-image` and an `input_references` array in `--extra-json` were sent | Pick one route per job — see "Two ways an image can enter a shot" |
 | 2 (video) | Exit `1`, "local image file ... exists but is not readable" | `--frame-first-image`'s path exists locally but this script/OS can't read it (permissions) — caught by `resolve_image_ref()` before any network call | Fix the file's permissions (confirm it's the exact `IMAGE_PATH` printed in Step 1) and retry — free, nothing was submitted |
@@ -910,7 +1005,7 @@ plus this skill's own:
 | 2 (video) | Exit `3`, `error.code: insufficient_credits` | Ofox balance too low | No charge was made; the user needs to add credits at `https://app.ofox.ai` before retrying |
 | 2 (video) | Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated output failed a post-generation content check, after the job ran — not billed (no `usage` field) | Retry with a brand-new `generate` call using a different prompt — a new request, safe to retry immediately |
 | 2 (video) | Exit `3`, request rejected when the API tries to use the reference image (commonly `error.code: invalid_request`) | The `IMAGE_PATH` doesn't exist locally and isn't a URL either, so `resolve_image_ref()` passed it through unchanged and the API rejected it as an unusable value — `ofox-video-core`'s docs confirm `bad_data_uri`/`download_failed`/`unreachable`/`not_image`/`too_large` only for `--real-person`'s reference-photo validation, not for `--frame-first-image`/`frame_images`, so don't assume one of those five specific codes here | Confirm the exact `IMAGE_PATH` printed in Step 1 still exists and is a valid, readable image file, then retry |
-| 2 (video) | Unexpected aspect ratio / frame shape in the output | `bytedance/seedance-2.5` + `--frame-first-image` always forces `aspect_ratio: adaptive` (printed as a `NOTE:`, never silent) — the output follows the image's own aspect ratio | Expected behavior, not a bug — the brief settles the ratio before Step 1 for exactly this reason; crop/pad the image and regenerate the shot if it was missed |
+| 2 (video) | Unexpected aspect ratio / frame shape in the output | `bytedance/seedance-2.5` + `--frame-first-image` always forces `aspect_ratio: adaptive` (printed as a `NOTE:`, never silent) — the output follows the image's own aspect ratio | Expected behavior, not a bug — the brief settles the ratio before Step 1 for exactly this reason, and `--target-aspect` on the Step 1 command is what keeps it. If it was missed, re-crop the existing frame (cropping only, never padding) and regenerate the shot — that is a second **video** bill, not a second image one |
 | 2 (video) | A cut lands up to a second off its timestamp | Expected: the verified multi-shot runs placed cuts within about ±1s of the written stamps | Give each shot 2s or more of slack around a line or a decisive hit; if a cut must be frame-exact, use `chain` or separate jobs |
 | 2 (video) | Exit `4`, timed out waiting for completion | Job is still running upstream, not failed | Do **not** re-run `generate`; run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID` using the job id printed before the timeout |
 | 2 (video) | Exit `5`, ambiguous network failure on create | No HTTP response received at all — can't tell if a job was created | Do not guess or retry `generate`; check `https://app.ofox.ai` first, per `ofox-video-core`'s no-resubmit rule |

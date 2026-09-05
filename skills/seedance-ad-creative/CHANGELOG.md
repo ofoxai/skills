@@ -4,6 +4,120 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.10.0 — a third accepted ad: the cuts and the duration split held, the climax's payoff did not
+
+Docs only; no script changes. One accepted 720p job
+(`60fbea52-b14b-4796-80bf-03afe0aa4fa0`, seed `799906248`, 2026-09-05, in the
+gallery as `aura-serum-ad`) — 15s, 5 shots, 4 hard cuts, image-to-video from a
+generated first frame, billed 3.60 USD for the video at the t2v rate plus
+0.154035 USD for the frame on `openai/gpt-image-2` at `--quality high --size
+1792x1024`. Versions in force when it ran: this skill 1.9.0,
+`ofox-video-core` 1.14.0, `ofox-image-core` 1.4.0. It confirms four things
+this skill already claimed, refines one, and breaks two.
+
+Confirmed:
+
+- **All four hard cuts survived**, at 2.62 / 4.75 / 6.62 / 12.25s, on a
+  timeline that wrote every boundary as a hard cut. That is this scenario's
+  third all-hard-cut job at 4 of 4, 6 of 6 and 4 of 4, and the sixth run
+  repo-wide whose written hard cuts all rendered — against the one that lost
+  all three of its at a share of 3 of 9. The row goes into "Several shots"'s
+  existing evidence table; the single repo-wide list stays in the shared
+  file.
+- **The written duration split was honoured within 0.4s per shot** — planned
+  3 / 2 / 2 / 5 / 3, rendered 2.62 / 2.13 / 1.87 / 5.63 / 2.79, including a
+  deliberately lopsided split. Spending the seconds by function is now a
+  measured instrument on this path, so the stale Template A bullet warning
+  that four or five beats was beyond what had been verified — retired in
+  1.9.0 and never rewritten — is replaced by this measurement.
+- **The frame lock held from 0.3s to 14.9s**: bottle, frosted finish, black
+  collar and bulb, label, glass of water, eucalyptus sprig, desk grain and
+  bare wall all unchanged. So did the label word `AURA`, in every shot it
+  appeared in, plus the same word rendered correctly as an end card — with
+  the reference frame declared the sole authority on the label and an
+  explicit ban on redrawing, restyling or re-lettering it.
+- **A hand written in text over an object-only first frame** came back
+  anatomically clean again.
+
+New, and refined:
+
+- **New: a continuous state change can be one of a consistency lock's listed
+  changes, if its direction is pinned.** The light bars from the blinds were
+  allowed to `only ever creep lower and warmer, never brighter, never
+  higher, and never change direction`, and they did exactly that. One
+  observation — but a dimming afternoon no longer has to be written as
+  discrete steps.
+- **"5. Text on screen" gains a clause.** The two studio ads got zero
+  invented text on sets where nothing could carry lettering, so they never
+  really tested the rule. This one is a **desk** — book spines and paper are
+  the classic failure — and it still came back with zero invented text,
+  because the wall was specified `entirely bare … no printed surface of any
+  kind` and AVOID named every carrier of printed matter as an object rather
+  than forbidding text. So: design it out of the set where the set allows it,
+  and **where it does not, exclude each carrier by object** — a bare "no
+  text" has already failed once, on a neon street.
+- **New "6. What the AVOID list has held, and what it has lost."** An honest
+  per-item record for this scenario's runs, including the two items this job
+  lost.
+
+Broken, and corrected:
+
+- **The written climax did not render, and it is the one defect that reached
+  the picture.** `10.5-12s the drop lands on the surface of the oil … one
+  clean ring spreads out and dies` never happened: at 11.8s the drop is still
+  hanging from the pipette, at 12.25s the clip cuts to the hero frame. Five
+  and a half seconds of climax bought a suspended drop and no payoff — the
+  build-up is the kind of picture this model is good at, so it made that and
+  skipped the fast physical beat. Template A now carries an optional `PAYOFF`
+  line under `CLIMAX`, with a slot note and a failure-table row: write the
+  payoff as its own timed shot, compress the build-up, and name the result as
+  a required visible event.
+- **A quantified limit on how much of a body part appears is not a control.**
+  `only the fingertips and the first knuckle ever visible` was stated twice,
+  in the shot and in AVOID, and the render shows the hand to the knuckles.
+  The shot was fine, and what made it fine was the macro framing plus one
+  simple action. The framing-order note in Template A now says so, so the
+  limit stops reading as a second line of defence.
+- **A loudness written per shot is not honoured.** Shot 2 read `room tone,
+  nothing else, very quiet` and came back as the loudest sustained passage
+  in the clip (about -27 to -24 dB mean against roughly -44 dB in the shot
+  before it). The sound *effects* did land where written — the loudest
+  transients are the pipette lift at 7-8s and the drop at 10-11s — and the
+  close did thin to near silence. So name what each shot contains and leave
+  the relative levels to an editor, the way the music already goes on
+  afterwards.
+- **`no lens flare stars, no sparkle particles` lost**: a small starburst
+  glint sits on the drop at about 9.6s. Minor, and now on the record in
+  section 6.
+- **The weakest shot was the abstract macro**: 2.1 seconds inside amber oil
+  came back a near-flat colour field with two refracted bands. The same shot
+  into a carbonated drink had rising bubbles to carry it (`7ae7d49e`). A
+  liquid macro needs something inside the liquid that moves.
+
+Two corrections to this skill's guidance about its `ofox-image-core`
+dependency, which shipped 1.5.0 through 1.7.0 the same day this entry was
+written:
+
+- **The generated first frame is no longer cropped by hand.** `60fbea52`'s
+  was, in two manual steps (`1792x1024` → `1792x1008` → `1280x720`), because
+  no flag existed for it then. `--target-aspect` / `--target-size` now
+  measure the written file and crop it exactly, and the image-to-video
+  section says to use them — `adaptive` means a wrong-ratio image is charged
+  at the price of the clip it opened. "Crop or pad" is now "cropping only,
+  never padding", matching the shared reference.
+- **The image cost row is quoted from the printed line, not corrected by
+  hand.** The paragraph used to say to read `ofox-image-core`'s warning about
+  which pair its estimate was anchored at; 1.7.0 made the lookup pair-aware,
+  so the line prices the pair being sent or labels itself `ROUGH UPPER
+  BOUND`. It also now says to dry-run with the *same* `--target-aspect` the
+  real call uses, since that flag decides the `--size` the estimate is priced
+  at.
+
+What to do: nothing breaks. A caller writing a CLIMAX whose payoff is a
+small, fast event should split it, and should stop relying on a written limb
+limit or a written per-shot level. When generating the first frame, pass
+`--target-aspect` and relay the estimate line as printed.
+
 ## 1.9.0 — a model *and* a locked product, no generated music, and the envelope this scenario measured itself
 
 Docs only; no script changes. Two accepted 720p ad clips (2026-09-04, jobs

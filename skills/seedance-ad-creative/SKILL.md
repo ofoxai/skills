@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.9.0"
+version: "1.10.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.9.0"
+  version: "1.10.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -174,15 +174,15 @@ Segments run 3–5s (cases 15, 25, 26, 27); the one official 30s piece with
 10s segments (case 13) never cuts. Slots are in `<angle brackets>`; optional
 lines in `[square brackets]`. Pick one header labelling style and keep it.
 
-**The five beats below are a floor, not a ceiling.** Counted per case: the
+**The beats below are a floor, not a ceiling.** Counted per case: the
 gallery's ads run 5 shots in 20s (case 15, 4s each) up to 9 `CUT`s in one
 generation (case 14), and case 26 runs seven segments in 30s — so a 30s spot
 written as five 6-second beats is the slowest ad in the set. Split a beat into
 two shots rather than holding one for six seconds; the per-case counts are in
 "Shot density, measured per case" in the shared file. The Ofox-measured
 envelope now reaches **20 seconds, 7 shots and 6 hard cuts in one job, with a
-first frame attached** — this scenario's own two jobs did it (see "Several
-shots: timestamps inside one job, `chain` across jobs" below) — so Template
+first frame attached** — this scenario's own accepted jobs did it (see
+"Several shots: timestamps inside one job, `chain` across jobs" below) — so Template
 A's four or five beats are inside what has been run, not past it. Above 7
 shots or 6 cuts is still gallery practice, and a first attempt there is an
 experiment.
@@ -200,6 +200,7 @@ SCENE: <backdrop>, <one or two props framing the shot>, <light: saturated studio
 <TRANSITION between any two beats — name a kind; a hard cut is one of nine and an unnamed boundary becomes one: HARD CUT. | The camera plunges through <the gears / the pour / the open lid> into the next beat. (case 13) | <The product / the blade / a hand> sweeps past the lens and the camera comes out of the occlusion on <the next arrangement>. (the phrasing is cases 2, 8, 41, none of them ads) | A white flash freezes the frame, then <the next pose>. (case 15) | An extreme speed ramp carries <the event> into <the next beat>. (case 15) | Without cutting, <the array reassembles in frame>.>
 <>–<>s      SHOWCASE — <arrangement: a strict geometric array of the variants | <tag> holds the product toward the lens, steam rising | the camera orbits the product 30 degrees>; cut to close-ups of <two or three details>.   (cases 12, 14, 24)
 <>–<>s      CLIMAX — <one physical event: the biscuit snaps | the broth erupts | the blade sweeps past the lens>; drops into slow motion for one second — <micro-detail: the filling bursts, crumbs fly, droplets hang> — then back to speed.   (cases 12, 14, 15)
+[<>–<>s     PAYOFF — <the event's result, as its own timed shot: the drop lands and one ring spreads and dies | the crumbs settle on the white>; full speed, and the landing named as a required visible event.]   (only when the payoff is small and fast; job 60fbea52 wrote it as CLIMAX's tail and lost it — slot notes below)
 [<>–<>s     VARIATION — back at full tempo, <a second arrangement>.]                                                        (case 12)
 <>–<N>s     CLOSE — product hero frame, <centered | in slow motion>; [the slogan "<text>" enters word by word, one word per cut;] [the logo per image2 in the last second;] hold the final frame.   (cases 12, 13, 14, 15)
 
@@ -243,6 +244,52 @@ Notes on the slots:
   much of the body is in frame, keep the full figure to one distant shot, and
   never make a hand or a face the focal point. Avoiding people entirely is
   not the only option.
+  **What that run did not establish is that a written size limit works, and a
+  later one shows it does not.** Job
+  `60fbea52-b14b-4796-80bf-03afe0aa4fa0` (a hand entering a macro on a
+  dropper) said twice — once in the shot and again in AVOID — `only the
+  fingertips and the first knuckle ever visible and never more of the hand
+  than that`, and the render shows most of the index finger and the hand to
+  the knuckles. The shot was still anatomically clean, with no extra or
+  warped fingers, and what kept it clean was the macro framing plus one
+  simple action, not the limit. Write the framing order above; treat a "never
+  more than X of a limb" clause as a wish, not a second line of defence.
+- **Give the climax's payoff its own timed shot when that payoff is small and
+  fast.** Measured once, on `60fbea52-b14b-4796-80bf-03afe0aa4fa0` (15s, 5
+  shots, accepted): a five-second CLIMAX was written as `7-8.5s` the pipette
+  lifts clear of the bottle, `8.5-10.5s` in slow motion a drop swells at the
+  glass tip and falls, `10.5-12s` back at full speed `the drop lands on the
+  surface of the oil in the bottle, one clean ring spreads out and dies
+  against the glass`. The build-up rendered beautifully and **the landing
+  never happened**: at 11.8s the drop is still hanging from the pipette, and
+  at 12.25s the clip cuts to the hero frame. Five and a half seconds of
+  climax bought a suspended drop and no event. A hanging, glowing droplet is
+  exactly the kind of picture this model is good at, so it made that and
+  skipped the fast physical beat at the end of it. The counter-measure —
+  aimed at the observed cause, not yet re-run — is to **write the payoff as
+  its own timestamped shot with its own share of the seconds**, compress the
+  build-up to pay for it, and name the result as a required visible event
+  (`the drop must be seen to leave the tip, land, and ring the surface`)
+  instead of trailing it off the end of a longer shot. That is what the
+  optional `PAYOFF` line in the template is for.
+- **A continuous state change can be one of the listed changes, if its
+  direction is pinned.** A consistency lock normally reads "nothing changes
+  except these things", and the things are discrete events. The same job also
+  let one *continuous* drift through, and it rendered correctly: the bars of
+  window light from the blinds were allowed to `only ever creep lower and
+  warmer, never brighter, never higher, and never change direction` — named
+  as the single permitted drift in a scene whose props were otherwise nailed
+  down. Opening and closing frames confirm the bars moved, and moved the
+  written way. One observation on one clip, but it means a dimming afternoon
+  or a cooling set does not have to be broken into discrete steps to be
+  controlled.
+- **An extreme macro inside a homogeneous liquid is the weakest showcase shot
+  on record here.** The same job's 2.1-second macro inside amber serum came
+  back as a near-flat colour field with two soft refracted light bands:
+  competent, and nothing to watch. The comparable shot into a carbonated
+  drink carried itself on rising bubbles (`7ae7d49e`). One observation each
+  way, so read it as a warning rather than a law — a liquid macro needs
+  something inside the liquid that moves.
 - **Do not ask the model for music.** The AUDIO slot above used to read
   `<upbeat | cinematic | minimal> instrumental; percussion hits synced to
   <the climax event>` — copied from cases 12 and 14, and **that is the shape
@@ -261,12 +308,16 @@ Notes on the slots:
 - **Slot pacing by tone**: Luxury runs 5s segments and slow moves (case 13);
   Playful runs 3s segments and cuts on the downbeat — the *cuts*, not the
   music the downbeat came from (cases 12, 14).
-- **Four or five beats is one or two beyond what has been verified here.**
-  Cuts inside one job were tested on Ofox at three shots in an 8-second clip
-  (see Several shots below); the gallery's five-to-nine-shot ads ran on
-  unrecorded platforms. Say so in the recap when the timeline has more than
-  three cuts, and drop VARIATION first if the cut count matters more than the
-  beat.
+- **Five beats in 15 seconds has now been run twice, and an uneven duration
+  split is honoured closely.** `7ae7d49e` and `60fbea52` are both 15s, 5
+  shots, 4 hard cuts, first frame attached, and both kept every cut. On
+  `60fbea52` the per-shot budget was planned 3 / 2 / 2 / 5 / 3 seconds and
+  rendered 2.62 / 2.13 / 1.87 / 5.63 / 2.79 — every segment within 0.4s of
+  its plan, including a deliberately lopsided split that gave the climax more
+  than twice any other shot. So spending the seconds by function rather than
+  evenly is a real instrument on this path, not a hope. (This bullet used to
+  warn that four or five beats was past what had been verified; that warning
+  was retired in 1.9.0, and this is what replaced it.)
 
 ### Template B — 10 seconds or less, three beats
 
@@ -428,16 +479,39 @@ editor, the way it does on a real spot. Shape and phrases: the shared file's
 `Dialogue and sound`, and `Asking for music can fail output moderation on
 copyright` for the measurement.
 
+**A loudness written per shot is not honoured — write what each shot
+contains, not how loud it is.** Measured on job
+`60fbea52-b14b-4796-80bf-03afe0aa4fa0`, whose shot 2 read `Sound: room tone,
+nothing else, very quiet` and came back as the loudest sustained passage in
+the clip. Mean level per second: about -44.6 and -43.3 dB over the opening
+shot, then -27.8, -24.3 and -27.0 dB across shot 2, back to roughly -37 to
+-41 dB for the middle of the clip, and -47.7 then -54.4 dB in the last two
+seconds. Two thirds of that AUDIO block did work: the loudest transients land
+exactly where sound effects were written — peaks of -10.1 dB at 7-8s (the
+pipette lifting) and -11.9 dB at 10-11s (the drop) — and the close thinned to
+near silence as asked. What was ignored is the *relative* level between
+shots. So **do not plan a clip whose effect depends on one shot being quieter
+than its neighbours**; name each shot's sounds and leave the mix to an
+editor, the same way the music goes on afterwards.
+
 ### 5. Text on screen: lock it, or design it out
 
-Two measured facts pull in opposite directions, and both are usable.
+Two measured facts pull in opposite directions, and both are usable — plus
+one refinement of the second, from the run that tested it hardest.
 
 - **Text you want** — a brand name, a wordmark — is reliable if it exists on
   the attached first frame and the video only has to preserve it. Job
   `7ae7d49e` closed on a legible wordmark in the frame's own typeface,
   because the label was approved on the still first. Rendering the same text
   from a description is the classic failure; read the label at full size
-  before spending on the clip.
+  before spending on the clip. Confirmed a second time on `60fbea52`, where
+  the label word `AURA` survived unaltered in every shot it appeared in
+  **and** the same word rendered correctly as an end card in an empty patch
+  of wall. What was written for it: the reference frame declared `the only
+  authority on how this product looks`, the letterforms and the letter
+  spacing named as invariants, and an explicit ban — `do not regenerate,
+  redraw, restyle, re-letter, translate or reword the label`, and no second
+  word, slogan, barcode or volume marking added to it.
 - **Text you don't want** is best removed by the set, not by the negative
   list. Both ads in this batch produced **zero** invented signage, and the
   reason is that a near-black studio and an empty bright studio contain no
@@ -445,6 +519,42 @@ Two measured facts pull in opposite directions, and both are usable.
   list named signs, posters and characters in any language and still returned
   sign-like shapes (`41f87ac7`). Detail: `Unwanted text is designed out of
   the set, not forbidden in the list` in the shared file.
+- **Where the set cannot be emptied, forbid the objects rather than the
+  text.** The two studio ads are the easy case: nothing in a near-black or an
+  empty bright studio can grow signage, so the rule was never really tested
+  by them. Job `60fbea52` is the hard case and the strongest data point in
+  this repo — a **desk**, where book spines, notebooks and loose paper are
+  the classic failure mode, and a brief that wanted a real brand word legible
+  in the same frame. It came back with **zero** invented text. Two things
+  were written for it, both more specific than a negative list: the wall was
+  specified as `entirely bare — no shelf, no book, no picture, no poster, no
+  notice and no printed surface of any kind anywhere in the room`, and AVOID
+  named every carrier of printed matter one by one — book, book spine,
+  notebook, sticky note, paper, envelope, card, packaging box, carton,
+  magazine, newspaper, phone, laptop, screen, shelf, picture frame, poster,
+  signage. So the shared rule stands and gains a clause: design the text out
+  of the set where the set allows it, and **in a setting that naturally
+  contains printed matter, name and exclude each carrier as an object** — a
+  bare "no text" has already failed once, on a neon street (`41f87ac7`),
+  while an object-by-object exclusion has held once, on a desk.
+
+### 6. What the AVOID list has held, and what it has lost
+
+The list is worth writing and it is not a guarantee. An honest record of this
+scenario's own accepted runs, so nobody plans a shot around an item that has
+already failed:
+
+| AVOID item | Record |
+|---|---|
+| any text other than the brand word | **no invented text in any of the three** ads, including once in a text-hostile set — see 5 above. The work was done by the set and by the object-by-object exclusion, not by the phrase "no text" |
+| `no lens flare stars, no sparkle particles` | **lost once.** A small starburst glint sits on the drop at about 9.6s of `60fbea52`, in a clip whose AVOID named both. Minor, arguably attractive, and not asked for |
+| `never more of the hand than the fingertips and first knuckle` | **lost once**, and it was stated twice in the same prompt — see the framing-order slot note in Template A |
+| music, score, named instruments | not really tested by the list: what keeps music out is not asking for it (4 above), and the one prompt that did ask was refused before it rendered |
+
+Two of those rows are a single observation each. What they add up to so far
+is a shape rather than a rule: **an item that removes a whole class of object
+from the set holds better than one that asks for a fine-grained quantity, or
+for the absence of a small visual flourish.**
 
 ### If the user has an actual product photo
 
@@ -483,7 +593,21 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 `ofox-video-core` forces `aspect_ratio` to `adaptive` on
 `bytedance/seedance-2.5` and prints a notice; the flag only takes effect on
 the pure text-to-video path. That is why the brief's Aspect question, when a
-photo exists, means "crop or pad the photo to this ratio first".
+photo exists, means "crop the photo to this ratio first" — cropping only,
+never padding, so nothing is invented at the edges. Confirmed again on
+`60fbea52`: a requested `16:9` was ignored, and the clip still came out
+1280x720 — because the frame had been cropped to 16:9 before it was attached,
+not because the flag did anything. On this route the crop is the only control
+over the clip's shape.
+
+**If the frame is generated rather than supplied, do not crop it by hand.**
+`60fbea52`'s was, and it took two manual steps (`1792x1024` → `1792x1008` →
+`1280x720`) because `ofox-image-core` had no flag for it at the time. It does
+now: pass `--target-aspect 16:9` (or `--target-size 1280x720`) to
+`ofox-image.sh generate` and the ratio is measured off the written file and
+cropped exactly, or the run fails loudly. That matters here more than in most
+places, because `adaptive` means a wrong-ratio image is charged at the price
+of the clip it opened.
 
 If the reference image includes an actual person (e.g. a spokesperson or
 model in the shot, not just the product), Seedance 2.5 image-to-video
@@ -557,14 +681,33 @@ the bare `0-3s: … Hard cut. 3-6s: …` form, one with a header manifest and
 `SHOT N (a-bs)` + `HARD CUT`.
 
 **This scenario has since pushed that envelope out itself, on the axes ads
-actually use.** Two accepted 720p jobs, both `bytedance/seedance-2.5` on
-`byteplus`, both with a generated product image attached as
+actually use.** Three accepted 720p jobs, all `bytedance/seedance-2.5` on
+`byteplus`, all with a generated product image attached as
 `--frame-first-image`:
 
 | Job | Shape | Result |
 |---|---|---|
 | `7ae7d49e-7eb9-4165-9d95-09cd525d53ed` | 15s, 5 shots, 4 hard cuts, hook/showcase/climax/close | all 4 cuts happened and the first frame held across them; the wordmark on the label stayed legible and in the frame's own typeface |
 | `ac927785-92ef-4e28-97b9-ff8172ec5554` | 20s, 7 shots, 6 hard cuts, a model entering mid-clip | all 6 present; 5 detected within about 0.3s of their stamps, the 6th visible frame by frame |
+| `60fbea52-b14b-4796-80bf-03afe0aa4fa0` | 15s, 5 shots, 4 hard cuts, hook / two showcases / climax / close, a hand entering the climax | all 4 cuts happened, detected at 2.62 / 4.75 / 6.62 / 12.25s; the per-shot split came in within 0.4s of plan; the first frame held from 0.3s to 14.9s — bottle, frosted finish, black collar and bulb, label, glass of water, eucalyptus sprig, desk grain and bare wall all unchanged |
+
+All three of those wrote **every** boundary as a hard cut — 4 of 4, 6 of 6,
+and 4 of 4 again — and all three kept every cut. Repo-wide that makes six
+runs whose written hard cuts all rendered (at shares of 3 of 8, 3 of 6, 5 of
+7, 4 of 4, 6 of 6 and now 4 of 4) against one that lost all three of its at a
+share of 3 of 9. The single list of those runs, and the reason the threshold
+is still unknown, is in the shared file's `Several shots in one job`; the row
+above is an entry in that record, not the start of a second one.
+
+For the reproducibility record the third one exists to be: seed `799906248`,
+billed 3.60 USD for the video (15s x 24 cents/s at 720p — image-to-video
+billed at the t2v rate again, not the dearer v2v rate) plus 0.154035 USD for
+the first frame on `openai/gpt-image-2` at `--quality high --size 1792x1024`,
+5063 output tokens. Delivered 1280x720 h264 at 24fps with a 32kHz stereo aac
+track, 15.04s; `generate_audio true`; `aspect_ratio` forced to `adaptive`.
+It is in the gallery as `aura-serum-ad`. Versions in force when it ran: this
+skill 1.9.0, `ofox-video-core` 1.14.0, `ofox-image-core` 1.4.0 — both
+dependencies have moved on since.
 
 So four or five beats is inside the measured envelope, and so is **an
 attached reference image combined with multiple cuts**, which the two 2026-09-03
@@ -616,6 +759,20 @@ at the duration, resolution and aspect ratio you settled on. When the choice
 between a 720p draft and a 1080p deliverable is still open, dry-run **both**
 and show two rows — the difference is a decision, and it reads as one only
 when both numbers are on screen.
+
+**When the first frame is generated rather than supplied by the user, that is
+a second row, and it is not a rounding error.** Measured on `60fbea52`'s
+frame: 0.154035 USD — 15.4 cents — on `openai/gpt-image-2` at `--quality
+high --size 1792x1024`, 5063 output tokens, against 3.60 USD for the 15s
+720p clip it opened. Quote it from `ofox-image-core`'s own `--dry-run`, with
+**the same `--target-aspect` the real call will use** — that flag decides
+which `--size` gets requested, and the size is half of what an image estimate
+is priced at. When that run was made, the estimate was anchored to a small
+`low`-quality pair and quoted ~0.6 cents for a frame that billed 15.4;
+`ofox-image-core` 1.7.0 made the lookup pair-aware, so the line now prices
+the pair being sent, or labels itself `ROUGH UPPER BOUND` when nobody has
+measured that pair. Relay the line as printed, label included — do not
+substitute a figure of your own in either direction.
 
 Afterwards the **actual** bill is `VIDEO_COST` from the finished job, read
 from `usage.video_cost`. Report it as money (`$3.60`), not as the raw
@@ -780,6 +937,8 @@ plus the ad-creative-specific ones:
 | Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated **output** failed a post-generation content check — happens after the job ran, not at submission. Not billed (no `usage` field on the response) | Retry with a brand-new `generate` call using a different prompt or reference image — a new request, not a resubmission of the failed one, so it's safe |
 | Exit `3`, job ends `failed`, `error.code: output_moderation_failed`, upstream message mentions **audio** copyright | The AUDIO block asked the model to generate music — measured on job `1ff72400-0f30-4be1-a417-f52d43955d09` with a cello note and a bell chime. Not billed | Rewrite AUDIO as room tone plus recorded sounds only, add the music words to AVOID, and re-run — a new request, safe immediately. See "4. No dialogue, no music — but a sound block" |
 | A real person is needed in the ad and the attached frame is refused | The frame itself contains the person. The refusal is about the attached picture, not the clip's content | Attach a frame of the **product alone** and write the person into the timeline as text — see "A model *and* a locked product: the route that works" |
+| The climax's build-up looks beautiful and the event itself never happens | The payoff was written as the tail of a longer shot. Measured once, on `60fbea52`: a drop hung from the pipette for the whole five-second climax and never landed, and the clip cut to the hero frame instead | Give the payoff its own timestamped shot with its own seconds, compress the build-up, and name the result as a required visible event — see the `PAYOFF` line in Template A and its slot note. This is a new prompt, so a new cost table |
+| One shot comes back louder than the shot written to be quieter than it | A loudness written per shot is not honoured. Measured on `60fbea52`, whose "very quiet" shot 2 was the loudest sustained passage in the clip; the sound *effects* did land where they were written | Nothing to fix in the prompt — name each shot's sounds and set the relative levels in an editor. See "4. No dialogue, no music — but a sound block" |
 | Invented signage or garbled lettering in the background | The negative list was relied on to remove it; on Ofox it is only partly obeyed | Change the set, not the wording: a background with no surface lettering can sit on returns zero text. See "5. Text on screen: lock it, or design it out" |
 | Exit `1`, `references_conflict` | `--frame-first-image` and an `input_references` array in `--extra-json` in the same job | Pick one meaning — first frame, or identity references — and drop the other |
 | `bad_data_uri` / `download_failed` / `unreachable` / `not_image` / `too_large` | `api-params.md` documents these as `real_person: true` image-validation failures, raised when Ofox fetches the reference image: it isn't a small, valid image the API can use (a remote URL that isn't publicly reachable, or a local file that failed to read/encode) | Prefer a local file (auto-base64'd, more reliable than some remote URLs — see above); confirm it's a real image file under the size limit and retry |

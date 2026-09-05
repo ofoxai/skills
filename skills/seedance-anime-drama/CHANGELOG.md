@@ -4,6 +4,85 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.9.1 — a dependency's chain reorder broke every image command in this file
+
+Docs only; no script changes. `ofox-image-core` made `openai/gpt-image-2` the
+head of its model chain on 2026-09-04. That model rejects `--quality
+standard` — HTTP 400, `Invalid value: 'standard'. Supported values are:
+'low', 'medium', 'high', and 'auto'`, nothing billed — and all four image
+commands in this file passed `standard` while pinning no `--model`, so every
+one of them resolved to the new head and failed at submission. Nothing here
+changed: they had worked verbatim right up to the reorder, because
+`microsoft/mai-image-2.5-flash`, the previous head, accepts `standard`. This
+is what a copy-pasteable command in one skill costs when the model it
+silently resolves to is chosen in another.
+
+- **Step 1 now passes two different values, on purpose.** An opening frame is
+  `high` — it is the clip's literal first frame, so its fidelity reaches the
+  deliverable, and `high` is what the one real run of this step used. A design
+  sheet is `medium` — a checking artifact, discarded once the design is
+  confirmed. The `Recommended defaults` row and the brief recap match. That
+  row's old reasoning ("the frame is a starting point, not the deliverable")
+  argued for a midpoint value that no longer exists on this model, so the
+  reasoning is rewritten rather than having the flag swapped underneath it.
+- **Approval 1's cost paragraph named the wrong model and the wrong number.**
+  It said "about 2.7 cents for `microsoft/mai-image-2.5-flash`", which is no
+  longer the chain's preferred model. Both of the current head's measured
+  points are now stated with the pair each was measured at: about 0.6 cents at
+  `low` / `1024x1024`, and **15.4 cents** at `high` / `1792x1024` (5063 output
+  tokens, the job's own reported `IMAGE_COST`) — a 26x spread from two flags,
+  whose cheap end was quoted on a real run for a frame that billed the dear
+  end. **The instruction is to relay the printed line verbatim, label and
+  all, not to substitute a figure by hand**: `ofox-image-core` 1.7.0 made the
+  lookup pair-aware the same day, so hand-correcting it now reintroduces the
+  error it was meant to prevent. Which label each of this skill's own
+  commands produces is spelled out — `16:9` at `high` resolves to a measured
+  pair and comes back plain `ROUGH`, while `9:16` at `high` and a `medium`
+  sheet have never been measured and come back `ROUGH UPPER BOUND` at the
+  same 15.4-cent ceiling. Both are correct; neither gets flattened into the
+  other.
+- **`--quality medium` has no measured token count on this model at any
+  size**, so the sheet's line is a labelled ceiling rather than an estimate.
+  Relay it as a ceiling; nothing is interpolated between two measured points.
+- New failure-table row for the `standard` rejection: that
+  `openai/gpt-image-2` accepts only `low`/`medium`/`high`/`auto` by its own
+  enumeration, that nothing is billed, that the cause was the dependency's
+  reorder, and the two fixes (one of the four accepted values, or pin
+  `--model microsoft/mai-image-2.5-flash`). It records **exit `1`, no network
+  call** — `ofox-image-core` 1.7.0 validates `--quality` against the resolved
+  model, so a `--dry-run` catches it for free — with the pre-1.7.0 exit `3` /
+  HTTP 400 shape noted as the older behaviour rather than the current one.
+- **Every opening-frame command now passes `--target-aspect`**, and the
+  hand-crop instruction is gone with it. This file used to say "check the
+  delivered file's real dimensions and crop it" and "crop or pad it before
+  Step 2"; `ofox-image-core` 1.6.0 added the flag that measures the written
+  file and centre-crops it exactly, and 1.7.0's guidance for scenario skills
+  says a skill producing a video first frame should treat one of the two
+  target flags as mandatory. It applies to the Step 1 commands, the worked
+  example and the Approval 1 dry run — which has to carry the *same* flag as
+  the real call, because the flag decides the `--size` the estimate is priced
+  at. The sheet command deliberately does not take it, and now says why: a
+  sheet is never attached to a video, so its ratio decides nothing. "Crop or
+  pad" is now "cropping only, never padding" throughout, matching the shared
+  reference, and the one remaining hand-crop is the honest one — an image the
+  user supplied.
+- **The `--size` paragraph described the old head's behaviour as if it were
+  everyone's.** Its three-way mismatch (request `1792x1024`, API reporting
+  `1354x774`, file `1344x768`) was measured on `mai-image-2.5-flash`, and
+  quoting a cost at `1792x1024` while that paragraph said a `1792x1024`
+  request does not come back at `1792x1024` left the file contradicting
+  itself. Both measurements are now attributed: the old head's three runs,
+  and the current head's single run where all three numbers agreed. The crop
+  step survives either way — `1792x1024` is 1.75, not 16:9, so an
+  exactly-honoured request still needs cropping to `1792x1008`.
+
+**What callers do**: stop passing `--quality standard` unless
+`--model microsoft/mai-image-2.5-flash` is pinned alongside it, and pass
+`--target-aspect` on anything that becomes a video's first frame. Relay the
+`Estimated cost:` line as printed, including an `UPPER BOUND` or `Weak
+ceiling` label — picking the right measured pair and cropping the frame are
+both the script's job as of `ofox-image-core` 1.7.0, not the caller's.
+
 ## 1.9.0 — the multi-cut-plus-frame combination is measured, the crop rule is measured, and the one-take has a movement floor
 
 Docs only; no script changes. One rejected anime clip
