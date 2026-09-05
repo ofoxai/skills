@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.15.0"
+version: "1.16.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.15.0"
+  version: "1.16.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -150,9 +150,11 @@ Every option `generate` takes works here. What `batch` adds:
   from each job's own `usage.video_cost` — never from the estimate.
 - **Every take reports its seed** (`TAKE 3 <job-id> seed=1852049 <cost> <path>`).
   This is what makes "take 3 was the good one" actionable: the takes differ
-  only by seed, so re-running the same prompt with that seed on a better model
-  or a higher resolution reproduces that take rather than rolling a new one.
-  Without the seed there is no way back to a specific take, only a reroll.
+  only by seed, so re-running the **same prompt** with that seed on a better
+  model or a higher resolution reproduces that take rather than rolling a new
+  one. Without the seed there is no way back to a specific take, only a
+  reroll. `same prompt` is load-bearing — see "Reproducing a shot" for how
+  little of it can change.
 - **`BATCH_COST_TOTAL` is the number to quote**, not `BATCH_COST_PER_TAKE`.
   Gacha means most takes go in the bin: if one take in three is usable, that
   clip cost you the whole total, because you paid for the two you threw away.
@@ -553,6 +555,24 @@ payload in `<out-dir>/.ofox-request-<job id>.json` for the poll to pick up
 and clean away. Poll into a different `--out-dir` and the handoff is simply
 not found — the sidecar omits `request`, nothing fails.
 
+**The seed reproduces a take only when the prompt is byte-identical**, and
+"byte-identical" is not a figure of speech. Measured on 2026-09-05: two jobs
+ran the same seed `642303335` at the same duration, resolution, aspect ratio
+and model, differing only in the wording of one paragraph in the middle of
+the prompt — and they came back with visibly *different subjects*, not merely
+different takes on one subject (a wide steel collar on a short body versus a
+narrow collar on a longer body, with the one asymmetric feature pointing the
+other way). Jobs `1cf5ac46-058f-4615-a47b-067743f76f8c` and
+`50f623b2-c54a-4d9d-9646-31dd06e2a926`.
+
+So the claim above stands and this is its boundary: the seed is the handle for
+"that one was good, render it properly at 1080p", where nothing but
+`--resolution` (or `--model`) moves. It is **not** a handle for "that one was
+good, now fix the third shot" — editing the prompt and keeping the seed does
+not preserve the parts you liked. Read the prompt back out of the sidecar
+rather than retyping it, which is what the `jq` line above is for; a retyped
+prompt is a new prompt.
+
 A sidecar that cannot be written is a warning, never a failed download — the
 video is what the user paid for.
 
@@ -659,6 +679,29 @@ nonzero with **no HTTP response at all** — exit code `5`), the script
 explicitly refuses to guess whether a job was created. Don't auto-retry;
 tell the user to check `https://app.ofox.ai` first.
 
+### The rule has now survived a real transport fault
+
+Until 2026-09-05 every clause above was a rule with no live test behind it —
+reasoned from the API's shape, never exercised by an actual broken
+connection. Two jobs that day dropped their TLS connection mid-poll:
+
+```
+curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to api.ofox.ai:443
+WARN: poll request failed (curl exit 35). Retrying the POLL (not create) in 6s...
+```
+
+**Both recovered on the retry and completed normally**, videos downloaded,
+costs reported. Jobs `1cf5ac46-058f-4615-a47b-067743f76f8c` and
+`50f623b2-c54a-4d9d-9646-31dd06e2a926`, 2.88 USD each.
+
+Two things that confirms. The poll retry is the right response to a transport
+fault — the job was running the whole time and the connection, not the job,
+was what broke. And the parenthetical in that warning line ("not create") is
+doing real work: a resubmit at that moment would have created a second
+billable job and doubled a 2.88 USD spend, on a fault that cleared by
+itself in six seconds. A dropped connection while polling is **never**
+evidence about the job's state.
+
 ## Error handling
 
 The script maps every documented `error.code` to a fixed, actionable
@@ -718,10 +761,12 @@ before writing a prompt.** It is the prompt-structure reference shared by
 every Seedance scenario skill: the vendor's own formula, the header-manifest
 -> timeline -> closing-block skeleton, when and how to timestamp segments,
 how many shots a clip of a given length actually carries in the gallery,
-transition and camera vocabularies, pacing, consistency locks and negative
-lists, dialogue density by tier, the two meanings of an attached image (frame
-lock vs. identity reference, and the `--extra-json` form for the latter), and
-endings — every item tagged with the gallery cases it was observed in. A
+transition and camera vocabularies, **why a camera move needs its waypoint
+frames and not just a verb**, pacing, consistency locks
+and negative lists, dialogue density by tier, the two meanings of an attached
+image (frame lock vs. identity reference, and the `--extra-json` form for the
+latter), and endings — every item tagged with the gallery cases it was
+observed in, or with the Ofox job ids it was measured on. A
 scenario skill keeps only its own template and links that file for the rest,
 exactly as it links `approval-gate.md` for the spend rule. This `SKILL.md`
 does not restate it: the script runs whatever `--prompt` it is given, and the

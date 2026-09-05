@@ -28,6 +28,15 @@ in the `awesome-seedance-2.5` repository and numbered 1–63 there. Case 28 is
 the vendor's own worked example. Chinese-language prompts are quoted here in
 translation — the wording is ours, the structure is theirs.
 
+**Two kinds of evidence, tagged differently.** A case number is gallery
+practice: a prompt somebody kept, on a platform and with parameters usually
+unrecorded. A **job id** like `50f623b2-c54a-4d9d-9646-31dd06e2a926` is an
+Ofox run made from this repo, where the parameters, the bill and the delivered
+frames were all read directly. Job ids are the stronger evidence and the
+narrower — usually one or two runs — so a section carrying them says how many.
+When the two disagree, the job ids win for behaviour on this API and the cases
+still win for what a good prompt looks like.
+
 **Frequency is not effect.** The gallery records prompts and their finished
 videos. It has no ratings, no A/B comparisons and, for most community entries,
 no generation parameters and no input assets. "Present in 32 of 63 prompts"
@@ -378,6 +387,20 @@ SHOT 3 - 0:10-0:15 / Visual: … / Camera: Medium-wide, slow push in … / Dialo
 
 Adapted from cases 1, 7, 22.
 
+Two slots here are traps, both measured, and both are about the *form* of the
+text rather than its content — see "A camera move needs its waypoint frames,
+not just a verb":
+
+- the fourth slot's `orbit` (and any other move with a destination) is a
+  summary the model may drop silently when it is the only thing written; add
+  waypoint frames at their own stamps beside it, and expect their interior
+  stamps to be approximate;
+- **the shot-size slot is not optional on any segment.** Leave it out and the
+  segment inherits the previous one's framing, which is how a move written
+  correctly still came back at the wrong closeness for its whole duration —
+  and took one of its waypoints' content with it, since the feature that
+  waypoint described was outside the inherited frame.
+
 ## Several shots in one job
 
 The gallery holds many prompts that ask for **several hard cuts inside a
@@ -483,10 +506,13 @@ longer or higher-resolution take.
 
 ### Checking the cuts: read frames, never a detector count alone
 
-Scene detection at threshold 0.3 under-reports cuts, and it does so in one
-predictable way: **two shots in the same place under the same light have too
-little pixel difference to trigger it.** Four of the six runs above hit this,
-which makes it the normal case for a dialogue scene rather than a curiosity.
+Scene detection under-reports cuts, and it does so in one predictable way:
+**two shots in the same place under the same light have too little pixel
+difference to trigger it.** Four of the six runs above hit this at threshold
+0.3, and **both clips of a later text-to-video pair hit it at the looser
+0.25** — which makes it the normal case for any scene that stays in one
+location, not a curiosity of dialogue coverage, and not something a lower
+threshold fixes.
 
 | Job | What the detector missed | What the frames show |
 |---|---|---|
@@ -494,6 +520,17 @@ which makes it the normal case for a dialogue scene rather than a curiosity.
 | `036ac3a8` | the 9s hard cut, the mother's close-up to the son's | t=8.5s is the mother, t=9.0s is the son |
 | `7ae7d49e` | 2 of its 4 cuts | all four are there; the same product under the same studio light sits on both sides of each |
 | `ac927785` | the 10.5s boundary, the entry into the slow-motion shot | the shot size changes visibly across it |
+| `1cf5ac46` | the third cut, at **9.750s**, **at threshold 0.25** — while the cuts at 3.12s and 6.00s were found in the same pass. It appears only once the threshold is dropped to **0.05** | one uniform grey studio for the whole clip, so the two shots either side of the missed boundary differ by less than the two shots either side of a boundary it caught |
+| `50f623b2` | the third cut, at **10.041667s**, also at threshold 0.25 — and this one needs **0.10** before it registers | the same uniform grey studio; this is `1cf5ac46`'s controlled twin, so the two of them are the same set and the same light with the same boundary missed |
+
+**Those last two rows are the strongest form this finding has taken, because
+they are a pair and their misses are at two *different* thresholds.** Same
+subject, same set, same light, same seed, one paragraph of prompt apart — and
+the boundary that a 0.25 pass could not see needed 0.05 in one clip and 0.10
+in the other. **No single lower number would have caught both**, which is
+what "not something a lower threshold fixes" means concretely: the threshold
+that works is a property of the individual clip, discovered after the fact,
+which is not a setting anyone can choose in advance.
 
 So a detector count is where a check starts, never where it ends. Sample the
 delivered file (1–2 fps is enough) and read the frames either side of every
@@ -501,6 +538,47 @@ written stamp. A missing detection on a shot/reverse-shot pair says nothing
 about whether that cut happened — and a detection *reported* inside a written
 continuous boundary may be the camera move's own frame change rather than a
 cut, which is what `844c9145`'s no-cut pull-back above looks like.
+
+**The converse is worth stating too, because it is easy to bank: a
+detector reporting nothing inside a segment you asked to be continuous is
+weak evidence that it is.** In `50f623b2` the 0.25 pass reported no boundary
+inside the ORBIT segment, which is what `no cut anywhere inside this segment`
+asked for — but the same pass also missed the real boundary at the end of
+that segment. A pass that demonstrably cannot see one cut in a clip has not
+established the absence of another one three seconds earlier. Read the frames
+for that claim as well.
+
+### Measuring a camera's travel: only inside one continuous shot
+
+The check above is about *whether* a boundary exists. This one is about a
+measurement people reach for immediately afterward — how far the camera moved
+— and it has its own precondition, which is the same class of mistake:
+trusting a reading whose conditions were never checked.
+
+**A camera's azimuth is only measurable within a continuous shot.** Across a
+cut the camera can be anywhere, so how far it travelled cannot be read off
+two endpoints that span the cut — the cut itself may have supplied the
+difference. And even inside a continuous shot the reading depends on the
+subject carrying an **asymmetric feature** to track; a rotationally
+symmetric subject removes the orientation cue entirely and there is nothing
+to measure against.
+
+Both halves were learned the expensive way, on `50f623b2`'s orbit, which was
+measured wrongly twice in opposite directions before it was measured within
+its limits:
+
+| Attempt | Endpoints used | Result claimed | Why it was wrong |
+|---|---|---|---|
+| 1 | the moving segment's own first frame → its last | about 180 degrees, presented as the total, and never back to the front | the segment *starts* at the rear, so its first frame is not the clip's front view. The return is demonstrably there and this reading denied it; the 180 was right about the segment's interior and wrong to call it a total |
+| 2 | the clip's opening frame (2.8s, before the cut at 6.291667s) → the segment's last | the full 360 completed and returned to the front | the endpoints are not connected by continuous motion: the hard cut sits between them, and the shot before it is a macro of a knurled ring — rotationally near-symmetric, so it carries no azimuth at all — over-reads the travel |
+| 3 | endpoints inside the continuous segment, plus one orientation match against the opening frame | the segment ends on the opening orientation; travel inside it is rear → side → front, about 180 degrees; **total travel unmeasurable** | the two claims the frames support, and the limitation that comes with them |
+
+So the honest form of a rotation finding is often a limitation rather than a
+verdict: **the move ends where it was written to end; how far it travelled is
+unmeasurable in this clip.** That is a smaller claim than either wrong one,
+and it is the one that survives. Write it that way and check the arrival
+against a named frame — see "A camera move needs its waypoint frames, not
+just a verb".
 
 ### Where `chain` fits
 
@@ -546,12 +624,208 @@ Hard cut. <Shot size>, <subject> <action>.                                      
 The camera pushes through <gap / window / curtain> into <next space>.                                                            (pass-through — cases 13, 58)
 ```
 
+## A camera move needs its waypoint frames, not just a verb
+
+**What is described as a picture gets rendered. What is described only as a
+motion does not.** Two Ofox runs on 2026-09-05 turned that from a suspicion
+into a controlled result, and it changes how every camera and action line in
+this file should be written: a move is specified by the frames it passes
+through — each with a timestamp and its own shot size — while a verb like
+`orbits`, on its own, is a summary of those frames rather than an instruction
+that produces them.
+
+Decomposed into frames, the move happens **and it arrives**: the run below
+was asked to end on a named frame and ended on it. How far it travelled to
+get there is a separate question, and one this clip cannot answer — see
+"What the arrival does and does not establish" below. What survives the
+decomposition least well is the *schedule* — see "The timing between
+waypoints is approximate".
+
+The failure mode of the undecomposed form is silent. The clip comes back
+looking competent, minus the movement that was asked for, which is why it
+survives a glance and only shows up when the frames are read.
+
+### The three observations, weakest to strongest
+
+| Job | Shape | What was written | What rendered |
+|---|---|---|---|
+| `60fbea52-b14b-4796-80bf-03afe0aa4fa0` | 15s, 720p, i2v, accepted | at `10.5-12s`, back at full speed, a drop `lands on the surface of the oil in the bottle, one clean ring spreads out and dies against the glass` — the tail of a five-second climax whose earlier beats described the build-up | the build-up rendered beautifully: a drop swelling at a glass tip, lit through. **The payoff never happened** — at 11.8s the drop still hangs from the pipette, and at 12.25s the clip cuts away |
+| `1cf5ac46-058f-4615-a47b-067743f76f8c` | 12s, 720p, **t2v**, seed `642303335`, rejected | `the camera orbits the grinder a full 360 degrees at constant height and constant speed, ending back at the front view. The product does not move and does not rotate; only the camera travels.` | 6.0s to about 9.7s is a near-static front view with a slight push-in, the crank arm pointing right in every frame. **The negative clause held and the positive instruction produced nothing** — the product genuinely never rotated, and the camera genuinely never travelled |
+| `50f623b2-c54a-4d9d-9646-31dd06e2a926` | **same seed, same parameters, same prompt except that one paragraph**, accepted | the paragraph rewritten as waypoint pictures, e.g. `at about 8s the camera is directly behind the grinder, the crank arm pointing away from the lens so that only the smooth back of the brushed steel collar and the walnut knob beyond it are visible` | that picture rendered: the arm entirely hidden, only the knob above the collar — its appearance clause, at least; the same waypoint's position label contradicts its own appearance clause, so the run cannot say which half was followed. **The camera moved, and the segment ended on the orientation it was told to end on** — inside the continuous segment (the hard cut at 6.291667s to about 10s) the frames read rear → side → front, roughly 180 degrees, finishing on the opening frame's own orientation. Whether it travelled further than that is **unmeasurable here** |
+
+The third row is the controlled experiment: one variable, one seed held
+constant, with the second row as its negative control on the same subject. It
+is also still two runs — read it as a direction with one clean test behind it,
+not as a measured law.
+
+### What the arrival does and does not establish
+
+The subject is its own protractor, which is the only reason any of this is
+readable: the grinder's crank arm rises from the centre of the collar and
+bends once at a right angle, so it extends cleanly sideways from the **front
+or the rear** (mirrored between the two) and hides behind the collar from
+either **side**, leaving only the knob visible above it. The clip's front
+view is fixed by the frame at 2.8s, at the end of the shot before the orbit:
+knob at the left, arm extending cleanly sideways.
+
+Inside the continuous ORBIT segment — the hard cut at 6.291667s to about 10s
+— the frames read:
+
+| Time | What the frame shows | Camera |
+|---|---|---|
+| 6.40 – 8.40s, six sampled frames | knob at the right, arm sideways | the rear |
+| ~8.80 – 9.20s, the crossing | arm hidden, only the knob above the collar — dead centre above it at 9.00, offset right at 8.80 and left at 9.20 | a side — the one axis crossing visible on screen |
+| 9.60 – 10.00s | knob back at the left, arm sideways | the front, matching 2.8s |
+
+Two claims and one limitation:
+
+1. **The segment ends on the orientation it was written to end on.** The
+   return worked, and it was written as a named frame — `back on the exact
+   front view of the opening shot` — rather than as a quantity of rotation.
+2. **The observable travel inside the segment is rear → side → front, about
+   180 degrees.**
+3. **The total travel is not measurable at all.** The written path's other
+   half, front to rear, could only have happened across the hard cut at
+   6.291667s, and azimuth is unreadable there — the shot before the cut is a
+   macro of the knurled ring, rotationally near-symmetric, carrying no
+   orientation cue. The segment simply *starts* at the rear; whether the
+   camera travelled there or was cut there cannot be told from this clip.
+
+So the finding is "the move arrives", not "the move completes a circuit".
+Both of the wrong readings this repo published first, and the precondition
+they each skipped, are in "Measuring a camera's travel: only inside one
+continuous shot" above — read it before measuring a rotation off any clip.
+
+### The timing between waypoints is approximate
+
+The pictures rendered and the arrival landed; **the spacing between them did
+not hold.** Ten frames sampled at 0.4s intervals across 6.4–10.0s of
+`50f623b2`, against four written waypoints at 7s, 8s, 9s and the return by
+10s — three interior views and the ending frame, evenly spaced on paper:
+
+- **Three interior views were written; two appeared** as distinct pictures
+  (the rear, and one side). The third never appeared at all.
+- **Six of the ten sampled frames are the same picture.** 6.40, 6.80, 7.20,
+  7.60, 8.00 and 8.40 all read crank-right; 8.80 is the transition. So
+  roughly 2 seconds near-stationary, and the rest of the move compressed into
+  about 1.2 seconds.
+- **The arrival was on time**, on the orientation named for it.
+
+Those are counts and durations, deliberately, and not a per-waypoint
+schedule: which written waypoint a given rendered frame corresponds to is not
+attributable here, because each waypoint carried both a camera-position label
+and an appearance description and on one of them the two contradict each
+other. "This waypoint was a second late" is a sentence this run cannot
+support, and an earlier version of this subsection wrote it anyway — as a
+four-row table pairing each written stamp with a verdict. That table is
+retracted, not merely reworded.
+
+Two consequences, and they are the practical half of this section:
+
+- **Do not plan a segment in which a specific angle has to land at a specific
+  second.** If a beat must be frame-accurate — a cut on it, a line spoken
+  over it — give it its own shot or its own job rather than trusting an
+  interior waypoint's stamp. This is the same tolerance the cut timestamps
+  have, and for the same reason (see "Several shots in one job").
+- **Do not write more interior waypoints than the segment can absorb.** Four
+  waypoints in four seconds lost one of them. Two or three across a move,
+  with the endpoints carrying the ones that matter, is what has been observed
+  to survive.
+
+So the boundary is not "long prompts fail", and it is not "orbits fail". A
+move written as frames happens and arrives; what stays soft is *when* each
+intermediate frame turns up, and how many of them turn up at all.
+
+### What that means for writing
+
+- **State every angle, position or beat you actually need as a still frame
+  with a timestamp**: what is in shot, what is hidden, what is foreshortened,
+  from where. That is the form the model honours.
+- **Give each waypoint its own shot size**, because an unspecified one does
+  not merely crop the picture — it can silently delete part of what a
+  waypoint asks for. A segment inherits the framing of the one before it
+  unless told otherwise: in `50f623b2` the whole move ran at the macro
+  closeness of the detail segment preceding it, so the subject's base was out
+  of frame for every waypoint. One waypoint then became **physically
+  unrenderable** — it asked for a knurled ring seen edge-on, and that ring
+  was outside the frame for the entire move, so half of that waypoint's
+  content had nowhere to appear. The framing was inherited rather than
+  chosen, and it took a waypoint's meaning with it.
+- **A small, fast physical event needs to be its own timestamped frame**, not
+  the tail of a longer beat. A drop landing, a ring spreading, a latch
+  closing: compress the build-up to pay for it, give the result its own stamp,
+  and name it as a required visible event (`the drop must be seen to leave the
+  tip, land, and ring the surface`) rather than trailing it off the end of a
+  shot whose earlier seconds already handed the model something it is good at
+  drawing.
+- **Two or three waypoints are enough for a move**, one every few seconds, at
+  the lengths in "Segmenting the timeline". The point is not to enumerate
+  frames; it is that the frames you care about exist in the prompt *as*
+  frames. Four in four seconds is past what one measured segment absorbed —
+  see "The timing between waypoints is approximate".
+- **A total quantity is fine as long as it is not the only thing you wrote.**
+  `a full 360 degrees, ending back at the front view` was in the prompt that
+  worked, and the frame it named is the frame the move ended on — so the
+  quantity is not recorded here as a failing form, and an earlier version of
+  this section wrongly said it was. It is not the mechanism either: what made
+  the move happen was the waypoint pictures beside it. Nor is there any
+  evidence the 360 itself was performed — that is the unmeasurable half above.
+  Keep the quantity if it reads well, and put the closing angle in as a
+  picture at its own stamp, because the picture is the part that can be
+  checked.
+
+### Negative clauses are honoured more reliably than positive ones
+
+In `1cf5ac46` one sentence carried both a prohibition and an instruction, and
+only the prohibition survived. Two working rules follow:
+
+- **A prohibition is not evidence that the corresponding action will occur.**
+  Do not read `the product does not rotate; only the camera travels` as two
+  halves of one working instruction. The second half needs waypoints of its
+  own, and the first half holds with or without them.
+- It matches what negative wording does elsewhere in this file: under
+  "Unwanted text is designed out of the set, not forbidden in the list", a
+  negative item held in a set with no lettered surfaces and failed on a street
+  full of them. Prohibitions that remove a whole class of thing are the
+  reliable end of the range; a positive instruction with nothing but a verb
+  behind it is the unreliable one.
+
+### Waypoint block to copy
+
+Replaces a bare `the camera orbits <subject>` in any timeline — keep the
+quantity alongside it if you like, but these lines are what makes the move
+happen. Slots in `<angle brackets>`; every line is a picture, and each names
+its own shot size. Three waypoints, not four: the stamps are approximate and
+an interior one can be absorbed.
+
+```
+<6–7s>    <shot size>, camera at <position: three-quarter front right, at <subject> height>. <What is visible from there: the <feature> foreshortened toward the lens, <surface> catching the key light>. <sound for this beat>
+<7–8.5s>  <shot size>, camera <directly behind / on the far side of> <subject>. <What is hidden from there: the <feature> points away from the lens, so only <what remains> is visible>.
+<8.5–10s> <shot size>, camera at <the mirrored position>. <What is visible again, and how it differs from the first waypoint>.
+```
+
+Adapted from the three pictures `50f623b2` actually delivered — two interior
+views and the arrival — rather than from the four its prompt asked for; field
+order is the one in "Field order inside a segment". Nothing here asks for
+music — check "Asking for music can fail output moderation on copyright"
+before adding an audio line to it.
+
 ## Camera language
 
 These are the sub-dimensions of the vendor's "camera movement or cuts" slot:
 **shot size, camera position, camera movement, focus subject** (the slot's own
 definition) plus **shot linkage** (see "Transitions"). Composition and lens/format
 parameters are community additions to the same slot.
+
+**This is a vocabulary, not a specification.** Every phrase below is quoted
+from a collected prompt, and the "Camera movement" table in particular is
+full of the summary form that the section above — "A camera move needs its
+waypoint frames, not just a verb" — measured as unreliable on Ofox when it is
+*all* the prompt says. Use these words to name what a move is,
+then write the frames it passes through to actually get it. A move that only
+has to hold the frame roughly where it is (`locked`, `handheld sway`, a push
+inside one beat) is safe as a phrase on its own; one that has to arrive
+somewhere specific needs the waypoints too.
 
 ### Shot size
 
@@ -627,7 +901,12 @@ by `--resolution`, not by the prompt.
 <Shot size>, <camera position>, <movement>; <lens / format, if any>. Focus on <subject>; <foreground / background softness>. <Subject> stays <centered / slightly left> and never leaves frame.
 ```
 
-From cases 28, 3, 22.
+From cases 28, 3, 22. The `<movement>` slot is the one to be careful with:
+fill it with a texture the camera keeps for the whole beat (`locked with a
+breathing sway`, `restrained handheld`) rather than with a destination. If the
+camera has to *get somewhere*, that belongs in waypoint frames — "A camera
+move needs its waypoint frames, not just a verb" — and this line carries only
+the lens, the focus and the framing rule.
 
 ## Pacing
 
@@ -662,6 +941,13 @@ Each segment shows one action only. <Climax event> drops into slow motion for on
 ```
 
 From cases 18, 12, 41, 29.
+
+`<Climax event>` needs one more thing than this line gives it when the event
+is small and fast — a landing, a snap, a ring spreading. Measured on job
+`60fbea52-b14b-4796-80bf-03afe0aa4fa0`: written as the tail of a five-second
+climax, the build-up rendered and the event itself was dropped. Give the
+result its own timestamp and its own frame, per "A camera move needs its
+waypoint frames, not just a verb".
 
 ## Consistency locks and the negative list
 
@@ -1057,6 +1343,25 @@ score in the first two as something laid in afterward by an editor, not
 asked of the model — see "Asking for music can fail output moderation on
 copyright".
 
+Four of the eight rows above are camera moves rather than pictures, so they
+inherit the caveat in "A camera move needs its waypoint frames, not just a
+verb": **write the last frame as a picture as well as the move that arrives at
+it.** `pulls back slowly, showing how small she is in the vast
+garden` is the model to copy, because it says what the final frame contains;
+a bare `pull back to a wide` leaves the arrival unspecified, and an
+unspecified arrival is the form a measured run dropped entirely. Freeze,
+black and fade need no help — they are states, not destinations.
+
+**`hold the final frame` is not honoured as a freeze, and the two clips that
+show this are a controlled pair.** Both grinder clips closed on that
+instruction; measured over each one's last half second, `1cf5ac46` really is
+still (every frame under a 0.0005 scene score) while `50f623b2` is not — six
+frames above 0.0005 and one above 0.002, a visible drift rather than a hold.
+Same instruction, same seed, same everything but one paragraph earlier in the
+prompt, and only one of them held. So write the hold if you want it, and
+expect a settle rather than a freeze; if the last frame genuinely has to be
+frozen, that is an editing step, not a prompt clause.
+
 ### Ending line to copy
 
 ```
@@ -1084,21 +1389,31 @@ From cases 29, 26, 24, 5.
    3 of 8 of the boundaries, and held none in the one job below that (see
    "Past that envelope").
 5. **Every segment runs time → shot size / position → action → dialogue →
-   sound** (cases 1, 7, 22).
-6. **Dialogue is speaker + quoted line + delivery note, in the language to be
+   sound** (cases 1, 7, 22), **with its own shot size stated** — a segment
+   that omits it inherits the previous segment's framing.
+6. **No movement is left phrased only as a movement.** Every angle, position
+   and beat that has to appear is written as a still frame at its own
+   timestamp, with its own shot size — a bare `the camera orbits it` and a
+   small fast event trailing off the end of a longer beat are the two forms
+   measured as silently dropped (see "A camera move needs its waypoint
+   frames, not just a verb"). Two or three waypoints per move, and **no beat
+   that has to land on an exact second**, since interior stamps
+   drift and one can be absorbed. A prohibition in the same sentence is no
+   evidence the instruction beside it will run.
+7. **Dialogue is speaker + quoted line + delivery note, in the language to be
    spoken, budgeted by tier** — drama far under 2–3 words/s, talking head
    about 3.5 words/s (cases 3, 20, 22).
-7. **A consistency lock that enumerates invariants, and a negative list that
+8. **A consistency lock that enumerates invariants, and a negative list that
    names the style you are not making** (cases 44, 3, 57, 25).
-8. **Every attached asset has a role sentence** ("image1 provides X; ignore
+9. **Every attached asset has a role sentence** ("image1 provides X; ignore
    Y"), and the job uses **either** a frame lock **or** identity references,
    never both (cases 34, 40; `api-params.md`).
-9. **No photoreal person in a `bytedance/seedance-2.5` attached frame** —
+10. **No photoreal person in a `bytedance/seedance-2.5` attached frame** —
    people generated from the prompt text are fine; **aspect ratio decided
    before any image is generated**, and the image file's real pixels
    measured and cropped, since adaptive follows the image
    (`api-params.md`, "What a frame lock actually holds, measured").
-10. **An ending is stated** — freeze, black, pull-back or fade — paired with
+11. **An ending is stated** — freeze, black, pull-back or fade — paired with
     its sound (cases 5, 26, 24). If the sound includes music the model has to
     invent, expect `output_moderation_failed` on copyright (see "Asking for
     music can fail output moderation on copyright").
@@ -1106,4 +1421,7 @@ From cases 29, 26, 24, 5.
 Then `--dry-run`, the cost table, and a yes — `approval-gate.md`. Afterwards,
 check the delivered file by reading frames, not by counting a scene
 detector's hits — "Checking the cuts: read frames, never a detector count
-alone".
+alone" — and before claiming how far a camera travelled, check that the
+endpoints you measured are inside one continuous shot and that the subject
+has an asymmetric feature to read the angle off: "Measuring a camera's
+travel: only inside one continuous shot".

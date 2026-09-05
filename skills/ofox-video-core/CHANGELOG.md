@@ -4,6 +4,209 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.16.1 — how far that camera went is unmeasurable, and 1.16.0 said it completed a circuit
+
+Docs only; no script changes. **This entry corrects 1.16.0, which is in the
+same unreleased state as this one — read them together rather than treating
+the newer one as an addition.** 1.16.0's headline finding stands: a camera
+move written only as a verb produced no movement, and the same move written
+as waypoint pictures produced movement and landed on the frame it named.
+What it got wrong is the *extent* of that movement, which it recorded as a
+completed 360-degree circuit. It is not measurable at all, and an
+intermediate draft before it had the error in the other direction — about
+180 degrees and no return. Three published readings of one clip, two of them
+wrong, which is why the general rule now sits in the file as its own section
+rather than as a note on this job.
+
+- **New shared subsection, `Measuring a camera's travel: only inside one
+  continuous shot`** (`references/prompt-structure.md`, immediately after
+  `Checking the cuts: read frames, never a detector count alone`, because it
+  is the same class of mistake — trusting a reading whose preconditions were
+  never checked). **A camera's azimuth is only measurable within a continuous
+  shot**: across a cut the camera can be anywhere, so travel cannot be read
+  off endpoints that span the cut, and the reading also needs the subject to
+  carry an asymmetric feature to track. A three-row table gives both wrong
+  attempts, the endpoints each used and the precondition each skipped —
+  attempt 1 measured from the moving segment's own first frame and under-read,
+  attempt 2 measured across the hard cut at 6.291667s and over-read.
+- **`50f623b2` now claims an arrival, not a circuit.** Inside the continuous
+  ORBIT segment the frames read rear → side → front, about 180 degrees,
+  ending on the orientation the clip's own 2.8s frame establishes as the
+  front. The written path's other half could only have happened across that
+  hard cut, and the shot before it is a macro of a knurled ring — rotationally
+  near-symmetric, no orientation cue — so the segment simply *starts* at the
+  rear and nothing distinguishes travelling there from being cut there. New
+  subsection `What the arrival does and does not establish` carries the frame
+  table, the two claims and the limitation; the section's preamble, the
+  three-observation table, the `total quantity` bullet and the `Waypoint block
+  to copy` note all match it now.
+- **The per-waypoint timing table is retracted, not reworded.** 1.16.0 paired
+  each written stamp with a verdict ("8s — about a second late"), which the
+  confound recorded in the same release makes unattributable: each waypoint
+  carried both a position label and an appearance clause, and on one of them
+  the two contradict each other. `The timing between waypoints is
+  approximate` now gives counts and durations only, and says the table was
+  retracted so nobody restores it.
+- **The near-stationary stretch is six sampled frames, not five.** 6.40, 6.80,
+  7.20, 7.60, 8.00 and 8.40 all read crank-right, with 8.80 the transition —
+  so roughly 2 seconds near-stationary and the rest of the move compressed
+  into about 1.2 seconds. Wherever 1.16.0 said five of ten frames, it was
+  short by one.
+- **An unspecified shot size deletes waypoint content, it does not just crop
+  the picture.** In `50f623b2` one waypoint asked for a knurled ring seen
+  edge-on and that ring was outside the inherited macro framing for the whole
+  move, so half of that waypoint had nowhere to render. `What that means for
+  writing` and the `Segment skeleton to copy` trap note both say this now: a
+  missing beat can be the prompt's own doing rather than the model ignoring
+  it.
+- **The scene-detector blind spot is a pair, at two different thresholds** —
+  the strongest form this finding has taken here. 1.16.0 recorded one clip's
+  miss at threshold 0.25. Both clips of the pair hid a real boundary at 0.25,
+  and they needed **0.05** (`1cf5ac46`, at 9.750s) and **0.10** (`50f623b2`,
+  at 10.041667s) respectively before it registered. No single lower number
+  would have caught both, which is what "a lower threshold does not fix it"
+  means concretely. `Checking the cuts` gains the second row and that
+  reading, plus the converse: a detector reporting nothing inside a segment
+  you asked to be continuous is weak evidence, since the same pass missed a
+  cut three seconds later in the same clip.
+- **`hold the final frame` buys a settle, not a freeze**, recorded in
+  `Endings`. Over each clip's last half second `1cf5ac46` is still (every
+  frame under a 0.0005 scene score) and `50f623b2` is not (six frames above
+  0.0005, one above 0.002) — same instruction, same seed, one paragraph
+  apart. Freeze in an editor if the last frame really has to stop.
+
+Every hedge 1.16.0 carried is still here — it is still two runs, and this
+pass makes the evidence narrower rather than broader. `references/ofox-video.sh`
+is untouched and all 271 assertions across the eleven suites still pass.
+
+## 1.16.0 — a camera that never travelled, and the same camera travelling once it was given frames
+
+Two runs on 2026-09-05 asked the same model for the same move twice, on one
+seed, changing nothing but the wording of a single paragraph. The first
+version — `the camera orbits the grinder a full 360 degrees at constant
+height and constant speed, ending back at the front view. The product does
+not move and does not rotate; only the camera travels.` — produced a
+near-static front view with the crank arm pointing right in every frame. The
+second version described the same move as a handful of still pictures, and
+the camera went round: measured against the clip's own opening view, 180
+degrees at 7.0s, the rear at 9.0s, back to the front at 10.0s. A controlled
+experiment with a negative control, and still only two runs.
+
+*(1.16.1 corrects the extent: the move arrives on the frame it names, its
+observable travel inside the continuous segment is about 180 degrees, and its
+total is unmeasurable because half the written path could only have crossed a
+hard cut. The waypoint finding itself stands. **Three things in this entry are
+superseded and are kept only as the record of what was claimed: every degree
+figure; every statement that the circuit completed; and every per-waypoint
+timing verdict — that last form was retracted rather than reworded, because
+each waypoint confounded a camera-position label with an appearance clause
+and no rendered frame can be attributed to a particular written stamp.**
+Read 1.16.1 first.)*
+
+- **New shared section, `A camera move needs its waypoint frames, not just a
+  verb`** (`references/prompt-structure.md`, placed immediately before
+  `Camera language`). What is described as a picture gets rendered;
+  what is described *only* as a motion may silently not happen. Three job
+  ids, weakest to strongest: a payoff dropped off the tail of a long climax
+  (`60fbea52`), the negative control (`1cf5ac46`), the rewrite that worked
+  (`50f623b2`). It is a top-level section rather than a subsection of `Camera
+  language`, because that section is a vocabulary of quoted phrases and this
+  is a rule about the grammar of a clause — and because it governs the
+  timeline and the pacing sections just as much.
+- **The move completes; the schedule does not.** *(Superseded by 1.16.1 in
+  both halves: the completion is unmeasurable, and the per-waypoint verdicts
+  below are retracted. What survives is the shape — two of three interior
+  pictures rendered, six of ten sampled frames were the same picture, and the
+  spacing did not hold.)* `50f623b2` delivered its full circuit, but of four
+  written waypoints the 7s and 10s endpoints landed
+  on time, the 8s one arrived about a second late, and the 9s one never
+  appeared as a distinct beat at all — absorbed, with the move lingering on
+  one side through roughly 6.4-8.4s and covering rear-to-front in the last
+  second and a half. So: two or three waypoints per move, endpoints carrying
+  the ones that matter, and **no beat planned to land on an exact second** —
+  give that its own shot instead. Sampled at 0.4s intervals; the table is in
+  the section.
+- **How to measure a rotation without getting it wrong**, recorded because
+  the first pass at these frames did. *(This bullet is the second wrong
+  reading, not the method: measuring from the clip's opening view reaches
+  across the hard cut at 6.291667s and over-reads the travel. 1.16.1 replaces
+  it — both endpoints have to sit inside one continuous shot. The
+  foreshortening half stands.)* The reference has to be the clip's own
+  opening view, not the first frame of the moving segment, and the crank
+  arm's foreshortening is what disambiguates front from side — from either
+  side the arm reads compressed, and only from the front or the rear does it
+  extend cleanly sideways.
+- **Negative clauses are honoured more reliably than positive ones.** In
+  `1cf5ac46` one sentence carried a prohibition and an instruction, and only
+  the prohibition survived — the product really never rotated, and the camera
+  really never moved. So a prohibition is no evidence that the instruction
+  beside it will run, which is now written down next to the existing
+  observation that a negative item holds in an empty set and fails on a
+  street full of surfaces.
+- **A segment inherits the previous segment's shot size.** In `50f623b2` the
+  waypoints rendered correctly and every one of them ran at the macro
+  closeness of the detail segment before them, so the subject's base was out
+  of frame for the whole move. `Segment skeleton to copy` now marks the
+  shot-size slot as not optional, and the `Quick checklist` gained an item for
+  it — the checklist is renumbered from 6 onward as a result.
+- **Cross-references added where the undecomposed form is still on the
+  page**: `Camera language`'s preamble and its `Camera line to copy` (the
+  `<movement>` slot takes a texture; a destination needs waypoints too),
+  `Segment skeleton to copy` (the `orbit` slot, and the shot-size slot),
+  `Pacing line to copy` (a small fast `<Climax event>` needs its own stamp),
+  and `Endings` (four of its eight rows are moves rather than pictures, so
+  write the arrival as a picture as well as the move). No template was made
+  to ask for music; the new `Waypoint block to copy` points at the copyright
+  section before an audio line is added.
+- **What this entry does not claim.** A total quantity — `a full 360
+  degrees`, `ending back at the front view` — is *not* recorded as a failing
+  form: it was in the prompt that worked and the circuit completed. It is not
+  the mechanism either; the waypoint pictures are. An intermediate draft of
+  this section said the quantity clause was the one thing that failed, from a
+  rotation measured against the wrong reference frame, and that claim is
+  retracted rather than merely edited out — the section says so in place, so
+  nobody re-derives it.
+
+Three more facts from the same two runs, none of which changed any behaviour:
+
+- **The seed reproduces a take only when the prompt is byte-identical**, and
+  this is its boundary rather than a retraction. Both grinder clips ran seed
+  `642303335` with identical parameters and came back with visibly *different
+  subjects* — a wide steel collar on a short body versus a narrow collar on a
+  longer body — from one edited paragraph. So the seed is the handle for "that
+  one was good, render it at 1080p", where only `--resolution` moves; it is
+  not a handle for "that one was good, now fix shot three". Recorded in
+  `SKILL.md`'s `Reproducing a shot` and `Batch`'s seed bullet, and in
+  `api-params.md`'s `Seed`, which is also why the sidecar stores the prompt as
+  submitted — so a replay never depends on retyping it.
+- **The no-resubmit rule has survived a real transport fault**, for the first
+  time in this repo. Both jobs dropped their TLS connection mid-poll
+  (`curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL`), the script retried
+  the poll and not the create, and both completed normally. 2.88 USD each, so
+  a resubmit at that moment would have doubled both bills on a fault that
+  cleared itself in six seconds. Every clause of that rule had been reasoned
+  from the API's shape and never exercised by an actual broken connection.
+- **A fifth confirmation of the scene detector's blind spot**, and the first
+  at a looser threshold: `1cf5ac46` hid its third cut at threshold **0.25**
+  while the detector found the two before it in the same pass. One uniform
+  grey studio throughout, which is the condition — same place, same light —
+  and a lower threshold does not fix it. Added to the existing table rather
+  than starting a second list.
+
+And two verifications that were cheap to get and had never been cleanly
+observed, both in `api-params.md`:
+
+- **`--aspect-ratio` is effective on the text-to-video path**, not merely
+  accepted: `16:9` delivered a file measuring 1280x720. Every earlier clip in
+  this repo attached a first frame and was therefore forced to `adaptive`,
+  where the ratio comes from the image and the flag does nothing.
+- **`--generate-audio false` produces no audio stream at all**, not a silent
+  one. Anything downstream that assumes every clip has a stream to work with
+  has to handle its absence.
+
+Documentation only — `references/ofox-video.sh` is untouched, and all 271
+assertions across the eleven suites still pass.
+
 ## 1.15.0 — a 15-second clip took over 600 seconds, and `batch` was multiplying that by the take count
 
 One measurement started this: a 15s 720p job on 2026-09-05 spent **over 600

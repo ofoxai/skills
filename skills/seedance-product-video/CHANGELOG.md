@@ -4,6 +4,218 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.10.1 — the orbit arrived; it did not demonstrably go round, and 1.10.0 said it did
+
+Docs only; no script changes. **This entry corrects 1.10.0, which is
+unreleased alongside it — read the two together rather than as an addition,
+because the wrong reading here is the intuitive one and a future reader is
+likely to re-derive it.** What 1.10.0 got right is the finding this skill's
+`Motion` default now rests on: `the camera orbits the grinder a full 360
+degrees` produced no movement at all, and the same prompt at the same seed
+with the angles written out as pictures produced a camera that moved and
+ended on the front view it named. What it got wrong is how far that camera
+travelled — recorded as a clean monotonic full circuit, when the clip cannot
+support any total at all.
+
+- **The corrected reading, and the reason two earlier ones failed.** The front
+  view is fixed by the frame at 2.8s (knob at the left, crank arm extending
+  cleanly sideways). Inside the continuous ORBIT segment — the hard cut at
+  6.291667s to about 10s — the frames read the rear through 6.40–8.40s, a
+  side at about 8.80–9.00s, and the front again from 9.60s. So: **the segment
+  ends on the opening orientation**, the **observable travel is about 180
+  degrees**, and the **total is unmeasurable**, because the written path's
+  other half could only have happened across that hard cut and the shot
+  before it is DETAIL's macro of the knurled ring — rotationally
+  near-symmetric, carrying no orientation cue. An earlier draft read the
+  segment's own first frame as the front and reported 180 degrees with no
+  return; 1.10.0 read across the cut and reported the full circuit. Neither
+  pair of endpoints was connected by continuous motion. §3 now states the two
+  claims and the limitation, and says plainly that this skill claimed the
+  circuit once.
+- **The general rule went to the shared file, not here**, as
+  `Measuring a camera's travel: only inside one continuous shot` in
+  `ofox-video-core/references/prompt-structure.md` — it is about checking any
+  clip, not about catalog footage, and it sits next to the existing
+  read-the-frames-not-the-detector guidance because it is the same class of
+  mistake.
+- **The near-stationary stretch is six sampled frames, not five** — 6.40,
+  6.80, 7.20, 7.60, 8.00 and 8.40, with 8.80 the transition, so roughly 2
+  seconds held and the rest of the move in about 1.2. §4 and the failure table
+  are corrected.
+- **The framing defect voided half a waypoint, which §3 now says.** The 7s
+  waypoint asked for the knurled ring seen edge-on, and that ring was outside
+  the inherited macro framing for the entire orbit — so an unspecified shot
+  size did not merely crop the picture, it deleted part of what a waypoint
+  asked for, and the missing beat looks like the model ignoring a waypoint
+  when the prompt had already made it impossible.
+- **The scene detector missed a real cut in *both* clips, not just the
+  rejected one** — clip A at **9.750s** (visible only at threshold 0.05) and
+  clip B at **10.041667s** (needs 0.10), neither at the 0.25 both were checked
+  at. These are the fifth and sixth confirmations of the same-lighting blind
+  spot in this repo and its strongest form, since a controlled pair needed two
+  *different* lower thresholds and no single number would have caught both. It
+  also weakens one of 1.10.0's own claims, now hedged: `no cut anywhere inside
+  this segment` was **not contradicted** rather than verified, because the
+  pass that reported nothing inside the orbit is the same pass that missed
+  that segment's closing boundary.
+- **Two instruction readings recorded, both stable across the pair.**
+  `hold the final frame` held in clip A (every frame of its last half second
+  under a 0.0005 scene score) and drifted in clip B (six frames above 0.0005,
+  one above 0.002) — so ask for it and expect a settle. And `in a row on the
+  grey surface beside the standing grinder` put the accessories on **both
+  sides** of the grinder in both clips: identical in the pair, so a stable
+  reading of `beside` rather than a roll, which makes it plannable — name the
+  side and say the product is not between any two items if the row has to
+  stay together. 1.10.0's ACCESSORIES row read as if the slot rendered exactly
+  as written; the items did, the placement did not.
+- **The gallery case number is `n: 1009`, not `n: 1008`.** Another session
+  committed 1008 to a different clip while this work was in progress, and `n`
+  is append-only, so the uncommitted case moved rather than the committed one.
+  Corrected in `SKILL.md` and in 1.10.0's own entry above.
+
+Every hedge 1.10.0 carried survives — it is still two runs, the turntable
+phrasing is still unmeasured, and nothing here widens a claim.
+
+## 1.10.0 — an orbit that never happened, and the one paragraph that fixed it
+
+Docs only; no script changes. Until now this skill had generated nothing of
+its own — every figure in it came from the gallery, from
+`seedance-ad-creative`'s product jobs, or from `ofox-video-core`'s two
+three-shot test runs. It now has two 12-second 720p clips of a fictional hand
+coffee grinder, `bytedance/seedance-2.5` on `byteplus`, **pure text-to-video
+with no image attached**, `--aspect-ratio 16:9`, `--generate-audio false`,
+2.88 USD each. They are a controlled pair: **the same seed (`642303335`), the
+same model, the same flags, and the same prompt text except the ORBIT
+paragraph.** The first was rejected, the second accepted on 2026-09-05 and is
+the gallery's first `ofox`-sourced case in the `product-video` category
+(`n: 1009` — this entry originally said 1008; see 1.10.1). Versions in force
+when they ran: this skill 1.8.0, `ofox-video-core` 1.15.0.
+
+- **`the camera orbits the grinder a full 360 degrees at constant height and
+  constant speed` produced no orbit at all.** Job
+  `1cf5ac46-058f-4615-a47b-067743f76f8c`: from 6.0s to about 9.7s a
+  near-static front view with a slight push-in, the crank arm pointing right
+  in every frame — 3.7 of 12 seconds, the core segment of a catalog clip,
+  delivering no new angle. Note which half of that sentence was obeyed: the
+  product genuinely did not rotate, and the camera genuinely did not travel.
+- **The same prompt at the same seed, with that one paragraph rewritten as
+  timestamped waypoint pictures, travelled the whole circuit.** *(The extent
+  claimed in this bullet — the circuit, and the degree readings below it — is
+  corrected in 1.10.1: the move arrives, and its total travel is
+  unmeasurable. The rest of the bullet stands.)* Job
+  `50f623b2-c54a-4d9d-9646-31dd06e2a926`, read against the clip's own opening
+  frame rather than the start of the segment, using the crank arm as a
+  protractor — it extends horizontally in one direction, so it runs cleanly
+  sideways from the front or the rear and hides behind the collar from either
+  side: front at 2.8s, rear at 7.0s, a side at 9.0s, front again at 10.0s, and
+  the same orientation still holding at 11.5s. A clean monotonic circuit.
+  **So: describe each angle as a still picture with a timestamp on it. A
+  camera verb is not honoured.** A negative control and a positive one, one
+  variable apart — which is what makes the prompt the attributable cause
+  rather than the roll, and it is still two runs.
+- **What that pair cannot attribute, now stated as a limitation in the skill
+  rather than left to read as more than it is.** Each waypoint carried two
+  kinds of description at once — a camera-position label ("directly behind the
+  grinder") and an appearance description ("only the smooth back of the collar
+  and the walnut knob beyond it are visible") — and on the 8s waypoint the two
+  contradict each other, since from directly behind that arm extends sideways
+  rather than pointing away from the lens. The rendered arm-hidden frame
+  matches the appearance clause and contradicts the position clause, so the
+  run cannot say which half the model followed. Section 3 now says so
+  explicitly, and every "the waypoint appeared" line is written to mean the
+  picture appeared, not that a position label was obeyed. The forward-looking
+  line that follows — **write a waypoint as an appearance description, not a
+  camera-position label** — is marked as reasoning from that confound, not as
+  something measured, and the template, the §3 slot and the worked example are
+  rewritten to carry appearance clauses only.
+- **Which motion this skill recommends has not changed; how to write it has.**
+  The gallery evidence for "camera orbits, product still" is untouched — every
+  rotation there is written as camera movement, and the fixed-camera turntable
+  still has no gallery source and, now stated plainly, has never been run here.
+  What moved is that the recommended option no longer stands on the words "the
+  camera orbits": the `Motion` question, the `Recommended defaults` row, the
+  full template's ORBIT slot and a new "3. Camera motion: waypoint pictures,
+  not a camera verb" all carry the waypoint construction, and the section is
+  the single place the measurement lives.
+- **A caller copying the old wording got the rejected clip, so the two
+  copyable orbit sentences were replaced.** The worked example's ORBIT line
+  was the failing phrasing verbatim; it is now the waypoint form, flagged as
+  the one line in that example that is neither case 17's nor a translation of
+  it. The compact 5s template's one-sentence orbit is the same phrasing at a
+  shorter duration — nothing in this repo has run it, so it is now marked
+  untested rather than safe, with a pointer to the waypoint form for any clip
+  that has to show more than one side.
+- **The pictures are honoured; the spacing between them is not — now its own
+  subsection, "4. A timestamp orders the pictures; it does not schedule
+  them".** It is a different failure mode from "a camera verb is not
+  honoured", and someone will need it without reading the whole A/B, so it has
+  its own heading and points back to §3 for the pair. Four evenly spaced
+  moments were written into a four-second segment — three interior views at
+  7s, 8s and 9s, then the opening front view by 10s. Two of the three interior
+  views rendered, and sampled every 0.4s from 6.4s to 10.0s, five of ten
+  frames still show the crank pointing right: one view is held for roughly
+  half the segment and the rest of the circuit is covered in the last second
+  and a half. *(1.10.1: **six** of ten, not five — 6.40 through 8.40 all read
+  crank-right, with 8.80 the transition. And "the rest of the circuit" is the
+  superseded extent: what the last 1.2 seconds covers is the observable
+  rear-to-front travel, not a circuit anyone can measure.)* Stated as counts
+  and durations rather than as a per-waypoint schedule, because the confound
+  above means "this waypoint was a second late" is not attributable. So:
+  **two interior pictures plus the return** for a
+  four-second orbit, and no angle planned to land on a given second — if a
+  picture has to exist at a given time, make it a segment boundary, where
+  stamps have held to about a second across every run here. The return is the
+  one wording with evidence behind it: `by 10s the camera has returned to the
+  exact front view of the opening shot` names a frame the clip already
+  contains rather than a quantity of rotation, and the 10.0s frame is that
+  frame.
+- **What the accepted clip still gets wrong beyond that pacing, cause
+  identified and fix not yet run**: no shot size was written on any waypoint,
+  so the orbit inherited the macro closeness of the DETAIL segment
+  immediately before it — the base and
+  the knurled ring are out of frame for the whole orbit, several angles of the
+  collar and the crank and never the whole product from the side or the back.
+  The template's slot notes now say a segment inherits the previous segment's
+  framing unless told otherwise, and every waypoint carries its own shot size.
+- **The rest of the template rendered as written, and two AVOID items earned
+  their place.** REVEAL (a plain grey box lid lifting straight up out of
+  frame) and DETAIL (macro on the knurled ring and the metal/wood seam, slow
+  straight push-in) came back exactly as described. ACCESSORIES produced the
+  three correct items, evenly spaced, not touching, **only** in the final
+  segment and with no duplication — the two failure modes that slot risks, and
+  the AVOID list named both (`no accessory appearing before the final segment`,
+  `no duplicated accessory`).
+- **Three things the text-only route confirmed that this skill previously only
+  argued for.** Zero invented text across an all-bare set of metal, glass and
+  wood, including the glass jar's steel screw lid, with **no first frame to
+  anchor anything** — the PRODUCT block's explicit "there is no printed text,
+  no logo, no engraving and no marking anywhere" plus a carrier-by-carrier
+  AVOID list. Zero deformation of the crank arm, a thin protruding
+  right-angle part, through both clips. And the consistency lock holding on
+  text alone: every earlier accepted clip here that needed a product's
+  identity held had an attached image doing that work, so "write the
+  consistency lock every time" now rests on a measurement rather than only a
+  rationale.
+- **`--aspect-ratio 16:9` took effect and the output is exactly 1280x720** —
+  the first clean confirmation of ratio control in this repo, since every
+  earlier product-adjacent clip attached a frame and was forced to `adaptive`.
+  It worked *because* the route was text-only, which "A product photo" now
+  states as a benefit of this skill's rule against generating a reference
+  image: on that route the platform ratio is a flag, not a crop made
+  beforehand. `--generate-audio false` was confirmed the same way — the
+  delivered files carry no audio stream at all, not a silent one. Four
+  segments at 3/3/4/2 also held: the rejected clip measured 3.12/2.88/3.7/2.3,
+  every segment within 0.3s of plan.
+- **Two boundaries added where the claims they qualify already live.** The
+  seed reproduces a take only while the prompt is byte-identical — both clips
+  ran seed `642303335` and the grinder is visibly a different design in each,
+  so "give me that take at 1080p" is still the seed's job and "let me tweak
+  one line and keep the look" is not. And the scene detector missed the
+  rejected clip's 9.7s boundary at threshold 0.25 while finding 3.12s and
+  6.00s, a fifth confirmation of the same-lighting blind spot; the record
+  stays in `ofox-video-core`'s shared `Checking the cuts`, with a failure-table
+  row here pointing at it rather than a competing list.
+
 ## 1.9.0 — the four-segment template is inside the measured envelope
 
 Docs only; no script changes. This skill's caution about its own full

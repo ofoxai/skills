@@ -221,6 +221,21 @@ stderr when it does — it never overrides silently. This requirement is
 specific to `bytedance/seedance-2.5`; `bytedance/seedance-2.0` does
 image-to-video without it (verified separately, not assumed).
 
+**The converse is now confirmed too: with no image attached,
+`--aspect-ratio` controls the output ratio exactly.** Verified 2026-09-05 on
+a text-to-video job — `--aspect-ratio 16:9` delivered a file measuring
+1280x720. That had never been cleanly observed before, because every earlier
+clip in this repo attached a first frame and was therefore forced to
+`adaptive`, where the ratio comes from the image and the flag does nothing.
+So the flag is not merely accepted on the t2v path; it is effective, and it
+is the only control over frame shape there.
+
+**`--generate-audio false` removes the audio stream, it does not mute it.**
+Same run: the delivered mp4 carried **no audio stream at all**, rather than a
+silent track. Anything downstream that expects every clip to have an audio
+stream to work with — a concatenation, an editor's timeline, a probe that
+reads stream 1 — has to handle its absence rather than assume silence.
+
 ### Local file vs. remote URL reliability
 
 Prefer a local file over a remote URL for `frame_images` when the user has
@@ -305,6 +320,16 @@ random either way; choosing it client-side is what makes it recordable.
 Between the seed and the handoff, a sidecar written by `generate`, or by
 `create` + `poll` into the same `--out-dir`, holds everything needed to
 re-render the same shot at a different resolution.
+
+**Re-rendering means replaying the sidecar's `prompt` unaltered.** A seed
+reproduces a take only against a byte-identical prompt: two 2026-09-05 jobs
+on seed `642303335`, identical in every parameter and differing only in one
+paragraph's wording, returned visibly different subjects rather than
+different takes on one subject
+(`1cf5ac46-058f-4615-a47b-067743f76f8c`, `50f623b2-c54a-4d9d-9646-31dd06e2a926`).
+That is why the sidecar stores the prompt as submitted — so the replay does
+not depend on anyone retyping it. `SKILL.md`'s "Reproducing a shot" has the
+full statement.
 
 `frame_images` is replaced by a `frame_images_count` — a resolved
 `--frame-first-image` is a base64 data URI that can exceed a megabyte, and
@@ -419,3 +444,14 @@ for the same invocation:
   hits its time budget** → the job was already created and is running. The
   fix is `ofox-video.sh poll JOB_ID`, never a new `generate` call for the
   same request — resubmitting creates a second, separately billed job.
+
+**Third bullet, observed rather than reasoned, 2026-09-05.** Two jobs lost
+their TLS connection mid-poll (`curl: (35) LibreSSL SSL_connect:
+SSL_ERROR_SYSCALL in connection to api.ofox.ai:443`), the script retried the
+poll — not the create — after six seconds, and both completed normally with
+their videos downloaded: `1cf5ac46-058f-4615-a47b-067743f76f8c` and
+`50f623b2-c54a-4d9d-9646-31dd06e2a926`, 2.88 USD each. The connection broke;
+the jobs never did. This is the first time in this repo that the rule has
+been exercised by a live transport fault rather than held as a rule, and a
+resubmit at that moment would have double-billed both. `SKILL.md`'s
+"The rule has now survived a real transport fault" carries the same record.
