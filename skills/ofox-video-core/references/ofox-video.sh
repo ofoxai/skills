@@ -13,7 +13,7 @@
 #   ofox-video.sh generate --prompt "..." [OPTIONS]
 #   ofox-video.sh create --prompt "..." [OPTIONS]  (submit only, no waiting)
 #   ofox-video.sh batch --prompt "..." --takes N [OPTIONS]
-#   ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS]
+#   ofox-video.sh poll JOB_ID [JOB_ID...] [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS] [--concurrency N]
 #   ofox-video.sh chain --shot "..." --shot "..." [OPTIONS]
 #   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]  (local, no API call)
 #   ofox-video.sh last-frame VIDEO [--out-dir DIR]                (local, no API call)
@@ -78,13 +78,26 @@
 #   --max-wait SECONDS           default: 540 (9 minutes)
 #   --poll-interval SECONDS      default: 6
 #
+# batch / poll OPTIONS:
+#   --concurrency N             how many jobs to WAIT for at once. Default 4,
+#                               ceiling 10, also settable via
+#                               OFOX_POLL_CONCURRENCY. A polling job issues one
+#                               request per --poll-interval, so at the default
+#                               6s each one spends 10 of the account's measured
+#                               100 requests/minute: 4 is 40% of the budget, 10
+#                               is all of it. Submission is never concurrent —
+#                               see cmd_batch's header for why.
+#
 # Exit codes:
 #   0  success — job completed, video downloaded
 #   1  usage / parameter validation error (no network call made)
 #   2  environment error (missing curl/jq/OFOX_API_KEY)
 #   3  API rejected the request, or the job ended failed/cancelled/expired
 #   4  timed out waiting for a terminal state — the job is still running
-#      upstream. Re-run: ofox-video.sh poll JOB_ID
+#      upstream. Re-run: ofox-video.sh poll JOB_ID  (batch and a multi-id poll
+#      return this only when nothing worse happened: a take that FAILED after
+#      submission is exit 3, since a failure needs a new prompt and a timeout
+#      needs another poll.)
 #      Do NOT re-run 'generate' for the same request — that creates a
 #      duplicate, separately billed job.
 #   5  the create call had an ambiguous network failure (no HTTP response was
@@ -109,6 +122,35 @@ GET_KEY_URL="https://app.ofox.ai"
 DEFAULT_MODEL="bytedance/seedance-2.5"
 DEFAULT_MAX_WAIT=540
 DEFAULT_POLL_INTERVAL=6
+
+# Concurrency for waiting on several jobs at once (batch, and `poll` with more
+# than one job id). Submission stays sequential; only the waiting overlaps.
+#
+# The number is set by requests per minute, not by how many jobs feel
+# reasonable. Each polling job issues at most one GET per poll interval, so at
+# the default 6s that is 10 requests/minute per job. The account this was
+# measured on allows 100 RPM, which makes 10 concurrent polls exactly the
+# limit — so 10 is the ceiling the flag will accept and never the default.
+#
+# The default of 4 is 40 RPM, 40% of that budget. The other 60% is not spare:
+# a batch's creates go out first, a 429 or 5xx retries at the same cadence,
+# and an agent commonly has another Ofox call (a model list, an image job)
+# in flight in the same session. Four also covers the common case in one wave
+# — three or four takes of one prompt — so the wall clock is that of a single
+# clip.
+MAX_CONCURRENCY=10
+DEFAULT_CONCURRENCY="${OFOX_POLL_CONCURRENCY:-4}"
+# Measured on the repo owner's account, 2026-09-05. Used only to warn: this
+# script never blocks a request because of it.
+ACCOUNT_RPM=100
+# Warn above 60% of the budget. Being at 100% is how a session earns 429s,
+# which cost a poll cycle per job — time, not money.
+RPM_SOFT_LIMIT=60
+# How often the supervisor says something while several jobs are running. A
+# ten-minute silence is indistinguishable from a hang.
+POLL_HEARTBEAT=30
+# Ceiling for the per-job backoff after consecutive 429s.
+POLL_BACKOFF_MAX=60
 
 # Cap for the readable part of an output filename, counted in Unicode
 # codepoints (not bytes). 40 CJK characters is 120 UTF-8 bytes, which leaves
@@ -399,8 +441,8 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh generate --prompt "..." [OPTIONS]
   ofox-video.sh create   --prompt "..." [OPTIONS]   (submit only, returns a job id)
          add --dry-run to any of generate/batch/chain to price it without spending
-  ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [OPTIONS]
-  ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS]
+  ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [--concurrency N] [OPTIONS]
+  ofox-video.sh poll JOB_ID [JOB_ID...] [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS] [--concurrency N]
   ofox-video.sh chain --shot "..." --shot "..." [--shots-file FILE] [--no-concat] [OPTIONS]
   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]
   ofox-video.sh last-frame VIDEO [--out-dir DIR]
@@ -409,6 +451,13 @@ Downloads are named <slug>-<short job id>.<ext>, where the slug comes from
 --name or, without it, from the prompt. Each video gets a .json sidecar
 holding the full job id, the prompt and the cost — the short id in the
 filename cannot be expanded back on its own.
+
+Independent clips are waited for in parallel, not one after another: give
+'poll' every job id at once, or let 'batch' do it for its takes. --concurrency
+caps how many are polled simultaneously (default 4, ceiling 10 — 10 polls at
+the default 6s interval is already the whole measured 100 requests/minute
+account limit). Submission stays sequential so a rejected create still stops a
+batch before the remaining takes are paid for.
 
 Seedance jobs are pinned to the byteplus upstream by default; override with
 --provider volcengine, or --provider auto to let Ofox route by weight. Run
@@ -1153,17 +1202,21 @@ cmd_generate() {
     echo "SEED $seed"
     echo "POLLING_URL $polling_url"
     echo "OUT_DIR $abs_out"
-    echo "" >&2
-    echo "Submitted, not waiting. Download it with:" >&2
-    # Carry --name into the suggested command: the follow-up poll is a
-    # separate process that would otherwise fall back to naming the file from
-    # the prompt, quietly losing the name the caller chose here.
-    if [ -n "$name_hint" ]; then
-      echo "  $0 poll $job_id --out-dir $abs_out --name \"$name_hint\"" >&2
-    else
-      echo "  $0 poll $job_id --out-dir $abs_out" >&2
+    # Suppressed by batch, which is about to wait for every take itself and
+    # says the same thing once for all of them instead of N times.
+    if [ -z "${OFOX_SUBMIT_QUIET:-}" ]; then
+      echo "" >&2
+      echo "Submitted, not waiting. Download it with:" >&2
+      # Carry --name into the suggested command: the follow-up poll is a
+      # separate process that would otherwise fall back to naming the file from
+      # the prompt, quietly losing the name the caller chose here.
+      if [ -n "$name_hint" ]; then
+        echo "  $0 poll $job_id --out-dir $abs_out --name \"$name_hint\"" >&2
+      else
+        echo "  $0 poll $job_id --out-dir $abs_out" >&2
+      fi
+      echo "The job is billable from now on whether or not you poll for it." >&2
     fi
-    echo "The job is billable from now on whether or not you poll for it." >&2
     return 0
   fi
 
@@ -1180,16 +1233,33 @@ cmd_generate() {
 # it is the thing nobody prices honestly. So: estimate before spending, report
 # what each take really cost from its own usage.video_cost, and total it.
 #
-# Every take is its own job, submitted one at a time through the same
-# cmd_generate path a single generate uses. That keeps the no-resubmit rule
-# intact for free — nothing here can re-POST a request that already exists —
-# and it means a take benefits from every validation and error mapping the
-# single-shot path already has. It is slower than firing N creates at once;
-# that is the trade, and it is the right way round when each retry costs money.
+# Every take is its own job, created one at a time through the same
+# cmd_generate path a single generate uses (in its submit-only mode). That
+# keeps the no-resubmit rule intact for free — nothing here can re-POST a
+# request that already exists — and it means a take benefits from every
+# validation and error mapping the single-shot path already has.
 #
-# A take that fails STOPS the run. Whatever broke take 2 will almost certainly
-# break takes 3..N, and continuing would spend real money to collect identical
-# failures.
+# The two halves are deliberately different:
+#
+#   submit  SEQUENTIAL. A create answers in seconds, so serialising it costs
+#           almost no wall clock, and it is what makes the money guard exact:
+#           if take 2's create is rejected, takes 3..N are never sent.
+#   wait    CONCURRENT, up to --concurrency at a time. This is the ten-minute
+#           half. One 15s 720p job measured over 600s of wall clock on
+#           2026-09-05, so three takes serially is half an hour for work the
+#           API does in ten minutes. The account allows 100 RPM and a polling
+#           job spends 10 of them, so nothing about the rate limit required
+#           the old serial wait.
+#
+# A take that fails to SUBMIT stops the run: whatever broke take 2's create
+# will almost certainly break takes 3..N, and continuing would spend real
+# money to collect identical failures. Takes already submitted are still
+# waited for and downloaded — they are billable whether or not we collect
+# them, and abandoning a paid job is not a saving.
+#
+# A take that fails AFTER submission (a generation-time or moderation failure)
+# is a different animal: the money is already committed and the other takes
+# are already running, so it is reported and the rest complete normally.
 # ---------------------------------------------------------------------------
 
 MAX_TAKES=10
@@ -1198,6 +1268,8 @@ cmd_batch() {
   local takes="" seed_given="" prompt_seen="" batch_provider="" batch_dry=""
   local passthrough=() out_dir="$PWD" duration="" resolution="" model="$DEFAULT_MODEL"
   local sheet="auto"
+  local concurrency="$DEFAULT_CONCURRENCY"
+  local name_hint="" max_wait="$DEFAULT_MAX_WAIT" poll_interval="$DEFAULT_POLL_INTERVAL"
   local key val
 
   while [ $# -gt 0 ]; do
@@ -1206,6 +1278,12 @@ cmd_batch() {
       --takes)
         [ $# -lt 2 ] && { echo "ERROR: --takes requires a value." >&2; return 1; }
         takes="$2"; shift 2; continue
+        ;;
+      --concurrency)
+        # Not forwarded to generate: it governs the wait this function runs
+        # itself, and generate has no waiting left to do here.
+        [ $# -lt 2 ] && { echo "ERROR: --concurrency requires a value." >&2; return 1; }
+        concurrency="$2"; shift 2; continue
         ;;
       --contact-sheet)
         sheet="always"; shift; continue
@@ -1235,6 +1313,9 @@ cmd_batch() {
           --duration) duration="$val" ;;
           --resolution) resolution="$val" ;;
           --model) model="$val" ;;
+          --name) name_hint="$val" ;;
+          --max-wait) max_wait="$val" ;;
+          --poll-interval) poll_interval="$val" ;;
         esac
         passthrough+=("$key" "$val")
         shift 2
@@ -1266,6 +1347,10 @@ cmd_batch() {
     echo "ERROR: --prompt is required." >&2
     return 1
   fi
+  validate_concurrency "$concurrency" || return 1
+  if [ "$concurrency" -gt "$takes" ]; then
+    concurrency="$takes"
+  fi
 
   if [ -n "$seed_given" ] && [ "$takes" -gt 1 ]; then
     echo "NOTE: --seed $seed_given is fixed, so all $takes takes may come back identical — and you would be billed for each. Drop --seed to let them vary." >&2
@@ -1290,21 +1375,48 @@ cmd_batch() {
       printf '%s\n' "$inner_err" >&2
       return 1
     fi
-    echo "DRY RUN — $takes takes would be submitted, one at a time. Nothing was billed." >&2
+    echo "DRY RUN — $takes takes would be created one at a time, then waited for concurrently, $concurrency at once. Nothing was billed." >&2
+    echo "The figure above is the whole batch. $takes takes means $takes bills, and running them concurrently means they all arrive at once — quote the total before starting, never the per-take figure." >&2
+    concurrency_rpm_note "$concurrency" "$poll_interval"
     echo "Re-run without --dry-run to generate." >&2
     echo "STATUS dry_run"
     echo "TAKES_REQUESTED $takes"
+    echo "CONCURRENCY $concurrency"
     return 0
   fi
 
-  # --- run the takes, one real job each ---
+  # --- phase 1: create every take, one at a time ---
+  #
+  # Sequential on purpose. A create answers in seconds, so this costs almost
+  # nothing in wall clock, and it is the only ordering in which "take 2 was
+  # rejected, so takes 3..N were never sent" can be true.
 
-  local i=1 rc=0 stopped=""
-  local paths=() costs=() ids=() seeds=()
+  mkdir -p "$out_dir" 2>/dev/null
+  local abs_out
+  abs_out="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_out="$out_dir"
+
+  local i=1 rc=0 submit_rc=0 stopped=""
+  local records=() ids=() seeds=()
   local out line
+
+  # cmd_generate submits and returns instead of waiting, the same mode the
+  # `create` subcommand uses. Saved and restored rather than set inline: a
+  # variable assignment prefixed to a *function* call is not reliably scoped
+  # to that call in bash.
+  local prev_submit_only_set="" prev_submit_only=""
+  if [ -n "${OFOX_SUBMIT_ONLY+x}" ]; then
+    prev_submit_only_set=1
+    prev_submit_only="$OFOX_SUBMIT_ONLY"
+  fi
+  export OFOX_SUBMIT_ONLY=1
+  # One "poll this job id yourself" block per take would be N pieces of advice
+  # for a wait this function is about to do. It says it once, below, for all of
+  # them.
+  export OFOX_SUBMIT_QUIET=1
+
   while [ "$i" -le "$takes" ]; do
     echo "" >&2
-    echo "--- take $i/$takes ---" >&2
+    echo "--- creating take $i/$takes ---" >&2
     # Give each take an explicit seed when the caller didn't pick one. Without
     # this, takes differ only by a seed the API chose and never told us, so
     # "take 3 was the good one, render that properly" is impossible — you can
@@ -1320,29 +1432,115 @@ cmd_batch() {
     out="$(cmd_generate "${take_args[@]}")"
     rc=$?
     if [ "$rc" -ne 0 ]; then
+      submit_rc="$rc"
       echo "" >&2
-      echo "Stopping the batch: take $i failed (exit $rc), so takes $((i))..$takes were NOT submitted." >&2
+      echo "Stopping the batch: take $i could not be submitted (exit $rc), so takes $i..$takes were NOT submitted." >&2
       echo "Whatever failed here would almost certainly fail for the rest, and each attempt costs money." >&2
+      if [ "$i" -gt 1 ]; then
+        echo "Takes 1..$((i - 1)) are already submitted and billable — they are waited for below, not abandoned." >&2
+      fi
       stopped="1"
       break
     fi
+    local take_id="" take_url="" take_seed_echoed=""
     while IFS= read -r line; do
       case "$line" in
-        "VIDEO_PATH "*) paths+=("${line#VIDEO_PATH }") ;;
-        "VIDEO_COST "*) costs+=("${line#VIDEO_COST }") ;;
-        "JOB_ID "*) ids+=("${line#JOB_ID }") ;;
+        "JOB_ID "*) take_id="${line#JOB_ID }" ;;
+        "POLLING_URL "*) take_url="${line#POLLING_URL }" ;;
+        "SEED "*) take_seed_echoed="${line#SEED }" ;;
+        "OUT_DIR "*) abs_out="${line#OUT_DIR }" ;;
       esac
     done <<EOF_TAKE
 $out
 EOF_TAKE
+    if [ -z "$take_id" ]; then
+      # Submit-only always prints a job id on success, so this cannot happen
+      # without something being wrong enough that spending more would be
+      # reckless.
+      submit_rc=3
+      echo "" >&2
+      echo "Stopping the batch: take $i reported success but printed no job id, so takes $i..$takes were NOT submitted." >&2
+      stopped="1"
+      break
+    fi
+    [ -n "$take_seed_echoed" ] && take_seed="$take_seed_echoed"
+    [ -n "$take_url" ] || take_url="$API_BASE/videos/$take_id"
+    ids+=("$take_id")
     seeds+=("$take_seed")
+    records+=("$(printf '%s\t%s' "$take_id" "$take_url")")
     i=$((i + 1))
   done
 
-  local done_count=${#paths[@]}
+  unset OFOX_SUBMIT_QUIET
+  if [ -n "$prev_submit_only_set" ]; then
+    export OFOX_SUBMIT_ONLY="$prev_submit_only"
+  else
+    unset OFOX_SUBMIT_ONLY
+  fi
+
+  local submitted=${#ids[@]}
+  local not_submitted=$(( takes - submitted ))
+  if [ "$submitted" -eq 0 ]; then
+    echo "ERROR: no takes were submitted." >&2
+    return "${submit_rc:-3}"
+  fi
+
+  echo "" >&2
+  echo "$submitted take(s) submitted and billable from now on, whether or not this command stays open." >&2
+  echo "If it is interrupted, resume the downloads with:" >&2
+  echo "  $0 poll ${ids[*]} --out-dir $abs_out" >&2
+
+  # --- phase 2: wait for them concurrently ---
+
+  poll_many "$concurrency" "$abs_out" "$max_wait" "$poll_interval" "$name_hint" "take" \
+    ${records[@]+"${records[@]}"}
+
+  # Read the results back BY INDEX. Takes finish in whatever order the API
+  # feels like, and the seed printed next to take 3 has to be take 3's or the
+  # whole "re-render that one" handle is worthless.
+  # take_* arrays are indexed by take number (one entry per submitted take,
+  # empty where there is nothing); paths/costs are the compacted lists the
+  # contact sheet and the total need.
+  local paths=() costs=() take_state=() take_rcs=() take_path=() take_cost=()
+  local idx=0 completed=0 failed=0 running=0
+  while [ "$idx" -lt "$submitted" ]; do
+    local t_path="" t_cost="" t_rc="${POLL_MANY_RC[$idx]:-3}"
+    while IFS= read -r line; do
+      case "$line" in
+        "VIDEO_PATH "*) t_path="${line#VIDEO_PATH }" ;;
+        "VIDEO_COST "*) t_cost="${line#VIDEO_COST }" ;;
+      esac
+    done <<EOF_RESULT
+${POLL_MANY_OUT[$idx]}
+EOF_RESULT
+    take_rcs+=("$t_rc")
+    take_path+=("$t_path")
+    take_cost+=("$t_cost")
+    if [ "$t_rc" = "0" ] && [ -n "$t_path" ]; then
+      paths+=("$t_path")
+      costs+=("${t_cost:-0}")
+      take_state+=("completed")
+      completed=$((completed + 1))
+    elif [ "$t_rc" = "4" ]; then
+      # Still running upstream and still billable — the job id below is the
+      # only way back to it.
+      take_state+=("running")
+      running=$((running + 1))
+    else
+      take_state+=("failed")
+      failed=$((failed + 1))
+    fi
+    idx=$((idx + 1))
+  done
+
+  local done_count="$completed"
   if [ "$done_count" -eq 0 ]; then
     echo "ERROR: no takes completed." >&2
-    return "${rc:-3}"
+    local jid
+    for jid in "${ids[@]}"; do
+      echo "  submitted job: $jid" >&2
+    done
+    return 3
   fi
 
   # --- contact sheet (optional, fail open) ---
@@ -1359,12 +1557,35 @@ EOF_TAKE
   local per
   per="$(awk -v t="$total" -v n="$done_count" 'BEGIN { printf "%.10f", (n ? t/n : 0) }')"
 
-  echo "STATUS batch_completed"
+  # batch_completed means exactly that: every requested take is on disk. A
+  # partial run says so in the status line rather than leaving an agent to
+  # notice the counts disagree.
+  if [ "$done_count" -eq "$takes" ]; then
+    echo "STATUS batch_completed"
+  else
+    echo "STATUS batch_partial"
+  fi
   echo "TAKES_REQUESTED $takes"
+  echo "TAKES_SUBMITTED $submitted"
   echo "TAKES_COMPLETED $done_count"
-  local idx=0
-  while [ "$idx" -lt "$done_count" ]; do
-    echo "TAKE $((idx + 1)) ${ids[$idx]:-unknown} seed=${seeds[$idx]:-unknown} ${costs[$idx]:-unknown} ${paths[$idx]}"
+  [ "$failed" -gt 0 ] && echo "TAKES_FAILED $failed"
+  [ "$running" -gt 0 ] && echo "TAKES_RUNNING $running"
+  [ "$not_submitted" -gt 0 ] && echo "TAKES_NOT_SUBMITTED $not_submitted"
+  # Numbered by take, not by position in the completed list, so a gap is
+  # visible and take 3's seed is still take 3's.
+  idx=0
+  while [ "$idx" -lt "$submitted" ]; do
+    case "${take_state[$idx]}" in
+      completed)
+        echo "TAKE $((idx + 1)) ${ids[$idx]:-unknown} seed=${seeds[$idx]:-unknown} ${take_cost[$idx]:-unknown} ${take_path[$idx]}"
+        ;;
+      running)
+        echo "TAKE $((idx + 1)) ${ids[$idx]:-unknown} seed=${seeds[$idx]:-unknown} RUNNING exit=${take_rcs[$idx]}"
+        ;;
+      *)
+        echo "TAKE $((idx + 1)) ${ids[$idx]:-unknown} seed=${seeds[$idx]:-unknown} FAILED exit=${take_rcs[$idx]}"
+        ;;
+    esac
     idx=$((idx + 1))
   done
   [ -n "$sheet_path" ] && echo "CONTACT_SHEET $sheet_path"
@@ -1378,11 +1599,30 @@ EOF_TAKE
   echo "same prompt on the model you actually want:" >&2
   echo "  $0 generate --prompt \"<same prompt>\" --seed <that take's seed> --model bytedance/seedance-2.5 --resolution 1080p" >&2
   echo "" >&2
-  echo "That is \$$total_h for $done_count takes. If only one of them is usable, \$$total_h IS your" >&2
+  echo "That is \$$total_h for $done_count take(s). If only one of them is usable, \$$total_h IS your" >&2
   echo "cost for that one clip — not the per-take figure. That total is the number worth" >&2
   echo "comparing across models and settings." >&2
+  if [ "$running" -gt 0 ]; then
+    echo "" >&2
+    echo "$running take(s) are still running upstream and are billed regardless. Collect them with:" >&2
+    idx=0
+    while [ "$idx" -lt "$submitted" ]; do
+      [ "${take_state[$idx]}" = "running" ] && echo "  $0 poll ${ids[$idx]} --out-dir $abs_out" >&2
+      idx=$((idx + 1))
+    done
+  fi
+  if [ "$failed" -gt 0 ]; then
+    echo "" >&2
+    echo "$failed take(s) failed after being submitted. A job that ends 'failed' carries no usage" >&2
+    echo "and is not billed; the block above each failure has its reason." >&2
+  fi
 
-  [ -n "$stopped" ] && return 3
+  # Nonzero whenever the run is not what was asked for: a stopped submission,
+  # a failed take, or one still running. The counts above say which.
+  if [ -n "$stopped" ] || [ "$failed" -gt 0 ]; then
+    return 3
+  fi
+  [ "$running" -gt 0 ] && return 4
   return 0
 }
 
@@ -1925,26 +2165,28 @@ cmd_contact_sheet() {
 # poll: resume polling / download for an existing job id (no create call)
 # ---------------------------------------------------------------------------
 
+# `poll` takes one job id or several. Several is what makes cross-clip
+# fan-out usable: N independent `create` calls, then one command that waits on
+# all of them at once. Sequentially, four 15-second clips is 40 minutes of
+# waiting for 10 minutes of generation.
+#
+# One id behaves exactly as it always has — same call, same stdout, no
+# subshell — because every existing caller and test depends on that shape.
 cmd_poll() {
   if ! check_curl_jq; then return 2; fi
 
-  if [ $# -eq 0 ]; then
-    echo "ERROR: 'poll' requires a job id, e.g. $0 poll abc123" >&2
-    return 1
-  fi
-  local job_id="$1"
-  shift
-
+  local ids=()
   local out_dir="$PWD"
   local max_wait="$DEFAULT_MAX_WAIT"
   local poll_interval="$DEFAULT_POLL_INTERVAL"
   local name_hint=""
+  local concurrency="$DEFAULT_CONCURRENCY"
   local key val
 
   while [ $# -gt 0 ]; do
     key="$1"
     case "$key" in
-      --out-dir|--max-wait|--poll-interval|--name)
+      --out-dir|--max-wait|--poll-interval|--name|--concurrency)
         if [ $# -lt 2 ]; then
           echo "ERROR: $key requires a value." >&2
           return 1
@@ -1952,9 +2194,16 @@ cmd_poll() {
         val="$2"
         shift 2
         ;;
-      *)
+      --*)
         echo "ERROR: unknown option '$key' for poll." >&2
         return 1
+        ;;
+      *)
+        # Anything that is not a flag is a job id. Ids may come before the
+        # flags or after them; a bare word is never ambiguous here.
+        ids+=("$key")
+        shift
+        continue
         ;;
     esac
     case "$key" in
@@ -1962,16 +2211,112 @@ cmd_poll() {
       --max-wait) max_wait="$val" ;;
       --poll-interval) poll_interval="$val" ;;
       --name) name_hint="$val" ;;
+      --concurrency) concurrency="$val" ;;
     esac
   done
+
+  if [ "${#ids[@]}" -eq 0 ]; then
+    echo "ERROR: 'poll' requires a job id, e.g. $0 poll abc123 — or several: $0 poll abc123 def456" >&2
+    return 1
+  fi
+
+  # A repeated id would be polled twice and downloaded twice onto the same
+  # filename. That is a typo every time, not a request.
+  local unique=() id
+  for id in "${ids[@]}"; do
+    if list_contains "$id" "${unique[*]+${unique[*]}}"; then
+      echo "NOTE: job id $id was given more than once; polling it once." >&2
+    else
+      unique+=("$id")
+    fi
+  done
+  ids=("${unique[@]}")
 
   if ! check_api_key; then return 2; fi
 
   # No request payload to pass: a poll knows only what the response reports,
   # so the sidecar it writes omits the resolution/aspect-ratio half.
-  poll_and_download "$job_id" "$API_BASE/videos/$job_id" "$out_dir" "$max_wait" \
-    "$poll_interval" "$name_hint"
-  return $?
+  if [ "${#ids[@]}" -eq 1 ]; then
+    poll_and_download "${ids[0]}" "$API_BASE/videos/${ids[0]}" "$out_dir" "$max_wait" \
+      "$poll_interval" "$name_hint"
+    return $?
+  fi
+
+  validate_concurrency "$concurrency" || return 1
+  [ "$concurrency" -gt "${#ids[@]}" ] && concurrency="${#ids[@]}"
+
+  mkdir -p "$out_dir" 2>/dev/null
+  local abs_out
+  abs_out="$(cd "$out_dir" 2>/dev/null && pwd)"
+  if [ -z "$abs_out" ]; then
+    echo "ERROR: --out-dir '$out_dir' could not be created or entered (bad path or missing permissions)." >&2
+    echo "None of the jobs were affected — fix the path and poll them again." >&2
+    return 6
+  fi
+
+  local records=()
+  for id in "${ids[@]}"; do
+    records+=("$(printf '%s\t%s' "$id" "$API_BASE/videos/$id")")
+  done
+
+  poll_many "$concurrency" "$abs_out" "$max_wait" "$poll_interval" "$name_hint" "job" \
+    "${records[@]}"
+
+  # Replay each job's own stdout, in the order the ids were given, under a
+  # delimiter. Verbatim, so VIDEO_PATH / VIDEO_COST / SIDECAR_PATH still read
+  # exactly as they do for a single poll — an agent relaying paths does not
+  # have to learn a second output shape.
+  local n="${#ids[@]}" idx=0 completed=0 failed=0 running=0
+  local costs=() rc
+  while [ "$idx" -lt "$n" ]; do
+    rc="${POLL_MANY_RC[$idx]:-3}"
+    echo "=== JOB $((idx + 1))/$n ${ids[$idx]} ==="
+    [ -n "${POLL_MANY_OUT[$idx]}" ] && printf '%s\n' "${POLL_MANY_OUT[$idx]}"
+    case "$rc" in
+      0) completed=$((completed + 1)) ;;
+      4) running=$((running + 1)) ;;
+      *) failed=$((failed + 1)) ;;
+    esac
+    local line
+    while IFS= read -r line; do
+      case "$line" in
+        "VIDEO_COST "*) costs+=("${line#VIDEO_COST }") ;;
+      esac
+    done <<EOF_JOB
+${POLL_MANY_OUT[$idx]}
+EOF_JOB
+    idx=$((idx + 1))
+  done
+
+  local total
+  total="$(printf '%s\n' ${costs[@]+"${costs[@]}"} | awk '{ s += $1 } END { printf "%.10f", s }')"
+
+  if [ "$completed" -eq "$n" ]; then
+    echo "STATUS poll_completed"
+  else
+    echo "STATUS poll_partial"
+  fi
+  echo "JOBS_REQUESTED $n"
+  echo "JOBS_COMPLETED $completed"
+  [ "$failed" -gt 0 ] && echo "JOBS_FAILED $failed"
+  [ "$running" -gt 0 ] && echo "JOBS_RUNNING $running"
+  echo "POLL_COST_TOTAL $total"
+
+  if [ "$running" -gt 0 ]; then
+    echo "" >&2
+    echo "$running job(s) had not finished within --max-wait and are still billable. Re-poll them:" >&2
+    idx=0
+    while [ "$idx" -lt "$n" ]; do
+      [ "${POLL_MANY_RC[$idx]:-3}" = "4" ] && echo "  $0 poll ${ids[$idx]} --out-dir $abs_out" >&2
+      idx=$((idx + 1))
+    done
+  fi
+
+  # Most severe actionable state wins: a failure needs a new prompt, a
+  # timeout needs another poll, and those are different instructions.
+  [ "$failed" -gt 0 ] && return 3
+  [ "$running" -gt 0 ] && return 4
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -1988,6 +2333,11 @@ poll_and_download() {
   # iteration would let a run of slow or timing-out requests overshoot
   # --max-wait by minutes while believing it was well inside it.
   local poll_started elapsed=0 tmp_body http_code curl_rc body status
+  # Consecutive 429s only. Concurrent polls share one account-wide rate
+  # limit, so a 429 means the session is over budget, not that this job is
+  # unlucky — retrying at the same cadence keeps it over budget. Any response
+  # that gets through resets this to 0.
+  local rate_limit_hits=0
   poll_started=$(date +%s)
   local out_dir_input="$out_dir"
 
@@ -2059,6 +2409,7 @@ poll_and_download() {
             return 3
             ;;
           pending|queued|in_progress)
+            rate_limit_hits=0
             sleep "$poll_interval"
             elapsed=$(( $(date +%s) - poll_started ))
             ;;
@@ -2070,8 +2421,18 @@ poll_and_download() {
         esac
         ;;
       429)
-        echo "WARN: rate limited while polling. Backing off ${poll_interval}s (retrying the poll, not create)..." >&2
-        sleep "$poll_interval"
+        # The first 429 waits exactly one poll interval, as it always has.
+        # Each further 429 in a row doubles that, up to POLL_BACKOFF_MAX,
+        # because with several polls sharing the limit the useful response to
+        # being rate limited is to ask less often rather than to keep asking.
+        # --max-wait is still wall clock, so a long backoff cannot overrun it.
+        local backoff=$(( poll_interval * (1 << rate_limit_hits) ))
+        [ "$backoff" -gt "$POLL_BACKOFF_MAX" ] && backoff="$POLL_BACKOFF_MAX"
+        # Stop counting once the cap is reached: the shift above would keep
+        # growing for no effect, and a long enough run of 429s would overflow it.
+        [ "$backoff" -lt "$POLL_BACKOFF_MAX" ] && rate_limit_hits=$(( rate_limit_hits + 1 ))
+        echo "WARN: rate limited while polling job $job_id. Backing off ${backoff}s (retrying the poll, not create)..." >&2
+        sleep "$backoff"
         elapsed=$(( $(date +%s) - poll_started ))
         ;;
       5??)
@@ -2091,6 +2452,230 @@ poll_and_download() {
   echo "  $0 poll $job_id" >&2
   echo "Do NOT re-run 'generate' for the same request — that creates a duplicate, separately billed job." >&2
   return 4
+}
+
+# ---------------------------------------------------------------------------
+# waiting on several jobs at once
+#
+# Why this exists: one 15-second 720p job took over 600 seconds of wall clock
+# on 2026-09-05. Three of them serially is half an hour for work the API does
+# in ten minutes. The rate limit is not the constraint — the account allows
+# 100 RPM and a polling job spends 10 of them — so the only thing serial
+# waiting buys is the wait itself.
+#
+# What is NOT parallelised here, on purpose: submission. A create is a
+# seconds-long call, so submitting one at a time costs almost nothing in wall
+# clock, and it is what keeps `batch`'s money guard exact — if take 2's create
+# is rejected, takes 3..N are never sent. Firing N creates at once would spend
+# N times before learning the first one was going to fail.
+# ---------------------------------------------------------------------------
+
+validate_concurrency() {
+  # $1 = the value as given. Prints nothing; returns 1 with a message on stderr
+  # when it is unusable.
+  local v="$1"
+  case "$v" in
+    ''|*[!0-9]*)
+      echo "ERROR: --concurrency must be a positive integer (got '$v')." >&2
+      return 1
+      ;;
+  esac
+  if [ "$v" -lt 1 ]; then
+    echo "ERROR: --concurrency must be at least 1 (got $v)." >&2
+    return 1
+  fi
+  if [ "$v" -gt "$MAX_CONCURRENCY" ]; then
+    echo "ERROR: --concurrency is capped at $MAX_CONCURRENCY here (got $v). At the default 6s poll interval that is already ${ACCOUNT_RPM} requests/minute, which is the whole measured account limit." >&2
+    return 1
+  fi
+  return 0
+}
+
+concurrency_rpm_note() {
+  # $1 = concurrency, $2 = poll interval. Warns when the combination crowds
+  # the account's rate limit. Never blocks: a 429 costs a poll cycle per job,
+  # which is time, not money, and the existing per-job backoff handles it.
+  local rpm
+  rpm="$(awk -v c="$1" -v p="$2" 'BEGIN { if (p + 0 <= 0) p = 1; printf "%d", c * (60 / p) }')"
+  [ -n "$rpm" ] || return 0
+  if [ "$rpm" -gt "$RPM_SOFT_LIMIT" ]; then
+    echo "NOTE: $1 concurrent polls at one request per ${2}s is about ${rpm} requests/minute, against a measured account limit of ${ACCOUNT_RPM}/min. Rate limiting costs a poll cycle per job, not money — but lower --concurrency or raise --poll-interval if you see rate-limit warnings." >&2
+  fi
+  return 0
+}
+
+# Results of the last poll_many run, indexed by the order the records were
+# passed in — NOT by the order jobs finished. bash 3.2 has no namerefs, so
+# these are globals; reading them by index is what keeps take 3 take 3 even
+# when it lands first.
+POLL_MANY_RC=()
+POLL_MANY_OUT=()
+POLL_MANY_ERR=()
+
+poll_many() {
+  # $1 = concurrency, $2 = out dir (absolute), $3 = max wait, $4 = poll
+  # interval, $5 = --name hint (may be empty), $6 = label word for progress
+  # output ("take" | "job"), then one record per job:
+  #   "<job id><TAB><polling url>"
+  #
+  # Each job gets its own background subshell running the ordinary
+  # poll_and_download — the same function a single `generate` or `poll` uses,
+  # so every retry rule, error mapping, download check and sidecar write is
+  # the one already tested. Its stdout and stderr go to files; its exit code
+  # is written last, so the presence of the .rc file means the other two are
+  # complete.
+  #
+  # Output discipline: nothing from a child is streamed. Interleaving four
+  # polls' warnings live would produce something no one can read and, worse,
+  # something no one can attribute. Instead each child's stderr is flushed as
+  # one contiguous labelled block the moment that child finishes, and the
+  # supervisor prints a heartbeat in between so a ten-minute wait is not
+  # silent.
+  local concurrency="$1" out_dir="$2" max_wait="$3" poll_interval="$4"
+  local name_hint="$5" label="$6"
+  shift 6
+  local records=("$@")
+  local n=${#records[@]}
+
+  POLL_MANY_RC=()
+  POLL_MANY_OUT=()
+  POLL_MANY_ERR=()
+  [ "$n" -eq 0 ] && return 0
+
+  local work
+  if ! work="$(mktemp -d)"; then
+    # Every job passed in has already been created and is billable, so the
+    # honest report is "still running, go and collect them" — not "failed",
+    # which would tell the caller to spend again on a new prompt.
+    echo "ERROR: could not create a scratch directory to collect the poll results." >&2
+    local k=0
+    while [ "$k" -lt "$n" ]; do
+      POLL_MANY_RC+=(4)
+      POLL_MANY_OUT+=("")
+      POLL_MANY_ERR+=("No result collected: this script could not create a temporary directory. The job is unaffected and still billable.")
+      k=$((k + 1))
+    done
+    return 6
+  fi
+
+  local ids=() urls=() state=() started_at=() pids=()
+  local i=0
+  while [ "$i" -lt "$n" ]; do
+    ids+=("$(printf '%s' "${records[$i]}" | cut -f1)")
+    urls+=("$(printf '%s' "${records[$i]}" | cut -f2)")
+    state+=(0)          # 0 queued, 1 running, 2 harvested
+    started_at+=(0)
+    pids+=("")
+    POLL_MANY_RC+=("")
+    POLL_MANY_OUT+=("")
+    POLL_MANY_ERR+=("")
+    i=$((i + 1))
+  done
+
+  local active=0 next=0 harvested=0
+  local now started heartbeat_at deadline
+  started="$(date +%s)"
+  heartbeat_at="$started"
+  # A hard stop for the supervisor itself. Every child is bounded by
+  # --max-wait plus its download, so this only fires if a child died without
+  # writing its exit code — which would otherwise spin here forever.
+  deadline=$(( started + max_wait + 300 ))
+
+  if [ "$n" -gt 1 ]; then
+    echo "" >&2
+    echo "Waiting on $n jobs, up to $concurrency at a time (poll interval ${poll_interval}s, --max-wait ${max_wait}s each)." >&2
+    concurrency_rpm_note "$concurrency" "$poll_interval"
+  fi
+
+  while [ "$harvested" -lt "$n" ]; do
+    # --- fill the free slots ---
+    while [ "$active" -lt "$concurrency" ] && [ "$next" -lt "$n" ]; do
+      # Copy the slot's values out before forking. A background subshell sees
+      # whatever the parent held at fork time, which is right but reads as if
+      # it were racing $next; naming them here removes the question.
+      local slot="$next" jid="${ids[$next]}" jurl="${urls[$next]}"
+      echo "--- $label $((slot + 1))/$n: polling $jid ---" >&2
+      (
+        poll_and_download "$jid" "$jurl" "$out_dir" \
+          "$max_wait" "$poll_interval" "$name_hint" \
+          >"$work/$slot.out" 2>"$work/$slot.err"
+        echo "$?" >"$work/$slot.rc"
+      ) &
+      pids[$slot]=$!
+      state[$slot]=1
+      started_at[$slot]="$(date +%s)"
+      active=$((active + 1))
+      next=$((next + 1))
+    done
+
+    # --- harvest anything that finished, in index order ---
+    local progressed="" rc took
+    i=0
+    while [ "$i" -lt "$n" ]; do
+      if [ "${state[$i]}" = "1" ] && [ -f "$work/$i.rc" ]; then
+        rc="$(cat "$work/$i.rc" 2>/dev/null)"
+        case "$rc" in ''|*[!0-9]*) rc=3 ;; esac
+        took=$(( $(date +%s) - ${started_at[$i]} ))
+        POLL_MANY_RC[$i]="$rc"
+        POLL_MANY_OUT[$i]="$(cat "$work/$i.out" 2>/dev/null)"
+        POLL_MANY_ERR[$i]="$(cat "$work/$i.err" 2>/dev/null)"
+        state[$i]=2
+        active=$((active - 1))
+        harvested=$((harvested + 1))
+        progressed=1
+        echo "" >&2
+        echo "--- $label $((i + 1))/$n finished after ${took}s (exit $rc) — ${ids[$i]} ---" >&2
+        [ -n "${POLL_MANY_ERR[$i]}" ] && printf '%s\n' "${POLL_MANY_ERR[$i]}" >&2
+      fi
+      i=$((i + 1))
+    done
+
+    [ "$harvested" -ge "$n" ] && break
+
+    now="$(date +%s)"
+    if [ "$now" -ge "$deadline" ]; then
+      echo "" >&2
+      echo "WARN: giving up on the wait after $(( now - started ))s — longer than --max-wait plus a margin, so a background poll must have died without reporting." >&2
+      i=0
+      while [ "$i" -lt "$n" ]; do
+        if [ "${state[$i]}" != "2" ]; then
+          [ -n "${pids[$i]}" ] && kill "${pids[$i]}" 2>/dev/null
+          POLL_MANY_RC[$i]=4
+          POLL_MANY_OUT[$i]=""
+          POLL_MANY_ERR[$i]="TIMEOUT: no result collected for ${ids[$i]}. The job may still be running and billable: $0 poll ${ids[$i]} --out-dir $out_dir"
+          state[$i]=2
+          harvested=$((harvested + 1))
+        fi
+        i=$((i + 1))
+      done
+      break
+    fi
+
+    if [ -z "$progressed" ] && [ $(( now - heartbeat_at )) -ge "$POLL_HEARTBEAT" ]; then
+      local waiting="" pending=0
+      i=0
+      while [ "$i" -lt "$n" ]; do
+        if [ "${state[$i]}" = "1" ]; then
+          waiting="$waiting $label $((i + 1))"
+          pending=$((pending + 1))
+        fi
+        i=$((i + 1))
+      done
+      local queued=$(( n - next ))
+      if [ "$queued" -gt 0 ]; then
+        echo "  still running:${waiting} ($queued more queued, $(( now - started ))s elapsed)" >&2
+      else
+        echo "  still running:${waiting} ($(( now - started ))s elapsed)" >&2
+      fi
+      heartbeat_at="$now"
+    fi
+
+    sleep 1
+  done
+
+  wait 2>/dev/null
+  rm -rf "$work"
+  return 0
 }
 
 # Build the readable part of an output filename.

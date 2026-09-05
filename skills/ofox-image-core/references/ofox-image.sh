@@ -50,13 +50,46 @@
 #                               when it refuses to guess at all.
 #   --prompt TEXT        required.
 #   --quality VAL        required (documented as required by the API).
-#                          One of: auto low medium high standard hd
-#                          Not every value is confirmed to apply to every
-#                          model — no default is guessed here, pass exactly
-#                          the value you intend.
+#                          One of: auto low medium high standard hd — that is
+#                          the union across models, and the only thing checked
+#                          here. No model is known to accept all six, so a
+#                          value the chosen model does not take comes back as
+#                          an API rejection (exit 3), not a local error:
+#                          measured 2026-09-04, openai/gpt-image-2 refuses
+#                          `standard` (400, "Supported values are: 'low',
+#                          'medium', 'high', and 'auto'"), which
+#                          microsoft/mai-image-2.5-flash accepts. Nothing is
+#                          billed for the refusal. Per-model table:
+#                          references/api-params.md. No default is guessed
+#                          here, pass exactly the value you intend.
 #   --size VAL           optional. One of:
 #                          auto 1024x1024 1536x1024 1024x1536 256x256
 #                          512x512 1792x1024 1024x1792
+#                        NOTE what that enum does NOT contain: 16:9 and 9:16.
+#                          1792x1024 is 1.75 and 1024x1792 is 0.5714; the
+#                          real ratios are 1.7778 and 0.5625. Neither can be
+#                          requested, on any model, so every 16:9 or 9:16
+#                          frame has to be cropped — see --target-aspect.
+#   --target-aspect W:H  optional. The ratio the delivered file must actually
+#                          be, e.g. 16:9. This script then picks the request
+#                          size that survives the crop with the most pixels
+#                          intact, measures the file it got back (never the
+#                          size the response claims), and centre-crops to
+#                          exactly W:H. Needs ffmpeg/ffprobe, checked before
+#                          anything is spent.
+#   --target-size WxH    optional. Exact output pixels, e.g. 1280x720. Same
+#                          as --target-aspect for the ratio, plus a floor:
+#                          the cheapest accepted size that clears it is
+#                          requested, and the crop is scaled down to exactly
+#                          WxH. Never scaled up — if the file comes back too
+#                          small the run fails loudly instead of delivering
+#                          an upscaled frame. Mutually exclusive with
+#                          --target-aspect (this already fixes the ratio).
+#                        With either flag the cropped frame takes the plain
+#                          output name (so IMAGE_PATH is the file to attach)
+#                          and the API's untouched bytes are kept alongside
+#                          it as <name>-uncropped.<ext>, reported as
+#                          IMAGE_PATH_UNCROPPED.
 #   --n N                optional, integer 1-10 (server default 1).
 #                          NOT supported by google/gemini-3.1-flash-image —
 #                          passing --n at all with that model is a client-
@@ -138,20 +171,34 @@ DOCUMENTED_MODELS="openai/gpt-image-2 google/gemini-3.1-flash-image bailian/qwen
 # a second copy is a second thing to forget to update when prices move.
 #
 # Ranked by measured cost PER IMAGE, not by the catalog's per-output-token
-# rate — the two rankings disagree here. openai/gpt-image-2 costs 15% more
-# per output token than microsoft/mai-image-2.5-flash, but spends only 196
-# output tokens on an image against mai-flash's 1024 (measured 2026-09-02,
-# see references/token-anchors.json), which more than cancels the higher
-# per-token rate out: ~0.6 cents/image against ~2.67 cents/image, gpt-image-2
-# cheaper by about 4.5x. Do not re-derive this order from the rate card
-# alone — the comparable figure is rate x that model's own measured token
-# count, and google/gemini-3.1-flash-lite-image and microsoft/mai-image-2.5
-# below have no per-image measurement yet, only the per-token rate.
+# rate — the two rankings disagree here. At the one --quality/--size pair
+# measured on both models (low / 1024x1024, 2026-09-02), openai/gpt-image-2
+# costs 15% more per output token than microsoft/mai-image-2.5-flash but
+# spends only 196 output tokens on an image against mai-flash's 1024, which
+# more than cancels the higher per-token rate out: ~0.6 cents/image against
+# ~2.67 cents/image, gpt-image-2 cheaper by about 4.5x. Do not re-derive this
+# order from the rate card alone — the comparable figure is rate x that
+# model's own measured token count, and google/gemini-3.1-flash-lite-image
+# and microsoft/mai-image-2.5 below have no per-image measurement yet, only
+# the per-token rate.
 #
 #   openai/gpt-image-2                   ~0.6 cents/image     preferred
 #   microsoft/mai-image-2.5-flash        ~2.67 cents/image    second
-#   google/gemini-3.1-flash-lite-image   $0.000030/token      no per-image figure yet
-#   microsoft/mai-image-2.5              $0.000047/token      same vendor, better quality
+#   google/gemini-3.1-flash-lite-image   0.000030 USD/token   no per-image figure yet
+#   microsoft/mai-image-2.5              0.000047 USD/token   same vendor, better quality
+#
+# EVERY cents/image figure above is only true for the pair it was measured at
+# (low / 1024x1024 for both), and the spread within one model is larger than
+# the gap between the two. Measured 2026-09-04: gpt-image-2 at high /
+# 1792x1024 spends 5063 output tokens, ~15.4 cents/image — about 26x its own
+# row above. No like-for-like comparison exists at any pair other than
+# low / 1024x1024, so "cheapest model" is a narrower claim than this list
+# looks. anchor_measurements() below reads every measured point a model has,
+# and print_estimate() quotes the one matching the request's own pair (or the
+# dearest, labelled an upper bound, when no point matches) — so the estimate
+# is pair-aware even though this comment's per-image column is not. Read
+# references/token-anchors.json's _what_the_count_does_depend_on before
+# quoting a cents/image figure from the rows above by hand.
 #
 # History, kept so a reorder never reads as someone quietly sneaking a
 # preference through: on 2026-09-02, with both cents-per-image figures above
@@ -167,9 +214,9 @@ DOCUMENTED_MODELS="openai/gpt-image-2 google/gemini-3.1-flash-image bailian/qwen
 # serves, including ones far more expensive than anything here. The chain only
 # decides what happens when nobody picked.
 #
-# google/gemini-2.5-flash-image also sits at $0.000030/token and is
+# google/gemini-2.5-flash-image also sits at 0.000030 USD/token and is
 # deliberately not in the chain — three entries at the same per-token price
-# buys nothing over two. The openai/gpt-5* family's $0.000032 is a text
+# buys nothing over two. The openai/gpt-5* family's 0.000032 USD is a text
 # model's incidental image output, not an image model, and is not a
 # candidate at all.
 MODEL_CHAIN="openai/gpt-image-2 microsoft/mai-image-2.5-flash google/gemini-3.1-flash-lite-image microsoft/mai-image-2.5"
@@ -193,6 +240,43 @@ VALID_QUALITIES="auto low medium high standard hd"
 VALID_OUTPUT_FORMATS="png jpeg webp"
 VALID_BACKGROUNDS="transparent opaque auto"
 NO_N_MODEL="google/gemini-3.1-flash-image"
+
+# --quality is a PER-MODEL enum, and VALID_QUALITIES above is the union of
+# every value any model takes. Validating only against the union is what let
+# --quality standard sail through both validation and --dry-run and then die
+# at submission with HTTP 400 the moment MODEL_CHAIN's head became
+# openai/gpt-image-2 on 2026-09-04 — five copy-pasteable commands in two
+# other skills shipped broken that way, and a dry run caught none of them.
+#
+# What is in the table below is FIRST-HAND ONLY, and there is exactly one
+# row, because there is exactly one model whose accepted set has been
+# enumerated by the API itself:
+#
+#   openai/gpt-image-2   auto low medium high
+#     From the refusal's own message, verbatim, 2026-09-04, nothing billed:
+#     Invalid value: 'standard'. Supported values are: 'low', 'medium',
+#     'high', and 'auto'. So 'standard' and 'hd' are excluded by the API's
+#     own enumeration, not by inference.
+#
+# Everything else falls through to the union on purpose. What exists for the
+# other models is evidence that a value WORKS, not an enumeration of what a
+# model takes: microsoft/mai-image-2.5-flash accepted 'standard' on nine real
+# runs, google/gemini-3.1-flash-image accepted 'low' — neither tells us what
+# else those models would have accepted. Narrowing a model on that basis
+# would invent a whitelist, and a false rejection here is worse than the 400
+# it would be trying to prevent: the 400 costs a round trip and nothing in
+# money, while a false rejection blocks work outright with no way around it
+# short of editing this script. So: an absence of evidence stays permissive,
+# and a row only gets added when a model has enumerated its own set.
+model_qualities() {
+  # $1 = model id. Prints the values that model is KNOWN to accept, or
+  # nothing when its accepted set has never been enumerated — in which case
+  # the caller must fall back to VALID_QUALITIES rather than guess.
+  case "$1" in
+    openai/gpt-image-2) echo "auto low medium high" ;;
+    *) ;;
+  esac
+}
 
 # ---------------------------------------------------------------------------
 # small helpers
@@ -220,6 +304,194 @@ decode_b64_to_file() {
     return 0
   fi
   return 1
+}
+
+# ---------------------------------------------------------------------------
+# target ratio / target size: request the size that crops best, then crop
+#
+# The size enum this API accepts CANNOT express 16:9 or 9:16. Not "does not
+# reliably produce" — cannot be asked for at all:
+#
+#   1024x1024 512x512 256x256   1.0000   1:1 exact
+#   1536x1024                   1.5000   3:2 exact
+#   1024x1536                   0.6667   2:3 exact
+#   1792x1024                   1.7500   nearest 16:9, which is 1.7778
+#   1024x1792                   0.5714   nearest 9:16, which is 0.5625
+#
+# So every 16:9 or 9:16 frame this API produces has to be cropped. There is
+# no flag, no model and no prompt wording that avoids it. That matters well
+# beyond tidiness because of where these frames go: attaching one to a
+# bytedance/seedance-2.5 job forces aspect_ratio: adaptive, so the frame's
+# own ratio becomes the finished video's ratio. A 1.75 frame yields a 1.75
+# video, and correcting it means paying for the video again.
+#
+# Two facts make the crop impossible to do by eye. The response's own size
+# field is not evidence of what was written (microsoft/mai-image-2.5-flash:
+# requested 1792x1024, response said 1354x774, file measured 1344x768 —
+# three different numbers, three real runs), and openai/gpt-image-2
+# honouring --size exactly (one run, 2026-09-04) still did not remove the
+# crop, because 1792x1024 is not 16:9 either. So the measurement has to come
+# from the written file, every time, on every model.
+#
+# That is what --target-aspect / --target-size are for: state the ratio (or
+# the exact pixels) the frame actually has to be, and this script picks the
+# request size, measures the file it got, and crops to the ratio exactly.
+# Three agents in a row re-derived "measure the file, then crop" by hand
+# before this existed.
+#
+# Crop dimensions are exact multiples of the reduced ratio, never a rounded
+# division — that is what makes the result the ratio asked for rather than
+# something 0.03% off it. Both hand-crops on record fall out of the same
+# rule: 1344x768 -> 1344x756 for 16:9 (k=84), 1792x1024 -> 1792x1008 (k=112).
+# ---------------------------------------------------------------------------
+
+gcd_of() {
+  # $1, $2 = positive integers. Echoes their greatest common divisor.
+  local a="$1" b="$2" t
+  while [ "$b" -ne 0 ]; do
+    t=$((a % b))
+    a="$b"
+    b="$t"
+  done
+  echo "$a"
+}
+
+parse_ratio_pair() {
+  # $1 = "W:H" or "WxH", $2 = the separator to require (":" or "x").
+  # Echoes "W H" with both terms validated as positive integers. The ratio is
+  # NOT reduced here — reduction is a separate step, because --target-size
+  # needs the raw pixels as well as the ratio they imply.
+  local spec="$1" sep="$2" w h
+  case "$sep" in
+    ':') w="${spec%%:*}"; h="${spec##*:}" ;;
+    *)   w="${spec%%x*}"; h="${spec##*x}" ;;
+  esac
+  # Reject anything that isn't exactly two positive integer terms. "16:9:1"
+  # and "16:" both fall out here, as does any non-digit.
+  case "$spec" in
+    *"$sep"*) : ;;
+    *) return 1 ;;
+  esac
+  case "$w$sep$h" in
+    "$spec") : ;;
+    *) return 1 ;;
+  esac
+  case "$w" in ''|*[!0-9]*) return 1 ;; esac
+  case "$h" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$w" -gt 0 ] && [ "$h" -gt 0 ] || return 1
+  echo "$w $h"
+}
+
+reduce_ratio() {
+  # $1 = W, $2 = H. Echoes "W H" divided by their gcd, so 1792 1008 -> 16 9.
+  local w="$1" h="$2" g
+  g="$(gcd_of "$w" "$h")"
+  [ "$g" -gt 0 ] || return 1
+  echo "$((w / g)) $((h / g))"
+}
+
+crop_dims_for() {
+  # $1 = measured width, $2 = measured height, $3/$4 = REDUCED target ratio.
+  # Echoes "cropW cropH": the largest centre-crop of the measured image whose
+  # dimensions are exact integer multiples of the reduced ratio. Fails (1)
+  # when the image is too small to hold even one multiple of it.
+  local mw="$1" mh="$2" tw="$3" th="$4" kw kh k
+  kw=$((mw / tw))
+  kh=$((mh / th))
+  k="$kw"
+  [ "$kh" -lt "$k" ] && k="$kh"
+  [ "$k" -ge 1 ] || return 1
+  echo "$((tw * k)) $((th * k))"
+}
+
+select_size_for_target() {
+  # $1/$2 = reduced target ratio. $3/$4 = a pixel floor, or "" for none.
+  # Echoes the --size value to request.
+  #
+  # Two different rankings, because the two flags want different things:
+  #
+  #   with a pixel floor (--target-size): the crop is scaled to exactly those
+  #   pixels afterwards, so anything above the floor is tokens paid for and
+  #   thrown away. Cheapest candidate that clears the floor wins.
+  #
+  #   without one (--target-aspect): nothing is thrown away, so the best
+  #   candidate is the one that survives the crop with the most pixels
+  #   intact. 16:9 picks 1792x1024 (98.4% retained) over 1536x1024 (84.4%)
+  #   and over 1024x1024 (56.3%); 1:1 picks 1024x1024, since 512x512 retains
+  #   fewer pixels and 1536x1024 costs more for the same crop.
+  local tw="$1" th="$2" fw="${3:-}" fh="${4:-}"
+  local cand cw ch dims ccw cch req_area ret_area take
+  local best="" best_req=0 best_ret=0
+  for cand in $VALID_SIZES; do
+    [ "$cand" = "auto" ] && continue
+    cw="${cand%x*}"
+    ch="${cand#*x}"
+    dims="$(crop_dims_for "$cw" "$ch" "$tw" "$th")" || continue
+    ccw="${dims% *}"
+    cch="${dims#* }"
+    if [ -n "$fw" ]; then
+      { [ "$ccw" -ge "$fw" ] && [ "$cch" -ge "$fh" ]; } || continue
+    fi
+    req_area=$((cw * ch))
+    ret_area=$((ccw * cch))
+    take=""
+    if [ -z "$best" ]; then
+      take=1
+    elif [ -n "$fw" ]; then
+      if [ "$req_area" -lt "$best_req" ] ||
+        { [ "$req_area" -eq "$best_req" ] && [ "$ret_area" -gt "$best_ret" ]; }; then
+        take=1
+      fi
+    else
+      if [ "$ret_area" -gt "$best_ret" ] ||
+        { [ "$ret_area" -eq "$best_ret" ] && [ "$req_area" -lt "$best_req" ]; }; then
+        take=1
+      fi
+    fi
+    if [ -n "$take" ]; then
+      best="$cand"
+      best_req="$req_area"
+      best_ret="$ret_area"
+    fi
+  done
+  [ -n "$best" ] || return 1
+  echo "$best"
+}
+
+measure_image_file() {
+  # $1 = path to an image on disk. Echoes "WxH" read from the FILE, never
+  # from anything the API said about it. ffprobe because that is what this
+  # repo already depends on for media measurement (ofox-video-core uses
+  # ffmpeg/ffprobe for its contact sheets and chain frames) — no new
+  # dependency is introduced to answer "how big is this PNG".
+  local f="$1" dims
+  command -v ffprobe >/dev/null 2>&1 || return 1
+  dims="$(ffprobe -v error -select_streams v:0 \
+    -show_entries stream=width,height -of csv=p=0:s=x "$f" 2>/dev/null)" || return 1
+  dims="${dims%%$'\n'*}"
+  dims="${dims%x}"
+  case "$dims" in
+    *x*) : ;;
+    *) return 1 ;;
+  esac
+  case "${dims%x*}" in ''|*[!0-9]*) return 1 ;; esac
+  case "${dims#*x}" in ''|*[!0-9]*) return 1 ;; esac
+  echo "$dims"
+}
+
+crop_image_to() {
+  # $1 = source, $2 = destination, $3/$4 = crop WxH, $5/$6 = optional exact
+  # output WxH to scale the crop down to. Centre crop: ffmpeg's crop filter
+  # defaults x/y to (iw-ow)/2, (ih-oh)/2.
+  local src="$1" dst="$2" cw="$3" ch="$4" ow="${5:-}" oh="${6:-}" vf
+  vf="crop=${cw}:${ch}"
+  if [ -n "$ow" ] && { [ "$ow" -ne "$cw" ] || [ "$oh" -ne "$ch" ]; }; then
+    vf="${vf},scale=${ow}:${oh}"
+  fi
+  ffmpeg -nostdin -loglevel error -i "$src" -vf "$vf" -frames:v 1 -y "$dst" \
+    >/dev/null 2>&1 || return 1
+  [ -s "$dst" ] || return 1
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -542,18 +814,45 @@ resolve_response_model() {
 # Applying one model's measured token count to another model would produce a
 # number that looks exactly like the measured one and is not. That is the
 # failure mode this refuses.
+#
+# THE SECOND failure mode, and the reason this block is pair-aware rather
+# than one-number-per-model: an anchor is only valid for the --quality and
+# --size it was measured at. Measured 2026-09-04, openai/gpt-image-2 spends
+# 196 output tokens at low / 1024x1024 and 5063 at high / 1792x1024 — 26x,
+# from two flags. The lookup this replaced read one count per model and never
+# saw what was requested, so a real run at high / 1792x1024 was quoted at the
+# low / 1024x1024 figure: approved at 0.6 cents, billed 15.4. See
+# token-anchors.json's _what_the_count_does_depend_on.
+#
+# So the rule is: quote the measurement for the request's OWN pair when one
+# exists, and otherwise quote the DEAREST measurement the model has, labelled
+# as an upper bound with the pair it came from. Never interpolate between two
+# measured points, and never let the quote come out below what the request
+# could actually cost. An upper bound labelled as one is honest; an estimate
+# that turns out to be 26x low is not, because by then someone has already
+# said yes to it.
 # ---------------------------------------------------------------------------
 
-anchor_output_tokens() {
-  # $1 = model id. Prints a measured output-token count, or nothing.
+anchor_measurements() {
+  # $1 = model id. Prints one measured point per line, TSV:
+  #   <output_tokens>\t<quality>\t<size>\t<measured>
+  # The anchor's own row first, then every entry in additional_measurements
+  # (a second pair for a model that already has a row is added there rather
+  # than overwriting the first, because both are true — each for its own
+  # pair). Empty output means nothing has been measured for this model, which
+  # is the "cannot be predicted" case rather than a reason to borrow.
   [ -f "$TOKEN_ANCHORS" ] || return 1
-  jq -er --arg m "$1" '.anchors[$m].output_tokens // empty | numbers' \
-    "$TOKEN_ANCHORS" 2>/dev/null
-}
-
-anchor_measured_date() {
-  [ -f "$TOKEN_ANCHORS" ] || return 1
-  jq -er --arg m "$1" '.anchors[$m].measured // empty' "$TOKEN_ANCHORS" 2>/dev/null
+  jq -r --arg m "$1" '
+    (.anchors[$m] // empty) as $a
+    | ([$a] + ($a.additional_measurements // []))
+    | map(select((.output_tokens | type) == "number"))
+    | .[]
+    | [ (.output_tokens | tostring),
+        (.quality // "unrecorded"),
+        (.size // "unrecorded"),
+        (.measured // "an earlier run") ]
+    | @tsv
+  ' "$TOKEN_ANCHORS" 2>/dev/null
 }
 
 # Set to 1 by generate --dry-run, so the estimate can say "nothing is going to
@@ -562,7 +861,9 @@ anchor_measured_date() {
 DRY_RUN_ACTIVE=""
 
 print_estimate() {
-  # $1 = model id, $2 = image count (n).
+  # $1 = model id, $2 = image count (n), $3 = the --quality this request will
+  # send, $4 = the --size it will send ("" when the flag was omitted, which
+  # leaves the size to the API and is therefore just as unknown as "auto").
   #
   # ALWAYS prints exactly one "Estimated cost:" line. Silence is the one
   # outcome a calling agent cannot relay to a user — it can repeat a number,
@@ -570,24 +871,68 @@ print_estimate() {
   # of a line it was never told to expect. (Lifted from ofox-video.sh's
   # print_estimate, deliberately: the two scripts must behave the same way
   # here, because the same agent relays both into the same approval table.)
-  local model="$1" count="${2:-1}" tokens rate measured per_image total tail
+  local model="$1" count="${2:-1}" req_q="${3:-}" req_size="${4:-}"
+  local rate measured per_image total tail
+  local tokens="" pair_q="" pair_size=""
+  local exact="" best="" best_tokens=-1 points=0
+  local m_tokens m_q m_size m_date
+  local measurements bound="" req_desc pair_desc
   # The rate comes from the model list, which validation usually loaded
   # already — but not when OFOX_SKIP_MODEL_VALIDATION=1. Load it here too
   # rather than quoting nothing for a run that skipped the check.
   load_models >/dev/null 2>&1 || true
-  tokens="$(anchor_output_tokens "$model")" || tokens=""
   rate="$(output_image_rate "$model")" || rate=""
+  measurements="$(anchor_measurements "$model")" || measurements=""
 
-  if [ -z "$tokens" ]; then
+  # "auto", and an omitted flag, both resolve to something the server picks.
+  # We cannot know which point was measured for a pair we cannot name, so
+  # they take the upper-bound path rather than being matched optimistically
+  # against whatever happens to be the model's first anchor row.
+  local pair_known=1
+  case "$req_q" in "" | auto) pair_known="" ;; esac
+  case "$req_size" in "" | auto) pair_known="" ;; esac
+
+  while IFS="$(printf '\t')" read -r m_tokens m_q m_size m_date; do
+    [ -n "${m_tokens:-}" ] || continue
+    case "$m_tokens" in '' | *[!0-9]*) continue ;; esac
+    points=$((points + 1))
+    if [ -n "$pair_known" ] && [ "$m_q" = "$req_q" ] && [ "$m_size" = "$req_size" ]; then
+      exact="$m_tokens|$m_q|$m_size|$m_date"
+    fi
+    if [ "$m_tokens" -gt "$best_tokens" ]; then
+      best_tokens="$m_tokens"
+      best="$m_tokens|$m_q|$m_size|$m_date"
+    fi
+  done <<EOF
+$measurements
+EOF
+
+  local chosen=""
+  if [ -n "$exact" ]; then
+    chosen="$exact"
+  elif [ -n "$best" ]; then
+    chosen="$best"
+    bound=1
+  fi
+
+  if [ -z "$chosen" ]; then
     echo "Estimated cost: cannot be predicted for '$model' — no real call's output-token count has been recorded for it (see references/token-anchors.json). An image bills per output token, and the token count only exists once the response comes back. Say so; do not substitute another model's figure." >&2
     return 0
   fi
+
+  tokens="${chosen%%|*}"
+  chosen="${chosen#*|}"
+  pair_q="${chosen%%|*}"
+  chosen="${chosen#*|}"
+  pair_size="${chosen%%|*}"
+  measured="${chosen#*|}"
+  [ -n "$measured" ] || measured="an earlier run"
+
   if [ -z "$rate" ]; then
-    echo "Estimated cost: cannot be predicted — no published output_image rate for '$model' (offline, or the model is missing from the list). Its measured output-token count is $tokens; the rate to multiply it by is what's missing." >&2
+    echo "Estimated cost: cannot be predicted — no published output_image rate for '$model' (offline, or the model is missing from the list). Its measured output-token count is $tokens (at --quality $pair_q --size $pair_size); the rate to multiply it by is what's missing." >&2
     return 0
   fi
 
-  measured="$(anchor_measured_date "$model")" || measured="an earlier run"
   per_image="$(awk -v t="$tokens" -v r="$rate" 'BEGIN { printf "%.4f", t * r }')"
   total="$(awk -v t="$tokens" -v r="$rate" -v n="$count" 'BEGIN { printf "%.4f", t * r * n }')"
 
@@ -597,13 +942,47 @@ print_estimate() {
     tail="The exact figure is the IMAGE_COST line below, computed from the response's own token counts."
   fi
 
+  # The pair travels with the price, in the same line, so that a table built
+  # from nothing but this one sentence still shows whether the number belongs
+  # to what was asked for.
+  pair_desc="--quality $pair_q --size $pair_size"
+  req_desc="--quality ${req_q:-unset, left to the API} --size ${req_size:-unset, left to the API}"
+
+  local label="ROUGH"
+  [ -n "$bound" ] && label="ROUGH UPPER BOUND"
+
   if [ "$count" -gt 1 ] 2>/dev/null; then
-    printf 'Estimated cost: ROUGH ~$%s total = %s images x ~$%s each (%s output tokens x $%s/token, measured %s). %s\n' \
-      "$total" "$count" "$per_image" "$tokens" "$rate" "$measured" "$tail" >&2
+    printf 'Estimated cost: %s ~$%s total = %s images x ~$%s each (%s output tokens x $%s/token, measured %s at %s). %s\n' \
+      "$label" "$total" "$count" "$per_image" "$tokens" "$rate" "$measured" "$pair_desc" "$tail" >&2
+  else
+    printf 'Estimated cost: %s ~$%s (%s output tokens x $%s/token, measured %s at %s). %s\n' \
+      "$label" "$per_image" "$tokens" "$rate" "$measured" "$pair_desc" "$tail" >&2
+  fi
+
+  if [ -n "$bound" ]; then
+    # "the dearest of the 1 measured point" implies a comparison that did not
+    # happen. With one point on file, "the only" is the true sentence and the
+    # Weak ceiling note below is the consequence.
+    local points_desc
+    if [ "$points" -eq 1 ]; then
+      points_desc="the only measured point"
+    else
+      points_desc="the dearest of the $points measured points"
+    fi
+    echo "  UPPER BOUND because nothing has been measured at this request's own pair ($req_desc). This is $points_desc for '$model', quoted as a ceiling so a table errs high on the token count instead of low — erring low is what got a 0.6-cent quote approved for a frame that billed 15.4 cents. Nothing is interpolated between measured points; see references/token-anchors.json. It bounds the output-token component only, the prompt's input tokens excluded, as every figure here does." >&2
+    if [ "$points" -le 1 ]; then
+      # Worth being exact about: with one measured point, "dearest" and "only"
+      # are the same sentence, and a ceiling over a single sample is not a
+      # ceiling over the model. gpt-image-2's own two points are 26x apart.
+      echo "  Weak ceiling, and say so in the table: '$model' has been measured at exactly one pair, so this is the dearest by default rather than a bound anyone has tested. If its token count climbs with size or quality the way openai/gpt-image-2's does (196 to 5063, 26x), a real bill at $req_desc can come in above this. Measure that pair and add it to references/token-anchors.json rather than leaning on the label." >&2
+    fi
+  else
+    echo "  Measured at the same --quality and --size this request sends, which is the only condition under which an image anchor means anything: on openai/gpt-image-2 the same model's measured points are 26x apart across two flags." >&2
+  fi
+
+  if [ "$count" -gt 1 ] 2>/dev/null; then
     echo "  Rough, twice over: the token count is one model's measured average, not a promise, and whether output tokens scale linearly with --n has never been measured. Treat the per-image figure as the reliable half." >&2
   else
-    printf 'Estimated cost: ROUGH ~$%s (%s output tokens x $%s/token, measured %s). %s\n' \
-      "$per_image" "$tokens" "$rate" "$measured" "$tail" >&2
     echo "  Rough because an image's token count is only known after the fact; this reuses a measured one for the same model. It also excludes the input-token component (the prompt), which on every observed call was a fraction of a cent." >&2
   fi
   return 0
@@ -640,6 +1019,11 @@ model in the cheapest-first priority chain, resolved before anything is
 quoted. Add --dry-run to any generate call to validate it and print a rough
 cost estimate without sending a request — no API key needed.
 
+Producing a first frame for a video job? Pass --target-aspect 16:9 (or
+--target-size 1280x720). The size enum this API accepts has no 16:9 or 9:16
+entry, so such a frame always needs cropping, and an attached frame's ratio
+becomes the finished video's ratio.
+
 Run with no arguments for this message. See the top of this file, or
 skills/ofox-image-core/SKILL.md and references/api-params.md, for the full
 option list and parameter reference.
@@ -667,6 +1051,35 @@ check_curl_jq() {
     missing=1
   fi
   [ "$missing" -eq 0 ]
+}
+
+check_image_tools() {
+  # Only needed when --target-aspect/--target-size is in play: those flags are
+  # a promise that the delivered file is the ratio asked for, and the only way
+  # to keep it is to measure the written file and crop it. Guarded the same
+  # way curl and jq are, and for the same reason — checked BEFORE the one
+  # billable call, so a missing tool costs nothing to discover. Fail loud
+  # rather than fail open here: falling open would mean handing back a
+  # wrong-ratio frame that then propagates into a paid video job.
+  local missing=0
+  if ! command -v ffprobe >/dev/null 2>&1; then
+    echo "ERROR: ffprobe is not installed, and --target-aspect/--target-size cannot be honoured without it." >&2
+    missing=1
+  fi
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ERROR: ffmpeg is not installed, and --target-aspect/--target-size cannot be honoured without it." >&2
+    missing=1
+  fi
+  if [ "$missing" -ne 0 ]; then
+    echo "  macOS:          brew install ffmpeg   (ffprobe ships with it)" >&2
+    echo "  Debian/Ubuntu:  sudo apt-get install ffmpeg" >&2
+    echo "  Other:          https://ffmpeg.org/download.html" >&2
+    echo "Or drop --target-aspect/--target-size: everything else in this script, including" >&2
+    echo "--dry-run pricing, works without ffmpeg. You then own the measure-and-crop step" >&2
+    echo "by hand, and the size the API reports is not evidence of what it wrote." >&2
+    return 1
+  fi
+  return 0
 }
 
 check_api_key() {
@@ -807,12 +1220,14 @@ cmd_generate() {
   local out_dir="$PWD"
   local out_name=""
   local dry_run=""
+  local target_aspect=""
+  local target_size=""
   local key val
 
   while [ $# -gt 0 ]; do
     key="$1"
     case "$key" in
-      --model|--prompt|--quality|--size|--n|--output-format|--background|--extra-json|--out-dir|--out-name)
+      --model|--prompt|--quality|--size|--n|--output-format|--background|--extra-json|--out-dir|--out-name|--target-aspect|--target-size)
         if [ $# -lt 2 ]; then
           echo "ERROR: $key requires a value." >&2
           return 1
@@ -841,6 +1256,8 @@ cmd_generate() {
       --extra-json) extra_json="$val" ;;
       --out-dir) out_dir="$val" ;;
       --out-name) out_name="$val" ;;
+      --target-aspect) target_aspect="$val" ;;
+      --target-size) target_size="$val" ;;
     esac
   done
 
@@ -849,7 +1266,13 @@ cmd_generate() {
 
   [ -n "$dry_run" ] && DRY_RUN_ACTIVE=1
 
+  # Whether the id below was typed by the caller or produced by MODEL_CHAIN.
+  # It changes what an error about that model has to say: a user who never
+  # passed --model cannot connect "openai/gpt-image-2 rejects this" to
+  # anything they wrote unless the message tells them where it came from.
+  local model_from_chain=""
   if [ -z "$model" ] || [ "$model" = "auto" ]; then
+    model_from_chain=1
     # Resolve the chain to one concrete id here, before the estimate is
     # printed and before the payload is built, so everything downstream —
     # including whatever the caller shows the user for approval — names the
@@ -896,10 +1319,102 @@ cmd_generate() {
     echo "ERROR: --quality '$quality' is not a documented value. Valid values: $VALID_QUALITIES" >&2
     return 1
   fi
+  # Then against the model that will actually serve the request, when its
+  # accepted set is known first-hand. The union above says the value exists
+  # somewhere in this API; this says it exists on the model being used.
+  local model_q
+  model_q="$(model_qualities "$model")"
+  if [ -n "$model_q" ] && ! list_contains "$quality" "$model_q"; then
+    echo "ERROR: --quality '$quality' is not accepted by '$model', the model this request would use. It accepts: $model_q." >&2
+    if [ -n "$model_from_chain" ]; then
+      echo "  No --model was passed, so '$model' came from the priority chain (MODEL_CHAIN), not from anything you typed — but it is still the model that would have run." >&2
+    fi
+    echo "  That set is the API's own enumeration rather than a guess; model_qualities() in this script quotes the refusal it was read off. Two fixes: pass a --quality from that list, or pin a --model that accepts '$quality'." >&2
+    if [ "$quality" = "standard" ]; then
+      echo "  For 'standard' specifically: microsoft/mai-image-2.5-flash accepted it on nine real runs, so '--model microsoft/mai-image-2.5-flash --quality standard' is the pin that keeps this value." >&2
+    fi
+    echo "  Caught before the request, which is the point of catching it at all: this combination used to pass --dry-run and then fail at submission with HTTP 400." >&2
+    return 1
+  fi
 
   if [ -n "$size" ] && ! list_contains "$size" "$VALID_SIZES"; then
     echo "ERROR: --size '$size' is not a documented value. Valid values: $VALID_SIZES" >&2
     return 1
+  fi
+
+  # --- the target ratio, and the request size that best serves it ---
+  #
+  # 16:9 and 9:16 are not in VALID_SIZES and cannot be — see the geometry
+  # section above for the ratio table. So a caller who needs one of those
+  # states it here and this script owns the crop, instead of every caller
+  # re-deriving "measure the file, then crop" and one of them forgetting.
+  local target_active="" target_label=""
+  local target_rw="" target_rh="" target_px_w="" target_px_h=""
+  local pair reduced
+
+  if [ -n "$target_aspect" ] && [ -n "$target_size" ]; then
+    echo "ERROR: pass --target-aspect or --target-size, not both — --target-size '$target_size' already fixes the ratio." >&2
+    return 1
+  fi
+
+  if [ -n "$target_aspect" ]; then
+    if ! pair="$(parse_ratio_pair "$target_aspect" ':')"; then
+      echo "ERROR: --target-aspect must be W:H with two positive integers (got '$target_aspect'). Examples: 16:9, 9:16, 4:3, 1:1." >&2
+      return 1
+    fi
+    reduced="$(reduce_ratio "${pair% *}" "${pair#* }")"
+    target_rw="${reduced% *}"
+    target_rh="${reduced#* }"
+    target_label="${target_rw}:${target_rh}"
+    target_active=1
+  elif [ -n "$target_size" ]; then
+    if ! pair="$(parse_ratio_pair "$target_size" 'x')"; then
+      echo "ERROR: --target-size must be WxH with two positive integers (got '$target_size'). Examples: 1280x720, 1792x1008." >&2
+      return 1
+    fi
+    target_px_w="${pair% *}"
+    target_px_h="${pair#* }"
+    reduced="$(reduce_ratio "$target_px_w" "$target_px_h")"
+    target_rw="${reduced% *}"
+    target_rh="${reduced#* }"
+    target_label="${target_px_w}x${target_px_h} (${target_rw}:${target_rh})"
+    target_active=1
+  fi
+
+  if [ -n "$target_active" ]; then
+    # Checked before anything is quoted or spent: these flags promise an
+    # exact ratio, and the promise needs ffprobe to measure and ffmpeg to
+    # crop.
+    if ! check_image_tools; then return 2; fi
+
+    if [ -z "$size" ]; then
+      local picked
+      if ! picked="$(select_size_for_target "$target_rw" "$target_rh" "$target_px_w" "$target_px_h")"; then
+        echo "ERROR: no --size this API accepts can be cropped to $target_label without upscaling." >&2
+        echo "  Accepted sizes: $VALID_SIZES" >&2
+        echo "  Ask for fewer pixels, or drop --target-size and crop the result yourself." >&2
+        return 1
+      fi
+      size="$picked"
+      echo "NOTE: requesting --size $size, the size that best serves the target $target_label (chosen from: $VALID_SIZES)." >&2
+      echo "  The delivered file will be centre-cropped to $target_label. This API's size enum contains no 16:9 or 9:16 entry, so a crop is unavoidable, not a fallback." >&2
+    elif [ "$size" = "auto" ]; then
+      echo "NOTE: --size auto leaves the request size to the model, so there is nothing to check the target $target_label against up front." >&2
+      echo "  The crop still happens: whatever comes back is measured and cropped to $target_label, or the run fails loudly." >&2
+    else
+      # An explicit --size is respected, never silently replaced. It is only
+      # checked against the target, and only warned about.
+      local ecw="${size%x*}" ech="${size#*x}" edims
+      if edims="$(crop_dims_for "$ecw" "$ech" "$target_rw" "$target_rh")"; then
+        if [ -n "$target_px_w" ] &&
+          { [ "${edims% *}" -lt "$target_px_w" ] || [ "${edims#* }" -lt "$target_px_h" ]; }; then
+          echo "NOTE: --size $size cannot cover the target ${target_px_w}x${target_px_h} — cropped to ${target_rw}:${target_rh} it is only ${edims% *}x${edims#* }, and this script never upscales." >&2
+          echo "  Keeping your explicit --size; the run will fail after generating rather than deliver an upscaled frame. Drop --size to let it pick, or ask for fewer pixels." >&2
+        fi
+      else
+        echo "NOTE: --size $size is smaller than one whole unit of ${target_rw}:${target_rh}; the crop will fail after generating. Drop --size to let this script pick a size." >&2
+      fi
+    fi
   fi
 
   if [ -n "$n" ]; then
@@ -994,8 +1509,11 @@ cmd_generate() {
     payload=$(printf '%s' "$payload" | jq --argjson extra "$extra_json" '. * $extra')
   fi
 
-  # Say what this will cost before spending anything.
-  print_estimate "$model" "${n:-1}"
+  # Say what this will cost before spending anything. The quality and size
+  # go in because an image anchor is only valid for the pair it was measured
+  # at — and $size here is the EFFECTIVE one, after --target-aspect has
+  # picked a request size, not the flag the caller typed.
+  print_estimate "$model" "${n:-1}" "$quality" "$size"
 
   if [ -n "$dry_run" ]; then
     # Everything above already ran: arguments parsed, model resolved against
@@ -1008,6 +1526,15 @@ cmd_generate() {
     echo "MODEL $model"
     echo "QUALITY $quality"
     [ -n "$size" ] && echo "SIZE $size"
+    if [ -n "$target_active" ]; then
+      # What an approval table needs: the size that will be REQUESTED and the
+      # ratio the delivered file is promised at. The exact cropped pixels are
+      # deliberately not predicted here — they are computed from the written
+      # file, because the response's own size field is not evidence of what
+      # was written on two of the three models measured.
+      echo "TARGET_ASPECT ${target_rw}:${target_rh}"
+      [ -n "$target_px_w" ] && echo "TARGET_SIZE ${target_px_w}x${target_px_h}"
+    fi
     echo "N ${n:-1}"
     if [ -n "$MODEL_FALLBACK_FROM" ]; then
       echo "MODEL_FALLBACK_FROM $MODEL_FALLBACK_FROM"
@@ -1060,7 +1587,8 @@ cmd_generate() {
   ext=$(infer_extension "$output_format")
   base_name="${out_name:-ofox_image_$(date +%Y%m%d%H%M%S)_$$}"
 
-  local idx=0 item b64 outpath paths=()
+  local idx=0 item b64 stem outpath rawpath paths=() raw_paths=()
+  local measured_size="" final_size="" crop_dims
   while IFS= read -r item; do
     b64=$(printf '%s' "$item" | jq -r '.b64_json // empty')
     if [ -z "$b64" ]; then
@@ -1070,13 +1598,71 @@ cmd_generate() {
       return 3
     fi
     if [ "$count" -gt 1 ]; then
-      outpath="${out_dir%/}/${base_name}_${idx}.${ext}"
+      stem="${out_dir%/}/${base_name}_${idx}"
     else
-      outpath="${out_dir%/}/${base_name}.${ext}"
+      stem="${out_dir%/}/${base_name}"
     fi
-    if ! decode_b64_to_file "$b64" "$outpath"; then
-      echo "ERROR: failed to base64-decode image data[$idx] to $outpath." >&2
+    # With a target, the API's own bytes land at <stem>-uncropped and the
+    # cropped frame takes the plain <stem> name. Two reasons for that split:
+    # a caller (or an older one, parsing IMAGE_PATH) gets the file that
+    # actually meets the target without changing how it reads the output, and
+    # the untouched original survives for a human who wants to re-crop
+    # differently. If the crop fails, <stem> never appears and the run exits
+    # nonzero — there is no path at which a wrong-ratio frame is sitting where
+    # the right one was promised.
+    if [ -n "$target_active" ]; then
+      rawpath="${stem}-uncropped.${ext}"
+      outpath="${stem}.${ext}"
+    else
+      rawpath="${stem}.${ext}"
+      outpath="$rawpath"
+    fi
+    if ! decode_b64_to_file "$b64" "$rawpath"; then
+      echo "ERROR: failed to base64-decode image data[$idx] to $rawpath." >&2
       return 3
+    fi
+    raw_paths+=("$rawpath")
+
+    # Measure the FILE. Never the response's size field: on
+    # microsoft/mai-image-2.5-flash the request, the response and the file
+    # have disagreed three ways on three separate runs.
+    local this_measured=""
+    this_measured="$(measure_image_file "$rawpath")" || this_measured=""
+    [ "$idx" -eq 0 ] && measured_size="$this_measured"
+
+    if [ -n "$target_active" ]; then
+      if [ -z "$this_measured" ]; then
+        echo "ERROR: could not measure '$rawpath', so the target ${target_rw}:${target_rh} cannot be guaranteed." >&2
+        echo "The generated image is on disk and was billed; it is NOT cropped and its ratio is unverified." >&2
+        echo "Do not attach it to a video job without measuring it by hand — an attached frame's ratio becomes the video's ratio." >&2
+        return 3
+      fi
+      local mw="${this_measured%x*}" mh="${this_measured#*x}"
+      if ! crop_dims="$(crop_dims_for "$mw" "$mh" "$target_rw" "$target_rh")"; then
+        echo "ERROR: '$rawpath' measured ${this_measured}, too small to hold one whole unit of ${target_rw}:${target_rh}." >&2
+        echo "The image was generated and billed; it is on disk uncropped. Nothing wrong-ratio was written to ${outpath}." >&2
+        return 3
+      fi
+      local cw="${crop_dims% *}" ch="${crop_dims#* }"
+      if [ -n "$target_px_w" ] &&
+        { [ "$cw" -lt "$target_px_w" ] || [ "$ch" -lt "$target_px_h" ]; }; then
+        echo "ERROR: '$rawpath' measured ${this_measured}; cropped to ${target_rw}:${target_rh} that is only ${cw}x${ch}, short of the requested ${target_px_w}x${target_px_h}." >&2
+        echo "This script crops and scales down, never up — an upscaled frame is a worse deliverable than a loud failure here." >&2
+        echo "The image was generated and billed and is on disk at the -uncropped path. Ask for fewer pixels, or drop --size so a larger request size can be chosen." >&2
+        return 3
+      fi
+      if ! crop_image_to "$rawpath" "$outpath" "$cw" "$ch" "$target_px_w" "$target_px_h"; then
+        echo "ERROR: ffmpeg could not crop '$rawpath' to ${cw}x${ch}." >&2
+        echo "The image was generated and billed and is on disk uncropped at that path." >&2
+        return 3
+      fi
+      if [ "$idx" -eq 0 ]; then
+        if [ -n "$target_px_w" ]; then
+          final_size="${target_px_w}x${target_px_h}"
+        else
+          final_size="${cw}x${ch}"
+        fi
+      fi
     fi
     paths+=("$outpath")
     idx=$((idx + 1))
@@ -1095,6 +1681,13 @@ cmd_generate() {
   for outpath in "${paths[@]}"; do
     echo "IMAGE_PATH $outpath"
   done
+  # Only when a crop happened, so the untouched original is findable and the
+  # single IMAGE_PATH above stays unambiguously "the file to attach".
+  if [ -n "$target_active" ]; then
+    for rawpath in "${raw_paths[@]}"; do
+      echo "IMAGE_PATH_UNCROPPED $rawpath"
+    done
+  fi
   echo "MODEL $resp_model"
   echo "MODEL_SOURCE $RESPONSE_MODEL_SOURCE"
   # Only worth a line when the two disagree — and then it is the single most
@@ -1103,7 +1696,27 @@ cmd_generate() {
   if [ "$resp_model" != "$model" ]; then
     echo "MODEL_REQUESTED $model"
   fi
+  # Three different facts, and conflating any two of them is the mistake this
+  # skill keeps paying for:
+  #   SIZE         what the API says it produced — not evidence of anything
+  #   SIZE_ACTUAL  what the written file really measures
+  #   SIZE_FINAL   what the cropped deliverable is (only when a target was set)
+  # With --n > 1 the last two describe the first image; one request produces
+  # one size.
   echo "SIZE $resp_size"
+  if [ -n "$measured_size" ]; then
+    echo "SIZE_ACTUAL $measured_size"
+    if [ "$measured_size" != "$resp_size" ] && [ "$resp_size" != "unknown" ]; then
+      echo "NOTE: the API reported SIZE $resp_size but the file measures $measured_size. The file is the fact; the response field is not." >&2
+    fi
+  else
+    echo "SIZE_ACTUAL unmeasured"
+    echo "NOTE: could not measure the written file's real dimensions (ffprobe missing or unreadable file), so SIZE above is unverified — and on two of the three models measured here it has been wrong. Install ffmpeg to have this checked: brew install ffmpeg / sudo apt-get install ffmpeg." >&2
+  fi
+  if [ -n "$final_size" ]; then
+    echo "SIZE_FINAL $final_size"
+    echo "TARGET_ASPECT ${target_rw}:${target_rh}"
+  fi
   echo "QUALITY $resp_quality"
   echo "USAGE_INPUT_TOKENS $input_tokens"
   echo "USAGE_OUTPUT_TOKENS $output_tokens"

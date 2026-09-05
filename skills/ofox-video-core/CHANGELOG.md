@@ -4,6 +4,143 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.15.0 — a 15-second clip took over 600 seconds, and `batch` was multiplying that by the take count
+
+One measurement started this: a 15s 720p job on 2026-09-05 spent **over 600
+seconds** of wall clock. The account allows **100 requests per minute** and a
+polling job spends 10 of them, so the rate limit was never the constraint —
+the serial `batch` loop was. Three takes of that clip was half an hour of
+waiting for ten minutes of generation, and the fan-out primitive to avoid it
+(`create` and `poll` as separate subcommands) had existed all along and had
+never been used.
+
+- **`batch` now creates one take at a time and waits for all of them at
+  once.** The split is the point. A create answers in seconds, so serialising
+  it costs almost no wall clock and it is the only ordering in which "take 2
+  was rejected, so takes 3..N were never sent" can be true — the money guard
+  is preserved exactly, not traded away for speed. Firing N creates at once
+  would spend N times to learn the first was going to fail.
+- **A take that fails *after* submission no longer takes the others down.**
+  That is a different animal from a rejected create: the money is already
+  committed and the other takes are already running, so the failure is
+  reported (`TAKE 2 <id> seed=<n> FAILED exit=3`) and the rest complete. And
+  when a submission *is* rejected, takes already submitted are still waited
+  for and downloaded — they are billable whether or not we collect them, and
+  abandoning a paid job was never a saving.
+- **`poll` takes several job ids**, polled together under the same cap. This
+  is what makes cross-clip fan-out usable: N `create` calls, then one command
+  that waits on all N. Each job's own stdout is replayed under a `=== JOB i/N
+  <id> ===` delimiter **in the order the ids were given**, so `VIDEO_PATH` and
+  `VIDEO_COST` read exactly as they do for a single poll, plus a
+  `POLL_COST_TOTAL`. One id is byte-for-byte what it always was — same call,
+  no subshell, no wrapper lines — because every existing caller depends on
+  that shape.
+- **`--concurrency N`, default 4, ceiling 10**, also settable via
+  `OFOX_POLL_CONCURRENCY`. Both numbers are requests per minute rather than a
+  guess: one polling job issues one GET per `--poll-interval`, so at the
+  default 6s it spends 10 of the account's 100 RPM, which makes 10 concurrent
+  polls exactly the whole limit — hence the ceiling, and hence why it is never
+  the default. Four is 40%, and the rest is not spare: a batch's creates go
+  out first, a 429 or 5xx retries at the same cadence, and an agent commonly
+  has another Ofox call in flight in the same session. Lowering
+  `--poll-interval` multiplies the rate, so the script computes the implied
+  RPM and says so when the combination crowds the limit — a warning, not a
+  block, since rate limiting costs a poll cycle per job rather than money.
+- **Attribution is by take, not by finish order.** Takes now land in whatever
+  order the API feels like, and the seed printed against take 3 has to be take
+  3's or "re-render that one at 1080p" spends money on the wrong clip. Results
+  are read back by index, take numbers survive a gap where a take failed, and
+  a take's own diagnostics are flushed as one contiguous labelled block the
+  moment it finishes — nothing is streamed, because four polls' warnings
+  interleaved live are unreadable and, worse, unattributable. A heartbeat every
+  30s covers the silence in between.
+- **`STATUS batch_partial`** is new, and replaces `batch_completed` whenever
+  the run is not what was asked for, alongside `TAKES_SUBMITTED`,
+  `TAKES_FAILED`, `TAKES_RUNNING` and `TAKES_NOT_SUBMITTED`. A partial run
+  used to print `batch_completed` with fewer `TAKE` lines and leave an agent
+  to notice the counts disagreed. `batch` and a multi-id `poll` also pick the
+  most severe actionable exit code: `3` if anything failed (needs a new
+  prompt), `4` if something is merely still running (needs another poll), `0`
+  only when everything landed.
+- **Consecutive 429s now back off further per job**, doubling up to 60s and
+  resetting the moment a request gets through. The first 429 still waits
+  exactly one poll interval, as it always did; what changed is the
+  pathological case, because with several polls sharing one account-wide limit
+  the useful response to being rate limited is to ask less often rather than
+  to keep asking at the same cadence. `--max-wait` is still wall clock, so a
+  long backoff cannot overrun it.
+- **`SKILL.md` gains "Waiting in parallel"**, which is half the point of this
+  release: the primitive existed and nobody used it, so the file now says
+  plainly that clips parallelise, that image-to-video **within** one clip does
+  not (the first frame has to exist before the video job can be submitted, so
+  that stretch of wall clock is irreducible), and that several takes of one
+  prompt is the highest-value case. The example for the last one is job
+  `60fbea52-b14b-4796-80bf-03afe0aa4fa0`, which came back technically clean
+  with its written climax missing — a drop that was supposed to fall never
+  detached. Nothing was wrong with the prompt or the bill; the answer to that
+  is another take, and another take now costs the same wall clock as the
+  first. The section also states the thing concurrency does not change:
+  N takes is N bills arriving at once, so the approval gate's itemised table
+  has to be on screen before a concurrent batch, never after.
+- **What this costs, stated once rather than buried:** submitting every take
+  up front removes the escape hatch the serial loop had. With takes billed one
+  at a time, a user watching a bad take land could interrupt before the next
+  one was paid for; now the whole total commits within seconds. The exchange
+  is a batch that takes one clip's wall clock instead of N, and the
+  consequence is that the cost table is the only place a concurrent batch can
+  still be stopped — which is why `approval-gate.md` now says so in its
+  batch section.
+- **`approval-gate.md`'s image-estimate section rewritten a second time**,
+  because 1.14.1 (above, hours earlier) described `ofox-image-core`'s lookup
+  as pair-blind and that stopped being true when that skill shipped 1.7.0 the
+  same day. The gate no longer tells an agent to work out which measured pair
+  applies — the script does that — and instead names the two labels it can
+  print, `ROUGH` for an exact pair match and `ROUGH UPPER BOUND` for a pair
+  nobody has measured, with `Weak ceiling` on a model that has only one
+  measured pair at all. Two new prohibitions, both aimed at the way a
+  hand-corrected table drifts: do not substitute a figure of your own for the
+  printed one, and do not quietly drop an `UPPER BOUND` to a cheaper measured
+  point because it looks closer to the request. This is the shared spec four
+  scenario skills read, so a stale sentence in it is four stale skills.
+- **New test suite** `references/test/concurrency.test.sh`, 48 assertions,
+  none of which spend anything: the cap's real high-water mark read off a
+  start/end marker log, multi-id argument parsing in either position and with
+  duplicates collapsed, single-id output shape unchanged, per-take
+  seed/id/cost/path attribution under deliberately reversed completion order,
+  a submission failure still stopping the run while the already-billable takes
+  are still collected, and a post-submission failure leaving the others alone.
+  Suite total is now 271 assertions across 11 files, with no existing
+  assertion changed.
+
+## 1.14.1 — the gate's own image example was broken by a chain reorder, and its rough figure carried no pair
+
+Docs only; no script changes. Two defects in
+`references/approval-gate.md`, both surfaced by `ofox-image-core` making
+`openai/gpt-image-2` its chain head on 2026-09-04.
+
+- **The image `--dry-run` example passed `--quality standard`**, which that
+  model rejects at submission — HTTP 400, `Supported values are: 'low',
+  'medium', 'high', and 'auto'`, nothing billed. The example pins no
+  `--model`, so it resolved to the new head and a user copying the shared
+  spec's own command hit an immediate error. It passes `high` now.
+- **"When there is no estimate" said to relay the ROUGH figure without saying
+  what that figure is scoped to, and that is a defect in the gate rather than
+  a typo in an example.** A ROUGH figure is only valid for the
+  `--quality`/`--size` pair its anchor was measured at, and at the time of
+  writing the script did not compare that pair against the request — it
+  looked up one count per model and printed it either way. (`ofox-image-core`
+  1.7.0, later the same day, made the lookup pair-aware; see 1.15.0's
+  approval-gate bullet for how this section reads now.) Measured 2026-09-04:
+  `openai/gpt-image-2` spends
+  196 output tokens at `low` / `1024x1024` and **5063** at `high` /
+  `1792x1024`, about 0.6 cents against 15.4, and a real approval table quoted
+  the 0.6-cent figure for a frame that billed 15.4. The section now states
+  that there is no flat per-image price, tells the agent to read the anchor's
+  own `quality` and `size` fields before relaying the line, and to declare an
+  unmeasured pair as unmeasured instead of interpolating between two that are
+  measured. An understated figure in the table is the one outcome this file
+  exists to prevent.
+
 ## 1.14.0 — seven real clips' worth of measurements folded into the two shared references
 
 Docs only; no script changes. Eight jobs produced between 2026-09-03 and

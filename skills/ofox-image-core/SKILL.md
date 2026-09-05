@@ -2,11 +2,11 @@
 name: ofox-image-core
 description: Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
 license: MIT
-version: "1.4.0"
+version: "1.7.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.4.0"
+  version: "1.7.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -59,22 +59,39 @@ public.
 cost-per-image-ranked chain and uses the first model that is actually
 available:
 
-| | Model | Cost per image (measured) | Why it is here |
+| | Model | Cost per image (measured — always at the pair named) | Why it is here |
 |---|---|---|---|
-| 1 | `openai/gpt-image-2` | ~0.6 cents | cheapest per image, despite the higher per-token rate below — see the warning |
-| 2 | `microsoft/mai-image-2.5-flash` | ~2.67 cents | second cheapest per image; was the chain's preferred model through 1.3.0 |
+| 1 | `openai/gpt-image-2` | **~0.6 cents** at `--quality low --size 1024x1024`; **~15.4 cents** at `--quality high --size 1792x1024` | cheapest per image at the one pair measured on both it and row 2, despite the higher per-token rate below — see the warnings |
+| 2 | `microsoft/mai-image-2.5-flash` | ~2.67 cents at `--quality low --size 1024x1024` | second cheapest at that pair; was the chain's preferred model through 1.3.0 |
 | 3 | `google/gemini-3.1-flash-lite-image` | not measured | tied with (1) on the per-token rate, but no per-image figure recorded yet |
 | 4 | `microsoft/mai-image-2.5` | not measured | same vendor as (2), when quality matters more |
 
+⚠️ **There is no such thing as "the" per-image price of an image model — every
+figure above is only true for the `--quality`/`--size` pair beside it.**
+Measured 2026-09-04: `openai/gpt-image-2` spends 196 output tokens at `low` /
+`1024x1024` and **5063** at `high` / `1792x1024`, so the same model costs 0.6
+cents or 15.4 cents depending on two flags — a **26x** spread. Quoting a bare
+"~0.6 cents per image" for a large, high-quality frame is exactly the mistake
+that produced a 15.4-cent bill against a 0.6-cent estimate. Since 1.7.0
+`--dry-run` picks the measured point matching the request's own pair, and
+falls back to the dearest one labelled `UPPER BOUND` when the pair has never
+been measured — so the estimate no longer under-quotes, but a bare per-image
+figure quoted from this table by hand still can. See "The estimate is rough,
+and sometimes impossible" below.
+
 ⚠️ **This table is ranked by measured cost per image, not by the rate card's
-per-output-token price** — the two rankings disagree here. Measured
-2026-09-02: `mai-image-2.5-flash` spends 1024 output tokens on an image,
-`gpt-image-2` spends 196. So the 15%-more-expensive-per-token model is
-**4.5x cheaper per image** (0.6 cents vs 2.67 cents), and that measurement is
-exactly why the chain was reordered — see "The 2026-09-04 reversal" below.
-**Do not re-derive the chain's order from the rate card alone** — the
-comparable figure is rate x that model's own measured token count, and rows
-3–4 have no per-image measurement to rank by yet, only the per-token rate.
+per-output-token price** — the two rankings disagree here. At the one pair
+measured on both models (`low` / `1024x1024`, 2026-09-02),
+`mai-image-2.5-flash` spends 1024 output tokens against `gpt-image-2`'s 196,
+so the 15%-more-expensive-per-token model is **4.5x cheaper per image** (0.6
+cents vs 2.67 cents), and that measurement is why the chain was reordered —
+see "The 2026-09-04 reversal" below. Two limits on how far that ranking
+reaches: rows 3–4 have no per-image measurement at all, only the per-token
+rate; and **no like-for-like comparison exists at any other pair** — the 26x
+within-model spread above is larger than the 4.5x between-model one, so
+"which model is cheaper" is a narrower claim than it looks. **Do not
+re-derive the order from the rate card alone** — the comparable figure is
+rate x that model's own measured token count at the pair you intend to run.
 Full numbers and the caveats on them: `references/pricing.md`.
 
 **The chain is defined in exactly one place** — `MODEL_CHAIN` in
@@ -107,18 +124,32 @@ This is the reversal it asked for, not an unreviewed reordering — and the
 2026-09-02 rule is still in force for the next person who wants to change
 this again: raise it before you reorder it.
 
-**`gpt-image-2` has no output samples in this repo yet.** The token count
-behind its ~0.6-cent-per-image figure is real (measured 2026-09-02, three
-calls, `references/token-anchors.json`), but that is a token count, not a
-look at what the model actually draws — no scenario skill built on this one
-has generated a real deliverable with it so far. Every existing
-opening-frame / concept image produced through this skill was generated with
-`mai-image-2.5-flash` (see the `SIZE` gotcha below for where; the same
-`content/ofox-cases/*/refs/` paths). The first time a scenario skill
-generates an image with the new default, look at the result before assuming
-it matches what `mai-image-2.5-flash` would have produced — pin `--model
-microsoft/mai-image-2.5-flash` explicitly if the quality turns out to
-matter more than the price for that use case.
+**`gpt-image-2` has exactly one real run behind it in this repo, and it
+carried two surprises.** Until 2026-09-04 it had none at all — its
+~0.6-cent figure was a token count (2026-09-02, three calls) rather than a
+look at what the model draws, while every opening-frame / concept image this
+skill had actually produced came from `mai-image-2.5-flash`. On 2026-09-04 a
+scenario skill generated a real frame with the new default, at `--quality
+high --size 1792x1024`, and it:
+
+- **cost 15.4 cents, not 0.6** — 5063 output tokens, ~26x the anchored
+  estimate, because the anchor was measured at `low` / `1024x1024` and
+  nothing recorded that (the chain table's first warning above);
+- **was refused once first**, because this model does not accept `--quality
+  standard` — the value every earlier image in this repo used (see "Required
+  flags" below). Nothing was billed for the refusal.
+
+It also honoured `--size` exactly, which neither model before it did (the
+`SIZE` gotcha below). One run is one run: pin `--model
+microsoft/mai-image-2.5-flash` explicitly if the look turns out to matter
+more than the price for a given use case, and look at the result rather than
+assuming it matches what `mai-image-2.5-flash` would have produced.
+
+Both surprises are guards now rather than warnings — 1.7.0 made the estimate
+pair-aware and `--quality` per-model, so that run's quote would come out at
+the 15.4-cent point and its `--quality standard` would be refused at
+`--dry-run` for free. Neither guard makes the model's *look* predictable,
+which is the part still resting on a single run.
 
 **Fallback is reported, never silent.** If the preferred model is missing from
 the model list, doesn't serve `/v1/images/generations`, or is deprecated, the
@@ -149,7 +180,9 @@ Three models are documented in depth in `references/api-params.md` and
 too; what isn't documented is which `--size`/`--quality` values each accepts,
 because the API doesn't publish that for image models. That gap covers the
 chain's models too: a `--quality` value a given model won't take surfaces as
-exit `3` with the upstream message, not as a client-side rejection.
+exit `3` with the upstream message, not as a client-side rejection —
+confirmed on 2026-09-04 by `gpt-image-2` refusing `--quality standard`, and
+recorded per model under "Required flags" below.
 
 ## Before you spend: quote it, get a yes, then spend it
 
@@ -163,15 +196,25 @@ What this skill contributes to that table:
 
 ```bash
 bash references/ofox-image.sh generate --dry-run \
-  --prompt "..." --quality standard --out-dir ./assets
+  --prompt "..." --quality high --target-aspect 16:9 --out-dir ./assets
 ```
+
+(`high`, not `standard`: the chain's default model does not accept
+`standard`, and since 1.7.0 this dry run refuses the combination itself
+rather than letting it reach an HTTP 400 — see "Required flags" above. And
+`--target-aspect 16:9` because this frame is going into a video job — the
+size enum cannot express 16:9, so the crop is not optional; the dry run
+reports which `--size` will be requested to serve it, **and prices the
+estimate at that size** rather than at whatever pair the model's anchor
+happened to be measured at.)
 
 `--dry-run` parses the arguments, resolves the model against the chain,
 validates every parameter, creates and checks `--out-dir`, builds the payload
 and prints the estimate — then returns, before the `POST`. Nothing is
 submitted, nothing is billed, and **no `OFOX_API_KEY` is needed**, so a job
 can be priced before anyone signs up. It prints `STATUS dry_run`, `MODEL`,
-`QUALITY`, `SIZE`/`N` where they apply, the `MODEL_FALLBACK_*` lines when a
+`QUALITY`, `SIZE`/`N` where they apply, `TARGET_ASPECT`/`TARGET_SIZE` when a
+target was set, the `MODEL_FALLBACK_*` lines when a
 fallback happened, and `MODEL_CHAIN_EXHAUSTED` in the rarer case where
 *nothing* in the chain is usable — the model named is then one the script
 already expects the API to reject, which the user needs to hear before
@@ -184,19 +227,50 @@ Images cannot. They bill per output token, and the token count only exists in
 the response. So `--dry-run` prints exactly one `Estimated cost:` line, and it
 is one of two things:
 
-- **`ROUGH ~<amount> (1120 output tokens x ...)`** — anchored to a real
-  measured call with **that same model**, recorded in
-  `references/token-anchors.json`. Relay it as rough; it is not a quote.
+- **`ROUGH ~<amount> (<N> output tokens x ..., measured <date> at --quality
+  <q> --size <s>)`** — anchored to a real measured call with **that same
+  model at that same pair**. Relay it as rough; it is not a quote.
+- **`ROUGH UPPER BOUND ~<amount> (... measured <date> at --quality <q> --size
+  <s>)`** — nothing has been measured at the pair *this* request asks for, so
+  the figure is the **dearest** point that model has, quoted as a ceiling.
+  Relay it as a ceiling and say so: the real bill may land well under it.
 - **`cannot be predicted for '<model>' — no real call's output-token count has
   been recorded for it`** — no measurement exists yet. Relay that sentence,
   show the table anyway with "cannot be predicted" in the cost column, and
   still wait for a yes.
 
+**An anchor is only valid for the `--quality`/`--size` pair it was measured
+at, and since 1.7.0 the lookup knows that.** It used to read one number per
+model and print it for every request, which cost real money on 2026-09-04: a
+run at `high` / `1792x1024` was quoted from `gpt-image-2`'s `low` /
+`1024x1024` anchor — approved at ~0.6 cents, billed **15.4 cents**, 26x, with
+the size and the quality on screen directly above the wrong price. The rule
+now:
+
+1. a measurement at the request's own pair is quoted as-is;
+2. otherwise the **dearest** measurement that model has is quoted, labelled
+   `UPPER BOUND` and carrying the pair it came from, so a table built from
+   the line alone still shows whether the number belongs to what was asked
+   for;
+3. nothing is interpolated between two measured points, and no quote comes
+   out below what the request could cost;
+4. `auto` for either flag — and an omitted `--size`, which is the same thing,
+   the API picking — is unknowable in advance and takes the upper-bound path.
+
+Two consequences worth carrying into the table. **A common cheap call now
+over-quotes**: `--quality low` with no `--size` on `gpt-image-2` shows the
+15.4-cent ceiling, not the 0.6-cent point, because an omitted size cannot be
+matched — name the pair when you want the exact figure. And **the ceiling
+bounds the output-token half only**; the prompt's input tokens are excluded
+from every figure this script estimates, as they always were, which on
+observed calls was a fraction of a cent.
+
 **Never borrow one model's measured token count for another model.** A
 borrowed number is indistinguishable from a measured one and is worth less
-than no number at all. Today only `google/gemini-3.1-flash-image` has a
-measurement; the chain's top two are marked as awaiting one — see
-`references/pricing.md`.
+than no number at all. Measured anchors today: `google/gemini-3.1-flash-image`
+(invoice-checked), `microsoft/mai-image-2.5-flash` and `openai/gpt-image-2`
+(formula only) — each at the pair recorded beside it, and the chain's rows 3–4
+at none. See `references/pricing.md`.
 
 ## Availability check
 
@@ -219,6 +293,11 @@ are present — it makes no network call. Handle each failure mode plainly:
   shown once), then `export OFOX_API_KEY=...` in their shell. Offer this
   once, plainly, and move on — don't repeat the pitch on every message.
 
+`check` deliberately does **not** test for `ffmpeg`/`ffprobe`: they are only
+needed by `--target-aspect`/`--target-size`, and making them a session-level
+requirement would block callers who never crop. Those flags check for them
+themselves, before anything is spent (exit `2`).
+
 ## Invoking the script
 
 ```bash
@@ -238,7 +317,11 @@ IMAGE_PATH <absolute/path/to/file.ext>   (one line per generated image)
 MODEL <the model the cost below is priced at>
 MODEL_SOURCE response | request
 MODEL_REQUESTED <id>                     (only when it differs from MODEL)
-SIZE <size actually used, from the response>
+SIZE <size the response claims — not evidence of anything, see below>
+SIZE_ACTUAL <WxH measured from the written file, or "unmeasured">
+SIZE_FINAL <WxH of the cropped deliverable>   (only with --target-aspect/--target-size)
+TARGET_ASPECT <W:H>                           (only with --target-aspect/--target-size)
+IMAGE_PATH_UNCROPPED <path>                   (only when a crop happened)
 QUALITY <quality actually used, from the response>
 USAGE_INPUT_TOKENS <n>
 USAGE_OUTPUT_TOKENS <n>
@@ -268,12 +351,49 @@ difference between a bill that reconciles and one that does not.
 
 Required flags: `--prompt`, and `--quality` (one of
 `auto low medium high standard hd` — Ofox's docs mark this required, and not
-every value is confirmed to apply to every model, so the script never guesses
-a default; you must pass one explicitly).
+every value applies to every model, so the script never guesses a default;
+you must pass one explicitly).
+
+**`--quality` is a per-model enum, and since 1.7.0 it is validated against
+the model the request will actually use** — not just against the union of
+every model's values. So an invalid combination fails at `--dry-run`, exit
+`1`, no network call, instead of costing a round trip to an HTTP 400. What is
+observed, and which half of it is first-hand:
+
+| Model | Accepted set | Where that comes from |
+|---|---|---|
+| `openai/gpt-image-2` (the chain's head) | `auto`, `low`, `medium`, `high` — **enforced**, so `standard` and `hd` are rejected locally | **First-hand, the API's own enumeration**: HTTP 400, `Invalid value: 'standard'. Supported values are: 'low', 'medium', 'high', and 'auto'` (2026-09-04, nothing billed) |
+| `microsoft/mai-image-2.5-flash` | the full union — **permissive fallback** | `standard` accepted on nine real runs. Evidence a value *works*, not an enumeration of what the model takes |
+| `google/gemini-3.1-flash-image` | the full union — **permissive fallback** | `low` accepted on three real runs. Same limit |
+| everything else | the full union — **permissive fallback** | no observation either way |
+
+**Only the first row is a whitelist, and that is deliberate.** A narrower set
+invented for a model that never enumerated its own would reject calls that
+would have worked, and a false rejection is worse here than the 400 it
+prevents: the 400 costs a round trip and no money, while a false rejection
+blocks the work outright with no way around it short of editing the script.
+So an absence of evidence stays permissive, and a row is added only when a
+model has enumerated its own set. The table lives in `model_qualities()` in
+`references/ofox-image.sh`, with the refusal quoted next to it.
+
+The trap this closes is worth stating plainly: **`standard` used to work on
+every call this repo made, and stopped working the moment the chain's head
+became `gpt-image-2` on 2026-09-04** — same flag, same script, instant 400,
+and `--dry-run` caught none of the five copy-pasteable commands that shipped
+broken in two other skills. It now does. Any caller still passing `--quality
+standard` needs `high` (or `low`/`medium`/`auto`), or `--model
+microsoft/mai-image-2.5-flash` pinned to keep the value; the error names the
+resolved model and both fixes, including when no `--model` was ever passed
+and the id came from `MODEL_CHAIN`. `hd` has never been accepted by any model
+here. Per-model detail and the captured response:
+`references/api-params.md`.
 
 Optional flags: `--model` (any image model Ofox serves; default: the priority
 chain above), `--dry-run` (validate, resolve, quote, stop — no request, no
 key needed), `--size` (one of the documented WxH values or `auto`),
+`--target-aspect W:H` / `--target-size WxH` (the ratio or exact pixels the
+delivered file must really be — see "The size enum cannot express 16:9 or
+9:16" below; **this is the flag to use for a video first frame**),
 `--n` (1-10, default 1 — **not supported at all by
 `google/gemini-3.1-flash-image`**, rejected client-side before any network
 call if combined with that model, even `--n 1`), `--output-format`
@@ -293,41 +413,124 @@ network call, so relay the printed path exactly; the file's location is the
 actual deliverable, and the user should be able to find it without
 re-deriving your working directory.
 
+## The size enum cannot express 16:9 or 9:16
+
+This is the single fact that explains every size surprise in this skill, and
+it is not a model bug — it is a structural gap between this image API's
+`size` enum and the video API's aspect ratios. Every value `--size` accepts,
+with its true ratio:
+
+| `--size` | Ratio | What it actually is |
+|---|---|---|
+| `1024x1024`, `512x512`, `256x256` | 1.0000 | 1:1, exact |
+| `1536x1024` | 1.5000 | 3:2, exact |
+| `1024x1536` | 0.6667 | 2:3, exact |
+| `1792x1024` | **1.7500** | the closest thing to 16:9 — but 16:9 is 1.7778 |
+| `1024x1792` | **0.5714** | the closest thing to 9:16 — but 9:16 is 0.5625 |
+
+**16:9 and 9:16 cannot be requested at all**, on any model, at any quality.
+So every 16:9 or 9:16 frame this API produces has to be cropped. There is no
+flag, no model and no prompt wording that avoids it, and looking for one is
+the wrong search.
+
+### Why that matters more than tidiness: `adaptive` propagates the error
+
+These frames mostly exist to be attached to a video job, and attaching an
+image to `bytedance/seedance-2.5` **forces `aspect_ratio: adaptive`** — the
+frame's own ratio becomes the finished video's ratio, whatever the video
+flags say. A 1.75 frame yields a 1.75 video. Fixing it after the fact means
+paying for the video again, at video prices, so a ratio error in a
+two-cent image is charged at the cost of the clip it was attached to.
+
+### `--target-aspect` / `--target-size`: state it, and the script keeps it
+
+```bash
+# A 16:9 first frame for a video job — the common case.
+bash references/ofox-image.sh generate \
+  --prompt "a teenage girl at the edge of a school rooftop at sunset, ..." \
+  --quality high --target-aspect 16:9 --out-dir ./assets
+```
+
+What that does, in order:
+
+1. **Picks the request size** from the enum above — the one that survives the
+   crop with the most pixels intact (`1792x1024` for 16:9, keeping 98.4%,
+   against `1536x1024`'s 84.4%). An explicit `--size` is respected and never
+   silently replaced; it is only warned about when it cannot cover the target.
+2. **Generates as normal**, at the usual price for that size and quality.
+3. **Measures the written file** with `ffprobe` — never the response's own
+   `size` field, for the reasons in the next section.
+4. **Centre-crops to exactly the target ratio.** Crop dimensions are integer
+   multiples of the reduced ratio, not a rounded division, so the result is
+   16:9 rather than 1.7773. Both crops on record fall out of that one rule:
+   `1344x768 → 1344x756` and `1792x1024 → 1792x1008`.
+5. **Fails loudly if the target cannot be met** — a file smaller than the
+   target, or a `--target-size` no accepted size can cover without upscaling.
+   It crops and scales *down*, never up. An almost-right image is the
+   expensive outcome here, not the safe one.
+
+`--target-size WxH` is the same thing with exact pixels: it requests the
+cheapest size that clears the floor after cropping (since anything above it
+is tokens bought and thrown away), then scales the crop to exactly `WxH`.
+The two flags are mutually exclusive — `--target-size` already fixes the
+ratio.
+
+**Which file to attach.** The cropped frame takes the plain output name, so
+`IMAGE_PATH` is always the file that meets the target and an existing caller
+parsing that key gets the right one without changing. The API's untouched
+bytes are kept alongside it as `<name>-uncropped.<ext>` and reported as
+`IMAGE_PATH_UNCROPPED`, so a human who wants a different crop still has the
+original. If the crop fails, the plain name is never written and the run
+exits non-zero — there is no state in which a wrong-ratio frame is sitting
+where the right one was promised.
+
+**These flags need `ffmpeg`/`ffprobe`** (`brew install ffmpeg`,
+`sudo apt-get install ffmpeg`) — the same dependency `ofox-video-core`
+already uses for contact sheets and chain frames, not a new one. Missing,
+they fail as an environment error (exit `2`) **before anything is spent**,
+because the flags are a promise about the delivered file and there is no way
+to keep it without measuring and cropping. Everything else in this script,
+including `--dry-run` pricing, works without `ffmpeg`; drop the flag and you
+own the measure-and-crop step by hand.
+
 ## Known gotcha: `SIZE` in the printed output can be wrong
 
-A real, paid end-to-end test (2026-08-29, `google/gemini-3.1-flash-image`,
-`--size 512x512`) succeeded and printed `SIZE 512x512` — taken straight
-from the API response, which claimed the image was generated at that
-size. The actual saved file, verified with `file` and
-`sips -g pixelWidth -g pixelHeight`, is really **1024x1024**.
+Three models, three different behaviours, and the correction is needed in
+all three cases:
+
+| Model | Requested | Response said | File really was | Runs |
+|---|---|---|---|---|
+| `google/gemini-3.1-flash-image` | `512x512` | `512x512` | **1024x1024** | 1 (2026-08-29) |
+| `microsoft/mai-image-2.5-flash` | `1792x1024` | `1354x774` | **1344x768** | 3 |
+| `openai/gpt-image-2` | `1792x1024` | `1792x1024` | `1792x1024` | **1** (2026-09-04) |
+
 `google/gemini-3.1-flash-image` appears to always generate at its native
-1024x1024 resolution and just echoes back whatever `size` was requested,
-regardless of what it actually produced.
+1024x1024 and echo back whatever `size` was asked for — verified with `file`
+and `sips -g pixelWidth -g pixelHeight`.
 
-**`microsoft/mai-image-2.5-flash` has its own version of this, and it is
-worse than a two-way mismatch — it is a three-way one.** Three real,
-paid calls through a scenario skill built on this one (all `mai-image-2.5-flash`,
-requesting `--size 1792x1024`) each printed a *different* `SIZE` from what
-was requested, and the saved file differed from both: requested `1792x1024`,
-response echoed `SIZE 1354x774`, actual saved file `1344x768` (ratio 1.75).
-None of the three numbers agree with each other. Evidence: the `refs/`
+**`microsoft/mai-image-2.5-flash` is worse than a two-way mismatch — it is a
+three-way one.** Request, response echo and file on disk are three
+*different* numbers, on three separate paid runs. Evidence: the `refs/`
 entries in `content/ofox-cases/{anime-rooftop-confession,
-yunqi-sparkling-ad, sneaker-motion-ad}/case.json` in the `home-page`
-project (a downstream consumer of this skill, not part of this repo).
+yunqi-sparkling-ad, sneaker-motion-ad}/case.json` in the `home-page` project
+(a downstream consumer of this skill, not part of this repo).
 
-**Neither of these findings has been checked against `openai/gpt-image-2`.**
-Both were observed on models other than the one now first in the chain, so
-whether `gpt-image-2` echoes a trustworthy `SIZE`, ignores the request like
-Gemini, or mismatches three ways like mai-flash is an open question as of
-this reorder — re-observe it the next time a scenario skill generates an
-image with the new default. `bailian/qwen-image-3.0-pro` remains unconfirmed
-too.
+**`openai/gpt-image-2` is the one model measured here that honours `--size`
+exactly** — and it is **one run**, so read it as one observation, not a
+guarantee. `bailian/qwen-image-3.0-pro` is untested.
 
-**If a caller needs a guaranteed output size, don't trust the `SIZE` line**
-— check the real dimensions of the file at `IMAGE_PATH` directly (`file
-<path>` or `sips -g pixelWidth -g pixelHeight <path>` on macOS,
-`identify <path>` via ImageMagick). Full detail:
-`references/api-params.md`.
+**Honouring the request is not the same as producing a usable ratio**, which
+is why that run still needed a crop: `1792x1024` is 1.75, so the frame went
+to `1792x1008` before it could be attached. So the rule is the same on every
+model and only the size of the correction changes — 16 pixels of height for
+`gpt-image-2`, a different resolution entirely for the other two.
+
+`SIZE` is printed straight from the response and inherits all of this;
+`SIZE_ACTUAL` is measured from the file and is the one to believe. When they
+disagree the script says so on stderr rather than leaving it to be noticed.
+**Don't trust `SIZE`, and crop rather than pad** so nothing is invented at
+the edges — or pass `--target-aspect`/`--target-size` and let the script do
+both. Full detail: `references/api-params.md`.
 
 ## Out of scope for this script
 
@@ -396,9 +599,9 @@ script's `print_api_error` if/when a new one is confirmed by a real call.
 | Exit | Meaning |
 |---|---|
 | `0` | Success — image(s) decoded and saved, usage token counts and `IMAGE_COST` printed. Also the exit code of a `--dry-run`, which prints `STATUS dry_run` and spends nothing. |
-| `1` | Usage/parameter validation error — no network call was made. Fix the flag and retry `generate` freely. |
-| `2` | Environment error — `curl`/`jq`/`OFOX_API_KEY` missing. Fix the environment, no request was attempted. |
-| `3` | The API rejected the request, or the response body couldn't be parsed into a usable image (see `references/api-params.md` for the one confirmed `error.type`; everything else is surfaced via the raw upstream message). |
+| `1` | Usage/parameter validation error — no network call was made. Fix the flag and retry `generate` freely. Includes a `--quality` the resolved model does not accept, which since 1.7.0 lands here instead of as an exit `3` HTTP 400. |
+| `2` | Environment error — `curl`/`jq`/`OFOX_API_KEY` missing, or `ffmpeg`/`ffprobe` missing while `--target-aspect`/`--target-size` was passed. Fix the environment, no request was attempted. |
+| `3` | The API rejected the request, the response body couldn't be parsed into a usable image, or a `--target-aspect`/`--target-size` target could not be met by the file that came back (**the image was generated and billed** and is on disk at the `-uncropped` path; nothing wrong-ratio was written to the plain path) (see `references/api-params.md` for the one confirmed `error.type`; everything else is surfaced via the raw upstream message). |
 | `4` | `--out-dir` could not be created or entered (bad path, permissions) — caught **before** any network call, so no money was spent finding this out. Fix `--out-dir` and retry. |
 | `5` | Ambiguous network failure — no HTTP response received at all. No job id exists to check afterward; check `https://app.ofox.ai`'s usage/billing history before deciding whether to retry. |
 
@@ -411,7 +614,7 @@ request-building, validation, or decoding logic above. It owns the
 scenario-specific prompt template and recommended size/quality defaults;
 this skill owns the mechanics of talking to the API correctly and safely.
 
-**Two things a scenario skill must not re-implement**, because a second copy
+**Four things a scenario skill must not re-implement**, because a second copy
 is a second thing to forget:
 
 - **The model choice.** Don't hardcode a model id and don't keep a copy of
@@ -423,3 +626,21 @@ is a second thing to forget:
   [`ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
   instead of restating the rule in your own words. Four paraphrases of "show
   the price first" become four different rules.
+- **The measure-and-crop step.** Don't tell the caller to check the file's
+  pixels and crop it by hand — pass `--target-aspect` (or `--target-size`)
+  and let the script guarantee the ratio. Three agents in a row re-derived
+  that arithmetic before those flags existed, and a frame that skips it
+  becomes a wrong-ratio **paid video**, because attaching an image forces
+  `aspect_ratio: adaptive`. A scenario skill producing a video first frame
+  should treat one of the two target flags as mandatory, not optional.
+- **The per-image price, and which `--quality` a model takes.** Don't write
+  either into your own copy. A quoted cents-per-image figure goes stale the
+  moment the chain moves or the flags change — `gpt-image-2` is 0.6 cents or
+  15.4 cents depending on two of them — so relay the `Estimated cost:` line
+  a `--dry-run` printed, including its `UPPER BOUND` label and the pair it
+  names, rather than a number of your own. Likewise, don't hardcode a
+  `--quality` value on the strength of one model accepting it: five
+  copy-pasteable commands across two skills said `--quality standard` and
+  broke the day the chain's head changed. Since 1.7.0 a `--dry-run` catches
+  that for free, which makes dry-running your own documented command the
+  cheapest way not to ship it broken.

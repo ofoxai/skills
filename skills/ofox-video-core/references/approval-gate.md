@@ -63,7 +63,7 @@ you are running from. From a `seedance-*` scenario skill's own directory:
 bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
   --prompt "..." --duration 8 --resolution 720p
 bash ../ofox-image-core/references/ofox-image.sh generate --dry-run \
-  --prompt "..." --quality standard
+  --prompt "..." --quality high
 ```
 
 From inside `ofox-video-core` or `ofox-image-core` itself, its own script is
@@ -99,6 +99,37 @@ figure **ROUGH**. Relay it as rough. Never present it as a quote, and never
 borrow one model's measured token count for another model — a borrowed number
 is indistinguishable from a measured one and is worth less than no number.
 
+**There is no flat per-image price, and a ROUGH figure is only valid for the
+`--quality`/`--size` pair its anchor was measured at.** Measured 2026-09-04:
+`openai/gpt-image-2` spends 196 output tokens at `low` / `1024x1024` and
+**5063** at `high` / `1792x1024`, so the same model is about 0.6 cents or
+15.4 cents depending on two flags — and a real approval table quoted the
+0.6-cent figure for a frame that billed 15.4, because the script then looked
+up one count per model and printed it whatever the flags were.
+
+**Since `ofox-image-core` 1.7.0 the lookup is pair-aware, so the estimate
+line is now the thing to relay verbatim — including its label.** Two shapes,
+and the label is not decoration:
+
+- `ROUGH ~$X (… measured <date> at --quality <q> --size <s>)` — measured at
+  the pair this request actually sends. Relay as rough.
+- `ROUGH UPPER BOUND ~$X (… measured <date> at --quality <q> --size <s>)` —
+  nothing has been measured at the request's own pair, so the figure is the
+  **dearest** point that model has, quoted as a ceiling. Say "ceiling" in the
+  table, and name the pair the line names — it is the pair the number came
+  from, not the one being requested. `auto` for either flag, and an omitted
+  `--size`, take this path too, since the API picks and no pair can be named.
+
+Two things not to do. **Do not substitute a figure of your own** for the one
+the line printed — hand-correcting a pair the script already matched is how a
+table drifts back to being wrong. And **do not quietly drop an `UPPER BOUND`
+to a cheaper measured point** because it looks closer to the request; nothing
+is interpolated between measured points, and the ceiling is deliberately
+high. Where the estimate reads `Weak ceiling`, that model has exactly one
+measured pair, so the "bound" is the dearest by default rather than one
+anyone has tested — pass that sentence through too. The anchors and their
+recorded pairs are in `ofox-image-core/references/token-anchors.json`.
+
 ### When a model fell back
 
 The image chain is a priority, not a lock: if the preferred model is
@@ -128,6 +159,19 @@ same money and mean completely different things.
 When one usable clip is the goal, say plainly that the **total** is what that
 clip cost — `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`. If one take in
 four is usable, the per-take figure understates its cost by 4x.
+
+**A batch that runs concurrently has to be quoted before it starts, because
+there is no longer a partway through it.** `ofox-video.sh batch` submits every
+take up front and then waits for them in parallel (since 1.15.0). That does
+not change the total by a cent, and it does take away one thing the old serial
+version had: with takes submitted one at a time and waited for in turn, a user
+watching a bad take land could interrupt before the next was billed. Now the
+whole total is committed within seconds of the command running. The exchange
+is a batch that takes one clip's wall clock instead of N, and the price of it
+is that the cost table is the only place the run can still be stopped.
+`batch --dry-run` prints exactly one `Estimated cost:` line for the whole
+batch plus the `CONCURRENCY` it would use; that is the number the table gets
+rows for, and the yes has to arrive before the command runs at all.
 
 ## Two-phase flows: two approvals
 

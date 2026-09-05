@@ -58,8 +58,22 @@ warm() {
 warm
 
 echo "=== --dry-run quotes and stops there ==="
+# The flags on this call carry two constraints that were not here before, and
+# both are the point of a later assertion rather than incidental:
+#   --quality low, not standard, because --quality is now checked against the
+#     model the request resolves to and MODEL_CHAIN's head (openai/gpt-image-2)
+#     does not accept 'standard' — the exact combination that used to pass a
+#     dry run and then fail at submission with HTTP 400. That rejection is
+#     asserted on its own further down; this call is about the happy path.
+#   --size 1024x1024 explicitly, because the estimate is now pair-aware: an
+#     omitted size is left to the API, so it cannot be matched to a measured
+#     point and takes the upper-bound path by design. Naming the pair
+#     gpt-image-2's anchor was measured at is what keeps the 0.0059
+#     assertion below testing "priced from its own anchor" rather than
+#     "priced from the dearest thing on file".
 out=$(env -u OFOX_API_KEY bash "$TARGET" generate --dry-run \
-  --prompt "a red apple on a white table" --quality standard --out-dir "$OUT_DIR" 2>&1)
+  --prompt "a red apple on a white table" --quality low --size 1024x1024 \
+  --out-dir "$OUT_DIR" 2>&1)
 code=$?
 if [ "$code" -eq 0 ]; then
   pass "--dry-run exits 0 with no OFOX_API_KEY set (pricing precedes signing up)"
@@ -297,6 +311,205 @@ case "$unmeasured" in
   *) fail "unexpected set of unmeasured anchors" "got '$unmeasured'" ;;
 esac
 
+echo
+echo "=== The estimate is priced at the pair the request asks for ==="
+# The failure being defended against is a real one, and it cost real money:
+# on 2026-09-04 a run at --quality high --size 1792x1024 was quoted from
+# gpt-image-2's low / 1024x1024 anchor — approved at ~0.6 cents, billed 15.4.
+# The two numbers below are the two ends of that 26x, and which one gets
+# printed must follow the flags.
+#
+# This is also the verbatim reproduction from the bug report: --quality high
+# with --target-aspect 16:9 and no --size, where the script itself picks
+# 1792x1024 to serve the crop. The quote has to follow the size the script
+# chose, not the (absent) flag the caller typed.
+repro=$(env -u OFOX_API_KEY bash "$TARGET" generate --dry-run \
+  --quality high --prompt t --target-aspect 16:9 --out-dir "$OUT_DIR" 2>&1)
+est=$(printf '%s\n' "$repro" | grep 'Estimated cost:' | head -1)
+if printf '%s' "$est" | grep -q '0\.1519'; then
+  pass "high + 1792x1024 is priced from the 5063-token point (~15.2 cents of output tokens)"
+else
+  fail "the 1792x1024 repro must quote the high/1792x1024 measurement" "got: $est"
+fi
+if printf '%s' "$est" | grep -q '0\.0059'; then
+  fail "the repro still quotes the low/1024x1024 anchor" \
+    "this is the 26x under-quote the pair-aware lookup exists to stop"
+else
+  pass "the cheap low/1024x1024 anchor is not reused for a high 1792x1024 frame"
+fi
+if printf '%s' "$est" | grep -q 'at --quality high --size 1792x1024'; then
+  pass "the quote carries the pair it was measured at, so the pair reaches the approval table"
+else
+  fail "the estimate line must name the measured pair" "got: $est"
+fi
+# An exact pair match is not an upper bound and must not be labelled one —
+# the label has to mean something for a reader to act on it.
+if printf '%s' "$est" | grep -q 'UPPER BOUND'; then
+  fail "an exact pair match was labelled an upper bound" "got: $est"
+else
+  pass "an exact pair match is quoted plainly, not as a ceiling"
+fi
+
+# A pair nobody has measured: 'medium' is accepted by gpt-image-2 and has no
+# anchor at any size, so this must fall to the dearest known point and say so.
+unknown=$(env -u OFOX_API_KEY bash "$TARGET" generate --dry-run \
+  --quality medium --size 1536x1024 --prompt t --out-dir "$OUT_DIR" 2>&1)
+uest=$(printf '%s\n' "$unknown" | grep 'Estimated cost:' | head -1)
+if printf '%s' "$uest" | grep -q 'UPPER BOUND'; then
+  pass "an unmeasured pair is labelled UPPER BOUND rather than quoted as an estimate"
+else
+  fail "an unmeasured pair must be labelled an upper bound" "got: $uest"
+fi
+if printf '%s' "$uest" | grep -q '0\.1519'; then
+  pass "the upper bound is the dearest measured point (5063 tokens), not the cheapest"
+else
+  fail "the upper bound must take the dearest measurement" "got: $uest"
+fi
+if printf '%s' "$uest" | grep -q 'at --quality high --size 1792x1024'; then
+  pass "the upper bound names the pair it borrowed from, not the pair requested"
+else
+  fail "an upper bound must name the pair it came from" "got: $uest"
+fi
+if printf '%s' "$unknown" | grep -q -- "--quality medium --size 1536x1024"; then
+  pass "the note also names the request's own unmeasured pair"
+else
+  fail "the upper-bound note must say which pair was unmeasured" \
+    "$(printf '%s' "$unknown" | grep -i 'upper bound' | tail -1)"
+fi
+# Nothing between two measured points is ever invented: only 196 and 5063
+# exist for this model, so no third token count may appear.
+if printf '%s' "$uest" | grep -Eq '\b(19[0-9][0-9]|2[0-9]{3}|3[0-9]{3}|4[0-9]{3}) output tokens'; then
+  fail "a token count was interpolated between two measured points" "got: $uest"
+else
+  pass "no count is interpolated between 196 and 5063"
+fi
+
+# --size omitted, and --size auto, are the same situation: the API picks, so
+# there is no pair to match and the ceiling is the only honest answer.
+for variant in "" "auto"; do
+  if [ -z "$variant" ]; then
+    label="omitted"
+    v=$(env -u OFOX_API_KEY bash "$TARGET" generate --dry-run \
+      --quality low --prompt t --out-dir "$OUT_DIR" 2>&1)
+  else
+    label="auto"
+    v=$(env -u OFOX_API_KEY bash "$TARGET" generate --dry-run \
+      --quality low --size auto --prompt t --out-dir "$OUT_DIR" 2>&1)
+  fi
+  vest=$(printf '%s\n' "$v" | grep 'Estimated cost:' | head -1)
+  if printf '%s' "$vest" | grep -q 'UPPER BOUND'; then
+    pass "--size $label leaves the size to the API, so the quote is an upper bound"
+  else
+    fail "--size $label cannot be matched to a measured pair" "got: $vest"
+  fi
+done
+qauto=$(env -u OFOX_API_KEY bash "$TARGET" generate --dry-run \
+  --quality auto --size 1024x1024 --prompt t --out-dir "$OUT_DIR" 2>&1)
+if printf '%s\n' "$qauto" | grep 'Estimated cost:' | grep -q 'UPPER BOUND'; then
+  pass "--quality auto is server-resolved too, so it takes the ceiling as well"
+else
+  fail "--quality auto must not be matched against a named quality" \
+    "$(printf '%s\n' "$qauto" | grep 'Estimated cost:' | head -1)"
+fi
+
+# A model with exactly one measurement still gets the pair printed, and is
+# still never priced from another model's count.
+solo=$(env -u OFOX_API_KEY bash "$TARGET" generate --dry-run \
+  --model google/gemini-3.1-flash-image --quality low --size 512x512 \
+  --prompt t --out-dir "$OUT_DIR" 2>&1)
+sest=$(printf '%s\n' "$solo" | grep 'Estimated cost:' | head -1)
+if printf '%s' "$sest" | grep -q '0\.0672' &&
+  printf '%s' "$sest" | grep -q 'at --quality low --size 512x512'; then
+  pass "gemini's single measured point is matched exactly and names its pair"
+else
+  fail "gemini at its measured pair should quote 0.0672 and say so" "got: $sest"
+fi
+if printf '%s' "$sest" | grep -Eq '196|5063'; then
+  fail "gemini borrowed gpt-image-2's token count" \
+    "a borrowed number looks exactly like a measured one"
+else
+  pass "pair-awareness did not start borrowing counts across models"
+fi
+
+# Still exactly one estimate line on every path — the property the whole
+# block above would be worthless without, since an agent cannot relay a line
+# it was never told to expect.
+for probe in "$repro" "$unknown" "$qauto" "$solo"; do
+  n=$(printf '%s\n' "$probe" | grep -c 'Estimated cost:')
+  if [ "$n" -ne 1 ]; then
+    fail "a pricing path printed $n estimate lines" "exactly one is the contract"
+  else
+    pass "one 'Estimated cost:' line on this path"
+  fi
+done
+
+# A ceiling built on ONE measured point is not a ceiling anyone has tested,
+# and the line has to admit that. mai-image-2.5-flash has a single point
+# (low / 1024x1024); asking it for a big high-quality frame produces a
+# "bound" of 2.66 cents that a real bill could plainly exceed, since
+# gpt-image-2's own two points are 26x apart.
+weak=$(env -u OFOX_API_KEY bash "$TARGET" generate --dry-run \
+  --model microsoft/mai-image-2.5-flash --quality high --size 1792x1024 \
+  --prompt t --out-dir "$OUT_DIR" 2>&1)
+if printf '%s\n' "$weak" | grep 'Estimated cost:' | grep -q 'UPPER BOUND'; then
+  pass "a single-point model at an unmeasured pair is still labelled a ceiling"
+else
+  fail "an unmeasured pair must take the bound path on any model" \
+    "$(printf '%s\n' "$weak" | grep 'Estimated cost:' | head -1)"
+fi
+if printf '%s' "$weak" | grep -q 'Weak ceiling'; then
+  pass "and is flagged a WEAK ceiling, because one sample cannot bound a model"
+else
+  fail "a one-point ceiling must say it is untested" \
+    "$(printf '%s' "$weak" | grep -i 'upper bound' | tail -1)"
+fi
+# Scoped to the quoted FIGURE, not the whole output: the weak-ceiling note
+# deliberately cites gpt-image-2's 196-to-5063 spread as the reason one
+# sample cannot bound a model, and that citation is the point of the note.
+# What must never happen is those counts becoming mai-flash's own number.
+wline=$(printf '%s\n' "$weak" | grep 'Estimated cost:' | head -1)
+if printf '%s' "$wline" | grep -Eq '196|5063'; then
+  fail "mai-flash's ceiling borrowed gpt-image-2's counts" \
+    "the 26x spread may be cited as a reason, but not quoted as this model's figure"
+else
+  pass "the weak ceiling stays on mai-flash's own 1024, borrowing nothing"
+fi
+if printf '%s' "$wline" | grep -q '1024 output tokens'; then
+  pass "and it is mai-flash's own measured 1024 that gets priced"
+else
+  fail "the weak ceiling must price mai-flash's own point" "got: $wline"
+fi
+# Two measured points is a real range, so the weak-ceiling caveat must NOT
+# fire there — a caveat printed unconditionally is a caveat nobody reads.
+if printf '%s' "$unknown" | grep -q 'Weak ceiling'; then
+  fail "the weak-ceiling caveat fired on a model with two measured points" \
+    "it must distinguish one sample from a measured range"
+else
+  pass "a model with two measured points gets the ceiling without the weak caveat"
+fi
+echo
+echo "=== Every anchor records the pair it was measured at ==="
+# The lookup can only be pair-aware if the data is. An anchor row without a
+# quality and a size is exactly the shape that produced the 26x under-quote:
+# a number with nothing to check it against.
+missing=$(jq -r '
+  [ .anchors | to_entries[]
+    | .key as $k
+    | ([.value] + (.value.additional_measurements // []))[]
+    | select(.output_tokens != null)
+    | select((.quality == null) or (.size == null))
+    | $k ] | unique | join(" ")' "$ANCHORS")
+if [ -z "$missing" ]; then
+  pass "every measured point carries both a quality and a size"
+else
+  fail "a measured point has no pair recorded" "models: $missing"
+fi
+if [ "$(jq -r '[.anchors["openai/gpt-image-2"].additional_measurements[] | select(.quality=="high" and .size=="1792x1024") | .output_tokens] | first' "$ANCHORS")" = "5063" ]; then
+  pass "the 5063-token high/1792x1024 measurement is still on file (the ceiling depends on it)"
+else
+  fail "gpt-image-2's high/1792x1024 measurement went missing" \
+    "references/pricing.md records 5063 output tokens, IMAGE_COST 0.154035"
+fi
 echo
 echo "=== SKILL.md's chain table matches the chain the script actually uses ==="
 # The chain has one definition (MODEL_CHAIN) and one explanation (the table in

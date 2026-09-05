@@ -4,6 +4,261 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.7.0 — the quote said 0.6 cents, the bill said 15.4, and `--dry-run` had no opinion about `standard`
+
+Two guards, both for failures that already happened on real runs and neither
+of which anything in this skill was set up to catch.
+
+**The estimate is pair-aware, and never optimistic.** On 2026-09-04 a scenario
+skill generated a real frame at `--quality high --size 1792x1024`, was quoted
+**~0.6 cents**, and was billed **15.4 cents** — 5063 output tokens against
+the 196 the anchor had been measured at (`low` / `1024x1024`). 26x, on one
+model, from two flags; and the flags were on screen directly above the wrong
+price, because the lookup read one number per model
+(`.anchors[<model>].output_tokens`) and never saw what was requested. The
+approval gate faithfully relayed the smaller number, which is the part that
+makes this a spend bug rather than a display bug.
+
+- **A measurement at the request's own `--quality` and `--size` is quoted
+  as-is**, and the line now carries the pair: `measured 2026-09-04 at
+  --quality high --size 1792x1024`. The pair travels with the price into the
+  approval table, so someone reading only the quote can see whether it
+  belongs to what they asked for.
+- **When no measurement exists at that pair, the DEAREST point the model has
+  is quoted, labelled `ROUGH UPPER BOUND`**, with the pair it borrowed from.
+  Nothing is interpolated between two measured points, and nothing is ever
+  borrowed across models — that rule is unchanged and still tested.
+- **`auto`, and an omitted `--size`, take the bound path.** The API picks in
+  both cases, so there is no pair to match and matching one anyway is exactly
+  the optimism that cost the 15.4 cents. **Consequence worth knowing: a cheap
+  `--quality low` call with no `--size` now shows `gpt-image-2`'s 15.4-cent
+  ceiling rather than its 0.6-cent point.** Naming the pair
+  (`--quality low --size 1024x1024`) is what gets the exact figure back. An
+  over-quote labelled a ceiling is recoverable; an under-quote that has
+  already been approved is not.
+- **A ceiling built on one sample says so.** `microsoft/mai-image-2.5-flash`
+  has exactly one measured point, so its "bound" for a large high-quality
+  frame is 2.66 cents — a figure a real bill could plainly exceed if its token
+  count climbs with size the way `gpt-image-2`'s does. The line prints a
+  second `Weak ceiling` note in that case and says to measure the pair rather
+  than lean on the label. Two-point models do not get the caveat, because a
+  caveat printed unconditionally is a caveat nobody reads.
+- Data: `references/token-anchors.json`'s `quality`/`size` fields are now
+  load-bearing rather than documentation, and `additional_measurements[]` is
+  read as real points rather than as a note — `gpt-image-2`'s 5063-token entry
+  is what the ceiling above is made of. A measured point with no pair recorded
+  can no longer be priced against a request at all, and a test fails if one
+  appears. The file's own instruction to raise this change with the repo owner
+  rather than make it quietly was followed; approved 2026-09-05.
+
+**`--quality` is validated against the model that will actually run.** It was
+validated against the union of every model's values (`auto low medium high
+standard hd`), so `standard` passed validation, passed `--dry-run`, and then
+died at submission with `Invalid value: 'standard'. Supported values are:
+'low', 'medium', 'high', and 'auto'` — the day `MODEL_CHAIN`'s head became
+`openai/gpt-image-2` (2026-09-04). Five copy-pasteable commands across two
+other skills shipped broken that way and a dry run caught none of them. Now
+the combination fails at `--dry-run`, exit `1`, no network call, nothing
+billed.
+
+- **The error names the model even when nobody named it.** With no `--model`
+  passed the id comes from `MODEL_CHAIN`, and an error about
+  `openai/gpt-image-2` is unconnectable to anything the user typed unless it
+  says where the model came from. It says so, and offers both fixes: an
+  accepted `--quality`, or pinning a `--model` that takes the value —
+  naming `microsoft/mai-image-2.5-flash` specifically when the value is
+  `standard`.
+- **The whitelist has exactly one row, and that is the design, not a TODO.**
+  `openai/gpt-image-2`'s four values come from the API's own enumeration, read
+  verbatim off the 400. Everything else keeps the full union: what exists for
+  the other models is evidence that a value *works* (`standard` on
+  `mai-image-2.5-flash`, nine real runs; `low` on
+  `google/gemini-3.1-flash-image`, three) — not an enumeration of what they
+  take. **A false rejection here is worse than the 400 it would prevent**: the
+  400 costs a round trip and no money, while a false rejection blocks the work
+  outright with no way around it short of editing the script. So an absence of
+  evidence stays permissive, and `model_qualities()` gains a row only when a
+  model has enumerated its own set. A test asserts the row count, so the next
+  row has to be argued for.
+
+- Documentation: `SKILL.md` rewrites "The estimate is rough, and sometimes
+  impossible" around the three-outcome line shape and the four selection
+  rules, replaces the per-model `--quality` pass/fail table with one that
+  separates first-hand enumeration from the permissive fallback, and adds a
+  fourth scenario-skill "do not re-implement this" item covering both the
+  per-image price and the `--quality` value — the two things those five broken
+  commands had hardcoded. `references/api-params.md` and
+  `references/pricing.md` carry the same correction against the fields and the
+  anchor table they belong to; `pricing.md`'s "neither is fixed by this
+  write-up" is now a record of what was fixed and what is still on a human.
+- Tests: 149 cases, up from 108. `dryrun.test.sh` gains 25 — the verbatim
+  bug reproduction (`--quality high --target-aspect 16:9`) now quoting the
+  5063-token point and explicitly *not* the 196-token one, the pair printed in
+  the line, an unmeasured pair taking the labelled ceiling, `auto` and omitted
+  `--size` doing the same, no interpolation between 196 and 5063, the weak
+  single-sample ceiling, one estimate line on every path, and every anchor
+  carrying its pair. `validation.test.sh` gains 16 — `standard` and `hd`
+  rejected for `gpt-image-2`, all four of its enumerated values still
+  accepted, the rejection reachable with no `--model` and naming the resolved
+  model and its origin, `standard` still accepted on the model that takes it
+  and on unenumerated models, `hd` still accepted where nothing was observed,
+  the union check still firing first, `check` still working with no model in
+  hand, and the one-row table asserted. No existing assertion was changed;
+  one existing case's **input** moved from `--quality standard` to
+  `--quality low --size 1024x1024`, because that input is now invalid by
+  design and an omitted size is deliberately unmatchable — the assertion and
+  its `0.0059` figure are untouched.
+
+## 1.6.0 — 16:9 was never requestable, and the third agent to hand-crop a frame is one too many
+
+**The size enum this API accepts contains no 16:9 and no 9:16 entry, and
+cannot.** `1792x1024` is 1.7500 against 16:9's 1.7778; `1024x1792` is 0.5714
+against 9:16's 0.5625. That is not a model defect and no flag removes it — it
+is a structural gap between this endpoint's `size` enum and the video API's
+`aspect_ratio` values, so **every 16:9 or 9:16 frame this skill has ever
+produced was cropped by hand afterwards**, and three separate agents
+re-derived "measure the file, then crop" from first principles before anyone
+wrote the fact down. Nothing in this skill said it. That is what 1.6.0 fixes,
+in the script rather than in advice.
+
+- **`--target-aspect W:H` and `--target-size WxH`: state the ratio you
+  actually need, and the script keeps it.** It picks the request size from the
+  enum (for 16:9, `1792x1024` — 98.4% of the pixels survive the crop, against
+  `1536x1024`'s 84.4%), generates, **measures the written file with
+  `ffprobe`**, and centre-crops to exact integer multiples of the reduced
+  ratio. Both crops previously done by hand fall out of that one rule:
+  `1344x768 → 1344x756` and `1792x1024 → 1792x1008`. `--target-size` adds a
+  pixel floor — cheapest accepted size that clears it, then scaled down to
+  exactly those pixels. Never scaled up.
+- **Why this was worth code and not a paragraph: `adaptive` turns a two-cent
+  mistake into a video bill.** Attaching an image to `bytedance/seedance-2.5`
+  forces `aspect_ratio: adaptive`, so the frame's own ratio becomes the
+  finished clip's ratio whatever the video flags say. A 1.75 frame delivers a
+  1.75 clip, and the correction is another paid generation. An
+  almost-right image is the expensive outcome here, not the safe one — which
+  is why a target that cannot be met **fails loudly** (exit `1` when no
+  accepted size can cover it, exit `3` when the delivered file comes back too
+  small) rather than emitting a frame that is 0.03% off and looks fine.
+- **`SIZE_ACTUAL`, on every run, whether or not a target was set.** The
+  response's own `size` field has now been wrong on two of the three models
+  measured, and on `microsoft/mai-image-2.5-flash` it is a *three-way*
+  mismatch — requested `1792x1024`, response said `1354x774`, file measured
+  `1344x768`, three separate paid runs. So the script measures the file
+  itself, prints it as its own line, and says on stderr when the two
+  disagree. `openai/gpt-image-2` honouring `--size` exactly is **one run**
+  (2026-09-04) and is recorded as one observation, not a guarantee — and that
+  same run still needed a crop, because 1792x1024 is not 16:9 either.
+  Honouring the request is not the same as producing a usable ratio.
+- **`IMAGE_PATH` is still the file to attach, and the original still exists.**
+  With a target, the cropped frame takes the plain output name and the API's
+  untouched bytes are kept beside it as `<name>-uncropped.<ext>`, reported as
+  `IMAGE_PATH_UNCROPPED`. An existing caller parsing `IMAGE_PATH` therefore
+  gets the correct-ratio file without changing a line, and a human who wants
+  a different crop still has the original. If the crop fails the plain name is
+  never written at all — there is no state in which a wrong-ratio frame sits
+  where the right one was promised.
+- **An explicit `--size` is respected, never silently replaced.** It is only
+  warned about, and only when it cannot cover a `--target-size`. The
+  selection runs when `--size` was omitted.
+- **`ffmpeg`/`ffprobe` are required only by the two new flags**, and are
+  checked **before anything is spent** (exit `2`, the same class as a missing
+  `curl`). They are not a new dependency for this repo —
+  `ofox-video-core` already measures and cuts media with them — and `check`
+  deliberately does not test for them, so a caller who never crops is
+  unaffected. The failure message names the install command *and* the way
+  out: drop the flag and everything else, `--dry-run` pricing included, still
+  works.
+- Documentation: `SKILL.md` gains "The size enum cannot express 16:9 or 9:16"
+  with the full ratio table, the `adaptive` propagation consequence, and a
+  per-model measurement table replacing the prose version; the scenario-skill
+  rules gain a third "do not re-implement this" item for the crop step, since
+  a scenario skill producing a video first frame should treat one of the two
+  target flags as mandatory. `references/api-params.md` carries the same
+  ratio table against the `size` field it belongs to.
+- Tests: `references/test/targetsize.test.sh`, 45 cases — the enum's lack of a
+  16:9 entry asserted rather than assumed, the two real hand-crops as
+  regression cases, the size-selection choice per ratio and per pixel floor,
+  exactness of the cropped ratio, both loud failures, the explicit-`--size`
+  warning, malformed and conflicting targets, and the missing-`ffmpeg` guard
+  including the case where no target flag is set and `ffmpeg` must not matter.
+  The three existing suites pass unchanged (63 cases), for a total of 108.
+
+## 1.5.0 — one real run on the new default model: 26x the estimate, a 400 on `standard`, and an exact `--size`
+
+**A single paid `openai/gpt-image-2` run on 2026-09-04 — `--quality high
+--size 1792x1024`, `USAGE_OUTPUT_TOKENS 5063`, `IMAGE_COST 0.154035` — billed
+15.4 cents against this repo's own 0.6-cent estimate. About 26x.** Nothing
+malfunctioned to produce that: the anchor said 196 output tokens, the script
+printed the anchor, and the anchor had been measured at `low` / `1024x1024`
+with nothing on the row recording that fact. Three findings came out of the
+one run; all three are written down here, and **no behaviour changed** — the
+only edit to `references/ofox-image.sh` is its comments, and all 63 tests in
+`references/test/` still pass untouched.
+
+- **Anchors now record the `--quality`/`--size` pair they were measured at.**
+  `references/token-anchors.json` gains a `quality` and a `size` field on all
+  three anchors, and `openai/gpt-image-2` gains an `additional_measurements`
+  entry for the new point (5063 output tokens at `high` / `1792x1024`,
+  `cost_per_image` 0.154035, `samples` 1, `cost_invoice_checked` **false** —
+  the figure is the job's own reported `IMAGE_COST`, not an invoice line; the
+  formula behind it is still reconciled against a real bill on
+  `google/gemini-3.1-flash-image` only). The 196-token point is kept intact
+  rather than corrected: it is still true for the pair it was measured at,
+  which is exactly the point. A new `_what_the_count_does_depend_on` note
+  states the rule the run bought — **an anchor is only valid for the pair it
+  was measured at** — and `_how_to_add_a_row` now requires the pair to be
+  recorded with any new count.
+- **Deliberately *not* fixed: the lookup.** `.anchors[<model>].output_tokens`
+  is still what `--dry-run` prints for every request, whatever quality and
+  size it asks for, so the 26x gap is now documented rather than closed.
+  Teaching it to select a point by pair — or to default to the dearest
+  measured point — changes what every caller is quoted, which makes it a
+  product decision, not a typo; `token-anchors.json` says to raise it the way
+  `_chain_order_history` requires a chain reorder to be raised. Until then
+  `SKILL.md` and `references/pricing.md` both tell the caller to read the
+  anchor's own `quality`/`size` before relaying the line, and to quote the
+  measured point that matches the run they are about to make.
+- **No per-image figure in this skill is unqualified any more.** Every place
+  that quoted "~0.6 cents" or "~2.67 cents" — the chain table in `SKILL.md`,
+  the anchor table in `references/pricing.md`, the `MODEL_CHAIN` comment's
+  own reasoning — now names the pair the figure belongs to. The chain table
+  also carries the limit on its own ranking: the 4.5x gap between the top two
+  models was measured at one pair only, and the 26x spread *within* one model
+  is larger than it, so "which model is cheaper" is a narrower claim than it
+  reads as.
+- **`--quality` is a per-model enum, and `standard` is not portable.** The
+  same run's first attempt was refused outright: `openai/gpt-image-2` +
+  `--quality standard` → HTTP 400, `Invalid value: 'standard'. Supported
+  values are: 'low', 'medium', 'high', and 'auto'`, **nothing billed**. That
+  value had worked on every image call this repo had ever made — nine of them
+  — and became an instant 400 the moment 1.4.0 moved `gpt-image-2` to the
+  head of the chain: a per-model enum turning a default change into a
+  breaking one. `SKILL.md`'s "Required flags" and
+  `references/api-params.md` now carry a per-model pass/fail table, and
+  `SKILL.md`'s own `--dry-run` example passes `high` instead of `standard`,
+  since a dry run cannot catch this (the script validates `--quality` against
+  the union of all models' values, so the rejection can only come from the
+  API). The new error-table row records the status and the message and marks
+  `error.type`/`error.code` as **not captured**, rather than borrowing the
+  values from the row above it.
+- **`gpt-image-2` honours `--size` exactly — and still needed a crop.**
+  Request, response echo and the saved file's real pixels all read
+  `1792x1024`, where `google/gemini-3.1-flash-image` disagrees two ways and
+  `microsoft/mai-image-2.5-flash` three. This answers the open question 1.4.0
+  asked someone to re-observe. It changes nothing about the standing advice,
+  and the same run is why: 1792x1024 is 1.75, not 16:9, so the frame had to be
+  cropped to `1792x1008` before a `bytedance/seedance-2.5` job would inherit
+  the right ratio (an attached frame forces `aspect_ratio: adaptive`).
+  **Measure the file and crop regardless of model** — what varies per model is
+  how large the correction is, not whether one is needed.
+- **1.4.0's "`gpt-image-2` has no output samples in this repo yet" is
+  retired.** It has one, and the two surprises above are what it produced.
+  One run is still one run: pin `--model microsoft/mai-image-2.5-flash` if the
+  look matters more than the price for a given use case.
+- `references/pricing.md`'s anchor table said `gpt-image-2` was measured on
+  2 calls where `token-anchors.json` says 3. Corrected to 3, per that table's
+  own rule that the JSON wins.
+
 ## 1.4.0 — the priority chain's order reversed: `gpt-image-2` first
 
 **`MODEL_CHAIN` now resolves to `openai/gpt-image-2` by default, not

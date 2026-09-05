@@ -136,13 +136,36 @@ entries of `content/ofox-cases/{anime-rooftop-confession,
 yunqi-sparkling-ad, sneaker-motion-ad}/case.json` in the downstream
 `home-page` project. Full writeup: `SKILL.md`'s `SIZE` gotcha section.
 
-**This has not been checked against `openai/gpt-image-2`**, the model now
-first in the chain — both `SIZE` findings above were observed on other
-models, so whether `gpt-image-2` behaves like Gemini (ignores the request,
-one consistent wrong answer), like `mai-image-2.5-flash` (three
-disagreeing numbers), or correctly, is unknown as of this reorder. Re-observe
-it the next time a scenario skill generates an image with the new default,
-rather than assuming either prior finding carries over.
+### `openai/gpt-image-2` honours `--size` exactly — and still needed a crop
+
+The model now first in the chain does **not** have either problem above.
+Measured 2026-09-04, one real, paid run at `--quality high --size
+1792x1024`: the request, the response's own `SIZE` echo and the saved file's
+real pixel dimensions all read **1792x1024**. All three agree, where Gemini
+gives two numbers and `mai-image-2.5-flash` gives three.
+
+**Honouring the request is not the same as producing a usable aspect ratio,
+and that distinction cost a step anyway.** 1792x1024 is 1.75, not 16:9
+(1.7778). The frame still had to be cropped to **1792x1008** before it could
+be attached to a `bytedance/seedance-2.5` job, because attaching an image
+forces `aspect_ratio: adaptive` — the video inherits the frame's own ratio,
+so a 1.75 frame delivers a 1.75 clip whatever the video flags say.
+
+So the standing rule holds for every model, and only the *size* of the
+correction changes: **measure the delivered file and crop it, whichever model
+made it.** What varies is how large the correction is — 16 pixels of height for
+`gpt-image-2`, a whole different resolution for the other two. Cropping
+only, never padding, so nothing is invented at the edges.
+
+Since 1.6.0 that is a flag rather than a manual step: `--target-aspect W:H`
+(or `--target-size WxH`) measures the written file and centre-crops it to
+exactly the ratio asked for, failing loudly instead of delivering something
+close. It does not change what anything costs — the price follows the `--size`
+that gets requested, and the flag only decides *which* size that is, which is
+why a dry run has to carry the same flag the real call will. See `SKILL.md`'s
+"The size enum cannot express 16:9 or 9:16".
+
+`bailian/qwen-image-3.0-pro` remains unchecked either way.
 
 ## Pre-flight estimates: the token anchor table
 
@@ -157,21 +180,73 @@ figure the agent invented. What it prints comes from
 `references/token-anchors.json`, the measured output-token count of a real
 earlier call **with that same model**:
 
-| Model | Measured output tokens | When | Rough cost/image at today's rate | Invoice-checked? |
-|---|---|---|---|---|
-| `google/gemini-3.1-flash-image` | **1120** | 2026-08-29, 3 calls | ~6.7 cents | **yes** — see the invoice section above |
-| `microsoft/mai-image-2.5-flash` | **1024** | 2026-09-02, 2 calls | ~2.67 cents | no — formula only |
-| `openai/gpt-image-2` | **196** | 2026-09-02, 2 calls | ~0.6 cents | no — formula only |
+| Model | Measured at `--quality` / `--size` | Measured output tokens | When | Rough cost/image at today's rate | Invoice-checked? |
+|---|---|---|---|---|---|
+| `google/gemini-3.1-flash-image` | `low` / `512x512` — the one call whose flags were written down; this model ignores `--size` anyway | **1120** | 2026-08-29, 3 calls | ~6.7 cents | **yes** — see the invoice section above |
+| `microsoft/mai-image-2.5-flash` | `low` / `1024x1024` | **1024** | 2026-09-02, 2 calls | ~2.67 cents | no — formula only |
+| `openai/gpt-image-2` | `low` / `1024x1024` | **196** | 2026-09-02, 3 calls | ~0.6 cents | no — formula only |
+| `openai/gpt-image-2` | `high` / `1792x1024` | **5063** | 2026-09-04, 1 call | **~15.4 cents** | no — the job's own reported `IMAGE_COST` |
 
 The sample counts here must match `samples` in `token-anchors.json` — that file
 is what the script actually reads, this table only explains it. When they
 disagree, the JSON wins and this table is the stale one.
 
+### The pair a row was measured at is part of the number
+
+The second column is not decoration, and the two `gpt-image-2` rows are why.
+**Measured 2026-09-04**: the same model that spends 196 output tokens at
+`low` / `1024x1024` spends **5063** at `high` / `1792x1024` — 15.4 cents
+against 0.6, about **26x**, from changing nothing but those two flags. That
+run had been quoted to the user at 0.6 cents beforehand, because the anchor
+row carried no record of the pair it came from and the script's lookup
+(`.anchors[<model>].output_tokens`) never sees what the caller asked for.
+
+**Fixed in 1.7.0** — raised with the repo owner the way
+`token-anchors.json`'s `_what_the_count_does_depend_on` required, and
+approved on 2026-09-05. The lookup now selects a measured point by
+`--quality` and `--size`, and where the request's own pair has never been
+measured it quotes the **dearest** point that model has, labelled `ROUGH
+UPPER BOUND` and carrying the pair it borrowed from. Nothing is interpolated
+between two points, and nothing is borrowed across models. So the earlier
+instruction — "the honest number for a large high-quality frame is the
+15.4-cent row, not the figure the script prints" — is now what the script
+prints.
+
+What that leaves for a human to know:
+
+- **An omitted `--size`, and `auto` on either flag, take the upper-bound
+  path**, because the API picks and no pair can be named in advance. A cheap
+  `--quality low` call with no `--size` therefore quotes the 15.4-cent
+  ceiling on `gpt-image-2`. That over-quotes on purpose: naming the pair
+  (`--quality low --size 1024x1024`) is what gets the 0.6-cent figure back.
+- **The ceiling bounds the output-token component only.** The prompt's input
+  tokens have always been excluded from the estimate — a fraction of a cent
+  on every observed call, and the reason a quoted ~0.1519 sits just under
+  the 0.154035 that pair actually billed.
+- **`mai-image-2.5-flash`'s 1024 carries the same pair caveat**, measured at
+  `low` / `1024x1024` and nowhere else. A scenario skill made three real
+  `1792x1024` calls with it (see the `SIZE` section above) and none of their
+  token counts was recorded, so the count for that pair is unknown rather
+  than assumed to be 1024 — which means a `1792x1024` request on that model
+  quotes its single `low` / `1024x1024` point as a ceiling, and that ceiling
+  is only a real ceiling if the count does not rise with size on this model
+  the way it does on `gpt-image-2`. It probably does rise. Measure it before
+  relying on the label there.
+
+One constraint on measuring the missing pairs: **`openai/gpt-image-2` rejects
+`--quality standard`** (HTTP 400 at submission, nothing billed — see
+`api-params.md`'s error table), so its rows can only ever be anchored at
+`low`, `medium`, `high` or `auto`. Since 1.7.0 the script enforces that
+itself, so an attempt to measure the disallowed pair fails at `--dry-run`
+rather than upstream.
+
 The chain's **preferred** and **second** models (`gpt-image-2` and
 `mai-image-2.5-flash`, in that order since the 2026-09-04 reorder — see
 "Decision record: the chain was reordered on this finding" below) are both
 measured, so a default `generate --dry-run` gives a rough number instead of
-"cannot be predicted". The **"invoice-checked?"**
+"cannot be predicted" — a number measured at `low` / `1024x1024` in both
+cases, which is the whole subject of the subsection above. The
+**"invoice-checked?"**
 column is a separate, weaker-or-stronger claim than the token count next to
 it — do not conflate the two:
 
@@ -252,6 +327,16 @@ above). What is new here is that content-independence holds across two
 *different* vendors that do respect the requested size — so the size/quality
 part of "model + size + quality" is doing real work, prompt content is doing
 none.
+
+**And "real work" turns out to be an understatement.** Measured 2026-09-04 on
+`openai/gpt-image-2`: `low` / `1024x1024` spends 196 output tokens,
+`high` / `1792x1024` spends **5063** — about 26x, on the same model, from the
+two flags alone. One sample, and it moved **both** flags at once, so it does
+not apportion the increase: the pixel count only rose 1.75x while the token
+count rose ~26x, which points at `--quality` carrying most of it, but that is
+an inference from a single run and not a measurement of either flag on its
+own. What it does settle is that a token count quoted without its pair is not
+an estimate of anything.
 
 Even a measured anchor is labelled **ROUGH** when it is printed. It is one
 model's observed count, not a promise, and it excludes the input-token

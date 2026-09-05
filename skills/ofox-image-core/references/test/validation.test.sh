@@ -170,6 +170,99 @@ expect_reject "n" "--n is still rejected for the model that cannot take it" -- \
   --model google/gemini-3.1-flash-image --prompt x --quality high --n 1
 
 echo
+echo "=== --quality is checked against the model, not just the union ==="
+# The union (auto low medium high standard hd) says a value exists somewhere
+# in this API. It does not say it exists on the model that will serve the
+# request — and 'standard' is the value where those two differ. It passed
+# validation, passed --dry-run, and then died at submission with
+#   Invalid value: 'standard'. Supported values are: 'low', 'medium',
+#   'high', and 'auto'
+# the day MODEL_CHAIN's head became openai/gpt-image-2 (2026-09-04). Five
+# copy-pasteable commands in two other skills shipped broken that way.
+warm_cache_then_go_offline
+expect_reject "standard" "--quality standard is rejected for the model that refused it upstream" -- \
+  --model openai/gpt-image-2 --prompt x --quality standard
+expect_reject "hd" "--quality hd is rejected too — the same enumeration excludes it" -- \
+  --model openai/gpt-image-2 --prompt x --quality hd
+
+# The four values the API's own message listed must all still work, or this
+# check has replaced a 400 with something worse: a false rejection, which
+# costs nothing to the API and blocks the caller completely.
+for q in auto low medium high; do
+  expect_accept "--quality $q is accepted by gpt-image-2 (its own enumeration)" -- \
+    --model openai/gpt-image-2 --prompt x --quality "$q"
+done
+
+# The rejection must be reachable without --model, because that is how it
+# actually happened — nobody typed 'openai/gpt-image-2'; the chain did.
+expect_reject "standard" "the chain-resolved model rejects it too, with no --model passed" -- \
+  --prompt x --quality standard
+out=$(bash "$TARGET" generate --prompt x --quality standard 2>&1)
+if printf '%s' "$out" | grep -q 'openai/gpt-image-2'; then
+  printf 'ok    the error names the model the request resolved to\n'
+  PASS=$((PASS + 1))
+else
+  printf 'FAIL  an error about an unpassed model must name it\n      output: %s\n' \
+    "$(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+  FAIL=$((FAIL + 1))
+fi
+if printf '%s' "$out" | grep -qi 'no --model was passed'; then
+  printf 'ok    and says where that model came from, so it connects to something the user typed\n'
+  PASS=$((PASS + 1))
+else
+  printf 'FAIL  the error must say the model came from the chain, not from the caller\n      output: %s\n' \
+    "$(printf '%s' "$out" | head -3 | tr '\n' ' ')"
+  FAIL=$((FAIL + 1))
+fi
+if printf '%s' "$out" | grep -qi -- '--model'; then
+  printf 'ok    and offers pinning a different --model as one of the fixes\n'
+  PASS=$((PASS + 1))
+else
+  printf 'FAIL  the error must name pinning --model as a fix\n      output: %s\n' \
+    "$(printf '%s' "$out" | head -3 | tr '\n' ' ')"
+  FAIL=$((FAIL + 1))
+fi
+
+# The other half of the rule: where a model's accepted set has never been
+# enumerated, an absence of evidence stays permissive. mai-image-2.5-flash
+# took 'standard' on nine real runs; narrowing it on the strength of that
+# would invent a whitelist and reject calls that work.
+expect_accept "--quality standard still works on the model that accepts it, when pinned" -- \
+  --model microsoft/mai-image-2.5-flash --prompt x --quality standard
+expect_accept "an unenumerated model keeps the full union (no invented whitelist)" -- \
+  --model google/gemini-3.1-flash-image --prompt x --quality standard
+expect_accept "--quality hd survives on an unenumerated model as well" -- \
+  --model microsoft/mai-image-2.5 --prompt x --quality hd
+
+# And a value outside the union is still caught first, by the union check,
+# so the per-model check never has to speak for values nothing accepts.
+expect_reject "not a documented value" "a value outside the union is still caught by the union check" -- \
+  --model microsoft/mai-image-2.5-flash --prompt x --quality ultra
+
+# check must not have grown a dependency on knowing the model.
+out=$(bash "$TARGET" check 2>&1)
+code=$?
+if [ "$code" -eq 0 ]; then
+  printf 'ok    check still passes with no model in hand\n'
+  PASS=$((PASS + 1))
+else
+  printf 'FAIL  check must not need a model to validate the environment (exit %s)\n      output: %s\n' \
+    "$code" "$(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+  FAIL=$((FAIL + 1))
+fi
+
+# The table is first-hand only, and that is a property worth pinning: one row
+# today, and any row added later has to come with an enumeration.
+enumerated=$(sed -n '/^model_qualities() {/,/^}/p' "$TARGET" | sed -n 's/^ *\([a-z0-9./|-]*\)) echo .*/\1/p' | tr '\n' ' ')
+if [ "$(echo "$enumerated" | xargs)" = "openai/gpt-image-2" ]; then
+  printf 'ok    exactly one model has a first-hand quality enumeration\n'
+  PASS=$((PASS + 1))
+else
+  printf 'FAIL  model_qualities() gained a row — was it sourced from the API, or guessed?\n      rows: %s\n' \
+    "$enumerated"
+  FAIL=$((FAIL + 1))
+fi
+echo
 echo "-----------------------------------------"
 printf 'passed: %s   failed: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

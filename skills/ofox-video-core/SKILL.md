@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.14.0"
+version: "1.15.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.14.0"
+  version: "1.15.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -163,16 +163,20 @@ Every option `generate` takes works here. What `batch` adds:
   take, tiled one row per take, so a human can pick a winner from one image
   instead of opening N files. Needs `ffmpeg`; without it the sheet is skipped
   with a reason and the videos are untouched.
-- **A stop on first failure.** If take 2 fails, takes 3..N are not submitted.
-  Whatever broke it will almost certainly break the rest, and each attempt is
-  real money.
+- **A stop on first failure — at submission.** If take 2's create is
+  rejected, takes 3..N are not submitted. Whatever broke it will almost
+  certainly break the rest, and each attempt is real money. A take that fails
+  *after* submission is a different case and does not stop the others; see
+  "Multiple takes of one prompt" below.
 - **A warning if you pass `--seed`**, since a fixed seed means you may be
   paying N times for N identical clips.
 
-Takes run one at a time, each as its own job through the same path a single
-`generate` uses. That is slower than firing N creates at once, and it is the
-right trade: the no-resubmit rule stays intact for free, and nothing here can
-double-bill a request that already exists.
+Takes are **created one at a time and waited for concurrently**, each as its
+own job through the same path a single `generate` uses. The sequential half is
+what keeps the money guard exact; the concurrent half is where the ten minutes
+per clip used to be multiplied by the take count. `--concurrency` caps the
+waiting (default 4); the reasoning behind that number is under "Waiting in
+parallel".
 
 `--takes` is capped at 10 per run.
 
@@ -192,7 +196,9 @@ bash references/ofox-video.sh generate --prompt "<the one that worked>" \
 
 The same five drafts on `seedance-2.5` at 720p would be $4.80. Offer the
 ladder — but let the user choose the model, since a different model is a
-different look, not just a different price.
+different look, not just a different price. All five drafts are waited for at
+once, so the ladder costs one clip's wall clock for its first rung rather than
+five.
 
 ### Re-tiling videos you already have
 
@@ -238,12 +244,139 @@ own tool timeout.
 **2. Raise the timeout for the call.** If your harness lets you set a
 per-call timeout, give `generate` at least `--max-wait` plus a margin.
 
-**`batch` needs this attention most.** Its takes run one at a time, so its
-worst case is `takes x max-wait` — four takes at the default is 36 minutes,
-which exceeds what any single Bash tool call can be given. Either lower
-`--max-wait` (a 4-second draft rarely needs 540s; 240 is generous), or run
-`create` per take and poll them yourself. Tell the user roughly how long it
+**`batch` still needs this attention most**, even though its waiting is now
+concurrent. Four takes finish in about the time of one, but that one is still
+minutes — a 15-second 720p job measured **over 600 seconds** of wall clock on
+2026-09-05, which is more than any single Bash tool call can be given. Either
+lower `--max-wait` (a 4-second draft rarely needs 540s; 240 is generous), or
+`create` each take and poll them yourself. Tell the user roughly how long it
 will take before starting.
+
+## Waiting in parallel
+
+The wall clock is the binding constraint on a multi-clip session, and it is
+not the API's fault. The account this was measured on allows **100 requests
+per minute**, while a polling job issues one request per `--poll-interval` —
+ten a minute at the default. Nothing about the rate limit required waiting for
+clips one at a time; the old serial `batch` simply did.
+
+### Across clips: parallelise, always
+
+N independent clips are N `create` calls (seconds each) and then **one** `poll`
+over every job id:
+
+```bash
+# submit all three; each returns in seconds with its own job id
+bash references/ofox-video.sh create --prompt "<shot A>" --duration 15 \
+  --resolution 720p --name "kitchen argument" --out-dir ./out
+bash references/ofox-video.sh create --prompt "<shot B>" --duration 15 \
+  --resolution 720p --name "she walks out" --out-dir ./out
+bash references/ofox-video.sh create --prompt "<shot C>" --duration 15 \
+  --resolution 720p --name "the station" --out-dir ./out
+
+# then wait for all three at once, not one after another
+bash references/ofox-video.sh poll 7b41f0c9-... 2c8e5511-... 9ad0b7e3-... \
+  --out-dir ./out
+```
+
+Each job's own output is replayed under a `=== JOB i/N <id> ===` delimiter in
+**the order the ids were given**, whatever order they finished in, so
+`VIDEO_PATH` and `VIDEO_COST` read exactly as they do for a single poll.
+`POLL_COST_TOTAL` sums the real bills. Exit is 0 when all completed, 3 if any
+job failed (a failure needs a new prompt), 4 if any is merely still running (a
+timeout needs another poll).
+
+This primitive is not new — `create` and `poll` have been separate subcommands
+for as long as they have existed, and until 2026-09-05 no agent used them this
+way. Three 15-second clips serially is half an hour; the same three this way
+is ten minutes.
+
+### Within one clip: you cannot, so don't try
+
+Image-to-video has a hard dependency in the middle of it: the first frame has
+to **exist** before the video job can be submitted. `seedance-anime-drama`'s
+two phases, and any `--frame-first-image` flow, are image → then video, and
+that ordering is the whole mechanism. `chain` is the same shape — each shot
+opens on the previous shot's closing frame, so shot 2 cannot be submitted
+until shot 1 has been downloaded and its last frame extracted.
+
+So that stretch of wall clock is irreducible. What is parallelisable is
+everything *across* those pipelines: four clips that each need an image can
+have all four images generated, then all four videos created, then all four
+polled together.
+
+### Multiple takes of one prompt is the highest-value case
+
+Video generation is a slot machine, and the reason to pull the lever more than
+once is not variety — it is that a take can quietly fail to render what the
+prompt asked for. Measured on 2026-09-05: job
+`60fbea52-b14b-4796-80bf-03afe0aa4fa0` came back technically clean with its
+written climax missing — a drop that was supposed to fall never detached from
+the surface. Nothing was wrong with the prompt, the parameters or the bill.
+
+Serially, the answer to that was a re-run and another ten minutes. Concurrently
+it costs the same wall clock as the first attempt:
+
+```bash
+bash references/ofox-video.sh batch --prompt "..." --takes 3 \
+  --duration 15 --resolution 720p --out-dir ./out
+```
+
+`batch` now **creates one take at a time and waits for all of them at once**.
+The two halves are deliberately different, and the difference is the money
+guard: a create answers in seconds, so serialising it is nearly free and it is
+the only ordering in which "take 2 was rejected, so takes 3..N were never
+sent" can be true. Firing N creates at once would spend N times to learn the
+first one was going to fail.
+
+What follows from the split:
+
+- **A take rejected at submission stops the run.** Takes already submitted are
+  still waited for and downloaded — they are billable whether or not you
+  collect them, and abandoning a paid job is not a saving.
+- **A take that fails after submission** (a generation-time or moderation
+  failure) does not touch the others. It is reported as `TAKE 2 <id>
+  seed=<n> FAILED exit=3`, keeping its take number, id and seed, and the rest
+  complete normally. A job that ends `failed` carries no `usage` and is not
+  billed.
+- **`STATUS batch_partial`** replaces `batch_completed` whenever the run is
+  not what was asked for, alongside explicit `TAKES_SUBMITTED`,
+  `TAKES_COMPLETED`, `TAKES_FAILED`, `TAKES_RUNNING` and
+  `TAKES_NOT_SUBMITTED` counts. Don't read a partial run as a complete one.
+- **Attribution is by take, not by finish order.** Takes land in whatever
+  order the API feels like; the seed printed against take 3 is take 3's, or
+  "re-render take 3 at 1080p" spends money on the wrong clip.
+
+### `--concurrency`: the number, and where it comes from
+
+`--concurrency N` (also `OFOX_POLL_CONCURRENCY`) caps how many jobs are
+**waited for** at once, on both `batch` and a multi-id `poll`. Default **4**,
+ceiling **10**.
+
+Both numbers are requests per minute, not a guess at what feels safe. One
+polling job issues at most one GET per `--poll-interval`, so at the default 6s
+it spends 10 of the account's 100 RPM. Ten concurrent polls is therefore
+exactly the whole limit, which is why 10 is the ceiling and never the default.
+Four is 40%, and the other 60% is not spare: a batch's creates go out first, a
+429 or a 5xx retries at the same cadence, and an agent commonly has another
+Ofox call in flight in the same session.
+
+Lowering `--poll-interval` multiplies the rate — four polls a second apart is
+240 RPM — so the script computes the implied rate and says so when the
+combination crowds the limit. It warns rather than blocks: rate limiting costs
+a poll cycle per job, which is time, not money, and each job backs off further
+on each consecutive 429 until a request gets through.
+
+### Money is the constraint, not the rate
+
+Concurrency does not make a batch cheaper. It makes **N bills arrive at once**,
+which is exactly why the cost table has to be on screen before it starts, not
+after. `batch --dry-run` prints one `Estimated cost:` line for the whole batch
+plus a `CONCURRENCY` line; that total is what
+[`references/approval-gate.md`](./references/approval-gate.md) requires you to
+quote, itemised, with the takes as rows — never `BATCH_COST_PER_TAKE`.
+`--takes` is still capped at 10 for the same reason it always was: a cap on how
+much one command can spend.
 
 ## Quote the price before you spend it
 
@@ -359,6 +492,7 @@ bash references/ofox-video.sh models
 bash references/ofox-video.sh generate --dry-run --prompt "..." [OPTIONS]
 bash references/ofox-video.sh generate --prompt "..." [OPTIONS]
 bash references/ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT]
+bash references/ofox-video.sh poll JOB_ID JOB_ID JOB_ID [--concurrency N]
 ```
 
 `generate` builds the request, validates parameters client-side against the
@@ -514,6 +648,12 @@ Don't guess or re-submit; tell the user the request may still be
 processing and that checking `https://app.ofox.ai` for recent jobs is the
 safe way to find its id and resume with `poll`.
 
+**`batch` prints its own resume command the moment its takes are submitted**,
+before the waiting starts — a single `poll` over every take's job id, with the
+out-dir already filled in. That line exists so a tool-call timeout during the
+concurrent wait never costs you the job ids of takes you have already paid
+for. Use it; never re-run `batch`.
+
 If the create call itself gets an ambiguous network failure (curl exits
 nonzero with **no HTTP response at all** — exit code `5`), the script
 explicitly refuses to guess whether a job was created. Don't auto-retry;
@@ -537,11 +677,21 @@ when `error.code` itself is absent or unrecognized.
 | `3` | The API rejected the request, or the job ended `failed`/`cancelled`/`expired`. The mapped message explains why (see `references/api-params.md` for the full error-code table). Includes `output_moderation_failed` — a **post-generation** failure (the job ran, its output failed a content check afterward), **not billed** (no `usage` field on the response), safe to fix by submitting a new `generate` call with a different prompt/reference — that's a new request, not a resubmission of the failed one. |
 | `4` | Timed out waiting for a terminal state. The job is still running — `poll JOB_ID`, do not `generate` again. |
 | `5` | Ambiguous network failure on create — no HTTP response received. Do not auto-retry; check the dashboard first. |
-
-`batch` returns `3` when it stopped early: the takes that did complete are
-still downloaded and still listed with their real cost, so a partial run is
-reported honestly rather than discarded.
 | `6` | `--out-dir` could not be created or entered (bad path, permissions) — a local filesystem problem, not an API problem. If this happened during `generate`, the job itself is unaffected (already created or still running server-side); do not re-run `generate`. Fix `--out-dir` and re-run `poll JOB_ID --out-dir <a writable directory>`. |
+
+(That `6` row used to sit *below* a paragraph about `batch`, which broke the
+table; the paragraph is now where it belongs, underneath.)
+
+**`batch` and a multi-id `poll` collapse several jobs' outcomes into one exit
+code, and pick the most severe actionable one.** `3` if anything failed —
+a rejected submission, or a take that ended `failed` after being submitted —
+because a failure needs a different prompt. `4` if nothing failed but something
+is still running, because that needs another poll and nothing else. `0` only
+when every requested take is on disk. Either way the takes that did complete
+are downloaded and listed with their real cost, and the counts
+(`TAKES_COMPLETED`, `TAKES_FAILED`, `TAKES_RUNNING`, `TAKES_NOT_SUBMITTED`)
+say which case you are in — a partial run is reported honestly rather than
+discarded.
 
 ## For scenario skills built on this
 

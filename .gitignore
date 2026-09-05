@@ -3,6 +3,14 @@ node_modules/
 .env
 test-output/
 
+# ofox-video.sh's create -> poll handoff files. `create` leaves the request
+# payload on disk keyed by job id (the API's response echoes neither
+# resolution, aspect ratio nor seed, so poll has no other way to get them),
+# and `poll` deletes it once the sidecar is written. Any that survive are
+# jobs whose poll never ran, or ran into a different --out-dir — real prompts
+# and parameters from someone's billed job, which is not repo content.
+.ofox-request-*.json
+
 # Personal planning notes — never commit (contains growth strategy)
 2026-*_GitHub*.md
 

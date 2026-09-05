@@ -1,12 +1,15 @@
 {
   "_what_this_is": "Measured output-token counts from real, paid calls to POST /v1/images/generations. ofox-image.sh reads this file to produce the ROUGH estimate that --dry-run prints. A model with no measurement here gets no estimate at all — the script says it cannot predict the cost and why, rather than borrowing another model's token count. Borrowed numbers look like measurements and are not.",
   "_why_it_is_needed": "An image bills per output token (cost = input_tokens * pricing.input + output_tokens * pricing.output_image) and the token counts only exist once the response comes back. Unlike video, where duration is an input and the price is exact before submitting, the only thing that makes a pre-flight image estimate possible at all is a previously measured token count for that same model.",
-  "_how_to_add_a_row": "Run one real generation with the model, take USAGE_OUTPUT_TOKENS straight from the printed output (never a derived or rounded figure), and record it with the date and the exact prompt/size used. Then update references/pricing.md's anchor table to match.",
+  "_how_to_add_a_row": "Run one real generation with the model, take USAGE_OUTPUT_TOKENS straight from the printed output (never a derived or rounded figure), and record it with the date and the exact prompt/size used — plus the `quality` and `size` the call passed, which are not optional metadata: see _what_the_count_does_depend_on for the run that proved a row without them prices a different request 26x wrong. A second pair for a model that already has a row goes in additional_measurements rather than overwriting the first, because both are true, each for its own pair. Then update references/pricing.md's anchor table to match.",
   "_what_the_count_does_not_depend_on": "Prompt content. Measured 2026-09-02: two unrelated prompts ('A simple red apple on a white table' and 'A wooden sailboat on a calm lake at sunrise, wide shot') at --quality low --size 1024x1024 produced byte-identical usage on both mai-image-2.5-flash (14 in / 1024 out) and gpt-image-2 (14 in / 196 out). Combined with gemini's three 1120s at input lengths 8, 51 and 79, the working model is: output_tokens is fixed by model + size + quality, not by what is being drawn. That is exactly why a single measured anchor can price a later run with a different prompt — the anchor would be worthless otherwise. It is two samples per model, not a proof; a count that moves with the prompt would falsify it, so record the counterexample here if one ever shows up.",
+  "_what_the_count_does_depend_on": "Quality and size — and by a factor large enough to wreck a cost table. Measured 2026-09-04: openai/gpt-image-2 at --quality high --size 1792x1024 reported 5063 output tokens and a reported IMAGE_COST of 0.154035 USD (15.4 cents), against the 196 output tokens and ~0.6 cents the same model's anchor was measured at (--quality low --size 1024x1024). That is ~26x, on one model, from changing nothing but the two flags. The estimate this repo printed before that run was the 196-token one, because the anchor row carried no record of the pair it was measured at and the script's lookup (.anchors[model].output_tokens) never sees what was requested. Hence the `quality` and `size` fields now on every anchor: AN ANCHOR IS ONLY VALID FOR THE QUALITY+SIZE PAIR IT WAS MEASURED AT. Read those two fields before relaying a --dry-run figure, and when the caller is generating at a different pair, say so instead of passing the number along — for gpt-image-2, the high/1792x1024 entry in additional_measurements is the honest figure for a large, high-quality frame. What CHANGED on 2026-09-05, and it is the fix this note asked for: the lookup is pair-aware. ofox-image.sh's anchor_measurements() flattens each model's own row plus its additional_measurements into a list of measured points, and print_estimate() quotes the point whose quality and size match the request. When none does — including whenever quality or size is 'auto' or the size flag is omitted, since the API then picks and no pair can be named — it quotes the DEAREST point that model has, labelled ROUGH UPPER BOUND and carrying the pair it came from, so the ceiling is visible as a ceiling. Nothing is ever interpolated between two measured points, and no count is ever borrowed from another model. This was raised with the repo owner the way this note required and approved on 2026-09-05; it is not a quiet change. Consequence for adding rows: a measurement WITHOUT a quality and size can no longer be priced against a request at all, so the two fields are now load-bearing rather than documentation — references/test/dryrun.test.sh fails if any measured point lacks them.",
   "_cost_is_not_the_same_claim_as_tokens": "output_tokens is observed. The dollar figure beside it is the formula's output, and the formula (output tokens bill entirely at output_image, not at the $3/M `output` rate) has been checked against a real invoice for exactly ONE model. cost_invoice_checked says which. This distinction is not pedantry: reading the model page alone left two readings 20x apart, and only an invoice line settled it — see references/pricing.md. Do not flip a false to true without an invoice.",
   "anchors": {
     "google/gemini-3.1-flash-image": {
       "output_tokens": 1120,
+      "quality": "low",
+      "size": "512x512",
       "input_tokens_observed": [
         8,
         51,
@@ -16,11 +19,13 @@
       "samples": 3,
       "cost_per_image": "0.06723950",
       "cost_invoice_checked": true,
-      "note": "1120 on all three observed calls, with input tokens of 8, 51 and 79 — the output count did not move with prompt length. This model ignores --size and always renders 1024x1024, so the count does not vary with the requested size either. The cost is the one figure in this file an actual invoice line confirmed (2026-08-31, $0.06723950 for in=79 out=1120, matching to eight decimals).",
+      "note": "1120 on all three observed calls, with input tokens of 8, 51 and 79 — the output count did not move with prompt length. This model ignores --size and always renders 1024x1024, so the count does not vary with the requested size either. The cost is the one figure in this file an actual invoice line confirmed (2026-08-31, 0.06723950 USD for in=79 out=1120, matching to eight decimals). The quality/size fields record the 2026-08-29 call's flags (--quality low --size 512x512); the two 2026-08-31 calls' flags were not written down at the time, and since this model ignores --size outright, 1120 has held across whatever they were. Treat the pair as the one documented call's, not as a claim about all three.",
       "source": "references/pricing.md"
     },
     "microsoft/mai-image-2.5-flash": {
       "output_tokens": 1024,
+      "quality": "low",
+      "size": "1024x1024",
       "input_tokens_observed": [
         14,
         14
@@ -29,11 +34,13 @@
       "samples": 2,
       "cost_per_image": "0.026694",
       "cost_invoice_checked": false,
-      "note": "The chain's preferred model. Two calls at --quality low --size 1024x1024 with unrelated prompts both reported 14 in / 1024 out. ofox-image.sh printed IMAGE_COST 0.026694 for them (14*0.000005 + 1024*0.000026). That figure is the formula's, not an invoice's — the formula itself was invoice-verified on gemini-3.1-flash-image only, so applying it here is an assumption that a real bill has not yet been held up against.",
+      "note": "The chain's preferred model. Two calls at --quality low --size 1024x1024 with unrelated prompts both reported 14 in / 1024 out. ofox-image.sh printed IMAGE_COST 0.026694 for them (14*0.000005 + 1024*0.000026). That figure is the formula's, not an invoice's — the formula itself was invoice-verified on gemini-3.1-flash-image only, so applying it here is an assumption that a real bill has not yet been held up against. The quality/size fields say what those two calls passed. Nothing here measures this model at a larger size or a higher quality, and gpt-image-2's 2026-09-04 run (see _what_the_count_does_depend_on) is the reason not to assume 1024 travels: the three 1792x1024 runs a scenario skill made with this model never had their token counts recorded, so the count for that pair is simply unknown.",
       "source": "references/pricing.md"
     },
     "openai/gpt-image-2": {
       "output_tokens": 196,
+      "quality": "low",
+      "size": "1024x1024",
       "input_tokens_observed": [
         14,
         14,
@@ -43,7 +50,19 @@
       "samples": 3,
       "cost_per_image": "0.00595",
       "cost_invoice_checked": false,
-      "note": "Second in the priority chain. Three calls at --quality low --size 1024x1024 (two with unrelated prompts, one after the fix below) all reported 14 in / 196 out. 196 is genuinely that much lower than mai-flash's 1024 — observed three times, so do not 'correct' it toward the others. $0.00595 is what ofox-image.sh itself now prints as IMAGE_COST, but it is still the FORMULA's output, NOT invoice-checked: the formula (output tokens bill entirely at output_image) was settled by a real invoice on gemini-3.1-flash-image only. History worth keeping: the first two runs printed no cost at all, because this model's response carries no `model` field and the code looked the literal string 'unknown' up in the rate table. Fixed 2026-09-02 — the requested id is used when the response omits one, while a response that echoes a DIFFERENT id is reported as-is (upstream may route elsewhere, and hiding that would misprice the run). Verified by a third real call.",
+      "additional_measurements": [
+        {
+          "output_tokens": 5063,
+          "quality": "high",
+          "size": "1792x1024",
+          "measured": "2026-09-04",
+          "samples": 1,
+          "cost_per_image": "0.154035",
+          "cost_invoice_checked": false,
+          "note": "One real, paid run made through a scenario skill: STATUS completed, MODEL_SOURCE request, SIZE 1792x1024, USAGE_OUTPUT_TOKENS 5063, IMAGE_COST 0.154035 (15.4 cents). The dollar figure is the job's own reported IMAGE_COST, not an invoice line — cost_invoice_checked is false here for the same reason it is false above, the formula has only ever been reconciled against a real bill on google/gemini-3.1-flash-image. This run is also the first evidence that gpt-image-2 honours --size exactly: the request, the response's own SIZE echo and the saved file's real pixels all read 1792x1024, unlike gemini (two-way mismatch) and mai-image-2.5-flash (three-way). Honouring the request is not the same as a usable ratio though — 1792x1024 is 1.75, not 16:9, and the frame still had to be cropped to 1792x1008 before it could be attached to a Seedance job. See references/pricing.md."
+        }
+      ],
+      "note": "Second in the priority chain. Three calls at --quality low --size 1024x1024 (two with unrelated prompts, one after the fix below) all reported 14 in / 196 out. 196 is genuinely that much lower than mai-flash's 1024 — observed three times, so do not 'correct' it toward the others. 0.00595 is what ofox-image.sh itself now prints as IMAGE_COST (as a bare number, no currency symbol), but it is still the FORMULA's output, NOT invoice-checked: the formula (output tokens bill entirely at output_image) was settled by a real invoice on gemini-3.1-flash-image only. History worth keeping: the first two runs printed no cost at all, because this model's response carries no `model` field and the code looked the literal string 'unknown' up in the rate table. Fixed 2026-09-02 — the requested id is used when the response omits one, while a response that echoes a DIFFERENT id is reported as-is (upstream may route elsewhere, and hiding that would misprice the run). Verified by a third real call. 2026-09-04 — a fourth call, at --quality high --size 1792x1024, reported 5063 output tokens and IMAGE_COST 0.154035, about 26x this row's ~0.6 cents; it is in additional_measurements rather than replacing the numbers above, because 196 is still correct for the pair it was measured at. What that run exposed is how the row was written, not a wrong count: with no quality/size qualifier on it, ~0.6 cents got quoted for a high-quality 1792x1024 frame and the bill came in 26x higher. The same run also had a first attempt refused — this model does not accept --quality standard (HTTP 400, upstream message: Invalid value: 'standard'. Supported values are: 'low', 'medium', 'high', and 'auto'), nothing billed — so any future anchor for gpt-image-2 can only be measured at one of those four values, and `standard`, which mai-image-2.5-flash accepts, is not one of them.",
       "source": "references/pricing.md"
     }
   },
