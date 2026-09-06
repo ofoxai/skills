@@ -393,13 +393,17 @@ not just a verb":
 
 - the fourth slot's `orbit` (and any other move with a destination) is a
   summary the model may drop silently when it is the only thing written; add
-  waypoint frames at their own stamps beside it, and expect their interior
-  stamps to be approximate;
+  waypoint frames at their own stamps beside it, expect their interior stamps
+  to be approximate, and expect the move to cover about half a turn and stop
+  there rather than reaching a written closing view;
 - **the shot-size slot is not optional on any segment.** Leave it out and the
   segment inherits the previous one's framing, which is how a move written
   correctly still came back at the wrong closeness for its whole duration —
   and took one of its waypoints' content with it, since the feature that
-  waypoint described was outside the inherited frame.
+  waypoint described was outside the inherited frame. Stating it on every
+  waypoint is the fix and it has been run: a later clip kept the same
+  macro-then-orbit order on purpose and held the whole subject in frame
+  throughout.
 
 ## Several shots in one job
 
@@ -509,7 +513,7 @@ longer or higher-resolution take.
 Scene detection under-reports cuts, and it does so in one predictable way:
 **two shots in the same place under the same light have too little pixel
 difference to trigger it.** Four of the six runs above hit this at threshold
-0.3, and **both clips of a later text-to-video pair hit it at the looser
+0.3, and **all three clips of a later text-to-video set hit it at the looser
 0.25** — which makes it the normal case for any scene that stays in one
 location, not a curiosity of dialogue coverage, and not something a lower
 threshold fixes.
@@ -522,15 +526,18 @@ threshold fixes.
 | `ac927785` | the 10.5s boundary, the entry into the slow-motion shot | the shot size changes visibly across it |
 | `1cf5ac46` | the third cut, at **9.750s**, **at threshold 0.25** — while the cuts at 3.12s and 6.00s were found in the same pass. It appears only once the threshold is dropped to **0.05** | one uniform grey studio for the whole clip, so the two shots either side of the missed boundary differ by less than the two shots either side of a boundary it caught |
 | `50f623b2` | the third cut, at **10.041667s**, also at threshold 0.25 — and this one needs **0.10** before it registers | the same uniform grey studio; this is `1cf5ac46`'s controlled twin, so the two of them are the same set and the same light with the same boundary missed |
+| `8efeb556` | the third cut, at **9.71s**, again at threshold 0.25, while the cuts at 2.67s and 5.71s were found in the same pass. It needs **0.10** | a third uniform grey studio clip — different product, different seed, different prompt, same blind spot, arrived at independently |
 
-**Those last two rows are the strongest form this finding has taken, because
-they are a pair and their misses are at two *different* thresholds.** Same
-subject, same set, same light, same seed, one paragraph of prompt apart — and
-the boundary that a 0.25 pass could not see needed 0.05 in one clip and 0.10
-in the other. **No single lower number would have caught both**, which is
-what "not something a lower threshold fixes" means concretely: the threshold
-that works is a property of the individual clip, discovered after the fact,
-which is not a setting anyone can choose in advance.
+**Those last three rows are the strongest form this finding has taken.** The
+first two are a controlled pair — same subject, same set, same light, same
+seed, one paragraph of prompt apart — and the boundary a 0.25 pass could not
+see needed 0.05 in one and 0.10 in the other. The third is an independent
+clip and it missed its third boundary too. So the same-lighting blind spot
+now has three consecutive confirmations in one scenario, at three separate
+after-the-fact discoveries (0.05, 0.10, 0.10) against a 0.25 default that was
+wrong for all three. **Lowering the default is not the fix**, because how far
+to lower it is only knowable once the frames have been read — which is
+exactly the work the count was supposed to save.
 
 So a detector count is where a check starts, never where it ends. Sample the
 delivered file (1–2 fps is enough) and read the frames either side of every
@@ -576,9 +583,22 @@ its limits:
 So the honest form of a rotation finding is often a limitation rather than a
 verdict: **the move ends where it was written to end; how far it travelled is
 unmeasurable in this clip.** That is a smaller claim than either wrong one,
-and it is the one that survives. Write it that way and check the arrival
-against a named frame — see "A camera move needs its waypoint frames, not
-just a verb".
+and it is the one that survives. Write it that way — and do not expect the
+arrival to be at the frame that was named for it; see "A camera move needs
+its waypoint frames, not just a verb", where two runs now bear on that.
+
+**The precondition here is not only a caveat, it is a recipe, and a later
+clip followed it.** Job `8efeb556-bf38-45ec-940b-a792ef74bfcf` (2026-09-06)
+put its whole orbit inside one continuous shot and gave it a subject with an
+unambiguous asymmetric feature — a folded pair of eyeglasses, the two temples
+reading as parallel bars from the rear and vanishing along the optical axis
+from the side. Azimuth is therefore readable at every frame of the move
+instead of only at its ends, and what came out is a measurement rather than
+an inference: front at 6.0s, side at 7.5s, rear at about 9.6s. **About half a
+turn, and it stops there.** So this section is *validated* by that clip
+rather than superseded — what it predicted would make a rotation readable is
+what made it readable. `50f623b2`'s own total stays unmeasurable; that is a
+fact about that clip, and no later run changes it.
 
 ### Where `chain` fits
 
@@ -634,31 +654,39 @@ through — each with a timestamp and its own shot size — while a verb like
 `orbits`, on its own, is a summary of those frames rather than an instruction
 that produces them.
 
-Decomposed into frames, the move happens **and it arrives**: the run below
-was asked to end on a named frame and ended on it. How far it travelled to
-get there is a separate question, and one this clip cannot answer — see
-"What the arrival does and does not establish" below. What survives the
-decomposition least well is the *schedule* — see "The timing between
-waypoints is approximate".
+Decomposed into frames, the move happens and **its interior pictures
+render**. What it does not reliably do is *arrive*: an earlier version of
+this section said "the move happens **and it arrives**", on the strength of
+one clip whose orbit ended on the frame it named — and a second, independent
+clip, whose azimuth is readable end to end, shows the same form of move
+covering about half a turn and stopping wherever that lands, opening view or
+not. Both readings, and why the first one is a coincidence rather than
+obedience, are in "How far the move goes, and where it stops" below. What
+survives the decomposition least well is the *schedule* — see "The timing
+between waypoints is approximate".
 
 The failure mode of the undecomposed form is silent. The clip comes back
 looking competent, minus the movement that was asked for, which is why it
 survives a glance and only shows up when the frames are read.
 
-### The three observations, weakest to strongest
+### The four observations, weakest to strongest
 
 | Job | Shape | What was written | What rendered |
 |---|---|---|---|
 | `60fbea52-b14b-4796-80bf-03afe0aa4fa0` | 15s, 720p, i2v, accepted | at `10.5-12s`, back at full speed, a drop `lands on the surface of the oil in the bottle, one clean ring spreads out and dies against the glass` — the tail of a five-second climax whose earlier beats described the build-up | the build-up rendered beautifully: a drop swelling at a glass tip, lit through. **The payoff never happened** — at 11.8s the drop still hangs from the pipette, and at 12.25s the clip cuts away |
 | `1cf5ac46-058f-4615-a47b-067743f76f8c` | 12s, 720p, **t2v**, seed `642303335`, rejected | `the camera orbits the grinder a full 360 degrees at constant height and constant speed, ending back at the front view. The product does not move and does not rotate; only the camera travels.` | 6.0s to about 9.7s is a near-static front view with a slight push-in, the crank arm pointing right in every frame. **The negative clause held and the positive instruction produced nothing** — the product genuinely never rotated, and the camera genuinely never travelled |
-| `50f623b2-c54a-4d9d-9646-31dd06e2a926` | **same seed, same parameters, same prompt except that one paragraph**, accepted | the paragraph rewritten as waypoint pictures, e.g. `at about 8s the camera is directly behind the grinder, the crank arm pointing away from the lens so that only the smooth back of the brushed steel collar and the walnut knob beyond it are visible` | that picture rendered: the arm entirely hidden, only the knob above the collar — its appearance clause, at least; the same waypoint's position label contradicts its own appearance clause, so the run cannot say which half was followed. **The camera moved, and the segment ended on the orientation it was told to end on** — inside the continuous segment (the hard cut at 6.291667s to about 10s) the frames read rear → side → front, roughly 180 degrees, finishing on the opening frame's own orientation. Whether it travelled further than that is **unmeasurable here** |
+| `50f623b2-c54a-4d9d-9646-31dd06e2a926` | **same seed, same parameters, same prompt except that one paragraph**, accepted | the paragraph rewritten as waypoint pictures, e.g. `at about 8s the camera is directly behind the grinder, the crank arm pointing away from the lens so that only the smooth back of the brushed steel collar and the walnut knob beyond it are visible` | that picture rendered: the arm entirely hidden, only the knob above the collar — its appearance clause, at least; the same waypoint's position label contradicts its own appearance clause, so the run cannot say which half was followed. **The camera moved** — inside the continuous segment (the hard cut at 6.291667s to about 10s) the frames read rear → side → front, roughly 180 degrees, finishing on the opening frame's own orientation. That last part reads like the closing waypoint being obeyed and ⚠️ **the row below shows it is a coincidence of the move having begun at the rear**. Whether it travelled further than that is **unmeasurable here** |
+| `8efeb556-bf38-45ec-940b-a792ef74bfcf` | 12s, 720p, **t2v**, seed `616202922`, accepted — a **different product** (a folded pair of eyeglasses), a different seed and a different prompt, written to test two of the fixes the row above proposed | the same waypoint form, plus **a shot size on every waypoint** (`with the whole pair in frame from the far temple tip to the near lens edge and margin around it`), and the same closing `by 10s the camera is back on the exact front view of the opening shot` | both interior pictures rendered, at their written framing, and the whole product stayed in frame with margin for the entire move. **The closing return did not**: front at 6.0s → side at 7.5s → rear at about 9.6s, with the front view arriving only after the cut into the next segment. About half a turn, **measured** rather than inferred — the folded temples are an unambiguous asymmetric feature and the whole orbit is one continuous shot |
 
 The third row is the controlled experiment: one variable, one seed held
-constant, with the second row as its negative control on the same subject. It
-is also still two runs — read it as a direction with one clean test behind it,
-not as a measured law.
+constant, with the second row as its negative control on the same subject —
+so the movement-versus-no-movement finding still rests on that pair and on
+nothing else. The fourth row is an independent run on another product at
+another seed, and it carries the two things the pair could not: the
+per-waypoint shot size as a **verified** fix rather than a proposed one, and
+a direct reading of how far the move goes.
 
-### What the arrival does and does not establish
+### How far the move goes, and where it stops
 
 The subject is its own protractor, which is the only reason any of this is
 readable: the grinder's crank arm rises from the centre of the collar and
@@ -679,9 +707,12 @@ Inside the continuous ORBIT segment — the hard cut at 6.291667s to about 10s
 
 Two claims and one limitation:
 
-1. **The segment ends on the orientation it was written to end on.** The
-   return worked, and it was written as a named frame — `back on the exact
-   front view of the opening shot` — rather than as a quantity of rotation.
+1. **The segment ends on the orientation the closing waypoint named.**
+   ⚠️ **This was recorded as "the return worked" and that reading does not
+   survive the next clip** — see below. What the frames support is only that
+   the last frame of this move happens to match the frame the prompt named;
+   the move also happens to begin, unasked, at the rear, so half a turn from
+   there lands on the front whether or not the closing clause did anything.
 2. **The observable travel inside the segment is rear → side → front, about
    180 degrees.**
 3. **The total travel is not measurable at all.** The written path's other
@@ -691,10 +722,50 @@ Two claims and one limitation:
    orientation cue. The segment simply *starts* at the rear; whether the
    camera travelled there or was cut there cannot be told from this clip.
 
-So the finding is "the move arrives", not "the move completes a circuit".
 Both of the wrong readings this repo published first, and the precondition
 they each skipped, are in "Measuring a camera's travel: only inside one
 continuous shot" above — read it before measuring a rotation off any clip.
+
+**A second clip removes the obstruction, and it is the one that settles the
+extent.** `8efeb556-bf38-45ec-940b-a792ef74bfcf` (2026-09-06, 12s, 720p,
+t2v, seed `616202922`) was built the way that section prescribes: the orbit
+is one continuous shot — cuts detected only at 2.67s, 5.71s and 9.71s — and
+the subject is a folded pair of eyeglasses whose two temples are an
+unambiguous asymmetric feature, so azimuth is readable at **every** frame of
+the move rather than only at its ends.
+
+| Time | What the frame shows | Camera |
+|---|---|---|
+| 6.0s | both lenses facing the lens, temples folded behind the front | the front, matching the opening shot |
+| 7.5s | the frame front seen along its own length, the two lenses overlapping into one narrow shape | a side |
+| ~9.6s | both folded temples as parallel bars, no lens surface facing the lens | the rear |
+
+So the move went front → side → rear and **stopped at the rear**. The
+written closing waypoint — `by 10s the camera is back on the exact front view
+of the opening shot` — never landed inside the segment; the front view
+returns only after the hard cut into the next one.
+
+What the same frames do **not** settle is the prompt's `constant height and
+constant speed`. The azimuth advances monotonically with no dead stretch, and
+that is the whole of the honest claim: a per-half-second scene-delta reading
+is not a clean angular-velocity proxy on this subject, because near the front
+view the same rotation changes the picture far less than it does near the
+side. Do not report a waypoint orbit as even or constant-speed off a delta
+count, in either direction.
+
+Two conclusions, and the second is a correction:
+
+- **About half a turn is now measured, not inferred.** Two clips, different
+  products, different seeds, different prompts, agree on roughly 180 degrees,
+  and this one reads it frame by frame inside a single continuous shot
+  instead of from two endpoints. The rule to write down: **expect a waypoint
+  orbit to cover about half a turn.**
+- **The closing return is not honoured.** It has one coincidence behind it
+  (`50f623b2`, which began at the rear) and one plain failure (`8efeb556`,
+  which began at the front, where the same half turn ends at the rear) — and
+  a coincidence plus a failure is no evidence at all. If the clip has to end
+  on the opening view, **give that view its own shot after a cut**, where
+  timestamps have held to about a second in every run in this repo.
 
 ### The timing between waypoints is approximate
 
@@ -711,11 +782,19 @@ not hold.** Ten frames sampled at 0.4s intervals across 6.4–10.0s of
   about 1.2 seconds.
 - **The arrival was on time**, on the orientation named for it.
 
+**The second clip behaves the same way, and its waypoints *are*
+attributable**, because each one is a distinct picture and none of them
+contradicts itself. `8efeb556` wrote a side view at 7.5s and a rear view at
+9s inside a 6–10s orbit: the side arrived **on time**, the rear about **0.6
+seconds late**, and the closing return never arrived at all. Two interior
+pictures written, two rendered — the first run to hit the budget this section
+recommends exactly, and it lost only the ending.
+
 Those are counts and durations, deliberately, and not a per-waypoint
 schedule: which written waypoint a given rendered frame corresponds to is not
-attributable here, because each waypoint carried both a camera-position label
-and an appearance description and on one of them the two contradict each
-other. "This waypoint was a second late" is a sentence this run cannot
+attributable on the grinder clip, because each waypoint carried both a
+camera-position label and an appearance description and on one of them the two
+contradict each other. "This waypoint was a second late" is a sentence this run cannot
 support, and an earlier version of this subsection wrote it anyway — as a
 four-row table pairing each written stamp with a verdict. That table is
 retracted, not merely reworded.
@@ -728,13 +807,17 @@ Two consequences, and they are the practical half of this section:
   interior waypoint's stamp. This is the same tolerance the cut timestamps
   have, and for the same reason (see "Several shots in one job").
 - **Do not write more interior waypoints than the segment can absorb.** Four
-  waypoints in four seconds lost one of them. Two or three across a move,
-  with the endpoints carrying the ones that matter, is what has been observed
-  to survive.
+  waypoints in four seconds lost one of them, while two interior pictures
+  plus a return in the same four seconds rendered both interior ones — so two
+  or three across a move is what has been observed to survive. Do not put the
+  one that matters most at the end of the move: on both runs the closing
+  frame is the one that went missing.
 
 So the boundary is not "long prompts fail", and it is not "orbits fail". A
-move written as frames happens and arrives; what stays soft is *when* each
-intermediate frame turns up, and how many of them turn up at all.
+move written as frames happens and covers about half a turn; what stays soft
+is *when* each intermediate frame turns up, how many of them turn up at all,
+and — measured on both runs — whether the move ends anywhere near the frame
+written for its ending.
 
 ### What that means for writing
 
@@ -751,6 +834,14 @@ intermediate frame turns up, and how many of them turn up at all.
   was outside the frame for the entire move, so half of that waypoint's
   content had nowhere to appear. The framing was inherited rather than
   chosen, and it took a waypoint's meaning with it.
+  **This is now a verified fix rather than a proposed one.** `8efeb556`
+  states a shot size on all three of its waypoints, closes the paragraph with
+  `at every one of those views the entire pair of glasses is inside the frame,
+  nothing cropped`, and **deliberately keeps the same risky order** — a macro
+  detail segment immediately before the orbit — so the inheritance had every
+  chance to happen again. Every frame of that move holds the whole product
+  with margin. One confirming run, on a different product at a different
+  seed, with the causal ordering preserved.
 - **A small, fast physical event needs to be its own timestamped frame**, not
   the tail of a longer beat. A drop landing, a ring spreading, a latch
   closing: compress the build-up to pay for it, give the result its own stamp,
@@ -765,14 +856,18 @@ intermediate frame turns up, and how many of them turn up at all.
   see "The timing between waypoints is approximate".
 - **A total quantity is fine as long as it is not the only thing you wrote.**
   `a full 360 degrees, ending back at the front view` was in the prompt that
-  worked, and the frame it named is the frame the move ended on — so the
-  quantity is not recorded here as a failing form, and an earlier version of
-  this section wrongly said it was. It is not the mechanism either: what made
-  the move happen was the waypoint pictures beside it. Nor is there any
-  evidence the 360 itself was performed — that is the unmeasurable half above.
-  Keep the quantity if it reads well, and put the closing angle in as a
-  picture at its own stamp, because the picture is the part that can be
-  checked.
+  worked, so the quantity is not recorded here as a failing form, and an
+  earlier version of this section wrongly said it was. It is not the mechanism
+  either: what made the move happen was the waypoint pictures beside it. And
+  ⚠️ **the `ending back at the front view` half is not what ended either
+  move** — an earlier version of this bullet said "the frame it named is the
+  frame the move ended on", which the second clip refutes: both runs cover
+  about half a turn, one landing on the named frame because it started
+  opposite it and one landing on the rear. No run here shows the written 360
+  performed. Keep the quantity if it reads well, write the closing angle in as
+  a picture at its own stamp because the picture is the part that can be
+  checked — and if the clip genuinely has to end on it, cut to it rather than
+  asking one move to travel there.
 
 ### Negative clauses are honoured more reliably than positive ones
 
@@ -790,6 +885,34 @@ only the prohibition survived. Two working rules follow:
   reliable end of the range; a positive instruction with nothing but a verb
   behind it is the unreliable one.
 
+### A description is honoured; a number attached to it is not
+
+The section above is about a *verb* needing frames behind it. This is the
+same grammar problem one level down: a **quantity** in a clause is the part
+most likely to be dropped, while the qualitative description it is attached
+to renders fine. Four instances, three of them measured on this API:
+
+| What was written | What rendered |
+|---|---|
+| `a small barrel hinge of three interleaved knuckles`, with acetate on one side and a brushed bar on the other (`8efeb556`) | the hinge, interleaved, acetate on one side, brushed bar on the other — held through a macro push-in and a full orbit. **Four** knuckle blocks at 5x, plus a screw head top and bottom |
+| `only the fingertips and the first knuckle ever visible and never more of the hand than that`, written twice, once in the shot and once in AVOID (`60fbea52`) | a clean, undeformed hand — showing most of the index finger and the hand to the knuckles |
+| three interior waypoints in a four-second move (`50f623b2`) | two pictures |
+| `a full 360 degrees` (`50f623b2`, `8efeb556`) | about half a turn, both times |
+
+So write what a thing **looks like** and **where it sits in the frame**, and
+treat any number in the same clause as a wish. The corollary matters as much,
+because it is what keeps this from collapsing into "nothing is honoured": the
+instruction that fixed the framing defect in the same clip — `with the whole
+pair in frame from the far temple tip to the near lens edge and margin around
+it` — is a **spatial description**, not a count, which is why it landed while
+the knuckle count in the same prompt did not. Where a count genuinely
+matters, it has to be checked on a draft; it cannot be bought with emphasis,
+and repeating it in the negative list did not buy it either. One nuance, from
+the same clip as the hinge and consistent with the subsection above: a count
+written as a **prohibition** did hold — `no third temple` produced no third
+temple — so the reliable form of a count is "not more than one of these",
+never "exactly three of those".
+
 ### Waypoint block to copy
 
 Replaces a bare `the camera orbits <subject>` in any timeline — keep the
@@ -802,13 +925,17 @@ an interior one can be absorbed.
 <6–7s>    <shot size>, camera at <position: three-quarter front right, at <subject> height>. <What is visible from there: the <feature> foreshortened toward the lens, <surface> catching the key light>. <sound for this beat>
 <7–8.5s>  <shot size>, camera <directly behind / on the far side of> <subject>. <What is hidden from there: the <feature> points away from the lens, so only <what remains> is visible>.
 <8.5–10s> <shot size>, camera at <the mirrored position>. <What is visible again, and how it differs from the first waypoint>.
+At every one of those views the whole <subject> is in frame, <top> to <bottom>, with margin, nothing cropped.
 ```
 
-Adapted from the three pictures `50f623b2` actually delivered — two interior
-views and the arrival — rather than from the four its prompt asked for; field
-order is the one in "Field order inside a segment". Nothing here asks for
-music — check "Asking for music can fail output moderation on copyright"
-before adding an audio line to it.
+Field order is the one in "Field order inside a segment". Two things about
+the shape, both measured: the per-line shot size and the closing framing
+sentence are what `8efeb556` added and what kept its whole subject in frame
+for a full move, so neither is decoration; and **there is deliberately no
+"and back to the opening view" line**, because that is the one waypoint
+neither run delivered — put it after a cut, as its own shot. Nothing here
+asks for music — check "Asking for music can fail output moderation on
+copyright" before adding an audio line to it.
 
 ## Camera language
 
@@ -1352,15 +1479,29 @@ a bare `pull back to a wide` leaves the arrival unspecified, and an
 unspecified arrival is the form a measured run dropped entirely. Freeze,
 black and fade need no help — they are states, not destinations.
 
-**`hold the final frame` is not honoured as a freeze, and the two clips that
-show this are a controlled pair.** Both grinder clips closed on that
-instruction; measured over each one's last half second, `1cf5ac46` really is
-still (every frame under a 0.0005 scene score) while `50f623b2` is not — six
-frames above 0.0005 and one above 0.002, a visible drift rather than a hold.
-Same instruction, same seed, same everything but one paragraph earlier in the
-prompt, and only one of them held. So write the hold if you want it, and
-expect a settle rather than a freeze; if the last frame genuinely has to be
-frozen, that is an editing step, not a prompt clause.
+**And even a named final frame is not reliably reached when it sits at the
+end of a move.** Two product clips wrote `by <T>s the camera is back on the
+exact front view of the opening shot` as the last waypoint of an orbit; one
+landed on it because the move happened to start opposite it, the other ended
+half a turn away at the rear (`50f623b2`, `8efeb556` — "How far the move
+goes, and where it stops"). If a clip has to end on a particular view, make
+it its own shot after a cut, where the timestamps have held, rather than the
+destination of a travelling camera.
+
+**`hold the final frame` is not honoured as a freeze — it is honoured about
+two times in three, which is the same thing for planning purposes.** Three
+product clips closed on that instruction. Measured over each one's last half
+second, and measured without an `-ss` pre-seek — which gives the first
+post-seek frame no predecessor to diff against and so scores it as a change:
+`1cf5ac46` is still (every frame under a 0.0005 scene score), `8efeb556` is
+**completely** still (zero frames above it after 11.541667s, the last change
+anywhere in the clip at 11.375s, so about 0.67s of hold), and `50f623b2` is
+not — **seven** frames above 0.0005, a visible drift. An earlier reading here
+said six and one; both figures were the pre-seek artefact. `1cf5ac46` and
+`50f623b2` are a controlled pair, same seed, one paragraph of prompt apart,
+and only one of them held. So write the hold if you want it, and expect a settle rather than
+a freeze; if the last frame genuinely has to be frozen, that is an editing
+step, not a prompt clause.
 
 ### Ending line to copy
 
@@ -1398,8 +1539,12 @@ From cases 29, 26, 24, 5.
    measured as silently dropped (see "A camera move needs its waypoint
    frames, not just a verb"). Two or three waypoints per move, and **no beat
    that has to land on an exact second**, since interior stamps
-   drift and one can be absorbed. A prohibition in the same sentence is no
-   evidence the instruction beside it will run.
+   drift and one can be absorbed. **Nothing that has to be the move's last
+   frame** either — a written return to an earlier view is the third form
+   measured as dropped, so cut to it instead. A prohibition in the same
+   sentence is no evidence the instruction beside it will run, and a
+   **number** in it is a wish rather than an instruction — see "A description
+   is honoured; a number attached to it is not".
 7. **Dialogue is speaker + quoted line + delivery note, in the language to be
    spoken, budgeted by tier** — drama far under 2–3 words/s, talking head
    about 3.5 words/s (cases 3, 20, 22).

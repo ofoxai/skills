@@ -4,6 +4,108 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.17.0 — the waypoints render, the ending does not: a second product clip settles two open items
+
+Docs only; no script changes. A third `seedance-product-video` clip
+(`8efeb556-bf38-45ec-940b-a792ef74bfcf`, 2026-09-06, 12s, 720p, t2v, seed
+`616202922`, a folded pair of eyeglasses, 2.88 USD) was written to test two
+fixes 1.16.x had proposed but not run, and it does three things to this
+file's waypoint material: it **verifies** the per-waypoint shot size,
+**measures** an extent that was previously unmeasurable, and **refutes** one
+sentence 1.16.1 left standing. It is an independent run — different product,
+different seed, different prompt — not a second half of the grinder pair, and
+that is what makes it able to settle anything.
+
+- **The per-waypoint shot size is verified, not proposed.** 1.16.1 recorded it
+  as a fix "aimed at the observed cause"; `What that means for writing` now
+  says it has been run. The new clip states a shot size on all three
+  waypoints, closes the paragraph with `at every one of those views the entire
+  pair of glasses is inside the frame, nothing cropped`, and **deliberately
+  keeps the same macro-detail-then-orbit order** that caused the inheritance
+  in the first place — so the defect had every chance to recur. Every frame of
+  the move holds the whole product with margin, where the grinder's base was
+  out of frame for its whole orbit. One confirming run with the causal
+  ordering preserved; `Segment skeleton to copy`'s trap note and the
+  `Waypoint block to copy` note say the same.
+- **⚠️ "The move happens and it arrives" is withdrawn — the interior pictures
+  arrive, the closing return does not.** This corrects the section preamble,
+  claim 1 of the arrival subsection, and the `A total quantity is fine`
+  bullet, all of which 1.16.1 left resting on the grinder clip's last frame
+  matching the frame its prompt named. The new clip's orbit begins at the
+  front (fixed by its own opening shot) and ends at the **rear**: front 6.0s →
+  side 7.5s → rear about 9.6s, with the named front view returning only after
+  the next hard cut. So the grinder's landing is explained by a half turn from
+  an unasked-for rear start, not by the closing clause — **one coincidence and
+  one plain failure, which is no evidence at all.** If a clip has to end on a
+  named view, cut to it.
+- **About half a turn is now measured.** `What the arrival does and does not
+  establish` is renamed `How far the move goes, and where it stops` and
+  carries both readings: the grinder's ~180 observable degrees with an
+  unmeasurable total, and the eyewear clip's front → side → rear read frame by
+  frame inside one continuous shot. Two independent clips agree on roughly
+  half a turn, and the second one measures rather than infers it. The rule for
+  a prompt: **expect a waypoint orbit to cover about half a turn.**
+- **`Measuring a camera's travel: only inside one continuous shot` is
+  validated, not superseded.** That subsection predicted that an asymmetric
+  feature inside one continuous shot would make azimuth readable; the folded
+  temples plus a cut-free orbit is exactly that case, and it read cleanly. It
+  now says so, and says explicitly that `50f623b2`'s own total stays
+  unmeasurable — a fact about that clip, which no later run changes.
+- **A fourth row in the observations table**, and the heading counts to four.
+  The movement-versus-no-movement finding still rests on the controlled pair
+  and nothing else; the new row carries the shot-size verification and the
+  extent.
+- **Interior timing gets its first attributable run.** Both of the new clip's
+  interior waypoints are distinct pictures that do not contradict themselves,
+  so `The timing between waypoints is approximate` can now say which was late:
+  the side on time, the rear about 0.6s late, the return never. Two interior
+  pictures written and two rendered — the first run to hit this file's own
+  recommended budget exactly, and it lost only the ending, which is why the
+  "don't put the one that matters at the end" clause is new.
+- **The same-lighting blind spot, third consecutive confirmation.**
+  `Checking the cuts` gains an `8efeb556` row: at threshold 0.25 only 2.67s
+  and 5.71s appear, and the third cut at **9.71s** needs **0.10**. Three
+  clips, three after-the-fact discoveries (0.05, 0.10, 0.10) against a 0.25
+  default wrong for all three — so **lowering the default is not the fix**,
+  because how far to lower it is only knowable once the frames have been read.
+- **New subsection, `A description is honoured; a number attached to it is
+  not`** (`references/prompt-structure.md`, between the negative-clause rule
+  and the copyable waypoint block, because it is the same grammar problem one
+  level down). A quantity in a clause is the part most likely to be dropped
+  while the description it hangs on renders fine: four instances, three of
+  them measured here — an interleaved barrel hinge that came back with four
+  knuckles against three written (`8efeb556`), a limb limit written twice and
+  ignored (`60fbea52`), three interior waypoints rendering as two
+  (`50f623b2`), and `a full 360 degrees` covering half a turn twice. The
+  corollary is what keeps this from over-generalising: the *spatial*
+  description that fixed the framing defect in the same clip landed, so what
+  fails is the counting, not the writing-it-down.
+- **`hold the final frame` is two in three, and the earlier figures were an
+  artefact.** Measured without an `-ss` pre-seek — which gives the first
+  post-seek frame no predecessor to diff against and therefore scores it as a
+  change — the new clip is **completely** still (zero frames above 0.0005
+  after 11.541667s, last change anywhere at 11.375s, about 0.67s of hold) and
+  `50f623b2` drifts across **seven** frames, not the six 1.16.1 recorded.
+  `Endings` states the count and keeps the advice: expect a settle, freeze in
+  an editor.
+- **Nothing claims the orbit was even or constant-speed.** `How far the move
+  goes, and where it stops` says only that the azimuth advances monotonically
+  with no dead stretch, and says explicitly that a per-half-second
+  scene-delta reading cannot settle angular velocity on this subject, because
+  near the front view the same rotation changes the picture much less.
+- **`--aspect-ratio 16:9` and `--generate-audio false`, confirmed again**
+  (`api-params.md`): 1280x720 out, and no audio stream at all rather than a
+  silent one — three text-to-video runs, three times.
+- **The no-resubmit rule survived a third live transport fault.** The same
+  `curl: (35) LibreSSL ... SSL_ERROR_SYSCALL` mid-poll, the same poll-not-
+  create retry six seconds later, the same clean completion. `SKILL.md` and
+  `api-params.md` both read three for three now, on separate days.
+
+Nothing here widens the untested edges: the turntable phrasing — a *product*
+verb rather than a camera one — is still unmeasured, and no run in this repo
+has ever shown a written 360 performed. `references/ofox-video.sh` is
+untouched and all 271 assertions across the eleven suites still pass.
+
 ## 1.16.1 — how far that camera went is unmeasurable, and 1.16.0 said it completed a circuit
 
 Docs only; no script changes. **This entry corrects 1.16.0, which is in the
@@ -29,10 +131,13 @@ rather than as a note on this job.
   attempts, the endpoints each used and the precondition each skipped —
   attempt 1 measured from the moving segment's own first frame and under-read,
   attempt 2 measured across the hard cut at 6.291667s and over-read.
-- **`50f623b2` now claims an arrival, not a circuit.** Inside the continuous
-  ORBIT segment the frames read rear → side → front, about 180 degrees,
-  ending on the orientation the clip's own 2.8s frame establishes as the
-  front. The written path's other half could only have happened across that
+- **`50f623b2` now claims an arrival, not a circuit.** ⚠️ **Superseded in
+  1.17.0: not an arrival either.** An independent clip shows the same form of
+  move covering half a turn and stopping at the rear, so this clip's landing
+  on the named frame is a coincidence of where the move began. Inside the
+  continuous ORBIT segment the frames read rear → side → front, about 180
+  degrees, ending on the orientation the clip's own 2.8s frame establishes as
+  the front. The written path's other half could only have happened across that
   hard cut, and the shot before it is a macro of a knurled ring — rotationally
   near-symmetric, no orientation cue — so the segment simply *starts* at the
   rear and nothing distinguishes travelling there from being cut there. New
@@ -72,7 +177,9 @@ rather than as a note on this job.
 - **`hold the final frame` buys a settle, not a freeze**, recorded in
   `Endings`. Over each clip's last half second `1cf5ac46` is still (every
   frame under a 0.0005 scene score) and `50f623b2` is not (six frames above
-  0.0005, one above 0.002) — same instruction, same seed, one paragraph
+  0.0005, one above 0.002 — ⚠️ **re-measured in 1.17.0 as seven above
+  0.0005**; the earlier count came from an `-ss` pre-seek that scores its
+  first frame as a change) — same instruction, same seed, one paragraph
   apart. Freeze in an editor if the last frame really has to stop.
 
 Every hedge 1.16.0 carried is still here — it is still two runs, and this
@@ -92,10 +199,12 @@ the camera went round: measured against the clip's own opening view, 180
 degrees at 7.0s, the rear at 9.0s, back to the front at 10.0s. A controlled
 experiment with a negative control, and still only two runs.
 
-*(1.16.1 corrects the extent: the move arrives on the frame it names, its
-observable travel inside the continuous segment is about 180 degrees, and its
-total is unmeasurable because half the written path could only have crossed a
-hard cut. The waypoint finding itself stands. **Three things in this entry are
+*(1.16.1 corrects the extent: the move arrives on the frame it names — ⚠️
+**and 1.17.0 withdraws that half too: an independent clip covers the same
+half turn and stops at the rear, so this one's landing is a coincidence of
+where it began** — its observable travel inside the continuous segment is
+about 180 degrees, and its total is unmeasurable because half the written
+path could only have crossed a hard cut. The waypoint finding itself stands. **Three things in this entry are
 superseded and are kept only as the record of what was claimed: every degree
 figure; every statement that the circuit completed; and every per-waypoint
 timing verdict — that last form was retracted rather than reworded, because
@@ -143,7 +252,10 @@ Read 1.16.1 first.)*
   beside it will run, which is now written down next to the existing
   observation that a negative item holds in an empty set and fails on a
   street full of surfaces.
-- **A segment inherits the previous segment's shot size.** In `50f623b2` the
+- **A segment inherits the previous segment's shot size.** *(The fix this
+  bullet proposed — a shot size on every waypoint — was verified in 1.17.0 on
+  an independent clip that kept the same macro-then-orbit ordering on
+  purpose.)* In `50f623b2` the
   waypoints rendered correctly and every one of them ran at the macro
   closeness of the detail segment before them, so the subject's base was out
   of frame for the whole move. `Segment skeleton to copy` now marks the

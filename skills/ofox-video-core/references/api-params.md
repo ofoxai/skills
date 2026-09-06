@@ -224,15 +224,18 @@ image-to-video without it (verified separately, not assumed).
 **The converse is now confirmed too: with no image attached,
 `--aspect-ratio` controls the output ratio exactly.** Verified 2026-09-05 on
 a text-to-video job — `--aspect-ratio 16:9` delivered a file measuring
-1280x720. That had never been cleanly observed before, because every earlier
-clip in this repo attached a first frame and was therefore forced to
-`adaptive`, where the ratio comes from the image and the flag does nothing.
-So the flag is not merely accepted on the t2v path; it is effective, and it
-is the only control over frame shape there.
+1280x720 — and again on 2026-09-06, job
+`8efeb556-bf38-45ec-940b-a792ef74bfcf`, same flag, same 1280x720. That had
+never been cleanly observed before those runs, because every earlier clip in
+this repo attached a first frame and was therefore forced to `adaptive`,
+where the ratio comes from the image and the flag does nothing. So the flag
+is not merely accepted on the t2v path; it is effective, and it is the only
+control over frame shape there.
 
 **`--generate-audio false` removes the audio stream, it does not mute it.**
-Same run: the delivered mp4 carried **no audio stream at all**, rather than a
-silent track. Anything downstream that expects every clip to have an audio
+Those runs: the delivered mp4 carried **no audio stream at all**, rather than
+a silent track — three times now, on every text-to-video clip this repo has
+passed the flag on. Anything downstream that expects every clip to have an audio
 stream to work with — a concatenation, an editor's timeline, a probe that
 reads stream 1 — has to handle its absence rather than assume silence.
 
@@ -445,13 +448,16 @@ for the same invocation:
   fix is `ofox-video.sh poll JOB_ID`, never a new `generate` call for the
   same request — resubmitting creates a second, separately billed job.
 
-**Third bullet, observed rather than reasoned, 2026-09-05.** Two jobs lost
-their TLS connection mid-poll (`curl: (35) LibreSSL SSL_connect:
-SSL_ERROR_SYSCALL in connection to api.ofox.ai:443`), the script retried the
-poll — not the create — after six seconds, and both completed normally with
-their videos downloaded: `1cf5ac46-058f-4615-a47b-067743f76f8c` and
-`50f623b2-c54a-4d9d-9646-31dd06e2a926`, 2.88 USD each. The connection broke;
-the jobs never did. This is the first time in this repo that the rule has
-been exercised by a live transport fault rather than held as a rule, and a
-resubmit at that moment would have double-billed both. `SKILL.md`'s
-"The rule has now survived a real transport fault" carries the same record.
+**Third bullet, observed rather than reasoned, 2026-09-05 and 2026-09-06.**
+Three jobs lost their TLS connection mid-poll (`curl: (35) LibreSSL
+SSL_connect: SSL_ERROR_SYSCALL in connection to api.ofox.ai:443`), the script
+retried the poll — not the create — after six seconds, and all three
+completed normally with their videos downloaded:
+`1cf5ac46-058f-4615-a47b-067743f76f8c`,
+`50f623b2-c54a-4d9d-9646-31dd06e2a926` and
+`8efeb556-bf38-45ec-940b-a792ef74bfcf`, 2.88 USD each. The connection broke;
+the jobs never did. Before 2026-09-05 this rule had never been exercised by a
+live transport fault at all, and a resubmit at any of those three moments
+would have doubled a 2.88 USD spend on a fault that cleared by itself in six
+seconds. `SKILL.md`'s "The rule has now survived a real transport fault"
+carries the same record.

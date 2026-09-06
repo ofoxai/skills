@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.16.1"
+version: "1.17.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.16.1"
+  version: "1.17.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -683,24 +683,26 @@ tell the user to check `https://app.ofox.ai` first.
 
 Until 2026-09-05 every clause above was a rule with no live test behind it —
 reasoned from the API's shape, never exercised by an actual broken
-connection. Two jobs that day dropped their TLS connection mid-poll:
+connection. Two jobs that day dropped their TLS connection mid-poll, and a
+third did the same on 2026-09-06:
 
 ```
 curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to api.ofox.ai:443
 WARN: poll request failed (curl exit 35). Retrying the POLL (not create) in 6s...
 ```
 
-**Both recovered on the retry and completed normally**, videos downloaded,
-costs reported. Jobs `1cf5ac46-058f-4615-a47b-067743f76f8c` and
-`50f623b2-c54a-4d9d-9646-31dd06e2a926`, 2.88 USD each.
+**All three recovered on the retry and completed normally**, videos
+downloaded, costs reported. Jobs `1cf5ac46-058f-4615-a47b-067743f76f8c`,
+`50f623b2-c54a-4d9d-9646-31dd06e2a926` and
+`8efeb556-bf38-45ec-940b-a792ef74bfcf`, 2.88 USD each.
 
 Two things that confirms. The poll retry is the right response to a transport
 fault — the job was running the whole time and the connection, not the job,
 was what broke. And the parenthetical in that warning line ("not create") is
-doing real work: a resubmit at that moment would have created a second
-billable job and doubled a 2.88 USD spend, on a fault that cleared by
+doing real work: a resubmit at any of those moments would have created a
+second billable job and doubled a 2.88 USD spend, on a fault that cleared by
 itself in six seconds. A dropped connection while polling is **never**
-evidence about the job's state.
+evidence about the job's state — three for three now, on separate days.
 
 ## Error handling
 

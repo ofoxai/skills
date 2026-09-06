@@ -4,6 +4,123 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.11.0 — a third clip made to test two fixes: one works, one half works, and the orbit stops half way round
+
+Docs only; no script changes. Clip C —
+`8efeb556-bf38-45ec-940b-a792ef74bfcf`, 2026-09-06, seed `616202922`,
+`bytedance/seedance-2.5` on `byteplus`, pure text-to-video with no image,
+12s, 720p, `--aspect-ratio 16:9`, `--generate-audio false`, billed 2.88 USD,
+gallery case `n: 1011`, accepted — is not a third look at the same thing. It
+is an **independent** run on a different product (a fictional pair of folded
+eyeglasses) at a different seed, written for one purpose: to test the two
+fixes 1.10.1 recorded as *aimed at an observed cause and not yet re-run*. One
+is verified, one is half verified, and a finding that was unmeasurable is now
+measured.
+
+- **The per-waypoint shot size is verified.** 1.10.1 proposed it; the failure
+  table and §3 now say it has been run. Clip C states a shot size on all
+  three waypoints, closes the paragraph with `at every one of those views the
+  entire pair of glasses is inside the frame, nothing cropped`, and
+  **deliberately keeps the DETAIL-macro-immediately-before-ORBIT ordering**
+  that caused clip B's inheritance in the first place — so the defect had
+  every chance to recur. Every frame of the move holds the whole product with
+  margin, where the grinder's base was outside the frame for its entire
+  orbit. **One confirming run, with the causal ordering preserved**, which is
+  what makes it a verification rather than a second observation. The
+  corollary — a segment inherits the previous segment's framing unless told
+  otherwise — now has both halves, the failure and the repair.
+- **The accessory wording is half repaired.** `beside` had been recorded as a
+  stable reading meaning "on either side of", deliberately not fixed. Clip C
+  wrote `to the right of the glasses and only to the right ... Nothing lies to
+  the left of the glasses and nothing lies above or below that line`. The
+  **left/right constraint held** — nothing on the left, which neither grinder
+  clip managed — and the **single-line constraint did not**: the cloth sits
+  forward of and below the case. So the rule is now: **the left/right axis is
+  controllable by explicit wording, placement in depth is not.** One run each
+  way, and on **two** accessories rather than the template's three. The
+  ACCESSORIES slot, its note, the worked example and a new failure row all
+  carry the wording that worked with the depth limitation beside it.
+- **⚠️ The written return to the opening view is withdrawn — it does not
+  bring the camera home, and 1.10.x read one clip as saying it did.** Clip C's
+  orbit is one continuous shot and its subject carries an unambiguous
+  asymmetric feature (two folded temples), so azimuth is readable at every
+  frame: front at 6.0s → side at 7.5s → rear at about 9.6s. The move stopped
+  at the rear, and the named front view came back only after the cut into
+  ACCESSORIES. Clip B's landing on that frame is therefore a coincidence of
+  its move having begun, unasked, at the rear — **one coincidence and one
+  plain failure, which is no evidence at all.** The closing return line is
+  gone from the template's ORBIT slot, from the copyable waypoint block and
+  from the worked example; if the clip has to end on the opening view, that
+  view is the next segment, after the cut.
+- **About half a turn is measured, not inferred.** Two clips, different
+  products, different seeds, different prompts, agree on roughly 180 degrees,
+  and clip C reads it frame by frame inside one continuous shot rather than
+  from two endpoints. Write an orbit expecting half a turn and pick the two
+  interior views accordingly. Clip B's own total **stays unmeasurable** — that
+  was a fact about that clip and no later run changes it, which is also why
+  `ofox-video-core`'s `Measuring a camera's travel: only inside one continuous
+  shot` is *validated* by clip C rather than replaced: it predicted exactly
+  which conditions would make a rotation readable.
+- **Interior timing, first attributable run.** Clip C's waypoints are distinct
+  pictures that do not contradict themselves, so §4 can finally say which was
+  late: the side on time, the rear about 0.6s late, the return never. Two
+  interior pictures written, two rendered — the first run to hit §4's own
+  budget exactly, losing only the ending, which is why §4 now also says not to
+  put the view that matters most at the end of a move.
+- **A description is honoured; a number attached to it is not** — a new
+  finding, and the one that constrains the shot-size result above. Clip C's
+  hinge landed qualitatively and completely (a barrel hinge, interleaved,
+  acetate edge one side and the flat brushed temple bar the other, unchanged
+  through the macro push-in and the whole orbit) and **missed the count**:
+  three interleaved knuckles were written, and 5x magnification shows four
+  knuckle blocks plus a screw head top and bottom. It pairs with
+  `seedance-ad-creative`'s `60fbea52`, where a limb limit written twice was
+  ignored, and with two findings already in this skill — three interior
+  waypoints written and two rendered, and `a full 360 degrees` producing no
+  measurable total. **What it does not undercut**: the instruction that fixed
+  the framing is a *spatial description*, not a count, which is why it landed
+  where the knuckle count did not — so "write it down and you get it" holds
+  for looks and framing and stops at countable parts. The general form went
+  to the shared file as `A description is honoured; a number attached to it is
+  not`; this skill carries a PRODUCT-slot note and a failure row.
+- **Three confirmations added, not new claims**: zero invented text on a
+  harder set than the pair's (acetate, titanium, clear lenses, a **hard case
+  lid** — the classic wordmark carrier — where a 5x zoom shows a specular
+  highlight and no lettering), with the PRODUCT-block no-text clause plus a
+  per-carrier AVOID and **no first frame** to anchor anything; thin protruding
+  parts holding for the third time (two slim temples, no third temple, after
+  the crank arm twice); and the duration budget holding again at
+  2.67/3.04/**4.00**/2.33 against a written 3/3/4/2. The lenses also stayed
+  clear and never mirrored, and the temples never unfolded.
+- **The final frame holds completely on clip C, and the earlier stillness
+  figures were an artefact.** Measured without an `-ss` pre-seek — which gives
+  the first post-seek frame no predecessor to diff against, so it scores as a
+  change — clip C has **zero** frames above a 0.0005 scene score after
+  11.541667s, with the last change anywhere in the clip at 11.375s, so the
+  hold runs about 0.67s. Clip B measured the same way is **seven** frames, not
+  the six recorded in 1.10.1. The conclusion is unchanged and firmer: two of
+  three held, and the two that differ are the same-seed pair.
+- **The orbit is not described as even or constant-speed anywhere.** What the
+  frames support is that the azimuth advances monotonically with no dead
+  stretch; a per-half-second scene-delta reading is not a clean
+  angular-velocity proxy on this subject, since near the front view the same
+  rotation moves the picture much less. Whether the prompt's `constant speed`
+  landed is left unstated in both directions.
+- **The same-lighting detector blind spot, third consecutive clip.** At
+  threshold 0.25 only 2.67s and 5.71s appear; the third cut at **9.71s**
+  needs **0.10**, where clip A needed 0.05 and clip B 0.10. Three
+  after-the-fact discoveries against a default wrong for all three, so
+  **lowering the default is not the fix** — how far to lower it is only
+  knowable once the frames have been read.
+- **`--aspect-ratio 16:9` → exactly 1280x720, `--generate-audio false` → no
+  audio stream at all**, third time each. And the poll survived the same
+  `SSL_ERROR_SYSCALL` transport fault the pair did, retrying the **poll, not
+  the create** — third consecutive clip, recorded in `ofox-video-core`.
+
+Nothing here widens an untested edge: the turntable phrasing is still a
+*product* verb rather than a camera one and remains unmeasured, and no run in
+this repo has shown a written 360 performed.
+
 ## 1.10.1 — the orbit arrived; it did not demonstrably go round, and 1.10.0 said it did
 
 Docs only; no script changes. **This entry corrects 1.10.0, which is
@@ -17,7 +134,12 @@ ended on the front view it named. What it got wrong is how far that camera
 travelled — recorded as a clean monotonic full circuit, when the clip cannot
 support any total at all.
 
-- **The corrected reading, and the reason two earlier ones failed.** The front
+- **The corrected reading, and the reason two earlier ones failed.** ⚠️
+  **Superseded in part by 1.11.0: the orbit did not "arrive" either.** An
+  independent clip covers the same half turn and stops at the rear, so this
+  clip's ending on the named front view is a coincidence of where its move
+  began — and the ~180 degrees is now a measurement rather than an
+  observation, taken on that other clip. The front
   view is fixed by the frame at 2.8s (knob at the left, crank arm extending
   cleanly sideways). Inside the continuous ORBIT segment — the hard cut at
   6.291667s to about 10s — the frames read the rear through 6.40–8.40s, a
@@ -42,7 +164,9 @@ support any total at all.
   6.80, 7.20, 7.60, 8.00 and 8.40, with 8.80 the transition, so roughly 2
   seconds held and the rest of the move in about 1.2. §4 and the failure table
   are corrected.
-- **The framing defect voided half a waypoint, which §3 now says.** The 7s
+- **The framing defect voided half a waypoint, which §3 now says.** *(The
+  fix proposed for it — a shot size on every waypoint — was verified in
+  1.11.0 on a clip that kept the same ordering on purpose.)* The 7s
   waypoint asked for the knurled ring seen edge-on, and that ring was outside
   the inherited macro framing for the entire orbit — so an unspecified shot
   size did not merely crop the picture, it deleted part of what a waypoint
@@ -61,12 +185,15 @@ support any total at all.
 - **Two instruction readings recorded, both stable across the pair.**
   `hold the final frame` held in clip A (every frame of its last half second
   under a 0.0005 scene score) and drifted in clip B (six frames above 0.0005,
-  one above 0.002) — so ask for it and expect a settle. And `in a row on the
+  one above 0.002 — ⚠️ **re-measured in 1.11.0 as seven above 0.0005**; the
+  earlier count came from an `-ss` pre-seek that scores its first frame as a
+  change) — so ask for it and expect a settle. And `in a row on the
   grey surface beside the standing grinder` put the accessories on **both
   sides** of the grinder in both clips: identical in the pair, so a stable
   reading of `beside` rather than a roll, which makes it plannable — name the
   side and say the product is not between any two items if the row has to
-  stay together. 1.10.0's ACCESSORIES row read as if the slot rendered exactly
+  stay together. *(1.11.0 ran that: naming the side works, `both on the same
+  line` does not.)* 1.10.0's ACCESSORIES row read as if the slot rendered exactly
   as written; the items did, the placement did not.
 - **The gallery case number is `n: 1009`, not `n: 1008`.** Another session
   committed 1008 to a different clip while this work was in progress, and `n`
@@ -102,7 +229,11 @@ when they ran: this skill 1.8.0, `ofox-video-core` 1.15.0.
   timestamped waypoint pictures, travelled the whole circuit.** *(The extent
   claimed in this bullet — the circuit, and the degree readings below it — is
   corrected in 1.10.1: the move arrives, and its total travel is
-  unmeasurable. The rest of the bullet stands.)* Job
+  unmeasurable. ⚠️ **And 1.11.0 withdraws the arrival too**: an independent
+  clip covers the same half turn and stops at the rear, so this clip's ending
+  on the named frame is a coincidence of where its move began. What still
+  stands from this bullet is the waypoint form producing movement where a
+  camera verb produced none.)* Job
   `50f623b2-c54a-4d9d-9646-31dd06e2a926`, read against the clip's own opening
   frame rather than the start of the segment, using the crank arm as a
   protractor — it extends horizontally in one direction, so it runs cleanly
