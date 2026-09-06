@@ -926,44 +926,6 @@ only the prohibition survived. Two working rules follow:
   reliable end of the range; a positive instruction with nothing but a verb
   behind it is the unreliable one.
 
-### What a prohibition cannot buy: timing and behaviour
-
-The subsection above sorts prohibitions by *what* they remove. Three
-prohibitions measured here sort them by something else — whether the thing
-forbidden is an **object or a style** (the reliable end) or a **behaviour
-unfolding in time** (not reliable).
-
-| Written | Delivered | Job |
-|---|---|---|
-| `one continuous take; no hard cuts, no jump cuts, no fade to black`, in a 30s anime fight | four cuts, at 1.2s / 10.5s / 14.8s / 15.0s (scene detection, threshold 0.35) | `c192dbe6-ae09-4dba-8e81-3a3e82ff5912` |
-| `neither of them waits after separating` + `NO WAITING. NO LONG RESET.`, same job | three low-motion stretches mid-fight — per-second inter-frame difference 7.8 at 10s, 4.3 at 21s, 6.1–7.1 at 27–28s, against a median near 15 | `c192dbe6` |
-| `no slow preparation; the fight continues from frame one`, in an 8s continuation | the first two seconds are nearly static — 2.0 and 4.1 on the same scale | `c2eb32e1-3b54-4a56-8d78-86e63bc355c7` |
-
-None of the three removes an object from the set; each tries to forbid a
-*tempo*, and each was done anyway. (Both prompts were written in Chinese, as
-case 44's is; the clauses are quoted here in translation, per this file's
-convention.)
-
-**A budget, in the same prompts, was honoured.** `at most 0.2 seconds of micro
-slow motion, only at the instant the final kick lands; normal high speed
-throughout the rest` held in `c192dbe6`: the decisive kick
-at 26s measures 18.1 on that scale — normal speed — and no slow-motion band
-appears anywhere in the 30 seconds. A quantified allowance for the thing you
-want *less* of landed where a flat prohibition on the thing you want *none* of
-did not.
-
-So when the axis is time — cutting, waiting, hesitating, slow motion, how long
-a beat runs — a budget (`at most 0.2 seconds, and only on the decisive hit`)
-is the sturdier instrument, and a prohibition is worth keeping as a cheap
-backstop rather than as the thing you rely on.
-
-Two caveats keep this from hardening into a rule. `c2eb32e1` also carried
-the same no-hard-cuts prohibition and came back with **zero** cuts in 8 seconds — so the 30-second
-result is as much about duration as about the prohibition failing; long jobs
-get cut, short ones have nothing to cut. And a prohibition costs almost
-nothing to write. Price these as measured tendencies when deciding what to
-lean on, not as a reason to stop writing prohibitions.
-
 ### A description is honoured; a number attached to it is not
 
 The section above is about a *verb* needing frames behind it. This is the
@@ -1044,7 +1006,7 @@ action be read.
 |---|---|---|
 | **Readability outranks the effect** | `the camera moves aggressively but the action must stay clearly visible` / `action readability > VFX` — the camera may be violent, the action must stay legible | Written, not isolated in a measurement. Cheap to carry, and it gives the model a tie-breaker for the many moments where a flourish and a clear view compete |
 | **Contact stays in one frame** | `on an important attack, attacker and target must briefly share one frame before and after contact` — attacker and target share the frame just before and just after a hit | Held in `c192dbe6` across the finishing exchange read frame by frame from 24.85s to 26.78s — both bodies in frame through approach, contact and displacement. The frames are tabulated under "The cause chain" in "Segmenting the timeline" |
-| **A slow-motion budget, not a slow-motion ban** | `at most 0.2 seconds of micro slow motion, only at the instant the final kick lands; normal high speed throughout the rest` | Honoured in `c192dbe6` — see "What a prohibition cannot buy: timing and behaviour". This is the reliable way to spend slow motion |
+| **A slow-motion budget, not a slow-motion ban** | `at most 0.2 seconds of micro slow motion, only at the instant the final kick lands; normal high speed throughout the rest` | Honoured in `c192dbe6` — see "What a prohibition cannot buy: timing and behaviour", under "Consistency locks and the negative list". This is the reliable way to spend slow motion |
 
 The first two are conventions worth borrowing; the third is measured. All
 three read naturally as one short block near the end of a prompt, and none of
@@ -1231,6 +1193,94 @@ live-action prompt excludes animation and sketch (case 1); an animation prompt
 excludes photorealism and game CG (cases 11, 44); a UGC prompt excludes
 cinematic grading (case 25).
 
+### What a prohibition cannot buy: timing and behaviour
+
+"Negative clauses are honoured more reliably than positive ones", under "A
+camera move needs its waypoint frames, not just a verb", sorts prohibitions by
+*what* they remove — a whole class of thing at the reliable end, a bare
+positive verb at the unreliable one. Three prohibitions measured here sort
+them by something else — whether the thing forbidden is an **object or a
+style** (still the reliable end) or a **behaviour unfolding in time** (not
+reliable).
+
+| Written | Delivered | Job |
+|---|---|---|
+| `one continuous take; no hard cuts, no jump cuts, no fade to black`, in a 30s anime fight | four cuts, at 1.2s / 10.5s / 14.8s / 15.0s (scene detection, threshold 0.35) | `c192dbe6-ae09-4dba-8e81-3a3e82ff5912` |
+| `neither of them waits after separating` + `NO WAITING. NO LONG RESET.`, same job | three low-motion stretches mid-fight — per-second inter-frame difference 7.8 at 10s, 4.3 at 21s, 6.1–7.1 at 27–28s, against a median near 15 | `c192dbe6` |
+| `no slow preparation; the fight continues from frame one`, in an 8s continuation | the first two seconds are nearly static — 2.0 and 4.1 on the same scale | `c2eb32e1-3b54-4a56-8d78-86e63bc355c7` |
+
+None of the three removes an object from the set; each tries to forbid a
+*tempo*, and each was done anyway. (Both prompts were written in Chinese, as
+case 44's is; the clauses are quoted here in translation, per this file's
+convention.)
+
+**A budget, in the same prompts, was honoured.** `at most 0.2 seconds of micro
+slow motion, only at the instant the final kick lands; normal high speed
+throughout the rest` held in `c192dbe6`: the decisive kick
+at 26s measures 18.1 on that scale — normal speed — and no slow-motion band
+appears anywhere in the 30 seconds. A quantified allowance for the thing you
+want *less* of landed where a flat prohibition on the thing you want *none* of
+did not.
+
+So when the axis is time — cutting, waiting, hesitating, slow motion, how long
+a beat runs — a budget (`at most 0.2 seconds, and only on the decisive hit`)
+is the sturdier instrument, and a prohibition is worth keeping as a cheap
+backstop rather than as the thing you rely on.
+
+Two caveats keep this from hardening into a rule. `c2eb32e1` also carried the
+same no-hard-cuts prohibition and came back with **zero** cuts in 8 seconds —
+so the 30-second result is as much about duration as about the prohibition
+failing; long jobs
+get cut, short ones have nothing to cut. And a prohibition costs almost
+nothing to write. Price these as measured tendencies when deciding what to
+lean on, not as a reason to stop writing prohibitions.
+
+**Writing the cut points explicitly is less soft, not solid.** The obvious
+repair for the first row of that table is to stop forbidding cuts and start
+naming them. A third job, generated 2026-09-06 with these findings already
+written down, was written that way and measured frame by frame:
+`9cd773d0-b84e-4135-bc75-8f4e8963be2b` (15s, 720p, seed `621899521`,
+3.60 USD) asked for `HARD CUT at 00:04`, `at 00:08` and `at 00:11.5`.
+
+| Written | Delivered |
+|---|---|
+| hard cut at 4.0s | no cut — the frames at 3.8s and 4.1s are the same continuous camera move |
+| hard cut at 8.0s | a cut, at 7.75s — 0.25s early |
+| hard cut at 11.5s | no cut — 11.3s and 11.6s continuous |
+| nothing written there | cuts at 6.29s and 9.67s |
+
+One of three landed and two arrived uninvited. The two misses were checked at
+frame level, so they are absent cuts rather than cuts a detector overlooked.
+That is better than the 30-second row above — where the prohibition bought
+nothing and four cuts appeared anyway — and it is still not control. Read it
+next to "Past that envelope: six jobs, and what the mix does to a boundary",
+which found that a timeline weighted toward hard cuts renders them: this
+job's written mix beyond those three stamps was not recorded, so it cannot be
+placed in that ranking, and the two accounts are complementary rather than in
+conflict. The honest summary across all of them is that **cut placement is
+unreliable under either wording** — forbidding cuts and scheduling them both
+come back approximate — and that the mix, not the stamp, is the lever with
+evidence behind it.
+
+**What did land in that same job was the budget and the arrangement of time.**
+Two clauses, both exact:
+
+- **The slow-motion budget.** `at most 0.15 seconds of slow motion, and only
+  at 00:13` — no out-of-budget slow motion anywhere in the 15 seconds, the
+  motion curve staying high until the written tail. Second reading in a row
+  for a budget clause, after `c192dbe6`.
+- **Ending the action early on purpose.** `the action ends at 00:13` produced
+  2.8 at 13s, 1.0 at 14s and 0.6 at 15s on the same inter-frame scale — about
+  two quiet seconds, landing inside the 15 already paid for. This is the first
+  time this file's "hold one second buys about two" finding was **spent**
+  rather than measured: the overshoot was planned for by scheduling the last
+  beat two seconds early, and it arrived where the plan put it.
+
+So on the time axis the ordering the evidence supports is: budget first,
+then where you place the beats and how long the clip runs, then the cut mix,
+and a stamp or a prohibition last — cheap to write, worth writing, not worth
+depending on.
+
 ### Unwanted text is designed out of the set, not forbidden in the list
 
 `no subtitles, no on-screen text, no watermarks` is the most-written item in
@@ -1289,6 +1339,24 @@ sentence that crowds it out.
 | **Unmotivated light.** A glow with no source, filling every shadow | Name the sources in the scene and let them fall off: a single overhead fluorescent tube, a window to camera-left at dusk, the screen lighting her face from below; shadows that stay dark on the far side |
 | **One mirror highlight.** A single uniform specular hotspot on every surface | Say the highlight is broken: broad soft highlights interrupted by surface irregularity, the reflection carrying the shape of the room rather than a white blob |
 | **Global over-exposure.** Case 1's *greasy* is an exposure fault before it is a texture one | Write the exposure: highlights that roll off rather than clip, deep shadow retained, contrast from the light's direction rather than from grading |
+
+**Where to aim the texture, and one place not to.** The first row's advice —
+name the pores, the uneven tone — is about the image API as much as this one,
+since the opening frame is generated there, and it can trip that API's safety
+filter when the subject is wet. A character frame refused on 2026-09-06
+(`image_generation_user_error`, nothing billed) carried
+`water runs in threads down skin`,
+`skin shows visible texture and rain-slick unevenness` and
+`soaked … clinging to her shoulders` in one paragraph; the wardrobe word in
+the same prompt was the isolated trigger, but that paragraph is the kind of
+writing that keeps a borderline prompt borderline. The same texture paragraph
+put back with its descriptions landing on **fabric, wet metal and water
+surfaces instead of on skin** passed on the next call and the frame still came
+back without the plastic sheen — step E of the bisect recorded in
+`ofox-image-core`'s `references/api-params.md`. So this is a caveat about
+*where* to point the texture sentence, not a reason to drop it: on a wet or
+undressed subject, spend it on the cloth's weave, the water sheeting off a
+surface and the grain of the metal, and let the skin be described plainly.
 
 Two more levers already have homes in this file. A **capture texture** —
 grain, gate weave, faded stock, lens character — is the "Style anchor" under
@@ -1733,6 +1801,13 @@ genuinely needs its full length, the practical lever is to give it a later
 timestamp and let the overshoot land inside the duration you already paid for,
 rather than to restate the number.
 
+That lever has since been applied rather than only recommended:
+`9cd773d0-b84e-4135-bc75-8f4e8963be2b` (15s, 720p, seed `621899521`) wrote the
+action as finishing at 00:13 and measured 2.8 at 13s, 1.0 at 14s and 0.6 at
+15s — the two-second tail arrived where it was scheduled, inside the duration
+already paid for. One application, so read it as a confirmation that the lever
+works, not as a third measurement of the overshoot.
+
 ### Ending line to copy
 
 ```
@@ -1758,7 +1833,11 @@ From cases 29, 26, 24, 5.
    "Transitions"). If a cutting rhythm is the point, hard cuts hold every
    boundary they are written on in the measured jobs where they are at least
    3 of 8 of the boundaries, and held none in the one job below that (see
-   "Past that envelope").
+   "Past that envelope"). **A cut written at one named second is a weaker
+   thing than a cutting rhythm**: a 15s job that wrote three stamps kept one
+   of them and delivered two nobody asked for, so budget the tempo and the
+   mix rather than promising a boundary at a given second (see "What a
+   prohibition cannot buy: timing and behaviour").
 5. **Every segment runs time → shot size / position → action → dialogue →
    sound** (cases 1, 7, 22), **with its own shot size stated** — a segment
    that omits it inherits the previous segment's framing.

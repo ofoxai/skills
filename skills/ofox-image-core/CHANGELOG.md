@@ -4,6 +4,74 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.9.0 — correction: it was the jacket, not the ages; and a refusal that names nothing has to be bisected
+
+Docs only; no script changes.
+
+**Correction to 1.8.0.** That entry said the safety refusal cleared because the
+prompt dropped its age numbers, softened minor-coded wardrobe detail and
+rewrote a strike as two forces meeting. Three edits went out together, so
+nothing was isolated, and the emphasis fell on the two that turn out to have
+nothing behind them. A single-variable bisect on 2026-09-06 — a control plus
+five steps at
+`--quality low --size 1024x1024`, about 0.037 USD billed and the one refused
+step free — walked from a prompt known to pass toward the prompt known to fail
+and stopped on one word: `cropped`, in `cropped jacket` — a
+bare-midriff garment, so most plausibly a sexual-content read, though the
+endpoint names no category and that part stays inference. The two prompts
+either side of that step are identical byte-for-byte apart from the word, and
+one is refused while the other is not.
+
+**Three strengths of result, kept apart.** The setting and the powers were each
+swapped on their own in a step that passed, so those two are cleared. The
+weapons and the covered faces are not: they came out of the prompt one at a
+time and then together while the cause was still being guessed at, and it was
+refused every time — enough to say neither is the cause on its own, not enough
+to call either safe, because nothing that passed on this model has carried
+them. The blade that did get through went through `mai-image-2.5-flash`, a
+different filter. The ages and
+the blow-landing strike wording are a third case again: every step started from
+the retry that had already dropped both, so the bisect inherits them and cannot
+speak to either. The entry also states the asymmetry behind all three, which is
+what both corrections turned on — a refusal shows what is not sufficient to fix
+a refusal, and only a passing call can show a clause is safe, and only for what
+that call carried.
+
+Reading back, the 1.8.0 retry that "worked" had also turned `black over-knee
+socks` into `dark tights` in the same batch, which is the likelier cause — so
+the wardrobe edit was in 1.8.0's list, filed under
+"minor-coded" when the evidence now points at the garment itself. **The
+age-number and rewritten-strike claims have no isolating evidence in this
+repo** and are recorded as untested rather than as advice. If you were
+following 1.8.0, the thing to change first on a refused character prompt is the
+wardrobe wording, not the subject matter. `SKILL.md`'s one-line pointer at that
+row changed with it: it used to send readers there for "what got through on the
+retry", which is exactly the attribution being corrected, and now names the
+isolated trigger and both repair routes.
+
+**A refusal here carries no category, so guessing is the expensive route.** All
+six refusals in that session returned the identical string `Your request was
+rejected by the safety system`. Six semantic guesses against that silence all
+missed; the five written down afterwards were weapons, the covered face,
+realistic combat versus fantasy powers, a rooftop parapet read as self-harm,
+and wet clothing clinging to the body. A new
+subsection in `references/api-params.md`, "When a refusal names no category,
+bisect rather than guess", writes up the procedure that did converge: start
+from a prompt that passes, change one thing per call, and bisect inside the
+step that fails. It leads with the control — re-running the known-good prompt
+unmodified — because a refused control means the filter moved and every
+comparison after it is unreadable.
+
+**The escape hatch was real and buried.** `microsoft/mai-image-2.5-flash` had
+already been observed producing a bladed character sheet that
+`openai/gpt-image-2` refused twice with this same error, but that lived only in
+a task record, which is why nobody reached for it during six refusals. The
+error table now lists two repair paths for a safety refusal, not one: rewrite
+the clause, or re-run unchanged on `--model microsoft/mai-image-2.5-flash`.
+About 2.67 cents against 0.6 cents at the cheap pair — usually less than a
+third rewrite, and the route to take when the refused element is one the shot
+wants to keep.
+
 ## 1.8.0 — the safety system has its own error type, and an age number was enough to trip it
 
 Docs only; no script changes. `error.type` on `/v1/images/generations` had

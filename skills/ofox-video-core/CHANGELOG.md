@@ -4,6 +4,64 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.19.0 — a scheduled cut is not a kept cut, and the anti-plastic sentence has one place not to point it
+
+Docs only; no script changes. One job generated 2026-09-06 with 1.18.0's
+findings already in hand — `9cd773d0-b84e-4135-bc75-8f4e8963be2b` (15s, 720p,
+seed `621899521`, 3.60 USD) — plus one caveat carried back from a refused image
+call the same day.
+
+**1.18.0's framing was optimistic and is corrected in place.** That entry showed
+prohibitions on a tempo failing and pointed at budgets as the sturdier
+instrument, which invited the reading that the repair for `no hard cuts` is to
+schedule the cuts instead. This job did exactly that — `HARD CUT at 00:04`,
+`at 00:08`, `at 00:11.5` — and delivered no cut at 4.0s, a cut at 7.75s (0.25s
+early), no cut at 11.5s, and two cuts nobody asked for at 6.29s and 9.67s. One
+of three landed. The two misses were confirmed frame by frame at 3.8/4.1s and
+11.3/11.6s, so they are absent cuts rather than cuts a detector missed.
+"What a prohibition cannot buy: timing and behaviour" now says plainly that
+**cut placement is unreliable under either wording**, and points at "Past that
+envelope: six jobs, and what the mix does to a boundary" — where the lever with
+evidence behind it, the hard-cut share of the timeline, already lives. If you
+took 1.18.0 as licence to promise a caller a cut at a named second, stop
+promising it; promise the mix and the length instead.
+
+**The same job's two exact deliveries say what to lean on.** `at most 0.15
+seconds of slow motion, and only at 00:13` held with no out-of-budget slow
+motion anywhere — a budget clause reading true for the second job running. And
+`the action ends at 00:13` produced 2.8 at 13s, 1.0 at 14s and 0.6 at 15s: the
+predicted two quiet seconds, landing inside the 15 already paid for. That is
+the first time `"Hold one second" buys about two` was **spent** rather than
+measured — the overshoot planned for by scheduling the last beat two seconds
+early — and that subsection now records the application alongside the two
+measurements.
+
+**And that subsection was parked where three of the four scenario skills could
+not see it.** 1.18.0 put "What a prohibition cannot buy: timing and behaviour"
+under "A camera move needs its waypoint frames, not just a verb" — a section
+no scenario skill names in its load list. Scenario skills load shared sections
+by name, so the finding reached only `seedance-anime-drama`, which happens to
+name the subsection itself, and was invisible to `seedance-short-drama`,
+`seedance-ad-creative` and `seedance-product-video`. It now
+sits under **"Consistency locks and the negative list"**, next to "Unwanted
+text is designed out of the set, not forbidden in the list" and "The plastic
+look is designed out, not forbidden" — the same shape of finding, and a section
+all four scenario skills already load. No scenario skill has to change to pick
+it up. Its opening sentence used to point at the subsection above it; it now
+names "Negative clauses are honoured more reliably than positive ones" and the
+section that one lives in, so the reasoning still chains. The cross-reference
+to it from "Rules that travel with the vocabulary" now names the new parent.
+
+**Where to aim a texture sentence.** "The plastic look is designed out, not
+forbidden" recommends naming skin texture positively. It can trip the image
+API's safety filter when the subject is wet: a refused character frame carried
+`water runs in threads down skin`, `skin shows visible texture and rain-slick
+unevenness` and `soaked … clinging to her shoulders` in one paragraph. The same
+paragraph with its descriptions landing on fabric, wet metal and water surfaces
+instead passed and still suppressed the plastic look. The subsection's claim is
+unchanged — this is a caveat about *where* to point the sentence, added inside
+it.
+
 ## 1.18.0 — a prohibition cannot buy a tempo, but a budget can; and the cause chain, read frame by frame
 
 Docs only; no script changes. Two anime jobs generated 2026-09-06 —

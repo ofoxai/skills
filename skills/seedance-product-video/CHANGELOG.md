@@ -4,6 +4,16 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.12.1 — two Chinese fragments in a shipped file, rendered in English
+
+Docs only; no script changes, no advice changed. Clip D's write-up (added in
+1.12.0) quoted two clauses from that clip's Chinese prompt verbatim, in a file
+that ships: a boundary marker and one `AVOID` item. `CONTRIBUTING.md` is
+English-only for anything shipped, and every other Chinese-language quotation
+in this repo is given in translation. Both now read as English — `hard cut`
+and `no ... hang tag` — with a line above them saying the prompt was Chinese
+and that clauses from it are translated. Nothing a caller does changes.
+
 ## 1.12.0 — one clip run outside this skill's own boundary: a presenter on camera, and what it moved
 
 Docs only; no script changes. Clip D —

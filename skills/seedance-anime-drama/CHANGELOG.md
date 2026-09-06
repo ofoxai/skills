@@ -4,6 +4,44 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.11.0 — the image refusal was blamed on the wrong clause, and there was a second way out all along
+
+Docs only; no script changes. Two of the three changes land on one row of the
+failure table — the `image_generation_user_error` row added in 1.10.0; the
+third is a pointer into the shared prompt-structure file.
+
+**Correction.** 1.10.0 told you to drop the age numbers, ease off minor-coded
+wardrobe detail and write the clash as two forces meeting rather than a blow
+landing on a body, on the strength of a retry that passed. Three things changed
+in that retry, so none of them was isolated. A single-variable bisect on
+2026-09-06 (write-up in `ofox-image-core`'s `references/api-params.md`) pinned
+the trigger to one wardrobe word — `cropped`, in `cropped jacket` — with the
+prompts either side of that step identical apart from the word. The school
+setting and the powers were each swapped alone in a step that passed, so those
+two are cleared. On `gpt-image-2` the weapons and the covered faces only ever
+appeared in prompts that were refused — taking them out did not lift the
+refusal, so neither is the cause on its own, and neither is cleared either. The
+ages and the blow-landing strike are untested: every step of the bisect started
+from the retry that had already dropped both. All three states are now recorded
+as what they are. The advice is: change the wardrobe wording first.
+
+**One pointer corrected.** The four shared subsections named under "Prompt
+template" now say which section each sits in. "What a prohibition cannot buy:
+timing and behaviour" moved in `ofox-video-core` 1.19.0 from "A camera move
+needs its waypoint frames, not just a verb" — a section this skill's load list
+never named — into "Consistency locks and the negative list", which it does.
+The list of sections to load is unchanged; it is now accurate about where that
+subsection is.
+
+**A second repair path.** `openai/gpt-image-2` refused a bladed character sheet
+twice with this same error while `microsoft/mai-image-2.5-flash` produced it
+with the blade kept — already known in this repo, written down only in a task
+record, and therefore not reached for across six refusals in one session. The
+row now carries `--model microsoft/mai-image-2.5-flash` as a route alongside
+rewriting the clause, and says which to prefer: switch the model when the
+refused element is one the shot needs, bisect when you want to know what the
+trigger was.
+
 ## 1.10.0 — two refusals this skill will actually meet, and the cause chain moves out
 
 Docs only; no script changes. A 30s water-versus-fire corridor fight

@@ -2,11 +2,11 @@
 name: ofox-image-core
 description: Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
 license: MIT
-version: "1.8.0"
+version: "1.9.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.8.0"
+  version: "1.9.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -585,19 +585,21 @@ was a semantic string. Here, `error.code` was literally the HTTP status as a
 (`invalid_request_error` was the only value confirmed until 2026-09-06, when
 a safety-system refusal on `openai/gpt-image-2` returned a second one,
 `image_generation_user_error` — see the error table in
-`references/api-params.md` for what triggered it and what got through on the
-retry. `provider_type_unavailable` still does not appear anywhere in a real
-response). `print_api_error` in `ofox-image.sh` now surfaces
-`error.type` as the primary classifier and shows `error.code` for reference,
-but always prints the raw `error.message` regardless — that part already
-worked correctly and still does. Two message-only gotchas remain doc-prose-
-only, unconfirmed by a real call: Gemini + `/v1/images/edits` ("Image
-editing is not supported for model") and Gemini + `n` (this script prevents
-the latter client-side before any network call, so it should never actually
-be observed against the real API through `ofox-image.sh`). Don't treat an
-unrecognized `error.type` as this script's bug; it means the vocabulary
-genuinely hasn't been seen yet — update `references/api-params.md` and this
-script's `print_api_error` if/when a new one is confirmed by a real call.
+`references/api-params.md` for the one trigger that has been isolated, and
+for the two repair routes: rewrite the clause, or re-run on
+`--model microsoft/mai-image-2.5-flash`. `provider_type_unavailable` still
+does not appear anywhere in a real response). `print_api_error` in
+`ofox-image.sh` now surfaces `error.type` as the primary classifier and shows
+`error.code` for reference, but always prints the raw `error.message`
+regardless — that part already worked correctly and still does. Two
+message-only gotchas remain doc-prose-only, unconfirmed by a real call:
+Gemini + `/v1/images/edits` ("Image editing is not supported for model") and
+Gemini + `n` (this script prevents the latter client-side before any network
+call, so it should never actually be observed against the real API through
+`ofox-image.sh`). Don't treat an unrecognized `error.type` as this script's
+bug; it means the vocabulary genuinely hasn't been seen yet — update
+`references/api-params.md` and this script's `print_api_error` if/when a new
+one is confirmed by a real call.
 
 | Exit | Meaning |
 |---|---|
