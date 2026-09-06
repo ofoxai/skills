@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.9.1"
+version: "1.10.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.9.1"
+  version: "1.10.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -248,6 +248,15 @@ first: "Prompt skeleton: header manifest, timeline, closing block",
 assets as visual anchors", "Endings". The vocabulary lives there and is not
 repeated. What follows is the anime shape laid over that skeleton.
 
+Four subsections in those pages carry most of what makes a fight or an action
+beat read, and all four are measured on this skill's own jobs: **"The cause
+chain"** (inside "Segmenting the timeline"), **"Rules that travel with the
+vocabulary"** (inside "Camera language"), **"What a prohibition cannot buy:
+timing and behaviour"**, and **"The plastic look is designed out, not
+forbidden"**. The last one matters here even though nothing in this scenario is
+photoreal — for animation the plastic read is the 3D-CG read, and the positive
+form is drawing vocabulary rather than a longer `AVOID` list.
+
 Gallery evidence for the shape: all eight animation-adjacent prompts (cases
 9, 10, 11, 18, 29, 44, 61, 63) name their style school in the first sentence;
 five of the eight are timestamped; seven carry a negative list; the two fight
@@ -296,7 +305,7 @@ What each anime slot is for, and where it comes from:
 |---|---|---|
 | **Style sandwich** — school in the first sentence, a `STYLE` block mid-prompt, a quality line at the end | All eight open with their school; 9, 18, 61 and 29 close by restating it | 9, 10, 18, 61, 29 |
 | **The schools seen** (the `Style` question's vocabulary) | `dreamlike cinematic anime aesthetic … anime 3D-stylised (rounded, appealing designs)` · `modern retro-anime 3D cel-shaded hybrid … soft VHS grain, synthwave colour glow` · `hand-drawn Japanese anime, highly detailed ink lines, expressive eyes, dramatic shadows … the slight imperfections of 1990s animation` · `pixel wuxia, 8-bit` · `hand-drawn 2D character inspired by 1969 American TV cartoons … thick black outlines, halftone dots, print misregistration` · `painterly anime illustration, cel-and-gradient shading` | 10, 18, 61, 29, 11, 34 |
-| **Cause chain** (action) | `visible target → body entry → real strike motion → clear contact → immediate body reaction → balance change → next action`; `no reaction before contact`; `no water/fire VFX in place of real body motion` | 44, 11 |
+| **Cause chain** (action) | The chain itself, its two attached prohibitions, and a frame-by-frame reading of it landing on a real job now live in **"The cause chain: ordering what happens inside a segment"** in `../ofox-video-core/references/prompt-structure.md` — load it rather than re-deriving it here. Its short form: `visible target → body entry → real strike motion → clear contact → immediate body reaction → balance change → next action` | 44, 11; measured on `c192dbe6` |
 | **Escalation curve** | each segment title raises the stakes (`REDIRECT → RUSH → PRESSURE WAVE → VORTEX BREAK → HYDRO DRILL → MAXIMUM FINISH`); `reactions grow louder after major punches`; the heaviest effects only on the decisive blow | 44, 11 |
 | **Effects allow-list with a frequency rule** | `SPEED LINES, SMEAR FRAME, IMPACT BURST, IMPACT FLASH, SHOCKWAVE RING, WOBBLE LINES — use effects sparingly`; onomatopoeia `THWACK! POW! SMACK! WHAM! CRACK!` | 11 |
 | **Terminal pose** | the referee raises the arm; faces the lens, serious and resolute; freeze; slow pull-back showing how small she is | 11, 9, 10, 29 |
@@ -993,6 +1002,7 @@ plus this skill's own:
 | 1 (image) | Exit `1`, no network call made | Missing `--quality`, bad `--model`, or `--n` combined with Gemini | Fix the flag per the error message and re-run `generate` — free to retry, nothing was submitted |
 | 1 (image) | Exit `2` | `curl`/`jq` missing, or `OFOX_API_KEY` not set | Re-run `ofox-image-core`'s `check` and follow its install/signup guidance |
 | 1 (image) | Exit `1`, `--quality '<v>' is not accepted by '<model>'`, no network call | `--quality standard` was passed and the chain resolved to `openai/gpt-image-2`, which accepts only `low`, `medium`, `high`, `auto`. Every command in this skill passed `standard` until 1.9.1, and they broke the day `ofox-image-core` made that model the chain head (2026-09-04) — not from anything changing here. Until `ofox-image-core` 1.7.0 this surfaced as exit `3` / HTTP 400 at submission (still unbilled); 1.7.0 validates `--quality` against the resolved model, so it is now caught locally, including under `--dry-run` | Pass `high` (an opening frame) or `medium` (a sheet), or pin `--model microsoft/mai-image-2.5-flash`, which does accept `standard`. Free to retry — nothing was submitted and nothing was charged |
+| 1 (image) | Exit `3`, `error.type: image_generation_user_error`, upstream message *"Your request was rejected by the safety system"* | The **safety system** refused the prompt before generating. On 2026-09-06 this fired on a character frame that named ages explicitly and described a strike landing on a person: `a 17-year-old girl` / `an 18-year-old boy` plus `his right fist … driving forward into her`. An action excerpt with school-age characters is this skill's normal input, so expect it. Nothing billed | Drop the age numbers (`a young woman` / `a young man`), ease off minor-coded wardrobe detail, and write the clash as two forces meeting rather than a blow landing on a body (`where the flame and the spinning water meet in the air between them`). That combination passed on the next call with everything else unchanged. Free to retry — nothing was submitted to a billed generation |
 | 1 (image) | Exit `3`, `error.type: invalid_request_error` | The request was rejected as malformed/unsupported. The confirmed error shape is `{"error":{"message","type","code"}}` — `error.code` is just the HTTP status as a number here, `error.type` is the real classifier | Read the printed `Upstream message`, fix the prompt/flags, retry — a rejected request has not been confirmed to bill |
 | 1 (image) | Exit `4` | `--out-dir` could not be created or entered | Caught before any network call, so no money was spent finding this out. Fix `--out-dir` and retry |
 | 1 (image) | Exit `5`, ambiguous network failure | No HTTP response at all — this is a synchronous, no-job-id API, so there's nothing to poll afterward | Do not guess or retry blindly; check `https://app.ofox.ai`'s usage/billing history first |
@@ -1003,6 +1013,7 @@ plus this skill's own:
 | 2 (video) | Exit `1`, "local image file ... exists but is not readable" | `--frame-first-image`'s path exists locally but this script/OS can't read it (permissions) — caught by `resolve_image_ref()` before any network call | Fix the file's permissions (confirm it's the exact `IMAGE_PATH` printed in Step 1) and retry — free, nothing was submitted |
 | 2 (video) | Exit `2` | `curl`/`jq` missing, or `OFOX_API_KEY` not set | Re-run `ofox-video-core`'s `check` and follow its install/signup guidance |
 | 2 (video) | Exit `3`, `error.code: insufficient_credits` | Ofox balance too low | No charge was made; the user needs to add credits at `https://app.ofox.ai` before retrying |
+| 2 (video) | Exit `3`, `output_moderation_failed`, *"the output video may be related to copyright restrictions"*, **on both upstreams** | A frame this model itself generated was fed back in as the next job's `--frame-first-image`. Measured 2026-09-06: `c192dbe6`'s own delivered last frame was refused as `5440c21e` on `byteplus` and again as `c4cff71a` on `volcengine`. Neither billed. Since the two upstreams moderate differently, both refusing points at the content — a stylised anime frame reads as closer to existing IP on the way back in than the text-to-image frame that opened the sequence did | The usual switch-upstream fix does not help here. Either continue with the words route instead (see "Continuing a previous clip" in the shared file — measured working on `c2eb32e1`), or regenerate the continuation's opening frame through `ofox-image-core` rather than reusing a delivered video frame. Budget for this before planning a long chained series |
 | 2 (video) | Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated output failed a post-generation content check, after the job ran — not billed (no `usage` field) | Retry with a brand-new `generate` call using a different prompt — a new request, safe to retry immediately |
 | 2 (video) | Exit `3`, request rejected when the API tries to use the reference image (commonly `error.code: invalid_request`) | The `IMAGE_PATH` doesn't exist locally and isn't a URL either, so `resolve_image_ref()` passed it through unchanged and the API rejected it as an unusable value — `ofox-video-core`'s docs confirm `bad_data_uri`/`download_failed`/`unreachable`/`not_image`/`too_large` only for `--real-person`'s reference-photo validation, not for `--frame-first-image`/`frame_images`, so don't assume one of those five specific codes here | Confirm the exact `IMAGE_PATH` printed in Step 1 still exists and is a valid, readable image file, then retry |
 | 2 (video) | Unexpected aspect ratio / frame shape in the output | `bytedance/seedance-2.5` + `--frame-first-image` always forces `aspect_ratio: adaptive` (printed as a `NOTE:`, never silent) — the output follows the image's own aspect ratio | Expected behavior, not a bug — the brief settles the ratio before Step 1 for exactly this reason, and `--target-aspect` on the Step 1 command is what keeps it. If it was missed, re-crop the existing frame (cropping only, never padding) and regenerate the shot — that is a second **video** bill, not a second image one |

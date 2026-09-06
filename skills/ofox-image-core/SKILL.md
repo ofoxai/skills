@@ -2,11 +2,11 @@
 name: ofox-image-core
 description: Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
 license: MIT
-version: "1.7.0"
+version: "1.8.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.7.0"
+  version: "1.8.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -582,9 +582,12 @@ the scenario that prose was describing) showed the actual shape is
 different from the video API's `{code, message}` shape where `code` really
 was a semantic string. Here, `error.code` was literally the HTTP status as a
 **number** (`400`); the real classifier is `error.type`
-(`invalid_request_error`, the only value confirmed so far — nothing else has
-been observed, and `provider_type_unavailable` does not appear anywhere in
-the real response). `print_api_error` in `ofox-image.sh` now surfaces
+(`invalid_request_error` was the only value confirmed until 2026-09-06, when
+a safety-system refusal on `openai/gpt-image-2` returned a second one,
+`image_generation_user_error` — see the error table in
+`references/api-params.md` for what triggered it and what got through on the
+retry. `provider_type_unavailable` still does not appear anywhere in a real
+response). `print_api_error` in `ofox-image.sh` now surfaces
 `error.type` as the primary classifier and shows `error.code` for reference,
 but always prints the raw `error.message` regardless — that part already
 worked correctly and still does. Two message-only gotchas remain doc-prose-

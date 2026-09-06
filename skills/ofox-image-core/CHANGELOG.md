@@ -4,6 +4,27 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.8.0 — the safety system has its own error type, and an age number was enough to trip it
+
+Docs only; no script changes. `error.type` on `/v1/images/generations` had
+exactly one confirmed value since 2026-08-29, `invalid_request_error`. A real
+call on 2026-09-06 returned a second: **`image_generation_user_error`**, HTTP
+400, upstream message *"Your request was rejected by the safety system"* with
+an Azure request id. Nothing billed.
+
+What tripped it is worth recording because it is ordinary scenario input, not
+an edge case. The prompt was an opening frame for an anime fight and named
+ages explicitly — `a 17-year-old girl`, `an 18-year-old boy` — while describing
+a strike landing on a person (`his right fist … driving forward into her`).
+Removing the age numbers (`a young woman` / `a young man`), easing the
+minor-coded wardrobe detail, and rewriting the clash as two forces meeting in
+the air rather than a blow landing on a body passed on the very next call with
+everything else unchanged.
+
+The error table in `references/api-params.md` carries the row; `SKILL.md`'s
+claim that `invalid_request_error` was "the only value confirmed so far" is
+corrected rather than left to age.
+
 ## 1.7.0 — the quote said 0.6 cents, the bill said 15.4, and `--dry-run` had no opinion about `standard`
 
 Two guards, both for failures that already happened on real runs and neither

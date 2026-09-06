@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), or for anything not involving people/dialogue.
 license: MIT
-version: "1.10.0"
+version: "1.11.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.10.0"
+  version: "1.11.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -622,6 +622,49 @@ So a short-drama character's consistency across jobs is text: the same
 appearance block word for word, plus the `CONSISTENCY` line. If a user
 attaches a photo of a real person anyway, say what will happen before
 spending anything, and confirm they have rights to the likeness.
+
+### Continuing a scene across jobs, when no frame can be attached
+
+The refusal above closes the frame route for this scenario specifically: the
+rest of the repo continues a clip by attaching its last frame, and a
+photoreal person cannot be attached at all. So when scene 3 has to open where
+scene 2 closed, the only instrument left is **the words route** — case 44's
+continuity block, described and measured under "Continuing a previous clip:
+the frame route and the words route" in
+`../ofox-video-core/references/prompt-structure.md`. Load that subsection; the
+measurement is not repeated here.
+
+Its shape, adapted to a dialogue scene:
+
+```
+CONTINUITY: this is part <N>, continuing directly from part <N-1>. Part <N-1>'s
+final image, restated: <who is where in the frame — foreground/background, near/far>,
+<what each is wearing, itemised>, <the objects that must still be there and where>,
+<the light and the time of day>, <the emotional state each was left in>.
+No re-staging, no re-introduction, no settling in — <the tag> is already <the action
+in progress> on the first frame.
+```
+
+Two things follow from the measurement, and they change how you write the cut
+rather than how you write the block:
+
+- **Staging, wardrobe, props and palette come back; an exact pose and the
+  camera's distance do not.** So write the continuation so it does not depend
+  on matching a pose — pick up on a line, a prop or a position in the room,
+  not on the tilt of someone's head. If the two clips genuinely must match on
+  a pose, the honest answer is that this route will not deliver it.
+- **The "no re-staging" half is a prohibition on a tempo, and those are soft.**
+  The measured run still opened with about two seconds of near-static
+  preparation. Give the first beat its own timestamp and write it as an action
+  already underway (`[0–3s] mid-sentence, she is already turning away from
+  him…`) — that does more than the prohibition does.
+
+One limit worth stating to the user before they pay: the run behind those
+findings (`c2eb32e1-3b54-4a56-8d78-86e63bc355c7`) was an **anime** continuation,
+not a live-action one. The mechanism is the prompt, not the art style, and
+nothing suggests it would differ — but no live-action continuation has been
+measured in this repo, so a first one is an experiment and worth pricing as
+one.
 
 ## Recommended defaults
 

@@ -4,6 +4,59 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.18.0 — a prohibition cannot buy a tempo, but a budget can; and the cause chain, read frame by frame
+
+Docs only; no script changes. Two anime jobs generated 2026-09-06 —
+`c192dbe6-ae09-4dba-8e81-3a3e82ff5912` (30s, 720p, t2v with a first frame,
+seed `457047702`, 7.20 USD) and `c2eb32e1-3b54-4a56-8d78-86e63bc355c7` (8s,
+480p, text-only, seed `18854260`, 0.88 USD) — add six subsections to
+`references/prompt-structure.md`, five of them measured on those two clips.
+
+**A prohibition on a tempo is soft; a budget is not.** "What a prohibition
+cannot buy: timing and behaviour", under the negative-clause section, tabulates
+three: `no hard cuts` produced four cuts in the 30s clip, `neither of them
+waits after separating` produced three low-motion stretches, and `no slow
+preparation` produced two near-static opening seconds in the 8s clip. In the
+same prompt, `at most 0.2 seconds of micro slow motion, only at the instant
+the final kick lands` held. (Both prompts were written in Chinese; clauses are
+quoted in translation, as this repo does for case 44.) The existing subsection already sorted prohibitions by
+*what* they remove; this adds the axis of whether the thing removed is an
+object or a tempo. It is written as a tendency to price in, not as a ban on
+writing prohibitions — the 8s clip carried the same no-hard-cuts clause and
+came back with zero
+cuts, which says duration was doing as much work as the prohibition failing.
+
+**The cause chain is now a first-class subsection with frame-level evidence.**
+It had been living in `seedance-anime-drama`'s pattern table, sourced to cases
+44 and 11 as writing anyone had done rather than as anything that had been
+checked. Reading `c192dbe6`'s finishing kick at 1/12-second spacing puts each
+link on a timestamp: target visible and unreacted at 24.85s, entry through
+25.10s, the strike at 25.18s with **still no anticipatory recoil**, contact at
+25.27s, reaction and displacement from 25.35s. Five frames of approach with no
+early flinch is the specific failure `no impact reaction before contact`
+names. The
+anime skill's row now points here instead of restating it.
+
+**Three more.** "Rules that travel with the vocabulary" gives `Camera language`
+the three constraints case 44 puts around whichever move it picks — readability
+over the effect, contact staying in one frame, a slow-motion budget — and notes
+that the block inverts rather than disappears for catalog footage. "Continuing
+a previous clip" splits the sequel problem into a frame route and a words
+route, measures what the words route reproduces (staging, positions, props by
+number and place, wardrobe, palette) against what it does not (exact pose,
+camera distance, light level), and records that feeding a *delivered* frame
+back in was refused for copyright on **both** upstreams — `5440c21e` on
+byteplus and `c4cff71a` on volcengine, neither billed. "Hold one second buys
+about two" measures the ending overshoot on both clips.
+
+**And one that is craft, not measurement.** "The plastic look is designed out,
+not forbidden" breaks the AI-render look into four faults — uniform surfaces,
+unmotivated light, a single mirror highlight, global over-exposure — and gives
+each a positive sentence, on the same principle as the neighbouring subsection
+about unwanted text. Both anime jobs carried a positive style sandwich *and*
+the usual negatives and came back with no CG sheen; which half did the work is
+not isolated, and the subsection says so.
+
 ## 1.17.0 — the waypoints render, the ending does not: a second product clip settles two open items
 
 Docs only; no script changes. A third `seedance-product-video` clip

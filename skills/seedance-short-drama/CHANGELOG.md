@@ -4,6 +4,36 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.11.0 — the only continuity route open to this scenario, now measured
+
+Docs only; no script changes. This skill has always been the one that cannot
+attach a frame: `bytedance/seedance-2.5` refuses a photoreal person at
+submission, so the frame route every other scenario uses to continue a clip is
+closed here. What was left — re-describing the previous clip's last frame in
+words — was documented nowhere and measured never.
+
+`c2eb32e1-3b54-4a56-8d78-86e63bc355c7` (2026-09-06, 8s, 480p, seed `18854260`,
+0.88 USD) is a continuation written from a paragraph describing another clip's
+final frame, with no image attached. It reproduced the over-the-shoulder
+staging, both characters' positions near and far, the distinguishing prop in
+the right number and place, wardrobe basics and palette. It did not reproduce
+the exact pose, the camera's distance, or the light level — the same split
+this repo already records under "A description is honoured; a number attached
+to it is not".
+
+The new section, "Continuing a scene across jobs, when no frame can be
+attached", carries the block to copy and the two consequences: write the
+continuation to pick up on a prop, a line or a position rather than on a
+matched pose, and give the first beat its own timestamp as an action already
+underway, because the block's `no re-staging` half is a prohibition on a tempo
+and those are soft — the measured run still opened with about two seconds of
+near-static preparation.
+
+One limit is stated in the section rather than buried: that run was an **anime**
+continuation. The mechanism is the prompt rather than the art style, but no
+live-action continuation has been measured here, so a first one is an
+experiment and should be priced as one.
+
 ## 1.10.0 — the transition-mix rule confirmed, the envelope opened up, and a movement floor for the one-take
 
 Docs only; no script changes. Four accepted short-drama clips and one

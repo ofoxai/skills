@@ -377,6 +377,47 @@ Shot 3 (6-10s): Facial close-up, the grandmother's eyes full of reluctance. Dial
 SHOT 3 - 0:10-0:15 / Visual: … / Camera: Medium-wide, slow push in … / Dialogue: "…"                                            (case 22 — three fixed fields per shot)
 ```
 
+### The cause chain: ordering what happens inside a segment
+
+A segment that names an outcome (`she strikes him back`) leaves the model to
+decide how the outcome is reached, and the cheap way to render it is to skip
+to the result — the opponent recoils, an effect covers the gap, no body ever
+travels. Cases 44 and 11 both answer this by writing the **order** as an
+explicit chain rather than the outcome as a noun:
+
+```
+VISIBLE TARGET → BODY ENTRY → REAL STRIKE MOTION → CLEAR CONTACT
+→ IMMEDIATE BODY REACTION → BALANCE CHANGE / DISPLACEMENT → NEXT ACTION
+```
+
+with two prohibitions attached that name the two ways the chain gets skipped:
+`no impact reaction before contact` and `no water/fire VFX standing in for
+real body motion` (translated from case 44).
+
+**Measured on `c192dbe6-ae09-4dba-8e81-3a3e82ff5912`**, reading the finishing
+kick frame by frame at 1/12-second spacing:
+
+| Time | What the frame shows | Chain link |
+|---|---|---|
+| 24.85s | both in frame; the opponent upright, fists closed, no impact reaction | VISIBLE TARGET |
+| 24.93–25.10s | she drops her centre and turns in, water forming along the arm; opponent still upright | BODY ENTRY |
+| 25.18s | the leg sweeps out; opponent **still shows no reaction** | REAL STRIKE MOTION |
+| 25.27s | foot meets his torso, fire and water burst at the point of contact | CLEAR CONTACT |
+| 25.35–25.43s | he is driven back, her leg stays extended rather than snapping home | BODY REACTION → DISPLACEMENT |
+
+Five frames of approach with no anticipatory recoil is the specific thing the
+chain buys; roughly a third of a second of entry, then contact, then reaction.
+Both bodies stay in frame across the whole exchange, which is the same
+constraint written up under "Rules that travel with the vocabulary".
+
+**It is not only for fights.** The chain is a general answer to "state changed
+and I could not see why", so the same shape carries a hand reaching a product
+(`hand enters frame → fingers meet the lid → the lid turns → the contents
+shift`), a door being opened, liquid poured, or an emotional beat that has to
+land on a line rather than before it. What it costs is words inside the
+segment, so it earns its place where the causation is the point and can be
+skipped where it is not.
+
 ### Segment skeleton to copy
 
 ```
@@ -885,6 +926,44 @@ only the prohibition survived. Two working rules follow:
   reliable end of the range; a positive instruction with nothing but a verb
   behind it is the unreliable one.
 
+### What a prohibition cannot buy: timing and behaviour
+
+The subsection above sorts prohibitions by *what* they remove. Three
+prohibitions measured here sort them by something else — whether the thing
+forbidden is an **object or a style** (the reliable end) or a **behaviour
+unfolding in time** (not reliable).
+
+| Written | Delivered | Job |
+|---|---|---|
+| `one continuous take; no hard cuts, no jump cuts, no fade to black`, in a 30s anime fight | four cuts, at 1.2s / 10.5s / 14.8s / 15.0s (scene detection, threshold 0.35) | `c192dbe6-ae09-4dba-8e81-3a3e82ff5912` |
+| `neither of them waits after separating` + `NO WAITING. NO LONG RESET.`, same job | three low-motion stretches mid-fight — per-second inter-frame difference 7.8 at 10s, 4.3 at 21s, 6.1–7.1 at 27–28s, against a median near 15 | `c192dbe6` |
+| `no slow preparation; the fight continues from frame one`, in an 8s continuation | the first two seconds are nearly static — 2.0 and 4.1 on the same scale | `c2eb32e1-3b54-4a56-8d78-86e63bc355c7` |
+
+None of the three removes an object from the set; each tries to forbid a
+*tempo*, and each was done anyway. (Both prompts were written in Chinese, as
+case 44's is; the clauses are quoted here in translation, per this file's
+convention.)
+
+**A budget, in the same prompts, was honoured.** `at most 0.2 seconds of micro
+slow motion, only at the instant the final kick lands; normal high speed
+throughout the rest` held in `c192dbe6`: the decisive kick
+at 26s measures 18.1 on that scale — normal speed — and no slow-motion band
+appears anywhere in the 30 seconds. A quantified allowance for the thing you
+want *less* of landed where a flat prohibition on the thing you want *none* of
+did not.
+
+So when the axis is time — cutting, waiting, hesitating, slow motion, how long
+a beat runs — a budget (`at most 0.2 seconds, and only on the decisive hit`)
+is the sturdier instrument, and a prohibition is worth keeping as a cheap
+backstop rather than as the thing you rely on.
+
+Two caveats keep this from hardening into a rule. `c2eb32e1` also carried
+the same no-hard-cuts prohibition and came back with **zero** cuts in 8 seconds — so the 30-second
+result is as much about duration as about the prohibition failing; long jobs
+get cut, short ones have nothing to cut. And a prohibition costs almost
+nothing to write. Price these as measured tendencies when deciding what to
+lean on, not as a reason to stop writing prohibitions.
+
 ### A description is honoured; a number attached to it is not
 
 The section above is about a *verb* needing frames behind it. This is the
@@ -953,6 +1032,30 @@ then write the frames it passes through to actually get it. A move that only
 has to hold the frame roughly where it is (`locked`, `handheld sway`, a push
 inside one beat) is safe as a phrase on its own; one that has to arrive
 somewhere specific needs the waypoints too.
+
+### Rules that travel with the vocabulary
+
+The tables below name moves. Case 44's camera block is worth reading for
+something else — the three constraints it puts *around* whichever move it
+picks, all aimed at the same thing: an aggressive camera that still lets the
+action be read.
+
+| Constraint | As written (case 44, translated) | Status here |
+|---|---|---|
+| **Readability outranks the effect** | `the camera moves aggressively but the action must stay clearly visible` / `action readability > VFX` — the camera may be violent, the action must stay legible | Written, not isolated in a measurement. Cheap to carry, and it gives the model a tie-breaker for the many moments where a flourish and a clear view compete |
+| **Contact stays in one frame** | `on an important attack, attacker and target must briefly share one frame before and after contact` — attacker and target share the frame just before and just after a hit | Held in `c192dbe6` across the finishing exchange read frame by frame from 24.85s to 26.78s — both bodies in frame through approach, contact and displacement. The frames are tabulated under "The cause chain" in "Segmenting the timeline" |
+| **A slow-motion budget, not a slow-motion ban** | `at most 0.2 seconds of micro slow motion, only at the instant the final kick lands; normal high speed throughout the rest` | Honoured in `c192dbe6` — see "What a prohibition cannot buy: timing and behaviour". This is the reliable way to spend slow motion |
+
+The first two are conventions worth borrowing; the third is measured. All
+three read naturally as one short block near the end of a prompt, and none of
+them presupposes an action scene — the same three sentences serve a dialogue
+two-hander (keep both faces available across the line), a product orbit (the
+product stays whole in frame through the move) or a quiet anime beat.
+
+Where a scenario wants the *opposite* of an aggressive camera — catalog
+footage is the clear case — the block inverts rather than disappears: a locked
+axis, one constant speed, the product whole in frame, no handheld and no whip
+pan. Same slot, opposite vocabulary.
 
 ### Shot size
 
@@ -1165,6 +1268,48 @@ backstop, not the defence. The same asymmetry runs the other way for text you
 rather than render it from scratch (see "Reference assets as visual
 anchors").
 
+### The plastic look is designed out, not forbidden
+
+Everything this file currently holds against the AI-render look is a
+prohibition: `plastic CG, greasy over-exposed CG` (case 1), `no skin
+smoothing, no influencer filter, no plastic skin` (case 20), `no CGI feel`
+(case 38), and case 25's `cinematic color grading, beauty filters, artificial
+skin smoothing, dramatic slow motion, music, perfect lighting`. Those are
+worth keeping. But the subsection above is the reason they are not enough on
+their own: a prohibition removes a class of thing without supplying what
+stands in its place, and "not plastic" leaves the model to pick the default —
+which is the plastic one.
+
+The plastic read is not one fault; it is four, and each has a positive
+sentence that crowds it out.
+
+| What produces it | What to write instead of forbidding it |
+|---|---|
+| **Uniform surfaces.** Skin with no pores, a product with no wear | Name the texture: visible pores and fine facial hair, uneven skin tone, a blemish, chapped lips · brushed metal grain, a fingerprint, micro-scratches, dust settled in a seam |
+| **Unmotivated light.** A glow with no source, filling every shadow | Name the sources in the scene and let them fall off: a single overhead fluorescent tube, a window to camera-left at dusk, the screen lighting her face from below; shadows that stay dark on the far side |
+| **One mirror highlight.** A single uniform specular hotspot on every surface | Say the highlight is broken: broad soft highlights interrupted by surface irregularity, the reflection carrying the shape of the room rather than a white blob |
+| **Global over-exposure.** Case 1's *greasy* is an exposure fault before it is a texture one | Write the exposure: highlights that roll off rather than clip, deep shadow retained, contrast from the light's direction rather than from grading |
+
+Two more levers already have homes in this file. A **capture texture** —
+grain, gate weave, faded stock, lens character — is the "Style anchor" under
+the prompt skeleton, and it is the single cheapest anti-plastic sentence in
+the set. And for animation the plastic read *is* the 3D-CG read, so the
+positive form is drawing vocabulary: flat cel fills, visible variation in line
+weight, hand-drawn shadow shapes, held drawings rather than smooth
+interpolation.
+
+**What is measured and what is not.** The two anime jobs here
+(`c192dbe6-ae09-4dba-8e81-3a3e82ff5912`, `c2eb32e1-3b54-4a56-8d78-86e63bc355c7`)
+carried both halves — a positive style sandwich (`clean confident line art,
+flat vibrant colour, strong rim light and hard cast shadows`) and the negatives
+(`never photoreal, never 3D game CG, never plastic skin`) —
+and came back cel-shaded with no CG sheen across 30 and 8 seconds. Carrying
+both is what is demonstrated; which half did the work is not isolated, and no
+run here has tried the negatives alone. Read the table as craft with a good
+prior behind it rather than as a measured result, and keep the prohibitions —
+they cost a few words and this file's own evidence says prohibitions on a
+*class of thing* are the reliable kind.
+
 ### Closing block to copy
 
 ```
@@ -1351,6 +1496,68 @@ tier: `16023efe` and `ac927785` each billed 4.80 dollars for 20s at 720p,
 which is the t2v rate of 24 cents/s, not v2v's 30 cents/s. Only a *video*
 input does that (`pricing.md`).
 
+### Continuing a previous clip: the frame route and the words route
+
+A sequel — PART 2 of a fight, the next beat of a scene, anything that has to
+open where the last clip closed — has two ways to carry the previous ending
+forward, and they cost and fail differently.
+
+**The frame route** attaches the previous clip's last frame (`chain` does this
+between jobs; `--frame-first-image` does it by hand). It is exact when it
+works: `c192dbe6`'s own opening frame reproduced its attached image on
+composition, both characters, wardrobe and setting.
+
+It has a failure mode worth knowing before planning a series on it. Feeding
+`c192dbe6`'s **own delivered last frame** back in as the next job's first
+frame failed output moderation on both upstreams:
+
+| Job | Upstream | Result |
+|---|---|---|
+| `5440c21e-6d0b-498f-b7ab-a12ec975e4f2` | `byteplus` | `output_moderation_failed` — *"the output video may be related to copyright restrictions"*. Not billed |
+| `c4cff71a-7f41-4462-8849-b0beb33dd3ae` | `volcengine` | same code, same reason. Not billed |
+
+byteplus and volcengine moderate differently and the retry-on-the-other-upstream
+fix usually exploits that, so both refusing points at the content rather than
+at one platform's policy: a stylised anime frame that this model generated can
+read as closer to existing IP on the way back in than the text-to-image frame
+that started the sequence did. Neither attempt was billed, which makes this
+cheap to discover but not cheap to plan around — budget for the possibility
+that a long chained series stalls partway.
+
+**The words route** drops the image and re-describes the previous last frame in
+the prompt — case 44's continuity block, which restates PART 1's closing image
+and then forbids re-staging it: `no re-positioning, no re-facing off, no slow
+preparation`.
+This is the only route open when the subject is a photoreal person, since
+image-to-video refuses those frames outright.
+
+Measured on `c2eb32e1-3b54-4a56-8d78-86e63bc355c7`, an 8-second continuation
+written from a paragraph describing `c192dbe6`'s final frame, with no image
+attached:
+
+| Reproduced from words alone | Not reproduced |
+|---|---|
+| the over-the-shoulder staging (her back and shoulder filling the left foreground) | her exact pose, and the camera's distance — the sequel sits closer and more centred |
+| both characters' positions in the corridor, near and far | the opponent's precise stance (head-down, fists clenched became a more upright stand) |
+| the distinguishing prop, in the right number and place: two pools of flame, one at each of his feet | the lighting level — the sequel's fluorescents read much brighter |
+| wardrobe basics, palette, lockers, wet reflective floor | hair direction and drape |
+
+The split matches what this file finds elsewhere in "A description is honoured;
+a number attached to it is not": **what a thing looks like and where it sits in
+the frame comes back; exact pose, camera distance and light level do not.** So
+the words route is worth reaching for when staging and continuity of props and
+wardrobe are what the cut needs, and worth distrusting when the two clips have
+to match on a pose.
+
+The block's second half — the prohibition against re-staging — behaves like
+every other prohibition on a tempo: `c2eb32e1` opened with roughly two seconds
+of near-static preparation (inter-frame difference 2.0 and 4.1 in the first two
+seconds) despite `no slow preparation; the fight continues from frame one`.
+See "What a prohibition
+cannot buy: timing and behaviour". Writing the first beat as an action already
+in progress, with its own timestamp, does more work here than the prohibition
+does.
+
 ### Sentence patterns for pointing at an asset
 
 | Pattern | Example (translated where needed) | Cases |
@@ -1502,6 +1709,29 @@ said six and one; both figures were the pre-seek artefact. `1cf5ac46` and
 and only one of them held. So write the hold if you want it, and expect a settle rather than
 a freeze; if the last frame genuinely has to be frozen, that is an editing
 step, not a prompt clause.
+
+### "Hold one second" buys about two
+
+Both jobs run here asked for a one-second hold on the final image and got
+roughly twice that. Per-second inter-frame difference, on a scale where these
+clips' mid-action median sits near 15:
+
+| Job | Asked | Last two seconds measured |
+|---|---|---|
+| `c192dbe6-ae09-4dba-8e81-3a3e82ff5912` (30s) | `freeze … hold one second` | 1.5 at 29s, 0.6 at 30s |
+| `c2eb32e1-3b54-4a56-8d78-86e63bc355c7` (8s) | `stop on … hold one second` | 2.6 at 7s, 1.0 at 8s |
+
+Two clips of very different length, the same overshoot: the tail goes quiet
+about two seconds out, not one. It is the same grammar as
+"A description is honoured; a number attached to it is not" — the *hold*
+renders, the *one second* is a wish.
+
+Worth pricing rather than fighting. On a 30-second job two quiet seconds is
+7% of the clip and usually fine; on an 8-second job it is a quarter of it, and
+the action has to be written to finish that much earlier. If the last beat
+genuinely needs its full length, the practical lever is to give it a later
+timestamp and let the overshoot land inside the duration you already paid for,
+rather than to restate the number.
 
 ### Ending line to copy
 

@@ -24,3 +24,13 @@ test-output/
 .claude/
 .trellis/
 AGENTS.md
+
+# Generated media from real API runs — deliverables, not repo content.
+# `out/` holds the mp4s plus their .json sidecars (full job id, prompt, real
+# cost); `assets/` holds the opening frames and design sheets that scenario
+# skills feed to --frame-first-image. Both are reproducible from the job ids
+# already cited in the skill docs, and a single 30s 720p clip is ~66MB.
+# Note out/ was previously only covered by a personal global gitignore, which
+# does not travel with a clone — hence the explicit entry here.
+out/
+assets/

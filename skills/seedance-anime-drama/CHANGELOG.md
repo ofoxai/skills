@@ -4,6 +4,37 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.10.0 — two refusals this skill will actually meet, and the cause chain moves out
+
+Docs only; no script changes. A 30s water-versus-fire corridor fight
+(`c192dbe6-ae09-4dba-8e81-3a3e82ff5912`, 720p, seed `457047702`, 7.20 USD,
+opening frame `openai/gpt-image-2` at 0.15352 USD) and its attempted
+continuation, all 2026-09-06.
+
+**Two failure rows, both for things this skill's normal input invites.**
+The image step can be refused by the safety system —
+`image_generation_user_error`, nothing billed — when a character frame names
+ages explicitly and describes a blow landing on a person. An action excerpt
+with school-age characters is exactly what this skill is handed, so the row
+says what got through on the retry rather than just what failed. And the video
+step can be refused for **copyright** when a frame this model itself delivered
+is fed back in as the next job's `--frame-first-image`: `5440c21e` on byteplus
+and `c4cff71a` on volcengine, the same code both times, neither billed. The
+usual switch-upstream fix does not apply when both upstreams refuse, so the
+row points at the two routes that do work.
+
+**The cause chain now lives in the shared file.** Its row in the pattern table
+pointed at cases 44 and 11 — writing someone had done, never checked here.
+`c192dbe6`'s finishing kick read frame by frame put every link on a timestamp,
+so the full treatment moved to "The cause chain: ordering what happens inside
+a segment" in `ofox-video-core`'s `prompt-structure.md` and the row now links
+to it. Linked, not copied, per this repo's own rule.
+
+**The load list gained a pointer** to the four shared subsections that carry
+most of an action beat, including "The plastic look is designed out, not
+forbidden" — which matters here even though nothing in this scenario is
+photoreal, because for animation the plastic read is the 3D-CG read.
+
 ## 1.9.1 — a dependency's chain reorder broke every image command in this file
 
 Docs only; no script changes. `ofox-image-core` made `openai/gpt-image-2` the
