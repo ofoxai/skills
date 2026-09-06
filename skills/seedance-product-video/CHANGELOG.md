@@ -4,6 +4,108 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.12.0 — one clip run outside this skill's own boundary: a presenter on camera, and what it moved
+
+Docs only; no script changes. Clip D —
+`e378f058-f224-4450-94b4-798840ad139b`, 2026-09-06, seed `561877558`,
+`bytedance/seedance-2.5` on `byteplus`, **image-to-video** with a generated
+product-only first frame, 30s, 720p, `aspect_ratio: adaptive` (forced by the
+attached image), **audio left on**, billed **7.20 USD**, plus **0.154615 USD**
+for the first frame on `openai/gpt-image-2` — **7.354615 USD** total. Accepted
+by the repo owner. `n: 1012` in the gallery.
+
+**Read this first.** The clip breaks this skill's own `description`, which
+ends `Do not use for ... anything involving people/dialogue`, and it breaks a
+second rule too — a fictional product is supposed to go text-only rather than
+generate-a-reference-then-animate. Both exclusions are **unchanged**, no new
+skill was created, and whether presenter-led commerce video deserves a
+scenario of its own is undecided. It is recorded because its findings bear on
+the templates here.
+
+### Added — a new section, "One clip outside this skill's own boundary: a presenter on camera"
+
+- **The first-frame lock survives the product being worn.** Every earlier
+  frame-lock result in this repo had the product sitting still; the sneaker
+  clip had a model beside the product, never wearing it. Clothing is the most
+  deformable category there is, so this was the predicted risk of the whole
+  run. Six discrete features enumerated in advance — the two-tone colour
+  split, the centre zip and its orange pull, the pocket set, the hood and its
+  drawcords, the cuff tabs, the blank sleeve patch — **all six held** across
+  hanger, body, outdoor and studio. Stated as **one clip**, with the hedges:
+  no control, cuff tabs unreadable in the backlit outdoor segment, and the
+  garment's **loft** drifted (it reads thicker than the attached shell), which
+  is a continuous property the six discrete features do not cover.
+- **"Product-only first frame, person written in text" has a second data
+  point**, and this one has the generated person **pick the product up and
+  wear it** rather than merely share a frame with it. No
+  `input_moderation_failed`; `--real-person` not passed and not needed.
+- **A shot size on every waypoint, a third time** — with the hedge that clip
+  D's boundaries rendered as cuts, so the framings are partly delivered by
+  cutting rather than by resisting inheritance inside one move.
+- **Nine hard cuts and ten shots in one job**, all confirmed by reading frames
+  — a new maximum for this repo, previously 6 hard cuts, and done with an
+  image attached, dialogue on the track and two locations.
+- **All nine timestamped boundaries became hard cuts, including the six that
+  never said so** — a 6-for-6 confirmation of the shared file's rule. One of
+  those six was written as a camera verb and delivered a cut, so a bare camera
+  verb neither produces a move nor prevents one.
+- Timestamps: eight of nine within 0.5s, the outlier 1.29s early. **Eight land
+  early, one (the 2s cut, delivered at exactly 2.000) lands on its stamp, none
+  lands late** — noted as a shape, not a rule.
+
+### Added — the failures, recorded as failures
+
+- **The zero-fake-text construction has a boundary.** Its per-part list named
+  only **outer** surfaces, and when the lining came on camera it carried a
+  neck brand label, a small tab and a care/spec panel. At 12x none resolves
+  into readable letters, so there is **no readable fake text** — but three
+  carriers `AVOID` had named outright. **Zero fake text is half-held, not
+  held.** The repair (extend the declaration to lining, inner collar and
+  pocket interiors; name interior carriers in AVOID) is **inferred from the
+  defect and has not been run**.
+- **A prohibition pinned to a second is only as reliable as the cut.** `No
+  person before 8s` was broken at 6.708s because that cut landed 1.29s early.
+  Move the thing to a later segment rather than writing the prohibition
+  harder.
+- **"Completely still" delivered a settle**: 23 of 54 final frames cross
+  0.0005, **zero** cross 0.005, framing identical at 28.0s and 29.9s. The
+  camera did not move; a living subject breathes.
+- **A style clause could not be separated from its own scene** — `no cinematic
+  colour grading` against a dawn-ridge-under-low-cloud location that supplies
+  that light by itself. Recorded as a deviation, not a violation.
+- **Detector blind spot, eighth time in this repo and fourth in a row in this
+  scenario — and the first one outdoors.** The 20.958s boundary needs 0.15.
+  Four clips have now needed 0.05 / 0.10 / 0.10 / 0.15. Lowering the default
+  is still not the fix, and the blind spot is not a studio artefact.
+
+### Changed — existing sections that this clip refines
+
+- "Measured on this scenario's own clips": the zero-fake-text bullet, the
+  `--generate-audio false` bullet and the detector bullet each gained a
+  pointer to where clip D moved them.
+- The full template's "Printed text goes in quotes" slot note now carries the
+  interior-surface rule.
+- The defaults table: `--duration` notes the 30s exception; `--generate-audio`
+  notes that a spoken clip drops the flag rather than setting it to `true`.
+- "Several shots": the hard-cut ceiling moves from 6 to 9, and the
+  timestamp-is-a-cut rule gains its 6-for-6 confirmation.
+- "A product photo": a note on what generating a reference for a *fictional*
+  product bought and cost. **The rule for a real SKU is untouched.**
+- "When NOT to use": the people/dialogue exclusion is restated as standing,
+  with a pointer to the one clip run against it and why that is not permission.
+- Failure-modes table: two new rows — interior labels despite an AVOID list,
+  and a second-pinned prohibition broken by a cut landing early.
+
+### Not verified — stated as such
+
+**The audio content was not checked by this skill.** Only the track's
+existence was measured (aac 32000 Hz stereo, 130074 bps, 940 frames). Whether
+the four Chinese lines are accurate, whether lip sync lands, and whether the
+ambience is layered per segment were all judged by the repo owner on playback
+— that is his judgement, not a measurement here. Frame checking was a 1fps
+overview plus both sides of all nine boundaries plus six full frames plus
+three high-magnification crops; **not an exhaustive scan**.
+
 ## 1.11.0 — a third clip made to test two fixes: one works, one half works, and the orbit stops half way round
 
 Docs only; no script changes. Clip C —

@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.11.0"
+version: "1.12.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.11.0"
+  version: "1.12.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -242,6 +242,16 @@ Notes on the slots:
   construction has produced a completely text-free set on all three of this
   scenario's text-to-video clips, including one whose accessory was a hard
   case lid — the classic place a brand name appears.
+  ⚠️ **It only covers the surfaces you actually name, and a script that opens
+  the product puts an unnamed one on camera.** In clip D the per-part list
+  named the chest, the back, the sleeves, the hood and a sleeve patch — every
+  one of them an outer surface — and the lining, which the presenter held open
+  to the lens, came back carrying a neck brand label, a small tab and a
+  care/spec panel. **If any beat opens, unzips, turns out or removes the
+  product, extend the declaration to the lining, the inner collar and the
+  inside of the pockets, and name the interior carriers in AVOID one by one**
+  — neck label, care label, composition label, size tag, hang tag. That repair
+  is inferred from the defect and has not been run.
 - **Describe a part; do not count it.** The PRODUCT block's job is what each
   part looks like and where it sits — material, finish, colour, geometry. A
   count inside that description is the part most likely to drift: `a small
@@ -420,7 +430,11 @@ that did not or that hold only with a hedge:
   the PRODUCT block's explicit `there is no printed text, no logo, no
   engraving, no etching and no marking anywhere on <each part>` plus an AVOID
   list naming each carrier one by one. Three clips, so it is good evidence
-  for that construction, not a guarantee.
+  for that construction, not a guarantee. ⚠️ **A fourth clip since found its
+  boundary**: every carrier checked in these three is an *outer* surface, and
+  when clip D put a garment's lining on camera the construction — which had
+  named only outer surfaces — let three label-shaped objects through. See
+  "One clip outside this skill's own boundary" below.
 - **Thin protruding parts have now held three times.** The grinder's crank arm
   — a thin right-angle part — kept its length, thickness and bend through both
   clips of the pair, including clip B's orbit; clip C's two slim titanium
@@ -458,6 +472,8 @@ that did not or that hold only with a hedge:
 - **`--generate-audio false` produced no audio stream at all** in the delivered
   file, not a silent track — all three times. The defaults table says the flag
   sets `generate_audio: false` on the request; this is the end-to-end result.
+  (The one clip here that *needed* sound simply left the flag off and took the
+  server's `true` default — clip D, below.)
 - **`--aspect-ratio 16:9` took effect — the output is exactly 1280x720**, on
   all three. First clean confirmation of ratio control in this repo: every
   earlier product-adjacent clip attached a frame and was forced to
@@ -500,7 +516,11 @@ that did not or that hold only with a hedge:
   an independent clip that walked into it anyway. Lowering the default is not
   the fix: how far to lower it was only knowable after the frames had been
   read, which is the work the count was meant to save. Read frames either side
-  of every written stamp; the record lives in `Checking the cuts: read frames,
+  of every written stamp. ⚠️ **A fourth clip hit the same blind spot
+  outdoors** — clip D's 20.958s boundary needs 0.15, and both sides of it are
+  the same person on the same path under the same overcast light. So this is
+  not a studio artefact; it happens wherever a cut does not change the
+  location. The record lives in `Checking the cuts: read frames,
   never a detector count alone` in
   [`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md),
   not here.
@@ -521,6 +541,246 @@ that did not or that hold only with a hedge:
   been running the whole time and completed normally. A resubmit there would
   have doubled a 2.88 USD bill. `ofox-video-core`'s "The rule has now survived
   a real transport fault" carries the record.
+
+## One clip outside this skill's own boundary: a presenter on camera
+
+**Read the first paragraph before you read the findings.** This skill's
+`description` ends `Do not use for ... anything involving people/dialogue
+(see seedance-short-drama)`, and clip D breaks that rule on purpose. It is
+recorded here because it was run on this skill's execution layer and its
+findings bear directly on the templates above — **not** because the exclusion
+has been relaxed. The exclusion is unchanged, no new skill was created, and
+whether spoken-presenter commerce footage deserves a scenario of its own is
+an open question this one clip does not settle.
+
+Why it was run at all: presenter-led commerce video sits in a gap none of the
+four scenario skills covers. `seedance-product-video` excludes people and
+dialogue, `seedance-short-drama` does not care whether a product's appearance
+is accurate, `seedance-ad-creative` is brand-mood advertising. The call was to
+borrow this skill's execution layer, ship one clip, and decide about
+abstraction afterwards rather than build a directory first.
+
+**It crosses a second line as well.** The product is fictional, and this
+skill's own rule says a fictional product goes text-only rather than
+generate-a-reference-then-animate. Clip D generated a first frame anyway,
+because the whole point was to see whether a frame-locked product survives
+being worn. What that trade cost is written up under "A product photo: when
+it is required, when text is enough" — the rule for a **real** SKU is
+untouched.
+
+| | Job | Outcome |
+|---|---|---|
+| Clip D | `e378f058-f224-4450-94b4-798840ad139b`, seed `561877558` | accepted 2026-09-06 |
+
+`bytedance/seedance-2.5` on `byteplus`, **30s, 720p, image-to-video** with a
+generated product-only first frame, `aspect_ratio: adaptive` (forced by the
+attached image), **audio left on**, billed **7.20 USD**; the first frame cost
+a further **0.154615 USD** on `openai/gpt-image-2`, so 7.354615 USD in total.
+Versions in force: this skill 1.11.0, `ofox-video-core` 1.18.0,
+`ofox-image-core` 1.8.0. It is `n: 1012` in the gallery.
+
+The subject is a fictional hardshell outdoor jacket — charcoal ripstop body,
+a brick-orange yoke across the shoulders and upper chest, one centre main zip
+with an orange pull, one diagonal chest pocket, two hand pockets, a
+stiff-brimmed hood with two drawcords, hook-and-loop cuff tabs, and a **blank
+triangular sleeve patch**, again with no printed text anywhere by design. Four
+segments: product alone on a wooden hanger (0–8s), a presenter entering and
+putting the jacket on (8–18s), an outdoor mountain-ridge scene (18–28s), a
+held final frame (28–30s), with four short Chinese spoken lines across it.
+
+### Where this skill's defaults had to be overridden
+
+| Default here | What clip D did |
+|---|---|
+| `--generate-audio false` | **left the flag off entirely**, taking the server's `true` default. A spoken clip needs the track. Delivered `nb_streams=2`, aac 32000 Hz stereo |
+| 5s, or 10–15s for the segmented template | **30s** — three separate demands plus dialogue headroom do not fit 15 |
+| "no dramatic cinematography" | 10 shots and 9 hard cuts. Once a person is in frame, shot sizes have to change |
+| the `Motion` question's four options | all four are about the product alone; none of them fits a clip whose subject picks the product up |
+
+### What held
+
+- **The first-frame lock survives the product being worn — this clip's
+  headline.** Every earlier piece of evidence for a frame-locked product in
+  this repo had the product **sitting still**: clips A, B and C are studio
+  objects on a table, and `seedance-ad-creative`'s sneaker clip
+  (`ac927785-92ef-4e28-97b9-ff8172ec5554`) has a model **beside** the product,
+  never wearing it. Clothing is the most deformable category there is —
+  fabric, drape and creases all change on a body — so this was the predicted
+  risk of the whole clip.
+
+  It did not happen. Because "does it look like the same garment" is not a
+  usable acceptance test, six discrete features that do not change under
+  deformation were enumerated in advance and compared frame by frame against
+  the attached image: **the two-tone colour split, the centre zip and its
+  orange pull, the pocket set, the hood and its two drawcords, the cuff tabs,
+  and the blank sleeve patch. All six held**, across the hanger, the body, the
+  outdoor scene and the studio closer — the colour split, the strictest of
+  them, never drifted. The sleeve patch was checked at 8x in two segments and
+  is an outlined dark triangle with nothing inside it.
+
+  **This is one clip.** One product, one seed, one run, no control; the cuff
+  tabs are unreadable in the backlit outdoor segment, so strictly it is five
+  of six features legible everywhere rather than six. Read it as: *the
+  frame lock is not known to stop at "product sitting still" — it survived one
+  garment being picked up, held open, put on and zipped.* Not as a guarantee.
+
+  One nuance that keeps this honest: the delivered jacket reads **thicker and
+  more insulated** than the attached shell. Nothing in the prompt locked
+  loft, and the six features are all discrete. So a discrete-feature lock
+  holding and a continuous property drifting are both true of the same clip.
+
+- **A shot size on every waypoint, a third time.** Segment A wrote three
+  framings — medium front, close push-in on the chest, medium-close from
+  front-right — and got exactly those three, with no framing inherited from
+  the shot before. Consistent with clip C. **The hedge:** in clip D those
+  boundaries rendered as cuts, so the framings are partly delivered *by
+  cutting*, which is not the same thing clips B and C measured (framing
+  inheritance inside one continuous move). Do not stack this as a third
+  identical confirmation.
+
+- **"Product-only first frame, person written in text" has a second data
+  point.** The first frame contains no person, no hand, no foot and no skin;
+  submission passed with no `input_moderation_failed`, and a photoreal
+  presenter appears from 6.7s and is on screen for the remaining 23 seconds.
+  The first data point was the sneaker clip, where person and product shared
+  a frame but never touched. Here the presenter **picks the product up, holds
+  it open, and wears it** — so the route survives physical contact between
+  the generated person and the frame-locked object. `--real-person` was not
+  passed and is not needed on this route; it is for authorised real-person
+  *reference images*, which is a different problem.
+
+- **Nine hard cuts and ten shots in one job — a new maximum for this repo.**
+  The previously recorded envelope was 3–10 shots and **up to 6 hard cuts**,
+  from two different jobs. All nine boundaries here were confirmed by reading
+  the frames either side, not by a detector count. And it was done with a
+  first frame attached, dialogue on the track, and two locations. Still
+  unmeasured: more than 10 shots, 1080p, the `volcengine` upstream, and what
+  happens to a line of dialogue split across a cut. ⚠️ **Do not read this clip
+  as settling that last one — the tempting reading is wrong.** Each line was
+  *written* inside a single waypoint (9–11 / 15–17 / 22–24 / 26–28s), which
+  makes it easy to say "no line crossed a cut"; but the cuts did not land on
+  the written seconds, and two of them fall inside a written line's window —
+  10.500s inside 9–11s, 27.750s inside 26–28s. Whether the spoken audio
+  actually crosses them is **not known**, because the audio content was never
+  checked here (see the not-verified note at the end of this section).
+
+- **Every timestamped boundary became a hard cut — including the six that
+  never said so.** Three boundaries were written `硬切`; the other six were
+  interior waypoints. All nine rendered as cuts. This is the shared file's
+  rule (`Two things a timestamp can mean` — an unnamed boundary becomes a hard
+  cut) confirmed 6 for 6 in a single job. **The cost, when you did not want
+  it:** the 2–5s waypoint was written as `the camera pushes straight in to the
+  chest` — a camera verb, describing a continuous move — and it delivered a
+  cut. So a bare camera verb neither produces a move nor prevents a cut. If a
+  segment must be continuous, `one continuous shot` has to be written.
+
+- **Timestamp accuracy, and a shape worth watching.** Delivered against
+  written: 2s→**2.000**, 5s→4.708, 8s→**6.708**, 11s→10.500, 14s→13.792,
+  18s→17.625, 21s→20.958, 25s→24.833, 28s→27.750. Eight of nine within 0.5s;
+  the outlier is the 8s cut at 1.29s early. **Eight land early and one lands
+  exactly on its stamp; none lands late** — a shape no other clip in this repo
+  has been checked for, and one clip is not a rule. ⚠️ Take the boundary from
+  the frame's own timestamp, not from the midpoint of an `-ss` pair: `-ss 1.92`
+  and `-ss 1.96` return the frames at 1.958333 and 2.000000, which straddle
+  this cut without either of them being it.
+
+### What did not
+
+- **The zero-fake-text construction has a boundary, and clip D is where it
+  broke: it only covers surfaces that face the camera by default.** Clips A,
+  B and C all passed with the same construction — the PRODUCT block declaring
+  `there is no printed text, no logo, no engraving ... anywhere on <each
+  part>` plus an AVOID list naming each carrier. Clip D used it too, and the
+  product's **outer** surfaces are clean throughout, sleeve patch included.
+
+  Then at 13.2s the presenter holds the jacket open with the lining toward
+  the lens, and there are **three label-shaped objects on it**: a brand label
+  at the neck (an abstract mark over a row of glyph-like blobs), a small tab
+  below it, and a bordered care/spec panel low on the lining with five or six
+  rows of glyph-like blobs. At 6x and again at 12x none of them resolves into
+  readable letters — so **no readable fake text**, but three carriers that
+  `AVOID` had named outright (`不要出现 ... 吊牌`, and the PRODUCT block's `no
+  size tag, no care label`). Zero fake text is therefore **half-held**, not
+  held.
+
+  The cause is mechanical and visible in the prompt: the per-part naming
+  listed `the chest, the back, the sleeves, the hood and that triangular
+  patch` — **all outer surfaces, not one interior one**. The construction did
+  not fail; it was never pointed at the surface that ended up on camera.
+
+  **The fix follows from that and has not been run.** When the script has the
+  product opened, turned inside out, unzipped or taken off, extend the
+  no-text declaration to the **lining, the inner collar and the inside of any
+  pocket**, and name the interior carriers in AVOID one by one — neck label,
+  care label, composition label, size tag, hang tag. Until a clip is run that
+  way this is a repair inferred from one defect, not a measured one.
+
+- **A prohibition pinned to a second is only as reliable as the cut.** AVOID
+  said no person, hand or skin before 8s. The presenter is fully in frame at
+  **6.708s**, because the cut he was written behind landed 1.29s early. The
+  instruction was not ignored; its time window moved. Anything of the form
+  "not before second N" carries roughly the cut tolerance — about 1.3s here —
+  so put the thing in a later segment rather than writing the prohibition
+  harder.
+
+- **"Completely still, no camera movement at all" delivered a settle.** Over
+  the final 2.25s, 23 frames of 54 cross a 0.0005 scene score, but
+  **zero** cross 0.005 and one crosses 0.002. Framing is identical at 28.0s
+  and 29.9s, so the camera did not move; the residue is a living subject
+  breathing. Consistent with what clips A–C showed about `hold the final
+  frame` — and with a person in shot a freeze was never physically available.
+  Freeze in an editor if the last frame has to stop.
+
+- **A style clause could not be separated from its own scene.** The prompt
+  asked for `no cinematic colour grading`, and the outdoor segment is dark,
+  cold and backlit. The scene as written — a dawn ridge under low cloud —
+  supplies exactly that light, so grading and location cannot be told apart
+  here. Recorded as a deviation, not a violation; separating them needs a
+  same-scene, same-seed pair, which was not run.
+
+- **The scene detector missed a cut again — the eighth time in this repo, the
+  fourth in a row in this scenario, and the first one outdoors.** The
+  boundary at **20.958s** is absent at 0.25 and needs **0.15**; the other
+  eight are found at 0.25. Both sides of the missed cut are the same person on
+  the same gravel path under the same overcast light, differing only in shot
+  size. The four clips here needed 0.05 / 0.10 / 0.10 / 0.15 — **four clips,
+  four answers, and lowering the default is still not the fix**, because how
+  far to lower it is only knowable once the frames have been read. What clip D
+  adds is that the same-lighting blind spot is not a studio artefact: it
+  happens under natural light too, wherever a cut does not change the location.
+
+### Two smaller notes
+
+- **The poll ran clean.** Clips A, B and C each lost their TLS connection
+  mid-poll; clip D did not. Three of four, not four of four — worth stating so
+  the fault does not get written up as inevitable. Wall clock was 439s, well
+  inside the 1800s `--max-wait` that was set because a 30s job had previously
+  taken about 1074s. The default 540s would have been enough, but only just.
+
+- **`--size` was honoured on the first frame, which contradicts an earlier
+  record.** `--size 1792x1024` produced a file measuring exactly 1792x1024
+  before cropping, whereas the sneaker clip recorded requested / reported /
+  actual as three different numbers. **This does not overturn that record**:
+  no response-reported size was captured for clip D, so all that is known is
+  that the file on disk matched the request. Capture `SIZE_REPORTED` next
+  time. The crop to 1792x1008 (exact 16:9) then delivered an exact 1280x720
+  clip, so the crop-before-generating discipline held as usual.
+
+### What was not verified here
+
+Read every claim above as sight-only. **The audio content was never checked.**
+What was measured is that a track exists and what it is: `nb_streams=2`, aac
+32000 Hz stereo, 130074 bps, 940 frames. Whether the four Chinese lines are
+spoken accurately, whether the lip sync lands, and whether the ambience is
+layered per segment as written were all judged by the repo owner on playback —
+**his judgement, not a measurement here**, and the `accepted` verdict rests
+partly on it. Do not restate any of it as a finding.
+
+The frame checking was **not an exhaustive scan** either: a 1fps overview,
+both sides of all nine boundaries, six full frames and three
+high-magnification crops. It cannot rule out fake text or drift at a moment
+that was not sampled — the lining labels were themselves missed on the first
+pass and only found on a frame-by-frame recount.
 
 ## A product photo: when it is required, when text is enough
 
@@ -544,6 +804,22 @@ the proportions in exactly the ways the video can — and then locks those
 errors in as the first frame. If the user has no photo of a real SKU, say the
 result may not match the item, and offer to proceed as a category prototype
 rather than offering to generate a reference first.
+
+⚠️ **The out-of-scope presenter clip broke this rule too, and it is worth
+knowing exactly what that did and did not prove.** Its product was fictional,
+and by the rule above that makes it a category prototype and therefore
+text-only — instead a first frame was generated on `openai/gpt-image-2` and
+attached. What that bought was real: the product's identity had to survive
+being picked up and worn across four segments and two locations, and it did,
+on six enumerated features. What it cost was exactly what this rule predicts —
+the frame shape stopped being a flag and became a crop decided before
+generating, and every invented detail in that image (including a lining the
+video then furnished with labels) became binding. **Nothing here contradicts
+the rule for a real SKU**, which is what the rule is actually about: a
+generated image is still no substitute for a photo of a real product. What
+the clip suggests, on one run, is narrower — for a *fictional* product that a
+person has to handle for 20-odd seconds, a generated anchor may be worth the
+control it costs. Treat that as an open question, not as permission.
 
 **The text-only route keeps one control the photo route gives up: the aspect
 ratio stays a flag.** With a photo attached, `bytedance/seedance-2.5` forces
@@ -940,11 +1216,11 @@ read frames, never a detector count alone` in
 | Parameter | Default | Why |
 |---|---|---|
 | `--model` | `bytedance/seedance-2.5` (script default, no flag needed) | current-generation model |
-| `--duration` | `5` for the compact orbit; `10`–`15` for the segmented template | a full 360-degree orbit reads clearly in 5 seconds (official case 42 does it in 5s) and keeps cost low; three or four segments need 3–5s each; Seedance 2.5 accepts 4–30 |
+| `--duration` | `5` for the compact orbit; `10`–`15` for the segmented template | a full 360-degree orbit reads clearly in 5 seconds (official case 42 does it in 5s) and keeps cost low; three or four segments need 3–5s each; Seedance 2.5 accepts 4–30. The one clip here that ran past this range went to 30s, and it did so because it was carrying spoken lines and three separate demands — see "One clip outside this skill's own boundary" |
 | `--resolution` | `720p` | catalog/listing thumbnails rarely benefit from more; show `1080p` as a second row in the cost table when the target platform might require it |
 | `--aspect-ratio` | settled by the brief's `Aspect` question (must-ask); `1:1` is the recommended option | e-commerce platforms vary: `1:1` fits most marketplace grids (Amazon, Etsy, Shopify), `4:3` matches older catalog templates, `9:16` suits mobile-first storefronts and TikTok Shop, `16:9` suits a website product-detail page. With a photo attached the flag is not sent — the photo is cropped or padded to the ratio instead, per `Two ways to attach the photo` above. On the text-only route the flag really does decide the frame: `16:9` in, exactly 1280x720 out, measured on this scenario's own clips |
 | Motion | camera orbits, product still — **written as timestamped waypoint pictures**: two interior views, each carrying its own shot size, and **no closing return inside the move** | *Which* motion comes from the gallery: every rotation there is written as camera movement or as a hand turning the product, and none writes a fixed-camera turntable, which is also untested here. *How to write it* is measured rather than inferred, and the default would not survive without it: `the camera orbits ... a full 360 degrees` produced no orbit at all (job `1cf5ac46-058f-4615-a47b-067743f76f8c`), and the same prompt at the same seed with the angles written out as pictures produced a camera that moved (job `50f623b2-c54a-4d9d-9646-31dd06e2a926`). Three things are settled on top of that by a third, independent clip (job `8efeb556-bf38-45ec-940b-a792ef74bfcf`): a **shot size on every waypoint** keeps the whole product in frame, where an unstated one inherits the previous segment's macro closeness; the move covers about **half a turn** and stops, measured frame by frame; and a written return to the opening view **does not bring the camera home**, so that view belongs in the next segment after the cut. **Spacing** stays approximate — an interior view can arrive late or be absorbed, so no angle should be planned to land on a given second. Write each view as an appearance description rather than a camera position, which is reasoning from clip B's confound rather than a measurement. See "3. Camera motion: waypoint pictures, not a camera verb" and "4. A timestamp orders the pictures; it does not schedule them" |
-| `--generate-audio` | `false` (this scenario's default) | a silent product clip needs no audio track; this **overrides** the server's `generate_audio: true` default, unlike `seedance-short-drama`/`seedance-ad-creative` which leave audio on. Verified against `ofox-video-core`'s script: `--generate-audio false` sets `generate_audio: false` directly on the request — and measured end to end on all three of this scenario's clips, whose delivered files carry **no audio stream at all**, not a silent one. |
+| `--generate-audio` | `false` (this scenario's default) | a silent product clip needs no audio track; this **overrides** the server's `generate_audio: true` default, unlike `seedance-short-drama`/`seedance-ad-creative` which leave audio on. Verified against `ofox-video-core`'s script: `--generate-audio false` sets `generate_audio: false` directly on the request — and measured end to end on all three of this scenario's clips, whose delivered files carry **no audio stream at all**, not a silent one. The one exception is the out-of-scope presenter clip, which left the flag off and took the server's `true` default; if a clip has spoken lines, this default is the wrong one and has to be dropped rather than set to `true` — omitting the flag is enough. |
 | `--real-person` | leave unset (`false`) | Seedance 2.5 image-to-video refuses photoreal people at submission; whether `true` lifts that on 2.5 is untested — prefer a photo of the product alone |
 
 ## Which upstream renders it
@@ -978,10 +1254,22 @@ cuts). Every written cut happened, and in both the attached frame held the
 product's shape and colours across all of them — on the second, verified as
 far as t=19.6s. So **the full template's four segments are inside the
 measured envelope, image attached and all**; there is no need to fall back to
-three, and no need to hedge about it in the recap. Still unmeasured: more
-than 10 shots or 6 hard cuts in one job, 1080p, the `volcengine` upstream.
-The record, including the reason a written `HARD CUT` can still soften, is in
-the shared file's `Several shots in one job`.
+three, and no need to hedge about it in the recap. **The hard-cut ceiling has
+since moved to 9**: the out-of-scope presenter clip
+(`e378f058-f224-4450-94b4-798840ad139b`, 30s, 720p, image attached, dialogue
+on the track, two locations) delivered **10 shots and 9 hard cuts**, all nine
+confirmed by reading the frames either side. Still unmeasured: more than 10
+shots in one job, 1080p, the `volcengine` upstream, and a line of dialogue
+split across a cut. The record, including the reason a written `HARD CUT` can
+still soften, is in the shared file's `Several shots in one job`.
+
+**Every timestamp is a cut boundary unless you say otherwise, and that clip
+confirmed it 6 for 6.** Of its nine boundaries, three were written `HARD CUT`
+and six were interior waypoints with nothing said about the transition; all
+nine rendered as cuts. One of those six was written as a camera verb — "the
+camera pushes straight in to the chest" — and delivered a cut, so a bare
+camera verb neither produces a move nor prevents one being cut around it.
+Write `one continuous shot` on any segment that must not be cut.
 
 **This scenario's own clips add the text-to-video half at 720p**: 12s, the
 full template's four segments, all three boundaries written as `HARD CUT`, and
@@ -1252,7 +1540,9 @@ plus the product-video-specific ones:
 | An accessory sits forward of or behind the line it was written on | The left/right axis is controllable and depth is not, measured on `8efeb556`: `to the right of the glasses and only to the right ... nothing lies to the left` held, while `both on the same line` did not — the cloth sits forward of and below the case | Name the side (that part works, and it repairs `beside`, which was read as "on either side of" on both grinder clips), then check the depth on the draft and accept it or re-roll. One run each way, on two accessories |
 | The orbit moves, but one written angle never shows up, or the views are bunched instead of evenly spaced | Expected: the pictures are honoured, their spacing is not. On job `50f623b2-c54a-4d9d-9646-31dd06e2a926` three interior views were written and two rendered, and the move held one of them for roughly 2 of its 4 seconds; on `8efeb556-bf38-45ec-940b-a792ef74bfcf` two were written and two rendered, one on time and one about 0.6s late | Nothing to fix in a delivered clip — plan for it instead: two interior pictures for a four-second orbit, no angle required to land on a given second, and read the frames rather than assuming the stamps. See "4. A timestamp orders the pictures; it does not schedule them" |
 | The clip did not cut where the timestamps said, or ran the four segments as fewer | Four segments are inside the measured envelope, so the usual cause is not the count — a timeline weighted toward named continuous transitions can soften a written `HARD CUT` too | Keep the boundaries as hard cuts (this scenario has no reason to write in-camera transitions), then re-check the draft by reading frames rather than a scene detector's count — see `Checking the cuts` in the shared file |
-| A scene detector reports fewer cuts than were written, and the clip looks right | Not a defect: detection cannot see a cut between two shots of the same subject under unchanging light, which is every cut in a studio product clip. This scenario's own clips are the fifth, sixth and seventh confirmations in this repo — **all three** hid their third boundary at threshold 0.25 while the earlier boundaries were found in the same pass, and the thresholds that did show them were only discovered afterwards (0.05 at 9.750s in clip A, 0.10 at 10.041667s in clip B, 0.10 at 9.71s in clip C), so lowering the default is not the fix | Read the frames either side of every written stamp instead of trusting the count — `Checking the cuts: read frames, never a detector count alone` in the shared file |
+| A scene detector reports fewer cuts than were written, and the clip looks right | Not a defect: detection cannot see a cut between two shots of the same subject under unchanging light, which is every cut in a studio product clip. This scenario's own clips are the fifth, sixth and seventh confirmations in this repo — **all three** hid their third boundary at threshold 0.25 while the earlier boundaries were found in the same pass, and the thresholds that did show them were only discovered afterwards (0.05 at 9.750s in clip A, 0.10 at 10.041667s in clip B, 0.10 at 9.71s in clip C), so lowering the default is not the fix. A fourth clip hit it **outdoors** (0.15 at 20.958s), so it is not a studio artefact — it is any cut that does not change the location | Read the frames either side of every written stamp instead of trusting the count — `Checking the cuts: read frames, never a detector count alone` in the shared file |
+| A label, tag or care panel appears on the product's **inside** — lining, inner collar, inside of a pocket — despite an AVOID list that forbade tags | The no-text construction covers the surfaces it names, and a per-part list written for a static product names only outer surfaces. Measured on `e378f058-f224-4450-94b4-798840ad139b`, where a garment held open to the lens showed a neck brand label, a small tab and a care/spec panel; none resolved into readable letters at 12x, but all three are carriers `AVOID` had named | Extend the PRODUCT block's no-text declaration to the lining, the inner collar and the inside of the pockets, and name the interior carriers in AVOID one by one (neck label, care label, composition label, size tag, hang tag). **Inferred from the defect, not yet run** — check the draft. New prompt, new cost table |
+| A prohibition of the form "nothing of X before second N" is broken by about a second | Expected: the cut that X sits behind carries the usual timestamp tolerance, so the prohibition's window moves with it. Measured on `e378f058`, where `no person before 8s` was broken at 6.708s because the 8s cut landed 1.29s early | Do not write the prohibition harder — move X into a later segment so the tolerance has somewhere to absorb |
 | Exit `4`, timed out waiting for completion | Job is still running upstream, not failed | Do **not** re-run `generate`; run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID` using the job id printed before the timeout |
 | Exit `5`, ambiguous network failure on create | No HTTP response received at all — can't tell if a job was created | Do not guess or retry `generate`; tell the user to check `https://app.ofox.ai` for a job that may already be running, per `ofox-video-core`'s no-resubmit rule |
 | Exit `6`, `--out-dir` could not be created or entered | Local filesystem problem (bad path, permissions), not an API problem | The job itself is unaffected — do not re-run `generate`; fix `--out-dir` and re-run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID --out-dir <a writable directory>` |
@@ -1270,3 +1560,15 @@ plus the product-video-specific ones:
 - Anything involving people, characters, or dialogue — use
   `seedance-short-drama` instead; this skill is for inanimate product objects
   only.
+
+  **This exclusion still stands, and one clip has been run against it anyway.**
+  A 30-second presenter-led commerce clip with four spoken Chinese lines was
+  produced on this skill's execution layer and accepted — see "One clip
+  outside this skill's own boundary: a presenter on camera". It is recorded
+  because its findings bear on the templates here, not because the rule has
+  moved. What it shows is that the execution layer copes; what it does not
+  show is that this skill's brief, defaults and motion vocabulary fit that
+  job, and four of them had to be overridden. Presenter-led commerce video is
+  a gap between the four scenario skills rather than a corner of this one, and
+  **whether it deserves a scenario of its own is undecided** — no new skill
+  has been created and none should be inferred from that clip.
