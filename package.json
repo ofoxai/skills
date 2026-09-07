@@ -1,0 +1,45 @@
+{
+  "name": "ofox-skills",
+  "version": "1.0.0",
+  "description": "Agent skills for the Ofox platform: video generation (Seedance 2.5 short drama, ad creative, product video, anime drama), image generation, SSH-key encrypted secrets, ImageMagick image handling, and static-site deploys to Cloudflare.",
+  "keywords": [
+    "claude-code",
+    "agent-skills",
+    "skills",
+    "ofox",
+    "seedance",
+    "seedance-2-5",
+    "text-to-video",
+    "image-to-video",
+    "video-generation",
+    "image-generation",
+    "ai-video",
+    "prompt-engineering",
+    "mcp",
+    "openclaw"
+  ],
+  "homepage": "https://github.com/ofoxai/skills#readme",
+  "bugs": {
+    "url": "https://github.com/ofoxai/skills/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ofoxai/skills.git"
+  },
+  "license": "MIT",
+  "author": "OFOX AI",
+  "type": "module",
+  "bin": {
+    "ofox-skills": "bin/ofox-skills.mjs"
+  },
+  "files": [
+    "skills/",
+    "bin/",
+    "skills.sh.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

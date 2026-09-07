@@ -135,8 +135,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the bar every skill must clear.
 - [ofoxai/hal-vault](https://github.com/ofoxai/hal-vault) — the SSH-key
   encrypted secret store the `hal-vault` skill drives (Go CLI, built on
   [age](https://github.com/FiloSottile/age)).
-- [ofoxai/hal2099](https://github.com/ofoxai/hal2099) — the 24/7 digital-human
-  cluster on native Claude Code that these skills equip.
 
 ## License
 
