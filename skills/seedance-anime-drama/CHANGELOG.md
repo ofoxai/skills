@@ -4,6 +4,55 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.11.1 — the key requirement, moved to the front of a description that gets truncated
+
+Docs only; no script changes, no advice changed. `description` now **opens**
+with one sentence: `Requires OFOX_API_KEY — create one at
+https://app.ofox.ai.` The dependency itself is unchanged and was already
+declared in `metadata.openclaw.requires.env`, which stays exactly as it
+was — that is the route ClawHub and openclaw read. Nothing a caller does
+changes.
+
+**Two separate blind spots, measured 2026-09-06 against Codex CLI 0.149.1 with
+a project-level install of this repo.** It listed all nine skills, but asked
+which environment variables `seedance-product-video` needs before use it
+answered that it could not tell from the visible skill metadata. The first
+cause is the obvious one: some agents read only the frontmatter's `name` and
+`description`, never `metadata`. The second only surfaced on a controlled
+retry — same agent, same question, the requirement added to the **end** of the
+description and nothing else changed — where the answer did not budge. Pressed
+for a verbatim quote, the agent said the description in its context was
+truncated and did not include the final sentence; it put its own visible tail
+at about 257 characters, and the fragment it could still quote ends at
+character 320 of the real text. So the window is roughly 300 characters, and
+these descriptions run 828 to 1200. "Reads the description" is not the same as
+"reads all of it".
+
+**What that costs, beyond the key.** Inside a ~300-character window the
+`Use when ...` trigger examples of all four scenario skills fall outside: they
+begin at character 431 (`seedance-ad-creative`), 594
+(`seedance-product-video`), 641 (`seedance-anime-drama`) and 690
+(`seedance-short-drama`). A truncating agent has never matched any of them
+on an example — it matches on the opening summary alone. Anything that has to
+reach such a reader belongs in the first ~300 characters, which is why this
+sentence leads instead of trailing, and why it is 58 characters rather than the
+106 first drafted: that position is the scarcest space in the skill, and every
+character spent there displaces a character of trigger material.
+
+**Why character 0 and not the end of the opening sentence.** The first
+sentence-ending period sits at character 268 in `ofox-image-core`, 430 in
+`seedance-ad-creative` and 593 in `seedance-product-video`. Placed there the
+sentence would straddle or clear the window in exactly those three, and
+reaching a boundary at all in two of them would mean repunctuating shipped
+prose. Character 0 is the only position that is inside the window under both
+the 257- and the 320-character reading, for all six skills, without altering a
+word of the existing text.
+
+Two readers were never affected and are unchanged by this: Claude Code reads
+the description in full, and OpenCode read at least the first 1075 characters
+of `seedance-product-video` — it answered `OFOX_API_KEY` correctly even from
+the trailing version.
+
 ## 1.11.0 — the image refusal was blamed on the wrong clause, and there was a second way out all along
 
 Docs only; no script changes. Two of the three changes land on one row of the
