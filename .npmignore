@@ -1,0 +1,3 @@
+# npm 专用：files 白名单放行了整个 skills/，而运行时产物会落在它下面。
+# git 未追踪 != 不会被 npm 打包，所以这里再挡一道。
+.ofox-request-*.json
