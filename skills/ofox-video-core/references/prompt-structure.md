@@ -554,10 +554,11 @@ longer or higher-resolution take.
 Scene detection under-reports cuts, and it does so in one predictable way:
 **two shots in the same place under the same light have too little pixel
 difference to trigger it.** Four of the six runs above hit this at threshold
-0.3, and **all three clips of a later text-to-video set hit it at the looser
-0.25** — which makes it the normal case for any scene that stays in one
-location, not a curiosity of dialogue coverage, and not something a lower
-threshold fixes.
+0.3, **all three clips of a later text-to-video set hit it at the looser
+0.25**, and two more since — one of them outdoors, one of them losing two
+cuts out of four — have hit it too. That makes it the normal case for any
+scene that stays in one location, not a curiosity of dialogue coverage, and
+not something a lower threshold fixes.
 
 | Job | What the detector missed | What the frames show |
 |---|---|---|
@@ -568,17 +569,36 @@ threshold fixes.
 | `1cf5ac46` | the third cut, at **9.750s**, **at threshold 0.25** — while the cuts at 3.12s and 6.00s were found in the same pass. It appears only once the threshold is dropped to **0.05** | one uniform grey studio for the whole clip, so the two shots either side of the missed boundary differ by less than the two shots either side of a boundary it caught |
 | `50f623b2` | the third cut, at **10.041667s**, also at threshold 0.25 — and this one needs **0.10** before it registers | the same uniform grey studio; this is `1cf5ac46`'s controlled twin, so the two of them are the same set and the same light with the same boundary missed |
 | `8efeb556` | the third cut, at **9.71s**, again at threshold 0.25, while the cuts at 2.67s and 5.71s were found in the same pass. It needs **0.10** | a third uniform grey studio clip — different product, different seed, different prompt, same blind spot, arrived at independently |
+| `e378f058` | the boundary at **20.958s**, absent at 0.25 and needing **0.15**, while the other eight boundaries of a nine-cut clip were found at 0.25 | **outdoors**, so this is not a studio artefact: both sides are the same person on the same gravel path under the same overcast light, differing only in shot size |
+| `cb6b7870` | **two** of its four cuts at the 0.25 default, and the scores descend monotonically through the clip: 0.395, 0.311, 0.216, 0.132. 0.25 finds two, 0.15 finds three, and **0.10** is the first threshold that finds all four | a near-black studio ad, and the shots get more alike as it goes: by the last boundary the product fills both sides and the two shots differ only in framing and in whether the cap is on. Scanned once at 0.25 the clip reads as "2 of 4 written cuts landed"; **all four landed**, at 3.000 / 7.542 / 11.042 / 13.250s |
 
-**Those last three rows are the strongest form this finding has taken.** The
-first two are a controlled pair — same subject, same set, same light, same
-seed, one paragraph of prompt apart — and the boundary a 0.25 pass could not
-see needed 0.05 in one and 0.10 in the other. The third is an independent
-clip and it missed its third boundary too. So the same-lighting blind spot
-now has three consecutive confirmations in one scenario, at three separate
-after-the-fact discoveries (0.05, 0.10, 0.10) against a 0.25 default that was
-wrong for all three. **Lowering the default is not the fix**, because how far
-to lower it is only knowable once the frames have been read — which is
-exactly the work the count was supposed to save.
+**The blind spot is now nine runs deep and no threshold has been right twice
+in a row.** The three grey-studio rows are its strongest controlled form —
+two of them are a pair one paragraph of prompt apart, and the boundary a 0.25
+pass could not see needed 0.05 in one and 0.10 in the other. The last two
+rows extend it in both directions that mattered: `e378f058` shows it happens
+under natural light, so it is not about studios; `cb6b7870` shows it happens
+between two shots **of the same product**, where a cut changes the framing
+and nothing else. The thresholds those five needed, in order: 0.05, 0.10,
+0.10, 0.15, 0.06. **Lowering the default is not the fix**, because how far to
+lower it is only knowable once the frames have been read — which is exactly
+the work the count was supposed to save.
+
+⚠️ **The cost of skipping that work is a false negative about the prompt, not
+just a low count.** `cb6b7870` is the clean example: one pass at the 0.25
+default finds two of its four cuts, and the honest-looking conclusion from
+that number is "half the written cuts were dropped" — a claim about the
+model's obedience, drawn entirely from a detector setting. The frames say all
+four cuts happened, within 0.00 / −0.46 / +0.04 / +0.25 seconds of their
+written stamps. A single-threshold pass cannot distinguish "the cut is not
+there" from "the cut is not visible to this threshold", so it cannot support
+either sentence.
+
+**Its scores also descend monotonically — 0.395, 0.311, 0.216, 0.132 — which
+is worth expecting rather than being surprised by.** A clip that opens wide
+and works inward ends with its shots more alike than it began, so the *last*
+boundaries are the ones a fixed threshold loses. If a scan has to be trusted
+anywhere, trust it least at the end of the clip.
 
 So a detector count is where a check starts, never where it ends. Sample the
 delivered file (1–2 fps is enough) and read the frames either side of every
@@ -640,6 +660,57 @@ turn, and it stops there.** So this section is *validated* by that clip
 rather than superseded — what it predicted would make a rotation readable is
 what made it readable. `50f623b2`'s own total stays unmeasurable; that is a
 fact about that clip, and no later run changes it.
+
+### A scene score is pixel churn, not motion
+
+The two checks above are about *whether* a boundary exists and *how far* a
+camera went. This one is about the question that follows both — "how much is
+happening in this segment?" — and it is the same class of mistake a third
+time: a number that looks like a measurement of the thing you care about and
+is a measurement of something else.
+
+**`scene` scores whole-frame pixel difference. It does not score movement,
+and on a dark set with a moving key light the two come apart completely.**
+Measured on `cb6b7870-22f7-4a15-9168-8a013805775f`, a near-black studio
+product ad, mean inter-frame `scene` at native 24fps with segment boundaries
+at the detected cuts and each segment's own cut frame excluded:
+
+| Segment | Score | What the frames show |
+|---|---|---|
+| HOOK, macro on brushed metal | 0.0078 | nothing moves; a specular streak slides across the body |
+| SHOWCASE, a written 0°→45°→90° orbit | 0.0039 | **the move never happened** — same orientation in all six sampled frames |
+| CLIMAX, a cap unscrewing and lifting | 0.0077 | a real physical event |
+| PAYOFF, steam rising from the neck | **0.0008** | a real physical event, and the liveliest thing in the clip to a viewer |
+| CLOSE, a held hero frame | 0.0003 | nothing, by design |
+
+**The ranking is close to inverted.** The beat where steam visibly leaves the
+bottle, glows and drifts sits second from the bottom; the beat where nothing
+moves at all sits in the middle; and the top score belongs to a static macro
+whose only change is a highlight sweeping a large metal surface. A thin wisp
+of white against near-black is a few hundred pixels; a specular streak on a
+brushed cylinder is tens of thousands. The metric is doing exactly what it
+says on the tin, and the tin does not say "motion".
+
+Three practical consequences:
+
+- **Never rank segments by liveliness off a scene score**, and never publish
+  a per-segment score table as evidence that a clip is static or busy. Sample
+  frames — 2fps over the whole clip, plus a few inside any segment in
+  question — and read them.
+- **The bias has a direction, so it is predictable.** Large-area, low-contrast
+  changes (light sweeps, grades, focus pulls, exposure drift) are
+  over-counted; small-area, high-contrast events (steam, a droplet, a small
+  part moving) are under-counted. A dark studio maximises both errors at once.
+- **Where a delta count *is* useful is as a bound, not a ranking**: a segment
+  scoring near zero at every frame really did have almost no pixels change,
+  which is how `50f623b2`'s orbit was shown to be motionless and how a `hold
+  the final frame` is confirmed. A near-zero score is informative; the
+  ordering of two non-zero scores is not.
+
+This is the general form of the warning under "How far the move goes, and
+where it stops", which says not to read angular velocity off a delta count
+because the same rotation changes the picture by different amounts at
+different angles. Same cause, wider blast radius.
 
 ### Where `chain` fits
 
@@ -710,22 +781,32 @@ The failure mode of the undecomposed form is silent. The clip comes back
 looking competent, minus the movement that was asked for, which is why it
 survives a glance and only shows up when the frames are read.
 
-### The four observations, weakest to strongest
+### The five observations, weakest to strongest
 
 | Job | Shape | What was written | What rendered |
 |---|---|---|---|
-| `60fbea52-b14b-4796-80bf-03afe0aa4fa0` | 15s, 720p, i2v, accepted | at `10.5-12s`, back at full speed, a drop `lands on the surface of the oil in the bottle, one clean ring spreads out and dies against the glass` — the tail of a five-second climax whose earlier beats described the build-up | the build-up rendered beautifully: a drop swelling at a glass tip, lit through. **The payoff never happened** — at 11.8s the drop still hangs from the pipette, and at 12.25s the clip cuts away |
+| `60fbea52-b14b-4796-80bf-03afe0aa4fa0` | 15s, 720p, i2v, accepted | at `10.5-12s`, back at full speed, a drop `lands on the surface of the oil in the bottle, one clean ring spreads out and dies against the glass` — the tail of a five-second climax whose earlier beats described the build-up | the build-up rendered beautifully: a drop swelling at a glass tip, lit through. **The payoff never happened** — at 11.8s the drop still hangs from the pipette, and at 12.25s the clip cuts away. ✅ The counter-measure this produced — the payoff as its own stamped shot, named a required visible event — has since been run and held on `cb6b7870`; see "A small, fast physical event needs to be its own timestamped frame" under "What that means for writing" |
 | `1cf5ac46-058f-4615-a47b-067743f76f8c` | 12s, 720p, **t2v**, seed `642303335`, rejected | `the camera orbits the grinder a full 360 degrees at constant height and constant speed, ending back at the front view. The product does not move and does not rotate; only the camera travels.` | 6.0s to about 9.7s is a near-static front view with a slight push-in, the crank arm pointing right in every frame. **The negative clause held and the positive instruction produced nothing** — the product genuinely never rotated, and the camera genuinely never travelled |
 | `50f623b2-c54a-4d9d-9646-31dd06e2a926` | **same seed, same parameters, same prompt except that one paragraph**, accepted | the paragraph rewritten as waypoint pictures, e.g. `at about 8s the camera is directly behind the grinder, the crank arm pointing away from the lens so that only the smooth back of the brushed steel collar and the walnut knob beyond it are visible` | that picture rendered: the arm entirely hidden, only the knob above the collar — its appearance clause, at least; the same waypoint's position label contradicts its own appearance clause, so the run cannot say which half was followed. **The camera moved** — inside the continuous segment (the hard cut at 6.291667s to about 10s) the frames read rear → side → front, roughly 180 degrees, finishing on the opening frame's own orientation. That last part reads like the closing waypoint being obeyed and ⚠️ **the row below shows it is a coincidence of the move having begun at the rear**. Whether it travelled further than that is **unmeasurable here** |
 | `8efeb556-bf38-45ec-940b-a792ef74bfcf` | 12s, 720p, **t2v**, seed `616202922`, accepted — a **different product** (a folded pair of eyeglasses), a different seed and a different prompt, written to test two of the fixes the row above proposed | the same waypoint form, plus **a shot size on every waypoint** (`with the whole pair in frame from the far temple tip to the near lens edge and margin around it`), and the same closing `by 10s the camera is back on the exact front view of the opening shot` | both interior pictures rendered, at their written framing, and the whole product stayed in frame with margin for the entire move. **The closing return did not**: front at 6.0s → side at 7.5s → rear at about 9.6s, with the front view arriving only after the cut into the next segment. About half a turn, **measured** rather than inferred — the folded temples are an unambiguous asymmetric feature and the whole orbit is one continuous shot |
+
+| `cb6b7870-22f7-4a15-9168-8a013805775f` | 15s, 720p, **i2v** with a generated product-only first frame, seed `226221006`, **rejected** — a vacuum flask ad, written to reuse the row above's fix | the same waypoint form on three waypoints, each carrying **its own shot size** (`a medium shot ... the whole bottle from cap to base inside the frame with margin above and below`), and the paragraph closed with `the bottle stays fully in frame at every moment of the move` | ❌ **neither half worked.** Six frames across the move (3.1 / 4.0 / 5.0 / 6.0 / 7.0 / 7.4s) are all a close shot of the bottle's upper body — the base is never in frame, and the etched label is clipped by the right edge in the last two. The framing was inherited from the macro HOOK immediately before it and never widened, which is exactly the failure the row above was taken to have repaired. **The move is near-absent too**: bottle orientation, cap perspective and the position of the brushed highlight are close to identical across all six frames, so the written 0° → 45° → 90° path did not happen. ⚠️ Read off frames, not off a scene score — on this clip a per-segment score ranks the motionless orbit above the beat where steam visibly rises, for the reason in "A scene score is pixel churn, not motion" above. The same clip's two *post-cut* shot sizes both landed, which is the one thing it does settle — see the shot-size bullet under "What that means for writing" |
 
 The third row is the controlled experiment: one variable, one seed held
 constant, with the second row as its negative control on the same subject —
 so the movement-versus-no-movement finding still rests on that pair and on
 nothing else. The fourth row is an independent run on another product at
-another seed, and it carries the two things the pair could not: the
-per-waypoint shot size as a **verified** fix rather than a proposed one, and
-a direct reading of how far the move goes.
+another seed, and it carries a direct reading of how far the move goes.
+
+**The fifth row is why the per-waypoint shot size is written below as "once
+held, once failed" rather than as a verified fix.** An earlier version of
+this section called it verified on the strength of the fourth row alone. The
+fifth run has the same shape — a macro detail beat immediately before a
+waypoint orbit, a shot size stated on every waypoint, a closing clause
+demanding the whole product in frame — and it inherited the macro framing
+anyway *and* barely moved. One hold and one failure is not a fix; it is an
+effect whose preconditions are unknown. What differs between the two runs is
+recorded below, because that difference is the only lead there is.
 
 ### How far the move goes, and where it stops
 
@@ -875,14 +956,49 @@ written for its ending.
   was outside the frame for the entire move, so half of that waypoint's
   content had nowhere to appear. The framing was inherited rather than
   chosen, and it took a waypoint's meaning with it.
-  **This is now a verified fix rather than a proposed one.** `8efeb556`
-  states a shot size on all three of its waypoints, closes the paragraph with
-  `at every one of those views the entire pair of glasses is inside the frame,
-  nothing cropped`, and **deliberately keeps the same risky order** — a macro
-  detail segment immediately before the orbit — so the inheritance had every
-  chance to happen again. Every frame of that move holds the whole product
-  with margin. One confirming run, on a different product at a different
-  seed, with the causal ordering preserved.
+  ⚠️ **This has held once and failed once — write it, and do not count on
+  it.** It was recorded here as a verified fix on the strength of one run,
+  and the next run to try it lost. Both had the same shape: a macro detail
+  beat immediately before the orbit, so the inheritance had every chance to
+  recur.
+  - **Held:** `8efeb556` states a shot size on all three of its waypoints and
+    closes the paragraph with `at every one of those views the entire pair of
+    glasses is inside the frame, nothing cropped`. Every frame of that move
+    holds the whole product with margin.
+  - **Failed:** `cb6b7870` states a shot size on all three of its waypoints
+    (`a medium shot ... the whole bottle from cap to base inside the frame
+    with margin above and below`) and closes with `the bottle stays fully in
+    frame at every moment of the move`. Every frame of that move is a close
+    shot of the upper body with the base outside the frame — the macro HOOK's
+    framing, inherited and never released.
+
+  Neither run isolates why. The differences between them, none of them
+  eliminated: **t2v against i2v with a first frame attached** (the flask
+  clip's opening composition was a paid macro still, which is a stronger pull
+  toward its own framing than a text-described macro beat), a folded pair of
+  glasses against a tall cylinder (a shot size that must include a base 30cm
+  below the label is a bigger jump than one that must include a temple tip),
+  and a 4s move inside a 12s clip against a 5s move inside 15s. The
+  first-frame difference is the one to suspect first and it is untested.
+
+  ⚠️ **What the failing clip does settle is where a written shot size still
+  works: after a cut.** The same prompt asked for a `medium-close shot` at
+  `11-13s` and a `medium shot dead front, the whole bottle centred` at
+  `13-15s`, both of them across hard cuts rather than inside a move — and
+  **both were delivered**, the last one with the whole bottle from cap to
+  base and margin all round. So one clip contains the contrast: three shot
+  sizes ignored inside a continuous move and two obeyed across cuts. That
+  matches the hedge a fourth clip (`e378f058`) already carried, where three
+  framings landed but their boundaries had rendered as cuts. **A shot size
+  stated across a cut is on much firmer ground than one stated inside a
+  continuous move.**
+
+  So: state a shot size on every waypoint — the failure mode when you omit it
+  is worse and is measured (`50f623b2`) — and then **read the frames of a
+  draft to see whether the framing actually widened**, because a written
+  shot size is not enough on its own to know that it did. When the move has
+  to change how much of the subject is in frame, **the safe form is a cut,
+  not a waypoint.**
 - **A small, fast physical event needs to be its own timestamped frame**, not
   the tail of a longer beat. A drop landing, a ring spreading, a latch
   closing: compress the build-up to pay for it, give the result its own stamp,
@@ -890,6 +1006,18 @@ written for its ending.
   tip, land, and ring the surface`) rather than trailing it off the end of a
   shot whose earlier seconds already handed the model something it is good at
   drawing.
+  ✅ **This one has now been run and it worked.** It was written from the
+  first row's failure and carried here unverified for two versions.
+  `cb6b7870` gave the payoff its own stamp — `11-13s PAYOFF`, a separate
+  boundary from the climax before it — and wrote it as `This is a required
+  visible event: the steam has to leave the neck and travel up through the
+  light within these two seconds, not merely hang above it`, the phrasing
+  aimed directly at what the drop did when it hung. The steam rises out of
+  the open mouth, climbs into the warm key and drifts right, confirmed at
+  t=12.5s. One run, on a different event and a different clip from the one
+  that failed, so the pairing is a before-and-after rather than a controlled
+  test — and note that the clause naming what the event must **not** do
+  ("not merely hang above it") describes precisely the earlier failure.
 - **Two or three waypoints are enough for a move**, one every few seconds, at
   the lengths in "Segmenting the timeline". The point is not to enumerate
   frames; it is that the frames you care about exist in the prompt *as*
@@ -970,13 +1098,16 @@ At every one of those views the whole <subject> is in frame, <top> to <bottom>, 
 ```
 
 Field order is the one in "Field order inside a segment". Two things about
-the shape, both measured: the per-line shot size and the closing framing
-sentence are what `8efeb556` added and what kept its whole subject in frame
-for a full move, so neither is decoration; and **there is deliberately no
-"and back to the opening view" line**, because that is the one waypoint
-neither run delivered — put it after a cut, as its own shot. Nothing here
-asks for music — check "Asking for music can fail output moderation on
-copyright" before adding an audio line to it.
+the shape. The per-line shot size and the closing framing sentence are what
+`8efeb556` added and what kept its whole subject in frame for a full move —
+⚠️ but `cb6b7870` wrote both and inherited a macro framing anyway, so they
+are **worth writing and not sufficient**; read a draft's frames to see
+whether the framing widened, and see the shot-size bullet under "What that
+means for writing". And **there is deliberately no "and back to the opening
+view" line**, because that is the one waypoint no run has delivered — put it
+after a cut, as its own shot. Nothing here asks for music — check "Asking for
+music can fail output moderation on copyright" before adding an audio line to
+it.
 
 ## Camera language
 
@@ -1840,7 +1971,10 @@ From cases 29, 26, 24, 5.
    prohibition cannot buy: timing and behaviour").
 5. **Every segment runs time → shot size / position → action → dialogue →
    sound** (cases 1, 7, 22), **with its own shot size stated** — a segment
-   that omits it inherits the previous segment's framing.
+   that omits it inherits the previous segment's framing. Stating it is
+   necessary and has not proved sufficient: one run held the framing it
+   asked for and one inherited a macro anyway, so check the draft's frames
+   rather than the prompt.
 6. **No movement is left phrased only as a movement.** Every angle, position
    and beat that has to appear is written as a still frame at its own
    timestamp, with its own shot size — a bare `the camera orbits it` and a
@@ -1878,4 +2012,7 @@ detector's hits — "Checking the cuts: read frames, never a detector count
 alone" — and before claiming how far a camera travelled, check that the
 endpoints you measured are inside one continuous shot and that the subject
 has an asymmetric feature to read the angle off: "Measuring a camera's
-travel: only inside one continuous shot".
+travel: only inside one continuous shot". And do not rank segments by how
+much is happening in them off a scene score — it counts pixels, not motion,
+and on a dark set it inverts the order: "A scene score is pixel churn, not
+motion".

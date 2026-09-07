@@ -4,6 +4,102 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.20.0 — a verified waypoint fix retracted, a proposed payoff fix verified, and a third measurement trap
+
+**`prompt-structure.md` only; no script changes.** Everything here comes from
+one run: job `cb6b7870-22f7-4a15-9168-8a013805775f` (2026-09-07, 15s, 720p,
+**i2v** with a generated product-only first frame, seed `226221006`, a
+`seedance-ad-creative` flask spot, **rejected** on content density). It was
+written to reuse two of this file's own conclusions and it split them — one
+held on its first real test, the other failed on its second — and the attempt
+to measure *why* it was rejected turned up a third thing: a metric this repo
+had been treating as a motion reading is not one.
+
+- ⚠️ **The per-waypoint shot size is no longer a verified fix. It is "once
+  held, once failed".** 1.17.0 promoted it on the strength of `8efeb556`
+  alone — one confirming run on a different product at a different seed with
+  the causal ordering preserved, which read at the time like a verification.
+  `cb6b7870` has the same shape (a macro beat immediately before a waypoint
+  orbit), states a shot size on all three waypoints (`a medium shot ... the
+  whole bottle from cap to base inside the frame with margin above and
+  below`), closes the paragraph with `the bottle stays fully in frame at
+  every moment of the move` — and rendered six frames of upper-body close
+  shot with the base never in frame. The macro HOOK's framing, inherited and
+  never released. `A camera move needs its waypoint frames, not just a verb`
+  now runs to five observations, the shot-size bullet under `What that means
+  for writing` carries both outcomes, and the copyable waypoint block says
+  the two lines are worth writing and not sufficient.
+- **What differs between the two runs, none of it eliminated.** t2v against
+  i2v with a paid macro still as the first frame — the one to suspect first,
+  since an attached opening composition is a stronger pull toward its own
+  framing than a text-described macro beat; a folded pair of glasses against
+  a tall cylinder, where the shot size has to reach a base far below the
+  label; and a 4s move in a 12s clip against a 5s move in 15s. Stated as
+  leads, not as an explanation.
+- ✅ **What the failing clip does settle: a shot size stated across a cut is
+  on much firmer ground than one stated inside a continuous move.** The same
+  prompt's `11-13s` `medium-close shot` and `13-15s` `medium shot dead front,
+  the whole bottle centred` were both delivered, the last one holding the
+  whole product cap to base with margin. So one clip contains the contrast —
+  three in-move shot sizes ignored, two post-cut ones obeyed — which is the
+  same distinction `e378f058`'s hedge already drew, now with direct evidence.
+  When a move has to change how much of the subject is in frame, the safe
+  form is a cut.
+- ✅ **A small, fast physical event as its own timestamped frame is now
+  verified.** That bullet was written from `60fbea52`'s failure (a drop that
+  hung from a pipette through a five-second climax and never landed) and had
+  never been run. `cb6b7870` gave the payoff its own boundary at `11-13s` and
+  wrote `the steam has to leave the neck and travel up through the light
+  within these two seconds, not merely hang above it` — a required-event
+  clause whose negative half names the earlier failure exactly. The steam
+  rises, glows and drifts, confirmed at t=12.5s. One before-and-after pair on
+  two different events rather than a controlled test, but the fix is no
+  longer a hypothesis, and the row for `60fbea52` now points at its own
+  resolution.
+- **`Checking the cuts` gains two rows and the blind spot is nine runs
+  deep.** `e378f058`'s **20.958s** boundary (absent at 0.25, needs **0.15**)
+  was described in a scenario skill but had never been entered in the shared
+  record it pointed at; it is in now. And `cb6b7870` loses **two of its four
+  cuts** at the 0.25 default, with scores descending monotonically through
+  the clip — 0.395, 0.311, 0.216, 0.132 — because its shots get more alike as
+  it goes; 0.15 finds three and 0.10 is the first threshold that finds all
+  four. Thresholds needed, in order: 0.05, 0.10, 0.10, 0.15, 0.10 — five
+  clips, and lowering the default is still not the fix. The monotonic descent
+  is a new sub-observation and a useful one: a clip that works inward ends
+  with its most similar shots, so a fixed threshold loses the *last*
+  boundaries first.
+- ⚠️ **New section: `A scene score is pixel churn, not motion`.** The third
+  measurement trap in this file, after the detector count and the azimuth
+  reading, and the same shape as both: a number that looks like it measures
+  the thing you care about. Measured on `cb6b7870`, mean inter-frame `scene`
+  at native 24fps with each segment's cut frame excluded — HOOK 0.0078,
+  SHOWCASE 0.0039, CLIMAX 0.0077, PAYOFF **0.0008**, CLOSE 0.0003 — against
+  what the frames show: the PAYOFF is steam visibly leaving the neck and
+  drifting, the SHOWCASE is an orbit that never moved, and the HOOK is a
+  static macro whose only change is a highlight sweeping brushed metal. **The
+  ranking is close to inverted**, because `scene` counts whole-frame pixel
+  difference: a thin white wisp on near-black is a few hundred pixels, a
+  specular streak on a brushed cylinder is tens of thousands. The bias has a
+  direction — large-area low-contrast changes over-counted, small-area
+  high-contrast events under-counted — so a dark studio maximises both errors
+  at once. A near-zero score is still informative as a bound (it is how
+  `50f623b2`'s motionless orbit and a held final frame were confirmed); the
+  ordering of two non-zero scores is not. This entered the file because a
+  scenario skill had drafted a per-segment score table as evidence that a
+  clip was too static; the conclusion survived on the frames, the table did
+  not.
+- ⚠️ **New paragraph: the cost of a single-threshold pass is a false claim
+  about the model, not just a low count.** One pass at 0.15 over `cb6b7870`
+  finds three of its four cuts, and the natural-sounding conclusion is "a
+  fourth cut was written and the model dropped it" — a statement about
+  obedience drawn entirely from a detector setting. The frames say all four
+  landed, at 0.00 / −0.46 / +0.04 / +0.25 seconds of their stamps. A single
+  threshold cannot separate "the cut is not there" from "the cut is not
+  visible at this threshold", so it supports neither sentence.
+
+Also: the closing checklist's item 5 now says a stated shot size is
+necessary and has not proved sufficient, for the same reason as above.
+
 ## 1.19.1 — the key requirement, moved to the front of a description that gets truncated
 
 Docs only; no script changes, no advice changed. `description` now **opens**

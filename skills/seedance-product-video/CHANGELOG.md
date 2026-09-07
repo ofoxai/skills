@@ -4,6 +4,50 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.13.0 — the per-waypoint shot size, downgraded from verified to once-held-once-failed
+
+**Docs only, and the run that forced it is not this skill's.** 1.11.0 wrote
+up `a shot size on every waypoint` as a verified repair for a segment
+inheriting the previous one's framing, on the strength of clip C
+(`8efeb556`, the eyeglasses) holding the whole product in frame through an
+orbit that deliberately kept the risky DETAIL-macro-then-ORBIT order. A
+`seedance-ad-creative` clip has since done the same thing and failed, so
+every place this file asserted the repair now says what it actually is.
+
+- ⚠️ **Job `cb6b7870-22f7-4a15-9168-8a013805775f`** (2026-09-07, 15s, 720p,
+  **i2v** with a generated first frame, rejected) has the identical shape: a
+  macro beat immediately before a waypoint orbit, a shot size on all three
+  waypoints (`a medium shot ... the whole bottle from cap to base inside the
+  frame with margin above and below`), and a closing `the bottle stays fully
+  in frame at every moment of the move`. Six frames across that move are all
+  a close shot of the bottle's upper body, base never in frame. So: **once
+  held, once failed**, with the differences unexamined — i2v with a paid
+  macro first frame against t2v, a tall cylinder against a folded pair of
+  glasses.
+- **What changed in this file.** §3's `That fix has now been run, and it
+  works` becomes `run twice: it worked once and failed once`; the ORBIT slot
+  note in the full template, the Motion row in `Recommended defaults`, and
+  the `orbit travels but the base is out of frame` row in the failure table
+  all carry the same correction. **Keep writing the shot size** — omitting it
+  is measured to be worse and it voided a whole waypoint on clip B — and then
+  read a draft's frames rather than trusting the prompt.
+- ✅ **One thing gained, and it is directly usable here: put a widening view
+  after a cut.** The failing clip's two post-cut shot sizes were both
+  delivered, the last holding the whole product cap to base with margin.
+  Together with clip D's existing hedge — where three framings landed but
+  their boundaries had rendered as cuts — that makes three clips agreeing
+  that a shot size stated across a cut is far more reliable than one stated
+  inside a continuous move. Clip D's bullet now says to read it as evidence
+  for the post-cut case only.
+- **The failure half of the finding is unaffected and is now measured
+  twice.** An unstated shot size inherits the previous segment's framing, and
+  it can silently delete a waypoint's content — clip B, plus the new clip's
+  SHOWCASE. It is the *repair* half that is one-for-two.
+
+No change to templates, flags, defaults or the scenario boundary. The
+repo-wide record lives in `ofox-video-core` 1.20.0's `A camera move needs its
+waypoint frames, not just a verb`, not here.
+
 ## 1.12.2 — the key requirement, moved to the front of a description that gets truncated
 
 Docs only; no script changes, no advice changed. `description` now **opens**

@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.10.1"
+version: "1.11.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.10.1"
+  version: "1.11.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -187,6 +187,16 @@ A's four or five beats are inside what has been run, not past it. Above 7
 shots or 6 cuts is still gallery practice, and a first attempt there is an
 experiment.
 
+⚠️ **That warning was only ever about the shot *count*, and a count is half
+of the problem.** It was in this file, in these words, when a 15s ad was
+written as five beats at the floor — and the clip was rejected as "too
+simple, too monotonous" anyway, because three of those five beats contained
+no physical movement at all. A beat can be at the floor and still be dead;
+"a floor, not a ceiling" says nothing about what happens *inside* a beat. The
+missing half is now written down as **7. Every beat needs a physical event —
+and "slow" is not "still"** below, and it is the first thing to check after
+the beat count.
+
 ```
 [FORMAT: <N> seconds, <16:9 | 9:16 | 1:1>, hard cuts on the timestamps.]            — optional; must match the flags
 STYLE: <ad category> commercial, <capture anchor: 8K photoreal studio | 35mm film grain | glossy high-speed>, <tone: luxury — slow, dark, warm gold | playful — bright, saturated, fast | minimalist-tech — white or grey, cool, steady>.
@@ -198,9 +208,9 @@ SCENE: <backdrop>, <one or two props framing the shot>, <light: saturated studio
 
 0–<3–5>s    HOOK — <one visual focus: a macro of one ingredient | the cap | the clock face>; <one strong move: a hard cut lands as the detail completes its motion | low-angle dolly-in | a white flash freezes the frame | layers unfold>.   (cases 12, 13, 15, 14)
 <TRANSITION between any two beats — name a kind; a hard cut is one of nine and an unnamed boundary becomes one: HARD CUT. | The camera plunges through <the gears / the pour / the open lid> into the next beat. (case 13) | <The product / the blade / a hand> sweeps past the lens and the camera comes out of the occlusion on <the next arrangement>. (the phrasing is cases 2, 8, 41, none of them ads) | A white flash freezes the frame, then <the next pose>. (case 15) | An extreme speed ramp carries <the event> into <the next beat>. (case 15) | Without cutting, <the array reassembles in frame>.>
-<>–<>s      SHOWCASE — <arrangement: a strict geometric array of the variants | <tag> holds the product toward the lens, steam rising | the camera orbits the product 30 degrees>; cut to close-ups of <two or three details>.   (cases 12, 14, 24)
+<>–<>s      SHOWCASE — <arrangement: a strict geometric array of the variants | <tag> holds the product toward the lens, steam rising | the camera orbits the product 30 degrees>; cut to close-ups of <two or three details>. <one physical event in this beat — required, see slot notes>   (cases 12, 14, 24)
 <>–<>s      CLIMAX — <one physical event: the biscuit snaps | the broth erupts | the blade sweeps past the lens>; drops into slow motion for one second — <micro-detail: the filling bursts, crumbs fly, droplets hang> — then back to speed.   (cases 12, 14, 15)
-[<>–<>s     PAYOFF — <the event's result, as its own timed shot: the drop lands and one ring spreads and dies | the crumbs settle on the white>; full speed, and the landing named as a required visible event.]   (only when the payoff is small and fast; job 60fbea52 wrote it as CLIMAX's tail and lost it — slot notes below)
+[<>–<>s     PAYOFF — <the event's result, as its own timed shot: the drop lands and one ring spreads and dies | the crumbs settle on the white>; full speed, and the landing named as a required visible event.]   (only when the payoff is small and fast; job 60fbea52 wrote it as CLIMAX's tail and lost it, job cb6b7870 gave it its own stamp and got it — slot notes below)
 [<>–<>s     VARIATION — back at full tempo, <a second arrangement>.]                                                        (case 12)
 <>–<N>s     CLOSE — product hero frame, <centered | in slow motion>; [the slogan "<text>" enters word by word, one word per cut;] [the logo per image2 in the last second;] hold the final frame.   (cases 12, 13, 14, 15)
 
@@ -212,6 +222,15 @@ AVOID: dialogue, subtitles, on-screen text other than the slogan card, watermark
 
 Notes on the slots:
 
+- **Every beat carries one physical event, `SHOWCASE` included.** This is the
+  slot where an ad goes quiet: it is the one whose job is "show the product",
+  and a rejected 15s spot spent it on an orbit that never moved — six frames
+  sampled across it hold the same orientation, the same cap perspective and
+  the same highlight. Name something that happens — the product is set
+  down, a hand enters, liquid moves, steam rises, a cloth is pulled away —
+  and check the whole timeline for a beat carried only by light sliding
+  across a surface. The measurement and the three repairs are in "7. Every
+  beat needs a physical event — and 'slow' is not 'still'" below.
 - **Anchor sentences when an image is attached** — put them first, before
   STYLE (cases 15, 24 both open on the asset):
   `Begin with the exact composition of the reference image.` (case 15, a
@@ -265,13 +284,27 @@ Notes on the slots:
   at 12.25s the clip cuts to the hero frame. Five and a half seconds of
   climax bought a suspended drop and no event. A hanging, glowing droplet is
   exactly the kind of picture this model is good at, so it made that and
-  skipped the fast physical beat at the end of it. The counter-measure —
-  aimed at the observed cause, not yet re-run — is to **write the payoff as
-  its own timestamped shot with its own share of the seconds**, compress the
-  build-up to pay for it, and name the result as a required visible event
-  (`the drop must be seen to leave the tip, land, and ring the surface`)
-  instead of trailing it off the end of a longer shot. That is what the
-  optional `PAYOFF` line in the template is for.
+  skipped the fast physical beat at the end of it. The counter-measure is to
+  **write the payoff as its own timestamped shot with its own share of the
+  seconds**, compress the build-up to pay for it, and name the result as a
+  required visible event (`the drop must be seen to leave the tip, land, and
+  ring the surface`) instead of trailing it off the end of a longer shot.
+  That is what the optional `PAYOFF` line in the template is for.
+  ✅ **That counter-measure has now been run, and it worked** — the first
+  time it was tried, on `cb6b7870`. The payoff got its own boundary at
+  `11-13s`, separate from the CLIMAX before it, and its own required-event
+  sentence: `A column of white steam must be seen to rise out of the open
+  mouth of the bottle, climb into the warm key light where it glows, and
+  drift off to the right. This is a required visible event: the steam has to
+  leave the neck and travel up through the light within these two seconds,
+  not merely hang above it.` The steam rises, glows and drifts, confirmed at
+  t=12.5s — one of only two segments in that clip where anything physical
+  happens at all, in a clip rejected for being too still. Two things to copy
+  from the wording: the
+  event has its **own timestamp**, and the clause naming what it must **not**
+  do (`not merely hang above it`) describes the earlier failure exactly.
+  One before-and-after pair on two different events, not a controlled test —
+  but the fix is no longer a hypothesis.
 - **A continuous state change can be one of the listed changes, if its
   direction is pinned.** A consistency lock normally reads "nothing changes
   except these things", and the things are discrete events. The same job also
@@ -307,10 +340,22 @@ Notes on the slots:
   moderation on copyright" in the shared file.
 - **Slot pacing by tone**: Luxury runs 5s segments and slow moves (case 13);
   Playful runs 3s segments and cuts on the downbeat — the *cuts*, not the
-  music the downbeat came from (cases 12, 14).
-- **Five beats in 15 seconds has now been run twice, and an uneven duration
-  split is honoured closely.** `7ae7d49e` and `60fbea52` are both 15s, 5
-  shots, 4 hard cuts, first frame attached, and both kept every cut. On
+  music the downbeat came from (cases 12, 14). ⚠️ Luxury's longer segments
+  raise the stakes on the rule above rather than relaxing it: a 5-second beat
+  with no event in it is 5 seconds of nothing, where a 3-second one is only
+  3. If a Luxury beat has no physical event available, split it into two
+  shorter shots instead of holding it.
+- **Five beats in 15 seconds has now been run three times, and an uneven
+  duration
+  split is honoured closely.** `7ae7d49e`, `60fbea52` and `cb6b7870` are all
+  15s, 5
+  shots, 4 hard cuts, first frame attached, and all three kept every cut —
+  `cb6b7870`'s four landed at 3.000 / 7.542 / 11.042 / 13.250s against
+  written stamps of 3 / 8 / 11 / 13, so within half a second each way. ⚠️ And
+  the third of those was **rejected**, which is the point worth carrying: the
+  structural half of this template is now well verified and the structural
+  half is not what decides whether an ad is watchable. See 7 in "Writing a
+  good ad-creative prompt". On
   `60fbea52` the per-shot budget was planned 3 / 2 / 2 / 5 / 3 seconds and
   rendered 2.62 / 2.13 / 1.87 / 5.63 / 2.79 — every segment within 0.4s of
   its plan, including a deliberately lopsided split that gave the climax more
@@ -451,7 +496,11 @@ One archetype word steers grade and pacing more reliably than a paragraph of
 adjectives; a `Color palette:` line (case 14) pins the colours it implies.
 
 - **Luxury**: slow movement, dark or moody background, warm gold highlights,
-  5s segments (cases 13, 15).
+  5s segments (cases 13, 15). ⚠️ **`slow movement` is a speed, not a
+  quantity — read it as "the movement is slow", never as "there is little
+  movement".** This line as written above is what a rejected flask ad turned
+  into three separate sentences pinning the camera and the product still; see
+  7 below for the measurement and the three repairs.
 - **Playful/consumer**: bright saturated colours, faster movement, cuts on
   the beat, 3s segments (cases 12, 14).
 - **Minimalist/tech**: clean white or grey background, precise steady camera,
@@ -493,6 +542,20 @@ near silence as asked. What was ignored is the *relative* level between
 shots. So **do not plan a clip whose effect depends on one shot being quieter
 than its neighbours**; name each shot's sounds and leave the mix to an
 editor, the same way the music goes on afterwards.
+
+**A sound written as `faint` can be honoured as inaudible, while the
+placement instruction still works.** Measured on `cb6b7870`, whose AUDIO line
+named three cues: the cap thread turning, `the short pneumatic tick of the
+seal parting at 9s`, and `a faint hiss of steam at 11s`. The first two
+landed clearly — the level rises off a -43 to -46 dB room-tone floor to
+-30.9 dB at 7.7s and to a -21.7 dB peak across 8.8-9.2s, the loudest
+sustained passage in the clip and exactly where the seal was written. The
+third produced nothing measurable: at 11.5s the level *drops* to -41.6 dB and
+stays near the floor for the whole PAYOFF, though the steam is plainly
+visible on screen. So **timing a sound to a visible action works and an
+intensity adjective is not a volume control** — do not hang a beat's effect
+on a sound you have described as faint. Second observation of the transient
+half, first of this nuance.
 
 ### 5. Text on screen: lock it, or design it out
 
@@ -546,15 +609,137 @@ already failed:
 
 | AVOID item | Record |
 |---|---|
-| any text other than the brand word | **no invented text in any of the three** ads, including once in a text-hostile set — see 5 above. The work was done by the set and by the object-by-object exclusion, not by the phrase "no text" |
+| any text other than the brand word | **no invented text in any of the four** ads, including once in a text-hostile set — see 5 above. The work was done by the set and by the object-by-object exclusion, not by the phrase "no text". The fourth (`cb6b7870`) is the easy case again — a near-black empty studio — and its real brand word also survived unaltered in every shot it appeared in |
 | `no lens flare stars, no sparkle particles` | **lost once.** A small starburst glint sits on the drop at about 9.6s of `60fbea52`, in a clip whose AVOID named both. Minor, arguably attractive, and not asked for |
 | `never more of the hand than the fingertips and first knuckle` | **lost once**, and it was stated twice in the same prompt — see the framing-order slot note in Template A |
-| music, score, named instruments | not really tested by the list: what keeps music out is not asking for it (4 above), and the one prompt that did ask was refused before it rendered |
+| music, score, named instruments | not really tested by the list: what keeps music out is not asking for it (4 above), and the one prompt that did ask was refused before it rendered. `cb6b7870` named fourteen music words in AVOID *and* asked only for diegetic sound, and passed — which confirms the combination, not the list |
+| `a faint hiss of steam` as an audible cue | **lost once**, on `cb6b7870`: no measurable level event at all where it was written, in a clip whose two other sound cues landed loudly and on time. An intensity adjective is not a volume control — 4 above |
 
-Two of those rows are a single observation each. What they add up to so far
+Three of those rows are a single observation each. What they add up to so far
 is a shape rather than a rule: **an item that removes a whole class of object
 from the set holds better than one that asks for a fine-grained quantity, or
 for the absence of a small visual flourish.**
+
+### 7. Every beat needs a physical event — and "slow" is not "still"
+
+**Measured on job `cb6b7870-22f7-4a15-9168-8a013805775f`** (15s, 720p, 5
+shots, 4 hard cuts, generated first frame attached, Luxury tone) — **rejected,
+and the only ad rejected in this scenario so far.** The verdict was that it
+rotates the product once and then nothing much happens: too simple, too
+monotonous. Everything this file normally checks came back clean. All four
+cuts landed, the shot budget held, the etched brand word survived unaltered
+in every shot it appeared in, a near-black studio produced zero invented
+text, and the payoff beat worked. What failed is **how much of the 15 seconds
+contained visible motion.**
+
+**Read off the frames, per segment** — two frames per second across the whole
+clip, plus six frames sampled through the SHOWCASE at 3.1 / 4.0 / 5.0 / 6.0 /
+7.0 / 7.4s:
+
+| Segment | What actually happens in it |
+|---|---|
+| HOOK — macro on the grain | nothing moves; a specular streak slides down the metal |
+| **SHOWCASE — the orbit** | **nothing.** All six sampled frames hold the same bottle orientation, the same cap perspective and the same highlight position. The written 0° → 45° → 90° move did not happen |
+| CLIMAX — the cap lifting | a real event: the cap turns, the seal parts, the thread clears the collar |
+| PAYOFF — steam rising | a real event: steam leaves the neck, glows in the key, drifts right |
+| **CLOSE — hero frame** | **nothing, by design** — a held hero frame to the end |
+
+So **two of five segments contain no physical event at all** and a third
+(HOOK) contains only moving light. Counting the seconds where something
+visibly happens — the cap and the steam — gives roughly **5.5 seconds of
+event in a 15-second spot**, a third of the runtime.
+
+⚠️ **Do not try to establish this with a per-segment scene score. It is
+measured here and it points the wrong way.** Mean inter-frame `scene` score
+at native 24fps, segment boundaries at the detected cuts and each segment's
+own cut frame excluded: HOOK 0.0078, SHOWCASE 0.0039, CLIMAX 0.0077, PAYOFF
+0.0008, CLOSE 0.0003. That ranking puts the steam — the one beat everybody
+agrees is alive — second from the bottom, and the motionless orbit in the
+middle of the field. The reason is that `scene` measures **whole-frame pixel
+churn, not motion**: a bright specular streak sweeping a large brushed-metal
+body changes a great many pixels while nothing moves, and a thin wisp of
+steam against near-black changes very few while something plainly does. On a
+dark-background product clip the metric is close to anti-correlated with what
+a viewer calls movement. The shared file already says not to read a camera's
+angular velocity off a delta count; this is the same mistake one step further
+out. **Sample frames and look at them.**
+
+**The cause is three sentences that were written deliberately**, each
+defensible alone and jointly fatal: `the camera holds still` (HOOK), `the
+bottle itself never moves or rotates` (SHOWCASE) and `the camera is
+completely still and the bottle does not move` (CLOSE). The middle one is the
+instructive failure. It was written to stop the product self-rotating — a real
+risk, and it worked — but nothing was given to the camera in exchange, so the
+segment ended up with a still product **and** a still camera. A negative
+clause about the subject is not a camera instruction, and pairing the two
+without noticing is easy in a tone whose own definition is `slow movement`.
+
+**The two accepted ads at the same spec are the control.** `7ae7d49e`
+(sparkling tea) and `60fbea52` (serum oil) are both 15s, 5 shots, 4 hard
+cuts, first frame attached — the same envelope, the same template, one
+accepted verdict each. The difference is that **every segment of both
+contains a physical event**: bubbles rising continuously through the tea in
+one, a hand entering, a pipette lifting and a droplet falling in the other.
+Neither is faster-cut than the flask ad. They are simply never empty.
+
+Three repairs, in the order to apply them:
+
+1. **No pure-display beat.** Every segment needs one nameable physical event
+   — something enters, opens, falls, pours, rises, turns, or is set down.
+   Light sliding along a surface is not an event; it is what a still shot
+   looks like under a moving key. The `SHOWCASE` slot in Template A is where
+   this goes wrong most easily, because "show the product well" reads as a
+   licence to hold on it.
+2. **In a Luxury spot, `slow` describes the speed of the movement, not
+   whether there is any.** A slow orbit is still an orbit. Sentences of the
+   form `the camera holds still` / `completely still` / `does not move` are a
+   misreading of the archetype when they are the whole of a segment's camera
+   direction — keep them for a final hero frame that has earned it, and even
+   then note that this clip's held CLOSE was one of the two motionless
+   segments that sank it.
+3. **A low-motion product needs an external source of motion.** This is the
+   one that generalises past Luxury. A sneaker can be jumped in, a carbonated
+   drink carries its own bubbles — a sealed steel flask can do essentially
+   nothing on its own, and no amount of prompt craft will make its body move.
+   Bring the motion in from outside: pouring water, ice dropping, steam, a
+   hand, moving air, a cloth pulled away. Or spend the budget on cuts
+   instead — **raise the shot count from 5 to 7**, which is inside the
+   measured envelope at 20s (see "Several shots" below). Deciding which
+   before writing the prompt is cheaper than discovering it from a delivered
+   clip.
+
+**Two technical defects in the same clip, independent of the verdict**, both
+of them about the orbit and both recorded in the shared file rather than
+here, because they are about camera craft in general and not about ads:
+
+- The SHOWCASE framing **never escaped the HOOK's macro closeness**, despite
+  all three waypoints stating a shot size and the paragraph closing with `the
+  bottle stays fully in frame at every moment of the move`. Six frames across
+  the move are all a close shot of the upper body; the base is never in frame
+  and the brand word is clipped at the right edge in the last two.
+- The orbit **barely happened**: three waypoints at 0°, 45° and 90°, and the
+  bottle's orientation, cap perspective and highlight position are close to
+  identical across all six sampled frames.
+
+⚠️ Together those **downgrade a conclusion this repo had marked verified** —
+that a shot size on every waypoint prevents a segment from inheriting the
+previous one's framing. It held on an eyeglasses clip and failed here, on the
+same "macro beat, then waypoint orbit" structure. It is now **once held, once
+failed**, with the differences between the two runs (i2v against t2v most of
+all) unexamined. Both the record and what to do about it are in
+[`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md)
+under "A camera move needs its waypoint frames, not just a verb" — read it
+before writing any orbit, and read a draft's frames rather than trusting the
+prompt to have widened the shot.
+
+**One usable rule does come out of it, from the same clip.** Its `11-13s`
+`medium-close shot` and its `13-15s` `medium shot dead front, the whole
+bottle centred` were both written across hard cuts, and **both were
+delivered** — the final one holding the whole bottle cap to base with margin,
+which is precisely what the SHOWCASE waypoints asked for and never got. So
+in an ad: **when a beat needs the framing to open up, put the wider shot
+after a cut rather than inside a camera move.** That is also cheap here,
+because Template A's boundaries are hard cuts by default.
 
 ### If the user has an actual product photo
 
@@ -608,6 +793,16 @@ now: pass `--target-aspect 16:9` (or `--target-size 1280x720`) to
 cropped exactly, or the run fails loudly. That matters here more than in most
 places, because `adaptive` means a wrong-ratio image is charged at the price
 of the clip it opened.
+
+**That flag has now been used on a real ad frame and it does the whole job.**
+On `cb6b7870` a single `--target-aspect 16:9` produced two files: the API's
+own bytes at `1792x1024` on the `-uncropped` path, and an exactly-16:9
+`1792x1008` on the plain path, which is the one that went to
+`--frame-first-image`. **No second downscale was needed** — `adaptive` takes
+the *ratio*, not the pixel count, so the clip came back 1280x720 from a
+1792x1008 frame. `60fbea52`'s third manual step (`1792x1008` → `1280x720`)
+was never necessary; it was a hand-crop artefact. One run, but it removes
+both manual steps.
 
 If the reference image includes an actual person (e.g. a spokesperson or
 model in the shot, not just the product), Seedance 2.5 image-to-video
@@ -681,23 +876,30 @@ the bare `0-3s: … Hard cut. 3-6s: …` form, one with a header manifest and
 `SHOT N (a-bs)` + `HARD CUT`.
 
 **This scenario has since pushed that envelope out itself, on the axes ads
-actually use.** Three accepted 720p jobs, all `bytedance/seedance-2.5` on
-`byteplus`, all with a generated product image attached as
-`--frame-first-image`:
+actually use.** Four 720p jobs — three accepted, one rejected — all
+`bytedance/seedance-2.5` on `byteplus`, all with a generated product image
+attached as `--frame-first-image`:
 
 | Job | Shape | Result |
 |---|---|---|
 | `7ae7d49e-7eb9-4165-9d95-09cd525d53ed` | 15s, 5 shots, 4 hard cuts, hook/showcase/climax/close | all 4 cuts happened and the first frame held across them; the wordmark on the label stayed legible and in the frame's own typeface |
 | `ac927785-92ef-4e28-97b9-ff8172ec5554` | 20s, 7 shots, 6 hard cuts, a model entering mid-clip | all 6 present; 5 detected within about 0.3s of their stamps, the 6th visible frame by frame |
 | `60fbea52-b14b-4796-80bf-03afe0aa4fa0` | 15s, 5 shots, 4 hard cuts, hook / two showcases / climax / close, a hand entering the climax | all 4 cuts happened, detected at 2.62 / 4.75 / 6.62 / 12.25s; the per-shot split came in within 0.4s of plan; the first frame held from 0.3s to 14.9s — bottle, frosted finish, black collar and bulb, label, glass of water, eucalyptus sprig, desk grain and bare wall all unchanged |
+| `cb6b7870-22f7-4a15-9168-8a013805775f` ⚠️ **rejected** | 15s, 5 shots, 4 hard cuts, hook / showcase / climax / payoff / close | all 4 cuts happened, at 3.000 / 7.542 / 11.042 / 13.250s against stamps of 3 / 8 / 11 / 13; the first frame's product held throughout and the etched brand word survived unaltered in every shot it appeared in. **Rejected on content density, not on structure** — see 7 in "Writing a good ad-creative prompt". ⚠️ Its cut scores descend through the clip — 0.395 / 0.311 / 0.216 / 0.132 — so the 0.25 default finds only two of the four and **0.10** is the first threshold that finds all of them |
 
-All three of those wrote **every** boundary as a hard cut — 4 of 4, 6 of 6,
-and 4 of 4 again — and all three kept every cut. Repo-wide that makes six
+All four of those wrote **every** boundary as a hard cut — 4 of 4, 6 of 6,
+4 of 4 and 4 of 4 — and all four kept every cut. Repo-wide that makes seven
 runs whose written hard cuts all rendered (at shares of 3 of 8, 3 of 6, 5 of
-7, 4 of 4, 6 of 6 and now 4 of 4) against one that lost all three of its at a
-share of 3 of 9. The single list of those runs, and the reason the threshold
-is still unknown, is in the shared file's `Several shots in one job`; the row
-above is an entry in that record, not the start of a second one.
+7, 4 of 4, 6 of 6, 4 of 4 and now 4 of 4) against one that lost all three of
+its at a share of 3 of 9. The single list of those runs, and the reason the
+threshold is still unknown, is in the shared file's `Several shots in one
+job`; the rows above are entries in that record, not the start of a second
+one.
+
+**Do not read "every cut landed" as "the clip worked."** The fourth row is
+the whole argument for keeping those two questions apart: it hit its cuts more
+precisely than any of the three accepted rows and was rejected anyway, for
+having nothing happening between them.
 
 For the reproducibility record the third one exists to be: seed `799906248`,
 billed 3.60 USD for the video (15s x 24 cents/s at 720p — image-to-video
@@ -708,6 +910,18 @@ track, 15.04s; `generate_audio true`; `aspect_ratio` forced to `adaptive`.
 It is in the gallery as `aura-serum-ad`. Versions in force when it ran: this
 skill 1.9.0, `ofox-video-core` 1.14.0, `ofox-image-core` 1.4.0 — both
 dependencies have moved on since.
+
+The fourth one, kept as a rejected case rather than a gallery entry: seed
+`226221006`, billed 3.60 USD for the video (15s x 24 cents/s at 720p, t2v
+rate again — the third confirmation of that tier on this route) plus
+0.153995 USD for the first frame, same model and same `--quality high`
+pair. Delivered 1280x720 h264 at 24fps with a 32kHz stereo aac track,
+15.072s, 13.6MB, `nb_streams=2`; `aspect_ratio` forced to `adaptive`; 538
+seconds of wall clock. Total 3.753995 USD. Versions in force: this skill
+1.10.1, `ofox-video-core` 1.19.1, `ofox-image-core` 1.9.1. Why it is worth a
+record despite being rejected: it is the run that verified the `PAYOFF` fix
+and that produced 7's motion measurements, and it is the only clip in this
+scenario whose per-segment motion has been measured at all.
 
 So four or five beats is inside the measured envelope, and so is **an
 attached reference image combined with multiple cuts**, which the two 2026-09-03
@@ -764,7 +978,10 @@ when both numbers are on screen.
 a second row, and it is not a rounding error.** Measured on `60fbea52`'s
 frame: 0.154035 USD — 15.4 cents — on `openai/gpt-image-2` at `--quality
 high --size 1792x1024`, 5063 output tokens, against 3.60 USD for the 15s
-720p clip it opened. Quote it from `ofox-image-core`'s own `--dry-run`, with
+720p clip it opened. **Measured a second time on `cb6b7870`'s frame:
+0.153995 USD**, same model and same quality/size pair — the two agree to
+within four hundredths of a cent, so at that pair the figure is stable and
+15.4 cents is the number to plan with. Quote it from `ofox-image-core`'s own `--dry-run`, with
 **the same `--target-aspect` the real call will use** — that flag decides
 which `--size` gets requested, and the size is half of what an image estimate
 is priced at. When that run was made, the estimate was anchored to a small
@@ -937,7 +1154,10 @@ plus the ad-creative-specific ones:
 | Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated **output** failed a post-generation content check — happens after the job ran, not at submission. Not billed (no `usage` field on the response) | Retry with a brand-new `generate` call using a different prompt or reference image — a new request, not a resubmission of the failed one, so it's safe |
 | Exit `3`, job ends `failed`, `error.code: output_moderation_failed`, upstream message mentions **audio** copyright | The AUDIO block asked the model to generate music — measured on job `1ff72400-0f30-4be1-a417-f52d43955d09` with a cello note and a bell chime. Not billed | Rewrite AUDIO as room tone plus recorded sounds only, add the music words to AVOID, and re-run — a new request, safe immediately. See "4. No dialogue, no music — but a sound block" |
 | A real person is needed in the ad and the attached frame is refused | The frame itself contains the person. The refusal is about the attached picture, not the clip's content | Attach a frame of the **product alone** and write the person into the timeline as text — see "A model *and* a locked product: the route that works" |
-| The climax's build-up looks beautiful and the event itself never happens | The payoff was written as the tail of a longer shot. Measured once, on `60fbea52`: a drop hung from the pipette for the whole five-second climax and never landed, and the clip cut to the hero frame instead | Give the payoff its own timestamped shot with its own seconds, compress the build-up, and name the result as a required visible event — see the `PAYOFF` line in Template A and its slot note. This is a new prompt, so a new cost table |
+| The climax's build-up looks beautiful and the event itself never happens | The payoff was written as the tail of a longer shot. Measured once, on `60fbea52`: a drop hung from the pipette for the whole five-second climax and never landed, and the clip cut to the hero frame instead | Give the payoff its own timestamped shot with its own seconds, compress the build-up, and name the result as a required visible event — **verified on `cb6b7870`**, where steam written that way rose and drifted as asked. See the `PAYOFF` line in Template A and its slot note. This is a new prompt, so a new cost table |
+| The clip is competent, every cut landed, and the user calls it monotonous or "nothing happens" | Beats that contain no physical event. Measured on `cb6b7870`, rejected: two of its five segments contain no physical event at all and a third only moving light, so only about 5.5 seconds of a 15-second spot had a visible event in it. Read this off sampled frames — a per-segment scene score gets the ranking wrong here, see 7. A Luxury brief plus a low-motion product is the setup for this | Do not just add cuts. Give every segment one nameable physical event, and for a product that cannot move on its own bring the motion in from outside — pour, steam, ice, a hand, moving air. See "7. Every beat needs a physical event — and 'slow' is not 'still'". A new prompt, so a new cost table |
+| A Luxury spot comes back static rather than slow | `slow movement` in the Luxury archetype read as "little movement". On `cb6b7870` it became three separate sentences pinning the camera and the product — `the camera holds still`, `the bottle itself never moves or rotates`, `the camera is completely still and the bottle does not move` | Write the speed, not the absence: a slow orbit, a slow push-in, a slow pour. Keep "still" for a hero frame you have earned, and check that a negative clause about the *product* has not left the *camera* with nothing to do — that pairing is what produced the stillest segment in that clip. See 7 |
+| The orbit segment stays at the previous beat's macro closeness even though every waypoint states a shot size | The framing was inherited and the written shot size did not release it. This is `cb6b7870`'s SHOWCASE: three waypoints all asking for the whole bottle cap to base, six frames all showing the upper body only | Keep writing the shot size — omitting it is measured to be worse — but treat it as necessary, not sufficient: it held on `8efeb556` and failed here. Read the frames of a cheap draft before paying for the final, and consider putting the wide shot after a hard cut rather than inside the move. The record is in `A camera move needs its waypoint frames, not just a verb` in the shared file |
 | One shot comes back louder than the shot written to be quieter than it | A loudness written per shot is not honoured. Measured on `60fbea52`, whose "very quiet" shot 2 was the loudest sustained passage in the clip; the sound *effects* did land where they were written | Nothing to fix in the prompt — name each shot's sounds and set the relative levels in an editor. See "4. No dialogue, no music — but a sound block" |
 | Invented signage or garbled lettering in the background | The negative list was relied on to remove it; on Ofox it is only partly obeyed | Change the set, not the wording: a background with no surface lettering can sit on returns zero text. See "5. Text on screen: lock it, or design it out" |
 | Exit `1`, `references_conflict` | `--frame-first-image` and an `input_references` array in `--extra-json` in the same job | Pick one meaning — first frame, or identity references — and drop the other |

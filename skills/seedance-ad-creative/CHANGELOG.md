@@ -4,6 +4,141 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.11.0 — a rejected ad: "slow" got executed as "still", and every beat needs an event
+
+**The first rejected clip in this scenario, and it was rejected for something
+this file did not have a rule about.** Job
+`cb6b7870-22f7-4a15-9168-8a013805775f` (2026-09-07, 15s, 720p, 5 shots, 4
+hard cuts, generated first frame attached, Luxury tone) was built to Template
+A and passed every check this file knew how to make: all four cuts landed
+within half a second of their stamps, the shot budget held, the etched brand
+word survived unaltered, a near-black studio produced zero invented text, and
+the payoff beat worked. The verdict on it was that the product rotates once
+and then nothing much happens — too simple, too monotonous. Billed 3.60 USD
+for the clip plus 0.153995 USD for the frame, 3.753995 USD in total, and it
+is kept as a rejected case rather than a gallery entry.
+
+- **New section, `7. Every beat needs a physical event — and "slow" is not
+  "still"`.** Read off sampled frames: **two of the five segments contain no
+  physical event at all** (the orbit, which never moved, and the held hero
+  frame) and a third contains only moving light (the macro HOOK). Only the
+  cap unscrewing and the steam rising are events, so roughly **5.5 of the 15
+  seconds** have anything happening in them. The cause is three sentences
+  written on purpose — `the camera holds
+  still`, `the bottle itself never moves or rotates`, `the camera is
+  completely still and the bottle does not move`. The middle one is the
+  instructive failure: it was written to stop the product self-rotating,
+  which worked, but the camera was given nothing to do in exchange, so the
+  segment came out static on both counts. Three repairs: no pure-display
+  beat, `slow` is a speed rather than a quantity, and a product that cannot
+  move on its own needs motion brought in from outside (pour, ice, steam, a
+  hand, moving air) or the shot count raised from 5 to 7.
+- **The two accepted 15s/5-shot ads are the control, and the difference is
+  not pacing.** `7ae7d49e` and `60fbea52` share the exact envelope — 15s, 5
+  shots, 4 hard cuts, first frame attached. Neither cuts faster. What they
+  have is a physical event in *every* segment: bubbles rising continuously in
+  one, a hand entering and a droplet falling in the other.
+- **The warning that was already here, and why it did not bind.** `The beats
+  below are a floor, not a ceiling` and `Split a beat into two shots rather
+  than holding one for six seconds` were both in this file when that prompt
+  was written, and the prompt sat exactly on the floor at 15s/5 shots. Those
+  sentences are about the shot **count**; neither says anything about what
+  must happen inside a beat. A beat can be at the floor and still be dead.
+  The paragraph now says so and points at 7, `SHOWCASE` carries a required
+  physical-event slot, and the Luxury archetype line in 3 marks `slow
+  movement` as a speed and not a quantity.
+- **`PAYOFF` moves from a proposed counter-measure to a verified one, first
+  try.** It was written from `60fbea52`'s failure — a drop that hung from a
+  pipette for a five-second climax and never landed — and carried here
+  unverified for two versions. This clip gave the payoff its own stamp
+  (`11-13s`, a separate boundary from the climax) plus a required-event
+  sentence whose negative clause names the earlier failure exactly: `the
+  steam has to leave the neck and travel up through the light within these
+  two seconds, not merely hang above it`. The steam rises, glows and drifts,
+  confirmed at t=12.5s, and that segment scores 0.0049 — the
+  second-liveliest in a clip rejected for stillness.
+- ⚠️ **A conclusion this repo marked verified is downgraded to "once held,
+  once failed", and it is not this skill's own.** `A shot size on every
+  waypoint` was recorded as a verified cure for a segment inheriting the
+  previous one's framing. This clip wrote it on all three SHOWCASE waypoints,
+  closed with `the bottle stays fully in frame at every moment of the move`,
+  and still rendered six frames of upper-body close shot with the base never
+  in view and the brand word clipped at the right edge. Same structure as the
+  clip that held (macro beat, then waypoint orbit); different result. The
+  record and the unexamined differences (i2v with a paid macro first frame
+  against t2v, most of all) are in `ofox-video-core` 1.20.0.
+- **One usable rule out of that failure, from the same clip.** Its `11-13s`
+  and `13-15s` shot sizes were both written across hard cuts and both
+  delivered — the last one holding the whole bottle cap to base with margin,
+  which is what the waypoints asked for and never got. So when a beat needs
+  the framing to open up, put the wider shot after a cut rather than inside a
+  camera move. Cheap here, because Template A's boundaries are hard cuts
+  anyway.
+- **`--target-aspect` confirmed end to end on a real ad frame, and it removes
+  both manual steps.** One flag produced the API's own `1792x1024` bytes at
+  the `-uncropped` path and an exactly-16:9 `1792x1008` at the plain path.
+  **No downscale to 1280x720 was needed** — `adaptive` takes the ratio, not
+  the pixel count, so a 1792x1008 frame yielded a 1280x720 clip.
+  `60fbea52`'s third hand-crop step was never necessary.
+- **A sound written as `faint` was honoured as inaudible, while the two
+  timed cues landed exactly.** New paragraph in 4. The clip's AUDIO line
+  named three cues; the cap thread and `the short pneumatic tick of the seal
+  parting at 9s` rise off a -43 to -46 dB floor to -30.9 dB at 7.7s and a
+  -21.7 dB peak across 8.8-9.2s, the loudest passage in the clip and exactly
+  where written. `a faint hiss of steam at 11s` produced no measurable event
+  at all — the level *drops* to -41.6 dB at 11.5s — although the steam is
+  plainly visible. **Timing a sound to a visible action works; an intensity
+  adjective is not a volume control.** Also a new row in 6's AVOID record.
+- **A second image-cost measurement at the same pair.** 0.153995 USD against
+  `60fbea52`'s 0.154035 USD, both `openai/gpt-image-2` at `--quality high`,
+  agreeing to within four hundredths of a cent. 15.4 cents is the figure to
+  plan with at that pair — still quoted from the script's own line, label
+  included.
+- **A fourth row in the multi-shot record, and a warning attached to it.**
+  Four 720p first-frame jobs now, three accepted and one rejected; all four
+  wrote every boundary as a hard cut and all four kept every cut. The
+  rejected one hit its stamps more precisely than any of the three accepted
+  ones. `Do not read "every cut landed" as "the clip worked"` is now written
+  next to the table, because that table is exactly the sort of evidence that
+  invites it.
+- ⚠️ **A per-segment scene score was tried as the evidence for all this and
+  it does not support it — the numbers are out and a warning is in.** An
+  earlier draft of this section carried a per-segment score table. It does
+  not reproduce, and worse, the metric ranks this clip almost backwards:
+  measured at native 24fps with the cut frames excluded, the beat where steam
+  visibly rises scores 0.0008 — second from the bottom — while the orbit that
+  never moved scores 0.0039 and a static macro whose only change is a
+  highlight sweeping brushed metal tops the clip at 0.0078. `scene` counts
+  whole-frame pixel churn, so a large low-contrast light sweep beats a small
+  high-contrast physical event, and a near-black set maximises both errors.
+  The conclusion is unchanged because it never rested on those numbers — it
+  rests on the frames and on the verdict — but the table is gone and section
+  7 now says to sample frames instead. The general form is a new section in
+  `ofox-video-core` 1.20.0, `A scene score is pixel churn, not motion`.
+- ⚠️ **The 0.25 scene-detection default finds only two of its four cuts.**
+  The scores descend monotonically through the clip — 0.395, 0.311, 0.216,
+  0.132 — because the shots get more alike as it goes, so 0.15 finds three
+  and 0.10 is the first threshold that finds all four. Scanned once at the
+  default, the clip reads as "half the written cuts were dropped"; in fact
+  all four landed, at 3.000 / 7.542 / 11.042 / 13.250s against stamps of 3 /
+  8 / 11 / 13. The repo-wide record is in `ofox-video-core`'s `Checking the
+  cuts`.
+- **Regression check on the 1.10.1 description change: no change in
+  behaviour.** This run doubled as the first real end-to-end use of the skill
+  after the `description` was rewritten to lead with the key requirement. The
+  creative brief ran normally — three questions in one round, the must-ask
+  photo question first and with no AI option, `Camera` and `Aspect` carrying
+  `Let the AI decide` last, `"premium"` inferred to the Luxury archetype via
+  the skip table without spending a question, and duration, resolution,
+  model, provider and audio all correctly not asked. Template A's skeleton
+  came out intact and the recap, the full prompt and the cost table arrived
+  in one message. Nothing in this section changes because of that; it is
+  recorded so the question does not have to be reopened.
+
+Docs only; no script changes. The prompt templates, flags and defaults are
+unchanged apart from the `SHOWCASE` slot gaining a required physical-event
+element.
+
 ## 1.10.1 — the key requirement, moved to the front of a description that gets truncated
 
 Docs only; no script changes, no advice changed. `description` now **opens**
