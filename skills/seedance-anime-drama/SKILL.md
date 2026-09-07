@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.11.1"
+version: "1.11.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.11.1"
+  version: "1.11.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -745,7 +745,7 @@ Which of the two you get here depends on the brief's ratio, and both are
 correct:
 
 - `--quality high --target-aspect 16:9` resolves `--size` to `1792x1024`,
-  which *is* a measured pair — a plain `ROUGH ~$0.1519`.
+  which *is* a measured pair — a plain `ROUGH ~15.19 cents`.
 - `--quality high --target-aspect 9:16` resolves to `1024x1792`, and
   `--quality medium` for a sheet names no size at all. Neither has ever been
   measured, so both come back as the `UPPER BOUND` at the same 15.4-cent

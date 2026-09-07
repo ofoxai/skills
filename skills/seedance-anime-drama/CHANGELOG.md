@@ -4,6 +4,33 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.11.2 — a $0 sequence that would have rendered as the user's prompt
+
+One line of prose. The image-cost note quoted `ROUGH ~$0.1519`, and a `$0`
+sequence in a `SKILL.md` is expanded with shell-style substitution when the
+skill loads: `$0` is replaced by the invocation's arguments, so that figure
+would have reached the reader as their own prompt text followed by `.1519`.
+CONTRIBUTING rule 8 forbids it for this reason and names the remedy — write
+the amount with no `$0` in it and keep the number identical.
+
+Now reads `ROUGH ~15.19 cents`. Same figure, no substitution.
+
+Scope, checked rather than assumed: this was the **only** `$0` in any
+`SKILL.md` in the repo. There are 14 more in `ofox-video-core/references/`
+and others elsewhere under `references/`, and they are **deliberately left
+alone** — rule 8 ends with "`references/*.md` are read as files rather than
+expanded, so they are unaffected". The repo was bitten by this once before
+(`140ea6a`, in `ofox-image-core`) and that fix used the same cents form.
+
+Worth recording: the first attempt at *this changelog entry* was itself
+mangled by the same mechanism. The heredoc writing it was unquoted, so the
+shell expanded `$0` to the shell's own name before python ever saw it, and
+every mention above came out as `/bin/zsh`. The entry was reverted and
+rewritten with a quoted heredoc. A hazard that catches the note warning
+about it is worth one sentence.
+
+Nothing a caller does changes.
+
 ## 1.11.1 — the key requirement, moved to the front of a description that gets truncated
 
 Docs only; no script changes, no advice changed. `description` now **opens**
