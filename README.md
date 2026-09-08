@@ -112,6 +112,14 @@ Lists every skill in this repo with the agents it is currently linked into, and
 exits non-zero if any are missing. Worth running when an agent insists a skill
 doesn't exist — usually it is right, and this says which ones and why.
 
+It checks user-level (global) skills, which is where the default install puts
+them, and names that scope in its own output. If you installed with
+`--project`, ask for the same scope:
+
+```
+npx ofox-skills doctor --project
+```
+
 If everything is listed but an agent still can't see it, restart the agent;
 most read their skills once at startup.
 

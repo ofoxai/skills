@@ -1,6 +1,6 @@
 {
   "name": "ofox-skills",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Agent skills for the Ofox platform: video generation (Seedance 2.5 short drama, ad creative, product video, anime drama), image generation, SSH-key encrypted secrets, ImageMagick image handling, and static-site deploys to Cloudflare.",
   "keywords": [
     "claude-code",

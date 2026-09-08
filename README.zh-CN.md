@@ -98,6 +98,13 @@ npx ofox-skills doctor
 当某个 agent 坚称某个 skill 不存在时值得跑一下 —— 通常它是对的，
 而这条命令会告诉你是哪些、为什么。
 
+它查的是**用户级（全局）**skill，也就是默认安装的落点，并会在输出里说明
+自己查的是哪个作用域。如果你是用 `--project` 装的，就问同一个作用域：
+
+```
+npx ofox-skills doctor --project
+```
+
 如果全都列出来了但某个 agent 仍然看不到，重启那个 agent ——
 多数 agent 只在启动时读一次 skill 列表。
 

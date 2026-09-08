@@ -27,6 +27,7 @@ Usage:
   npx ofox-skills                        install every skill into every agent
   npx ofox-skills <skill-name>           install one skill
   npx ofox-skills doctor                 check which agents can see these skills
+  npx ofox-skills doctor --project       ...checking this project instead of global
   npx ofox-skills [...] --agent <agent>  target specific agents instead
 
 Defaults: every skill, every agent, user-level, no prompts
@@ -70,10 +71,15 @@ const bail = (result, suggestion) => {
 };
 
 // `doctor` answers the one question people actually ask when a skill is
-// missing: which agents can see these? It reads `skills ls -g` rather than
+// missing: which agents can see these? It reads `skills ls` rather than
 // looking inside ~/.codex/skills, ~/.claude/skills and friends, because the
 // CLI already knows where every agent keeps its skills and that list grows
 // without us.
+//
+// Scope is stated in the output and never guessed at. `skills ls` reports one
+// scope at a time, so a doctor that silently picked global would cheerfully
+// print "all 9 installed" to someone standing in a project that has none —
+// which is the one situation this command exists to catch.
 if (argv[0] === "doctor") {
   const OURS = [
     "ofox-video-core", "ofox-image-core",
@@ -82,10 +88,21 @@ if (argv[0] === "doctor") {
     "hal-vault", "hal-image", "cloudflare-drop",
   ];
 
-  const listed = spawnSync("npx", ["-y", "skills", "ls", "-g"], { encoding: "utf8" });
+  const wantsProject = argv.includes("-p") || argv.includes("--project");
+  const scopeFlag = wantsProject ? "-p" : "-g";
+  const scopeName = wantsProject ? "this project" : "user-level (global)";
+  const scopePossessive = wantsProject ? "this project's" : "your user-level (global)";
+
+  console.log(`Checking ${scopePossessive} skills.`);
+  if (!wantsProject) {
+    console.log("For a project-scoped install, run:  npx ofox-skills doctor --project");
+  }
+  console.log("");
+
+  const listed = spawnSync("npx", ["-y", "skills", "ls", scopeFlag], { encoding: "utf8" });
   if (listed.error) {
     console.error(`ofox-skills: could not run the skills.sh CLI — ${listed.error.message}`);
-    console.error(`  Run it directly instead:  npx skills ls -g`);
+    console.error(`  Run it directly instead:  npx skills ls ${scopeFlag}`);
     process.exit(1);
   }
 
@@ -114,13 +131,13 @@ if (argv[0] === "doctor") {
 
   console.log("");
   if (missing) {
-    console.log(`${missing} of ${OURS.length} skills are not installed, or are installed`);
-    console.log("without being linked into any agent. Install them all:");
-    console.log("  npx ofox-skills");
+    console.log(`${missing} of ${OURS.length} skills are missing from ${scopeName}, or are`);
+    console.log("installed there without being linked into any agent. Install them all:");
+    console.log(`  npx ofox-skills${wantsProject ? " --project" : ""}`);
     process.exit(1);
   }
-  console.log(`All ${OURS.length} skills are installed and linked. If an agent still`);
-  console.log("cannot see one, restart it — most agents read their skills at startup.");
+  console.log(`All ${OURS.length} skills are installed and linked in ${scopeName}. If an`);
+  console.log("agent still cannot see one, restart it — most read their skills at startup.");
   process.exit(0);
 }
 
