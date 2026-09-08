@@ -7,6 +7,16 @@ contracts, real-tool recipes, no leaking of secrets or local paths).
 Skills work with Claude Code, Cursor, Copilot, and 70+ other agents via
 [skills.sh](https://skills.sh).
 
+[简体中文](README.zh-CN.md)
+
+```
+npx ofox-skills          # install every skill into every agent on this machine
+npx ofox-skills doctor    # check which agents can actually see them
+```
+
+No account needed to price a job — see below. Read that part first: four of
+these skills spend real money.
+
 ## The video skills cost real money — here's how to check before you commit
 
 The four `seedance-*` skills call Ofox's video API, which runs
@@ -19,12 +29,18 @@ one — so the per-clip figure is not the whole cost.
 **You can price any of this with no account and no API key.** Install, then:
 
 ```
-bash ~/.claude/skills/ofox-video-core/references/ofox-video.sh \
+bash ~/.agents/skills/ofox-video-core/references/ofox-video.sh \
   generate --dry-run --prompt "two people arguing in a kitchen" \
   --duration 15 --resolution 720p
 # Estimated cost: ~$3.60 (15s x $0.24/s)
 # DRY RUN — nothing was submitted and nothing was billed.
 ```
+
+`~/.agents/skills/` is where the installer keeps the canonical copy, and every
+agent reads it — directly, or through a symlink of its own. Claude Code also
+exposes the same skill at `~/.claude/skills/ofox-video-core/`, but that path
+only exists if Claude Code is installed, so the line above is the one that
+works everywhere.
 
 `--dry-run` validates everything and quotes the price without sending a
 request. `ofox-video.sh models` and `ofox-video.sh providers` likewise need no
@@ -118,17 +134,32 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 ## Skills
 
-| Skill | Group | Description |
-|-------|-------|-------------|
-| [hal-vault](skills/hal-vault/SKILL.md) | Secrets | Agent-safe secret management: SSH-key encrypted storage, tag search, masked-by-default output — store, search, and inject secrets without ever seeing or leaking them. |
-| [hal-image](skills/hal-image/SKILL.md) | Media | Agent-safe image handling: read metadata, resize/crop/composite/montage/watermark/convert with ImageMagick, and losslessly compress before sending so images stay small and transfers don't stall. |
-| [cloudflare-drop](skills/cloudflare-drop/SKILL.md) | Deploy | Publish a static site (a folder of HTML/CSS/JS/images/fonts) to Cloudflare and get a live, shareable `*.workers.dev` URL in seconds. One packaged command built on the Wrangler CLI (Cloudflare's own agent guidance): permanent deploy when `CLOUDFLARE_API_TOKEN` is set, 60-minute claimable preview when not — always says which one you got. Bakes an honest expiry countdown into previews, self-verifies the served content (not just a 200), and fails open rather than inventing a link. |
-| [ofox-video-core](skills/ofox-video-core/SKILL.md) | Video | Shared execution layer for the Ofox video generation API (Seedance 2.5): submits a job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. A library skill every Video skill (`seedance-short-drama`, `seedance-ad-creative`, `seedance-product-video`, `seedance-anime-drama`) builds on — not typically installed on its own unless you're calling the Ofox video API directly with custom parameters. |
-| [seedance-short-drama](skills/seedance-short-drama/SKILL.md) | Video | Generate a realistic-human, dialogue-driven short-drama shot from a script or scene description via the Ofox video API (Seedance 2.5): builds a shot-craft prompt (character appearance, quoted dialogue, scene-cut timing cues), shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
-| [seedance-ad-creative](skills/seedance-ad-creative/SKILL.md) | Video | Generate a cinematic brand/product ad clip from a description or product photo via the Ofox video API (Seedance 2.5): builds a shot-craft prompt (product framing, camera language, brand tone), shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
-| [seedance-product-video](skills/seedance-product-video/SKILL.md) | Video | Generate a clean, catalog-style e-commerce product video from a real product photo via the Ofox video API (Seedance 2.5): plain white-background prompt with a simple turntable/orbit motion (no cinematic camera language), strongly prefers image-to-video for literal product accuracy, shows a cost estimate, then submits, polls, downloads, and reports the real cost. Built on `ofox-video-core`. |
-| [ofox-image-core](skills/ofox-image-core/SKILL.md) | Image | Shared execution layer for the Ofox image generation API (every image model Ofox serves; `--model` defaults to a cheapest-first priority chain that falls back and says so): validates parameters client-side, prices a job with `--dry-run` before spending, sends one synchronous text-to-image request, base64-decodes and saves the result, and reports both the real token usage and the dollar cost, computed from the published rates and verified against a real invoice. A library skill other scenario skills (e.g. a character-reference-image step ahead of video generation) build on — not typically installed on its own unless you're calling the Ofox image API directly with custom parameters. |
-| [seedance-anime-drama](skills/seedance-anime-drama/SKILL.md) | Video | Turn a novel/script excerpt into an anime- or manga-style storyboard shot: writes the character description, generates the image the shot opens on via `ofox-image-core`, then animates it via `ofox-video-core`. `--frame-first-image` is the literal first frame, so a single shot wants an in-scene opening frame — a multi-view character sheet fed there makes the clip open on a grid of thumbnails. For a sequence, a sheet is generated too, once, to fix the design, and each shot gets its own opening frame written from the same description. Asks for approval twice — once for the image, once for the shots — because the shot prompt depends on the image the user has to see first. Built on both `ofox-image-core` and `ofox-video-core`. |
+Nine skills in three groups. The one-liners below are deliberately short — each
+`SKILL.md` carries the full contract, the flags, and the measured costs.
+
+### Video — Ofox video API (Seedance 2.5), bills per second
+
+| Skill | What it does |
+|-------|--------------|
+| [seedance-short-drama](skills/seedance-short-drama/SKILL.md) | Dialogue-driven scenes with real humans. Writes the shot list, quoted lines and delivery notes; one held take or several hard cuts inside one job. |
+| [seedance-ad-creative](skills/seedance-ad-creative/SKILL.md) | Cinematic brand/product ads — hook, showcase, slow-motion climax, hero close. From a product photo or a text description. |
+| [seedance-product-video](skills/seedance-product-video/SKILL.md) | Plain catalog/listing footage — white background, simple orbit or turntable, literal accuracy, no mood lighting. A product photo gives the best fidelity; a text description works for a generic or fictional product. |
+| [seedance-anime-drama](skills/seedance-anime-drama/SKILL.md) | Anime/manga storyboard shots. Generates the character image first, then animates it, so the same character survives across shots. |
+| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **Library.** The execution layer the four above call: submit, poll, download, report the real cost. Install it, don't invoke it — unless you're driving the API directly. |
+
+### Image
+
+| Skill | What it does |
+|-------|--------------|
+| [ofox-image-core](skills/ofox-image-core/SKILL.md) | **Library.** Every image model Ofox serves, `--model` defaulting to a cheapest-first chain that falls back and says so. Prices a job with `--dry-run`, then reports real token usage and dollar cost. |
+
+### Free to run — no Ofox API, no per-call cost
+
+| Skill | What it does |
+|-------|--------------|
+| [hal-vault](skills/hal-vault/SKILL.md) | SSH-key encrypted secret store. Masked by default, so an agent can search and inject a credential without ever printing it. |
+| [hal-image](skills/hal-image/SKILL.md) | ImageMagick recipes — resize, crop, composite, montage, watermark, convert — plus lossless compression before sending, so transfers stay small. Needs `magick` installed. |
+| [cloudflare-drop](skills/cloudflare-drop/SKILL.md) | A folder of static files to a live shareable URL. Permanent when `CLOUDFLARE_API_TOKEN` is set, a 60-minute claimable preview when not — and it says which one you got, verifies the served content, and refuses to invent a link. |
 
 ## Why a monorepo
 
