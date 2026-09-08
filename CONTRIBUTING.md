@@ -122,9 +122,30 @@ A skill name is lowercase kebab-case and matches its directory name, the
    Tests for a skill that calls a paid API must be free by construction: point
    the API base somewhere unroutable so a case that passes validation dies on
    connect rather than spending someone's credits.
-6. Run `npx clawhub skill publish ./skills/<name> --owner ofoxai --dry-run`.
-   It reports the packaged file count, which is the cheapest way to catch a
-   `references/` file that won't ship or a stray file that will.
+6. Dry-run the ClawHub publish:
+
+   ```
+   npx clawhub skill publish ./skills/<name> --owner ofoxai \
+     --version <the frontmatter version> --dry-run --json
+   ```
+
+   `fileCount` in that JSON is the cheapest way to catch a `references/` file
+   that won't ship or a stray file that will. Three things about this command,
+   all measured against CLI v0.23.3 during the 2026-09-08 publish:
+
+   - **`--json` is what prints `fileCount`.** Without it the whole output is
+     one line, `Would publish <slug>@<version>`, and the file check you came
+     for isn't in it.
+   - **Pass `--version` explicitly.** The CLI does not read the frontmatter
+     version; left to itself it publishes `1.0.0` or the registry's next
+     patch. `hal-vault` sitting at `1.1.0` dry-ran as `hal-vault@1.0.0`.
+     Publish nine skills without this flag and nine version histories
+     flatten to 1.0.0.
+   - **A green dry-run does not mean publish will work.** Run unauthenticated
+     it never checks the publisher, so nine passing dry-runs were followed by
+     `Publisher "@ofoxai" not found` on the first real publish. The publisher
+     org has to exist (`npx clawhub publisher create <handle>`), and that is
+     one of a class of preconditions dry-run says nothing about.
 7. Open a PR. Releasing is merging to `main` + a tag if the change is
    user-visible.
 
