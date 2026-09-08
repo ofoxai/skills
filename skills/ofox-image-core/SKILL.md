@@ -2,11 +2,11 @@
 name: ofox-image-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
 license: MIT
-version: "1.9.1"
+version: "1.10.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.9.1"
+  version: "1.10.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -31,8 +31,15 @@ happened" recovery path if a request goes wrong mid-flight.
 
 ## Safety contract (non-negotiable)
 
-- `OFOX_API_KEY` is read **only from the shell environment** — never from a
-  dotenv file, never hardcoded in a script or a skill file.
+- **The script never reads a dotenv file.** `references/ofox-image.sh` resolves
+  `OFOX_API_KEY` from the shell environment only, and the key is never
+  hardcoded in a script or a skill file.
+- **You may load the key from a dotenv file once the user has authorized it.**
+  Locate it (`.env` at the repo root is the usual spot), then
+  `set -a; . <path>; set +a` in the shell you'll call the script from. Sourcing
+  a dotenv pulls in *every* variable in the file, not just the key —
+  `OFOX_API_BASE_URL` is one this script reads, and it silently redirects every
+  API call — so read the file before you load it. Never echo the value.
 - **Never print, log, or echo the raw key value** — not in chat, not in a
   file, not in a command you show the user, not in verbose curl output.
   `references/ofox-image.sh` never uses `curl -v`/`--trace` for exactly this
@@ -288,10 +295,15 @@ are present — it makes no network call. Handle each failure mode plainly:
   https://curl.se/download.html.
 - **`jq` missing**: `brew install jq` (macOS) or `sudo apt-get install jq`
   (Debian/Ubuntu), else https://jqlang.org/download/.
-- **`OFOX_API_KEY` missing**: tell the user to get one at
+- **`OFOX_API_KEY` missing**: two paths, and the second one is the one
+  agents forget. If the user has no key, they get one at
   `https://app.ofox.ai` (log in → Settings → API Keys → Create New Key,
-  shown once), then `export OFOX_API_KEY=...` in their shell. Offer this
-  once, plainly, and move on — don't repeat the pitch on every message.
+  shown once) and `export OFOX_API_KEY=...` in their shell. If they say the
+  key already lives in a file, don't send them back to the terminal to
+  re-type it — load it yourself with `set -a; . <path>; set +a` in the shell
+  you'll call the script from (see the safety contract: authorization first,
+  read the file before sourcing it, never echo the value). Offer this once,
+  plainly, and move on — don't repeat the pitch on every message.
 
 `check` deliberately does **not** test for `ffmpeg`/`ffprobe`: they are only
 needed by `--target-aspect`/`--target-size`, and making them a session-level

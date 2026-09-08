@@ -3,8 +3,10 @@
 #
 # Part of the ofox-video-core skill. Dependencies: bash, curl, jq. Nothing else.
 #
-# OFOX_API_KEY is read ONLY from the shell environment (never from a dotenv
-# file, never hardcoded). The raw key is never printed by this script.
+# OFOX_API_KEY is read from the shell environment. This script never parses a
+# dotenv file and never hardcodes the key; if the key lives in a file, the
+# caller sources it into this script's environment first. The raw key is never
+# printed by this script.
 #
 # Usage:
 #   ofox-video.sh check
@@ -498,6 +500,8 @@ check_api_key() {
     echo "Get a key at ${GET_KEY_URL} (log in -> Settings -> API Keys -> Create New Key)," >&2
     echo "then export it in your shell:" >&2
     echo "  export OFOX_API_KEY=your_key_here" >&2
+    echo "Already have it in a file? Source that file into this shell instead:" >&2
+    echo "  set -a; . /path/to/.env; set +a" >&2
     return 1
   fi
   return 0

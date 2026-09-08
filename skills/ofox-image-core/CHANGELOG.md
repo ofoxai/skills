@@ -4,6 +4,39 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.10.0 — a key the agent was forbidden to load, in a file the user had already pointed at
+
+**Documentation and `check` output only; no change to how a request is built
+or billed.** This one came out of a real session on Codex: the user was
+asked to `export OFOX_API_KEY`, replied that it was already in `.env`, then
+gave the absolute path, then said "just read it" — and was refused all three
+times. Nothing was generated. The refusal was correct per the text: the safety
+contract's first line read *"`OFOX_API_KEY` is read **only from the shell
+environment** — never from a dotenv file"*, and the only reading available to
+an agent is that it may not touch the file even on request.
+
+- **The first safety-contract line is split in two, because it was describing
+  two different actors in one sentence.** The script's constraint is real and
+  stays hard: `ofox-image.sh` parses no dotenv, ever. The agent's constraint was
+  collateral damage from sharing the sentence. It now reads separately: you may
+  load the key from a dotenv file *once the user has authorized it*, via
+  `set -a; . <path>; set +a` in the shell you'll call the script from.
+  Authorization is still the precondition — this is not licence to go hunting
+  for `.env` files nobody mentioned.
+- **The missing-key recovery bullet now carries the same second path.** This is
+  the part that actually mattered. An agent hitting a missing key reads the
+  nearest instruction, not the contract twelve screens up, and that bullet said
+  `export` and only `export`. Splitting the contract alone would have left the
+  dead end exactly where it was.
+- **`check`'s stderr gained one line for the same reason** — the terminal user
+  who runs the script directly was getting the same single-path advice.
+- ⚠️ **New warning, because sourcing a dotenv is not as narrow as it looks.**
+  `set -a; . <path>; set +a` imports *every* variable in the file. One of them
+  is `OFOX_API_BASE_URL`, which `ofox-image.sh` honours (`ofox-image.sh:144`) — a stray value
+  there silently redirects every API call in the session to somewhere else.
+  Read the file before you source it. The `.env` that prompted this entry
+  contained exactly that variable.
+
 ## 1.9.1 — the key requirement, moved to the front of a description that gets truncated
 
 Docs only; no script changes, no advice changed. `description` now **opens**
