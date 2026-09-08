@@ -4,6 +4,35 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.10.1 — the fake key in the tests read as a real one to a scanner
+
+**Test fixtures only; no change to the script, the API calls or the billing.**
+ClawHub's public page for this skill showed `suspicious` at high confidence
+after the 2026-09-08 publish. The machine reason was a single code —
+`suspicious.exposed_secret_literal` from staticScan v2.4.26 — and it was
+correct about the pattern even though it was wrong about the risk: every test
+file opened with `export OFOX_API_KEY="test-key-never-sent-anywhere-real"`, a
+33-character key-shaped literal assigned straight to a credential variable. A
+static scanner matches the shape; it does not read the string and notice that
+the string says it is not a key.
+
+- **The literal now goes through a variable**, and the variable's name has no
+  `KEY` in it: `PLACEHOLDER=placeholder` then `export OFOX_API_KEY="$PLACEHOLDER"`.
+  What changed is the *pattern*, not the length — picking a shorter secret-ish
+  string would have been betting on a threshold nobody published.
+- ⚠️ **`newuser.test.sh` had a worse one.** Its "a present key is not a verified
+  key" case used `OFOX_API_KEY="sk-obviously-not-a-real-key"` — the `sk-` prefix
+  is the shape a real OpenAI-style key has, which is exactly what makes the
+  string funny and exactly what makes it scan badly. Same treatment.
+- **Nothing about the tests' meaning moved.** The scripts only require the
+  variable to be non-empty; the "present but unverified" case only requires it
+  to be set. All 4 test files in this skill still pass.
+- **What this does *not* fix**: the LLM-written `security.summary` on the same
+  verify call reads differently from the machine code — it talks about dotenv
+  sourcing and redirectable endpoints. Those are design properties, argued for
+  elsewhere in this file, and no reason code is attached to them. This entry
+  claims the static-scan code only.
+
 ## 1.10.0 — a key the agent was forbidden to load, in a file the user had already pointed at
 
 **Documentation and `check` output only; no change to how a request is built

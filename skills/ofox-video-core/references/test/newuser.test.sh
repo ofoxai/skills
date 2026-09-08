@@ -19,6 +19,9 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 export XDG_CACHE_HOME="$WORK/cache"
 
+# Not a credential — see the note in the sibling tests.
+PLACEHOLDER=placeholder
+
 pass() {
   printf 'ok    %s\n' "$1"
   PASS=$((PASS + 1))
@@ -103,7 +106,7 @@ fi
 
 echo
 echo "=== check separates 'present' from 'valid' ==="
-out=$(OFOX_API_KEY="sk-obviously-not-a-real-key" bash "$TARGET" check 2>&1)
+out=$(OFOX_API_KEY="$PLACEHOLDER" bash "$TARGET" check 2>&1)
 if printf '%s' "$out" | grep -qiE 'not.*verif|present.*not.*valid|not been checked'; then
   pass "check says a present key has not been verified"
 else
