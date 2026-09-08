@@ -62,48 +62,59 @@ resolution rather than producing a different shot.
 
 ## Install
 
-Install everything:
-
 ```
-npx skills add ofoxai/skills
+npx ofox-skills
 ```
 
-**For the `seedance-*` skills, install the whole repo rather than a single
-skill.** Each scenario skill delegates execution to `ofox-video-core` (and
-`seedance-anime-drama` also to `ofox-image-core`), referencing it by a
-relative path that only resolves when both are installed side by side. There
-is no dependency field in the skills.sh manifest format to declare that with,
-so installing one on its own can leave you with:
+Every skill, into every agent on your machine, at user level. That combination
+is the default because the other combinations break quietly:
+
+- **Every agent**, because `skills add` on its own asks you interactively which
+  agents to install to — and when an *agent* is the one running it, skips the
+  question and installs only to the agent it detects. Either way the agents you
+  didn't pick get nothing, and you don't find out until one of them can't see a
+  skill you know you installed.
+- **Every skill**, because each scenario skill reaches its execution layer
+  (`ofox-video-core`, and for `seedance-anime-drama` also `ofox-image-core`) by
+  relative path, which only resolves when they sit side by side. The skills.sh
+  manifest format has no dependency field to declare that with, so installing
+  one alone can leave you with:
+
+  ```
+  bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
+  ```
+
+  That means the core skill is missing, not that the skill is broken.
+
+### Check what your agents can actually see
 
 ```
-bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
+npx ofox-skills doctor
 ```
 
-That means the core skill is missing, not that the skill is broken — install
-the repo and it resolves.
+Lists every skill in this repo with the agents it is currently linked into, and
+exits non-zero if any are missing. Worth running when an agent insists a skill
+doesn't exist — usually it is right, and this says which ones and why.
 
-Single-skill installs, optionally scoped to one agent with `--agent`:
+If everything is listed but an agent still can't see it, restart the agent;
+most read their skills once at startup.
+
+### Narrower installs
+
+Any flag you pass overrides the matching default:
 
 ```
-npx skills add ofoxai/skills@<skill-name> --agent claude-code
-npx skills add ofoxai/skills@<skill-name> --agent codex
-npx skills add ofoxai/skills@<skill-name> --agent opencode
-npx skills add ofoxai/skills@<skill-name> --agent '*'   # all supported agents
+npx ofox-skills --agent codex               # one agent, still every skill
+npx ofox-skills seedance-short-drama        # one skill, still every agent
+npx ofox-skills --project                   # this project instead of user level
 ```
 
-The four user-facing scenario skills:
+The underlying CLI works directly too, if you'd rather not go through this
+package — but then the defaults are yours to supply:
 
-- `seedance-short-drama`
-- `seedance-ad-creative`
-- `seedance-product-video`
-- `seedance-anime-drama`
-
-`ofox-video-core` and `ofox-image-core` are the library skills they build on.
-You don't invoke these directly for a normal request, but they do need to be
-present — see the note above.
-
-The same `--agent`-scoped pattern works for `hal-vault`, `hal-image` and
-`cloudflare-drop`.
+```
+npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
+```
 
 ## Skills
 
