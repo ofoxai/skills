@@ -66,6 +66,11 @@ skill 会检查这两个并告诉你缺哪个。
 于是「刚那条不错，给我出个 1080p 的」就等于重新摇一次骰子。记下来，它就是
 把同一个镜头换个分辨率重渲，而不是换一个镜头。
 
+想看成品长什么样：ofox.ai 的
+[Seedance 2.5 提示词与案例页](https://ofox.ai/zh/seedance-2-5-prompts?utm_source=github&utm_medium=case&utm_campaign=skills)
+公开了一批成片，每条附提交的 prompt 与参数；其中用这几个 skill 生成的那些，
+还带 job id 和实际账单。
+
 ## 安装
 
 ```

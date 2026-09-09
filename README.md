@@ -76,6 +76,12 @@ reports it nowhere, so "that take was good, give me it at 1080p" means rolling
 the dice again. Recorded, it re-renders the same shot at a different
 resolution rather than producing a different shot.
 
+To see what this looks like at the other end, the
+[Seedance 2.5 prompts and examples](https://ofox.ai/seedance-2-5-prompts?utm_source=github&utm_medium=case&utm_campaign=skills)
+page on ofox.ai publishes finished clips with the prompt and parameters behind
+each one — and, for the clips generated with these skills, the job id and the
+real bill.
+
 ## Install
 
 ```
