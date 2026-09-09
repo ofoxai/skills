@@ -16,9 +16,10 @@
 // otherwise (the caller then delivers the file — it must NOT reflexively ask for
 // a token; that discipline lives in hal-html, not here).
 
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, existsSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, existsSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
+import { stageOtp, verifyOtp } from './otp.mjs';
 import { injectCountdown } from './inject-countdown.mjs';
 import { recordDeploy, renew as renewDeploy, idFromUrl } from './drop-index.mjs';
 import { resolveTtlSeconds, honestTtl, formatTtl, TEMPORARY_HARD_TTL_SECONDS } from './ttl.mjs';
@@ -222,11 +223,12 @@ function sanitizeName(s) {
 
 /** Minimal flag parser for the CLI (`--ttl 30m`, `--name x`, `--permanent`). */
 export function parseArgs(argv) {
-  const out = { _: [], ttl: null, name: null, permanent: false, pauseOAuth: true, noCountdown: false };
+  const out = { _: [], ttl: null, name: null, permanent: false, pauseOAuth: true, noCountdown: false, otp: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--ttl') out.ttl = argv[++i];
     else if (a === '--name') out.name = argv[++i];
+    else if (a === '-otp' || a === '--otp') out.otp = true;
     else if (a === '--permanent') out.permanent = true;
     else if (a === '--no-pause-oauth') out.pauseOAuth = false;
     else if (a === '--no-countdown') out.noCountdown = true;
@@ -251,6 +253,9 @@ export function parseArgs(argv) {
  */
 export async function deployPage(htmlPath, opts = {}) {
   const mode = opts.permanent ? 'permanent' : detectAuthMode().mode;
+  if (opts.otp && mode !== 'permanent') {
+    throw new Error('-otp requires permanent hosting. Use --permanent with Cloudflare authentication; temporary previews do not support OTP.');
+  }
 
   // A permanent deploy has no expiry, so it gets no countdown at all — a countdown
   // on a link that never dies is the same dishonesty as showing 3h on a link
@@ -267,23 +272,44 @@ export async function deployPage(htmlPath, opts = {}) {
   // temporary preview is unchanged and EXPIRY_EPOCH is still printed.
   const pageExpiry = opts.noCountdown ? null : expiryEpoch;
   const { stagedDir, indexPath } = stageForDrop(htmlPath, pageExpiry);
-  const res = deployWithWrangler(stagedDir, {
-    name: workerNameFrom(htmlPath, opts.name),
-    compatibilityDate: todayISO(),
-    mode,
-    allowPauseOAuth: opts.pauseOAuth !== false,
-  });
-  if (!res.url) {
-    return { url: null, claim: null, expiryEpoch, mode, verified: false, ttlNote, raw: res.raw };
-  }
+  const name = workerNameFrom(htmlPath, opts.name);
+  const compatibilityDate = todayISO();
+  let protection;
+  try {
+    protection = opts.otp ? stageOtp(stagedDir, { name, compatibilityDate }) : null;
+    const res = deployWithWrangler(stagedDir, {
+      configPath: protection?.configPath,
+      name,
+      compatibilityDate,
+      mode,
+      allowPauseOAuth: opts.pauseOAuth !== false,
+    });
+    if (!res.url) {
+      return { url: null, claim: null, expiryEpoch, mode, verified: false, ttlNote,
+        ...(!opts.otp ? { raw: res.raw } : {}) };
+    }
 
-  // Single verification exit: edge-propagation 200 poll, THEN content check —
-  // a 200 that serves a blank/truncated husk is still a failure (A6).
-  const stagedHtml = readFileSync(indexPath, 'utf8');
-  const live = await verifyWithBackoff(res.url, { probe: opts.probe, sleepFn: opts.sleepFn });
-  const verified =
-    live && (await verifyContent(res.url, { sourceHtml: stagedHtml, fetchFn: opts.fetchFn }));
-  return { url: res.url, claim: res.claim, expiryEpoch, mode, verified, ttlNote, indexPath };
+    const stagedHtml = readFileSync(indexPath, 'utf8');
+    // Ride out propagation, expecting the gate's 401 for protected deployments.
+    const probe = protection ? async url => {
+      const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(20000) });
+      await response.body?.cancel();
+      return response.status === 401 ? 200 : 0;
+    } : opts.probe;
+    const live = await verifyWithBackoff(res.url, { probe, sleepFn: opts.sleepFn });
+    const verified = live && (protection
+      ? await verifyOtp(res.url, { otpCode: protection.otpCode, sourceHtml: stagedHtml })
+      : await verifyContent(res.url, { sourceHtml: stagedHtml, fetchFn: opts.fetchFn }));
+    return { url: res.url, claim: res.claim, expiryEpoch, mode, verified, ttlNote,
+      ...(!protection ? { indexPath } : {}),
+      ...(protection && verified ? { otpCode: protection.otpCode } : {}) };
+  } catch (error) {
+    // Wrangler can include server-side variable values in diagnostics.
+    if (opts.otp) throw new Error('Protected deployment failed. Check Cloudflare authentication and Durable Object permissions; no public fallback was attempted.');
+    throw error;
+  } finally {
+    if (opts.otp) rmSync(dirname(stagedDir), { recursive: true, force: true });
+  }
 }
 
 /**
@@ -307,6 +333,7 @@ export async function deployHtmlString(html, opts = {}) {
 
   // Injected upload seam (tests / alternate backends): upload the raw html,
   // then run the exact same verification exit as the real path below.
+  if (opts.uploadFn && opts.otp) throw new Error('OTP requires the protected Worker deployment backend.');
   if (opts.uploadFn) {
     const { url, claim } = await opts.uploadFn(html);
     if (!url) throw new Error('deployHtmlString: no url returned');
@@ -339,13 +366,17 @@ export async function deployHtmlString(html, opts = {}) {
 }
 
 // CLI entry — two modes:
-//   node deploy.mjs <page.html> [--ttl 30m] [--name n] [--permanent]
+//   node deploy.mjs <page.html> [--ttl 30m] [--name n] [--permanent] [-otp]
 //   node deploy.mjs renew <url|id> [--ttl 30m]
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = parseArgs(process.argv.slice(2));
   const [arg1, arg2] = args._;
 
   if (arg1 === 'renew') {
+    if (args.otp) {
+      console.error('-otp is only supported for permanent deployments, not temporary renewal.');
+      process.exit(2);
+    }
     if (!arg2) {
       console.error('usage: node deploy.mjs renew <url|id> [--ttl 30m]');
       process.exit(2);
@@ -384,7 +415,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else {
     const htmlPath = arg1;
     if (!htmlPath || !existsSync(htmlPath)) {
-      console.error('usage: node deploy.mjs <page.html> [--ttl 30m] [--name n] [--permanent]');
+      console.error('usage: node deploy.mjs <page.html> [--ttl 30m] [--name n] [--permanent] [-otp]');
       console.error('       node deploy.mjs renew <url|id> [--ttl 30m]');
       process.exit(2);
     }
@@ -422,6 +453,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       }
       console.log('RESULT_URL', res.url);
       console.log('MODE', res.mode);
+      if (res.otpCode) console.log('OTP_CODE', res.otpCode);
       if (res.mode === 'permanent') {
         console.log('EXPIRY none — deployed to your Cloudflare account; this link is permanent');
       } else {

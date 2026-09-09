@@ -11,7 +11,7 @@ test('parseArgs: defaults — countdown on, oauth pause on', () => {
     name: null,
     permanent: false,
     pauseOAuth: true,
-    noCountdown: false,
+    noCountdown: false, otp: false,
   });
 });
 

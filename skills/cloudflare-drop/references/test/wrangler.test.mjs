@@ -154,3 +154,20 @@ test('OAuth is left untouched when the pause is not opted into', () => {
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('OAuth pause never overwrites a pre-existing backup', () => {
+  const home = tempHome();
+  const cfg = join(home, 'config', 'default.toml');
+  const parked = `${cfg}.paused-by-cloudflare-drop`;
+  writeFileSync(cfg, 'current');
+  writeFileSync(parked, 'previous');
+  try {
+    assert.throws(() => deployWithWrangler('/unused', {
+      name: 'test', compatibilityDate: '2026-09-09', mode: 'temporary',
+      allowPauseOAuth: true, env: { WRANGLER_HOME: home },
+      run() { assert.fail('must not deploy'); },
+    }), /backup already exists/);
+    assert.equal(readFileSync(cfg, 'utf8'), 'current');
+    assert.equal(readFileSync(parked, 'utf8'), 'previous');
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});

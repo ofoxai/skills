@@ -2,6 +2,18 @@
 
 All notable changes to the **cloudflare-drop** skill. Versioning follows SemVer.
 
+## 2.3.0 — Optional server-side access code
+
+- Add `-otp` / `--otp` for permanent deployments. Temporary mode and preview
+  renewal reject the flag before uploading; existing unprotected flows are unchanged.
+- Gate all HTML/assets through a Worker with signed one-hour sessions and a
+  persistent Durable Object guessing budget. Access codes never enter public assets.
+- Add a responsive, accessible six-digit verification screen with paste/autofill,
+  error, busy and rate-limit states. The public skill UI remains English.
+- Verify unauthorized routes, wrong codes and exact authenticated content before
+  reporting a protected URL. Remove private staging material after deployment.
+- Refuse to overwrite an existing OAuth backup during temporary deployment.
+
 ## 2.2.0 — English-only copy, ClawHub metadata
 
 - **Breaking for readers, not for callers**: the countdown banner and

@@ -1,15 +1,15 @@
 ---
 name: cloudflare-drop
-description: Publish a static site (a folder of HTML/CSS/JS/images/fonts) to Cloudflare and get back a live, shareable URL in seconds. Use when you have a finished static page or site and need to hand someone a link they can open on any device — reports, mockups, one-off landing pages, AI-generated HTML, "give me a link I can share". Runs one packaged command (references/deploy.mjs) built on the Wrangler CLI, which is what Cloudflare's own agent guidance tells agents to use. Deploys permanently to your Cloudflare account when credentials are present, or as a 60-minute claimable preview when they are not — and says plainly which one you got. Bakes an expiry countdown into previews (matched to the real 60-minute limit; --ttl to shorten it), and fails open (deliver the file) rather than invent a link.
+description: Publish a static site (a folder of HTML/CSS/JS/images/fonts) to Cloudflare and get back a live, shareable URL in seconds. Use when you have a finished static page or site and need to hand someone a link they can open on any device — reports, mockups, one-off landing pages, AI-generated HTML, "give me a link I can share". Runs one packaged command (references/deploy.mjs) built on the Wrangler CLI, which is what Cloudflare's own agent guidance tells agents to use. Deploys permanently to your Cloudflare account when credentials are present, or as a 60-minute claimable preview when they are not — and says plainly which one you got. Bakes an expiry countdown into previews (matched to the real 60-minute limit; --ttl to shorten it), and supports optional server-side six-digit access-code protection with -otp for permanent links only. Unprotected delivery may fall back to a file; protected delivery fails closed.
 license: MIT
-version: "2.2.0"
+version: "2.3.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/cloudflare-drop
 metadata:
   author: ofoxai
-  version: "2.2.0"
+  version: "2.3.0"
   openclaw:
     requires:
-      bins: [node, npx]
+      bins: [node, npm, npx, curl]
     envVars:
       - name: CLOUDFLARE_API_TOKEN
         required: false
@@ -35,6 +35,21 @@ from its edge at `https://<name>.<account>.workers.dev` in seconds.
 
 The mode is detected, not guessed, and always reported back — so you never hand
 someone a link believing it's permanent when it dies in an hour.
+
+## Protection contract
+
+When the user asks for password protection, use `-otp` on a **permanent** deployment.
+Temporary previews and `renew` reject it before upload. Never omit the flag on retry,
+change hosting mode silently, embed the report behind a client-side password form,
+or fall back to publishing an unprotected copy. An explicit `--permanent` uses the
+operator's Cloudflare account and requires authentication. Without `-otp`, behavior
+is unchanged.
+
+Stage only intended deliverables in a dedicated input folder: the existing helper
+copies sibling files too. Keep CSV exports, credentials, source repositories and
+unrelated reports out of that folder. A protected share authorizes access to **all**
+its staged assets after login. Use a fresh worker name when moving previously public
+content behind a password; old downloads and cached public copies cannot be revoked.
 
 ## The one command
 
@@ -74,9 +89,45 @@ sentinel — a blank/truncated page that still 200s fails as `URL_UNVERIFIED`.
 |---|---|
 | `--ttl 30m` | countdown window shown on the page. Accepts `s`/`m`/`h`/`d`; a bare number is minutes. Default **60m** (the real preview lifetime), or `$CLOUDFLARE_DROP_TTL`. Values above 60m are clamped — see below. |
 | `--name my-report` | worker name (becomes the subdomain). Defaults to a sanitized filename. |
+| `-otp` / `--otp` | generate a random six-digit access code; **permanent links only**. Prints `OTP_CODE` separately after verification. |
 | `--permanent` | force a normal (account) deploy. Requires credentials. |
 | `--no-pause-oauth` | never touch the local OAuth file (see below). |
 | `--no-countdown` | skip baking the countdown into the page. The real expiry is unchanged — a temporary preview still dies at 60 minutes and the CLI still prints `EXPIRY_EPOCH`; only the on-page banner is omitted. Use when the reader finds the banner noisy and you (the operator) own the claim-before-expiry responsibility. |
+
+## Optional six-digit access code
+
+```bash
+node references/deploy.mjs ./publish/report.html --permanent -otp --name private-report
+```
+
+Requires an authenticated Cloudflare account supporting Workers Static Assets and
+SQLite Durable Objects. Wrangler provisions the limiter through a migration; the
+token must also permit that deployment. No token is required for ordinary temporary
+previews. Check `node --version` and `npm --version` (install Node.js with npm if
+missing); Wrangler is obtained automatically via npm.
+
+After successful protected verification, deliver `RESULT_URL` and `OTP_CODE` as
+separate values to the requesting user. Never put the code in a URL, report, screenshot,
+public log, claim link, or index. Do not guess or log it again on failure. This flag
+means a **shared access code**, not email/SMS delivery, TOTP, or a single-use code:
+readers may reuse it, and every protected redeploy generates a new code and invalidates
+old sessions. Permanent deployments do not use preview renewal or archival.
+
+All HTML and static assets pass through server-side authentication before their bytes
+are sent. Anonymous responses contain only the standalone verification screen; viewing
+source cannot reveal the report. Correct input sets a signed, host-bound `HttpOnly`,
+`Secure`, `SameSite=Strict` cookie for one hour. Responses are `private, no-store`.
+The Worker enforces a durable 15-minute attempt budget: 10 per client IP and 100
+across the deployment (including successful logins). Limits can temporarily block
+legitimate readers sharing an IP; there is no insecure fallback. Once authorized,
+a reader can view source and save content normally.
+
+Protected verification checks anonymous paths, rejects a wrong code, and checks the
+exact original HTML with an authenticated session. If verification or deployment fails,
+report failure and keep the local deliverable; do not publish it without protection.
+Server configuration lives outside the assets directory in a private temporary folder,
+which is removed after the protected deployment attempt. Technical review and tests:
+[OTP security review](references/otp-security.md).
 
 ## The TTL is a display, not a lifetime
 

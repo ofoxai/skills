@@ -13,7 +13,7 @@
     },
     {
       "title": "Deploy",
-      "description": "Publish static sites to shareable URLs. cloudflare-drop runs one packaged command built on the Wrangler CLI: permanent deploy to your Cloudflare account when CLOUDFLARE_API_TOKEN is set, or a 60-minute claimable *.workers.dev preview when not — always stating which you got, baking an honest expiry countdown into previews, self-verifying the served content (not just a 200), and failing open rather than inventing a link.",
+      "description": "Publish static sites to shareable URLs. cloudflare-drop runs one packaged command built on the Wrangler CLI: permanent deploy to your Cloudflare account when CLOUDFLARE_API_TOKEN is set, or a 60-minute claimable *.workers.dev preview when not — always stating which you got, baking an honest expiry countdown into previews, self-verifying the served content (not just a 200), and refusing to invent a link. Optional -otp adds server-side six-digit access-code protection for permanent links only and fails closed.",
       "skills": ["cloudflare-drop"]
     },
     {

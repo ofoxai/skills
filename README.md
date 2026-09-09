@@ -167,7 +167,7 @@ Nine skills in three groups. The one-liners below are deliberately short — eac
 |-------|--------------|
 | [hal-vault](skills/hal-vault/SKILL.md) | SSH-key encrypted secret store. Masked by default, so an agent can search and inject a credential without ever printing it. |
 | [hal-image](skills/hal-image/SKILL.md) | ImageMagick recipes — resize, crop, composite, montage, watermark, convert — plus lossless compression before sending, so transfers stay small. Needs `magick` installed. |
-| [cloudflare-drop](skills/cloudflare-drop/SKILL.md) | A folder of static files to a live shareable URL. Permanent when `CLOUDFLARE_API_TOKEN` is set, a 60-minute claimable preview when not — and it says which one you got, verifies the served content, and refuses to invent a link. |
+| [cloudflare-drop](skills/cloudflare-drop/SKILL.md) | A folder of static files to a live shareable URL. Permanent when `CLOUDFLARE_API_TOKEN` is set, a 60-minute claimable preview when not — and it says which one you got, verifies the served content, and refuses to invent a link. Optional `-otp` protects permanent links with a server-side six-digit access code. |
 
 ## Why a monorepo
 

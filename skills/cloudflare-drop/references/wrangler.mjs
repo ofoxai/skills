@@ -84,7 +84,7 @@ export function deployWithWrangler(siteDir, opts = {}) {
   const detected = opts.mode ? { mode: opts.mode } : detectAuthMode({ env });
   const mode = detected.mode;
 
-  const args = ['exec', '--yes', 'wrangler@latest', '--', 'deploy', siteDir,
+  const args = ['exec', '--yes', 'wrangler@latest', '--', 'deploy', ...(opts.configPath ? ['--config', opts.configPath] : [siteDir]),
     '--name', name, '--compatibility-date', compatibilityDate];
   if (mode === 'temporary') args.push('--temporary');
 
@@ -95,6 +95,7 @@ export function deployWithWrangler(siteDir, opts = {}) {
   const cfg = oauthConfigPath(env);
   const paused = mode === 'temporary' && allowPauseOAuth && existsSync(cfg);
   const parked = `${cfg}.paused-by-cloudflare-drop`;
+  if (paused && existsSync(parked)) throw new Error('OAuth backup already exists; refusing to overwrite it.');
   if (paused) renameSync(cfg, parked);
   let raw = '';
   try {
