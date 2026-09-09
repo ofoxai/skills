@@ -146,6 +146,18 @@ A skill name is lowercase kebab-case and matches its directory name, the
      `Publisher "@ofoxai" not found` on the first real publish. The publisher
      org has to exist (`npx clawhub publisher create <handle>`), and that is
      one of a class of preconditions dry-run says nothing about.
+   - **The scanner reads `CHANGELOG.md` too, and `skill verify` will not tell
+     you where a hit is.** `suspicious.exposed_secret_literal` fires on any
+     key-shaped literal assigned to a credential-named variable, in any
+     shipped file — including a changelog entry that quotes the literal it
+     just removed (`ofox-video-core` 1.21.1 shipped exactly that and had to be
+     followed by 1.21.2). `verify` returns only the reason code; the file and
+     line are in `clawhub scan download <slug> --version <v>`, under
+     `static-analysis.json` → `findings[]`. Local folder scans were removed
+     from the CLI, so every attempt at a fix costs a published patch version:
+     read the stored report first, grep the whole skill directory for the
+     literal's text before bumping, and describe a removed secret-shaped
+     string without reproducing it.
 7. Open a PR. Releasing is merging to `main` + a tag if the change is
    user-visible.
 
