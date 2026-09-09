@@ -188,6 +188,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the bar every skill must clear.
 
 ## Related
 
+- [ofoxai/awesome-seedance-2.5](https://github.com/ofoxai/awesome-seedance-2.5) —
+  the Seedance 2.5 prompt and clip collection: official and community cases
+  plus the ones generated with these skills, every case with its prompt and
+  parameters, the self-run ones with the bill. The prompts page on ofox.ai
+  is its on-site mirror.
 - [ofoxai/hal-vault](https://github.com/ofoxai/hal-vault) — the SSH-key
   encrypted secret store the `hal-vault` skill drives (Go CLI, built on
   [age](https://github.com/FiloSottile/age)).

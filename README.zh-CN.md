@@ -169,6 +169,9 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 ## 相关项目
 
+- [ofoxai/awesome-seedance-2.5](https://github.com/ofoxai/awesome-seedance-2.5) ——
+  Seedance 2.5 的 prompt 与成片合集：官方案例、社区案例，以及用这几个 skill 生成、
+  带账单的案例，每条附 prompt 与参数。ofox.ai 上的 prompts 页就是它的站内镜像。
 - [ofoxai/hal-vault](https://github.com/ofoxai/hal-vault) —— `hal-vault` skill
   驱动的那个 SSH 密钥加密密钥库（Go CLI，基于
   [age](https://github.com/FiloSottile/age)）。
