@@ -4,6 +4,23 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.21.2 — the changelog for 1.21.1 quoted the literal it had just removed
+
+**Changelog text only; no change to the script, the tests, the API calls or
+the billing.** The 1.21.1 entry below originally explained the scanner finding
+by quoting the old test-fixture literal verbatim, so the published 1.21.1
+still carried `suspicious.exposed_secret_literal`. ClawHub's stored scan report
+(`clawhub scan download`, staticScan v2.4.26) placed it at `CHANGELOG.md:14`,
+the line of the quote. A key-shaped string in prose explaining its own removal
+is still a key-shaped string to the scanner.
+
+- **The 1.21.1 entry is reworded in place** to describe the literal without
+  reproducing it. This file ships in the bundle and is scanned like any other
+  file; nothing key-shaped belongs in it, in any version's entry.
+- **What this does *not* fix**: nothing else. The same stored report lists no
+  other static-scan code for this skill, and its LLM review (skillSpector 2.3.5)
+  already rated it `clean` / SAFE.
+
 ## 1.21.1 — the fake key in the tests read as a real one to a scanner
 
 **Test fixtures only; no change to the script, the API calls or the billing.**
@@ -11,19 +28,19 @@ ClawHub's public page for this skill showed `suspicious` at high confidence
 after the 2026-09-08 publish. The machine reason was a single code —
 `suspicious.exposed_secret_literal` from staticScan v2.4.26 — and it was
 correct about the pattern even though it was wrong about the risk: every test
-file opened with `export OFOX_API_KEY="test-key-never-sent-anywhere-real"`, a
-33-character key-shaped literal assigned straight to a credential variable. A
-static scanner matches the shape; it does not read the string and notice that
-the string says it is not a key.
+file opened by exporting `OFOX_API_KEY` with a 33-character hyphenated literal
+written inline — one whose text says, in words, that it is not a real key. A
+static scanner matches the shape of the assignment; it does not read the value
+and take its word for it.
 
 - **The literal now goes through a variable**, and the variable's name has no
   `KEY` in it: `PLACEHOLDER=placeholder` then `export OFOX_API_KEY="$PLACEHOLDER"`.
   What changed is the *pattern*, not the length — picking a shorter secret-ish
   string would have been betting on a threshold nobody published.
 - ⚠️ **`newuser.test.sh` had a worse one.** Its "a present key is not a verified
-  key" case used `OFOX_API_KEY="sk-obviously-not-a-real-key"` — the `sk-` prefix
-  is the shape a real OpenAI-style key has, which is exactly what makes the
-  string funny and exactly what makes it scan badly. Same treatment.
+  key" case set the variable inline to a joke value carrying the `sk-` prefix a
+  real OpenAI-style key has — which is exactly what made the string funny and
+  exactly what made it scan badly. Same treatment.
 - **Nothing about the tests' meaning moved.** The scripts only require the
   variable to be non-empty; the "present but unverified" case only requires it
   to be set. All 11 test files in this skill still pass.

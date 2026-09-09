@@ -4,6 +4,34 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.10.2 — the changelog for 1.10.1 quoted the literal it had just removed
+
+**Changelog text only; no change to the script, the tests, the API calls or
+the billing.** The 1.10.1 entry below originally explained the scanner finding
+by quoting the old test-fixture literal verbatim, so the published 1.10.1
+still carried `suspicious.exposed_secret_literal`. ClawHub's stored scan report
+(`clawhub scan download`, staticScan v2.4.26) placed it at `CHANGELOG.md:14`,
+the line of the quote. A key-shaped string in prose explaining its own removal
+is still a key-shaped string to the scanner.
+
+- **The 1.10.1 entry is reworded in place** to describe the literal without
+  reproducing it. This file ships in the bundle and is scanned like any other
+  file; nothing key-shaped belongs in it, in any version's entry.
+- **What this does *not* fix, and will not**: the same stored report carries a
+  second static code for this skill, `suspicious.potential_exfiltration`, at
+  `references/ofox-image.sh:302`, with the message that the script "base64-encodes
+  a local file and sends it over the network". Line 302 is the decode helper: it
+  turns the API's base64 *response* into the image file on disk. Nothing local
+  is encoded on that path and nothing is sent. It is a false match on `base64`
+  and `curl` sharing one script, and rewriting a correct decode to dodge an
+  unpublished heuristic is the bet the 1.10.1 entry declined to make. It stays.
+- **Also left alone**: the LLM review (skillSpector 2.3.5) rates the
+  refusal-handling section of `references/api-params.md` HIGH for reporting
+  that a prompt refused on one model passed unchanged on another. That section
+  records a measured result with a bill attached; it stays as written. Expect
+  the public page to keep showing `suspicious` for this skill on those two
+  grounds — this entry says so rather than claiming otherwise.
+
 ## 1.10.1 — the fake key in the tests read as a real one to a scanner
 
 **Test fixtures only; no change to the script, the API calls or the billing.**
@@ -11,19 +39,19 @@ ClawHub's public page for this skill showed `suspicious` at high confidence
 after the 2026-09-08 publish. The machine reason was a single code —
 `suspicious.exposed_secret_literal` from staticScan v2.4.26 — and it was
 correct about the pattern even though it was wrong about the risk: every test
-file opened with `export OFOX_API_KEY="test-key-never-sent-anywhere-real"`, a
-33-character key-shaped literal assigned straight to a credential variable. A
-static scanner matches the shape; it does not read the string and notice that
-the string says it is not a key.
+file opened by exporting `OFOX_API_KEY` with a 33-character hyphenated literal
+written inline — one whose text says, in words, that it is not a real key. A
+static scanner matches the shape of the assignment; it does not read the value
+and take its word for it.
 
 - **The literal now goes through a variable**, and the variable's name has no
   `KEY` in it: `PLACEHOLDER=placeholder` then `export OFOX_API_KEY="$PLACEHOLDER"`.
   What changed is the *pattern*, not the length — picking a shorter secret-ish
   string would have been betting on a threshold nobody published.
 - ⚠️ **`newuser.test.sh` had a worse one.** Its "a present key is not a verified
-  key" case used `OFOX_API_KEY="sk-obviously-not-a-real-key"` — the `sk-` prefix
-  is the shape a real OpenAI-style key has, which is exactly what makes the
-  string funny and exactly what makes it scan badly. Same treatment.
+  key" case set the variable inline to a joke value carrying the `sk-` prefix a
+  real OpenAI-style key has — which is exactly what made the string funny and
+  exactly what made it scan badly. Same treatment.
 - **Nothing about the tests' meaning moved.** The scripts only require the
   variable to be non-empty; the "present but unverified" case only requires it
   to be set. All 4 test files in this skill still pass.
