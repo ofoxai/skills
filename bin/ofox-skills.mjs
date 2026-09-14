@@ -46,7 +46,7 @@ relative path, which only resolves when they are installed side by side.
 Skills in this repo:
   Video    ofox-video-core, seedance-short-drama, seedance-ad-creative,
            seedance-product-video, seedance-anime-drama, keyframe-animation,
-           product-demo
+           product-demo, ugc-ads, shorts-reels
   Image    ofox-image-core
   Secrets  hal-vault
   Media    hal-image
@@ -89,6 +89,7 @@ if (argv[0] === "doctor") {
     "seedance-short-drama", "seedance-ad-creative",
     "seedance-product-video", "seedance-anime-drama",
     "keyframe-animation", "product-demo",
+    "ugc-ads", "shorts-reels",
     "hal-vault", "hal-image", "cloudflare-drop",
   ];
 

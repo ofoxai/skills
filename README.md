@@ -14,13 +14,13 @@ npx ofox-skills          # install every skill into every agent on this machine
 npx ofox-skills doctor    # check which agents can actually see them
 ```
 
-No account needed to price a job — see below. Read that part first: six of
+No account needed to price a job — see below. Read that part first: eight of
 these skills spend real money.
 
 ## The video skills cost real money — here's how to check before you commit
 
-The six video skills — the four `seedance-*` ones plus `keyframe-animation`
-and `product-demo` — call Ofox's video API, which runs
+The eight video skills — the four `seedance-*` ones plus `keyframe-animation`,
+`product-demo`, `ugc-ads` and `shorts-reels` — call Ofox's video API, which runs
 [Seedance 2.5](https://ofox.ai/models/bytedance/seedance-2.5?utm_source=github&utm_medium=readme&utm_campaign=skills)
 and bills per second of generated video. A 15-second 720p clip runs about
 **$3.60**; a 4-second 480p draft is about **$0.44**, and there are cheaper
@@ -149,7 +149,7 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 ## Skills
 
-Eleven skills in three groups. The one-liners below are deliberately short —
+Thirteen skills in three groups. The one-liners below are deliberately short —
 each `SKILL.md` carries the full contract, the flags, and the measured costs.
 
 ### Video — Ofox video API (Seedance 2.5), bills per second
@@ -162,7 +162,9 @@ each `SKILL.md` carries the full contract, the flags, and the measured costs.
 | [seedance-anime-drama](skills/seedance-anime-drama/SKILL.md) | Anime/manga storyboard shots. Generates the character image first, then animates it, so the same character survives across shots. |
 | [keyframe-animation](skills/keyframe-animation/SKILL.md) | Two stills you already have: image A as the first frame, image B as the last, in one job — the model fills the middle. Both ends come back honoured to the pixel, and the motion arrives early and then holds. |
 | [product-demo](skills/product-demo/SKILL.md) | Two screenshots of your interface, before and after a state change, animated as one clip. The model cross-fades only the values that differ; the strings stay legible, so this one carries no anti-text rule. |
-| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **Library.** The execution layer the six above call: submit, poll, download, report the real cost. Install it, don't invoke it — unless you're driving the API directly. |
+| [ugc-ads](skills/ugc-ads/SKILL.md) | Handheld, phone-shot creator clips — unboxing, first impression, honest review. Deliberately inverts the polish the other scenarios default to: one practical light, imperfect framing, no grading, no beauty filter. |
+| [shorts-reels](skills/shorts-reels/SKILL.md) | Several cheap vertical 9:16 drafts in one priced batch, a contact sheet to pick from, then one proper re-render of the winner. Brings the format and the economics; the prompt comes from whichever scenario skill fits. |
+| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **Library.** The execution layer the eight above call: submit, poll, download, report the real cost. Install it, don't invoke it — unless you're driving the API directly. |
 
 ### Image
 

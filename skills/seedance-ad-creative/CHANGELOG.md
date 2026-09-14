@@ -4,6 +4,25 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.13.1 — UGC and vertical drafts now have their own skills
+
+Two sibling scenario skills shipped, and both take work this file used to
+absorb by default. No behaviour in this skill changes; the routing does.
+
+- **`ugc-ads`** owns handheld, phone-shot creator clips. The "UGC variant"
+  section here stays as a slot diff against the cinematic template, with a
+  pointer at the top saying that skill is the better route — it inverts the
+  polish default outright, which this file cannot do while its own archetypes
+  are Luxury, Playful and Minimalist-tech.
+- **`shorts-reels`** owns several cheap vertical drafts and the
+  draft-then-promote ladder. The ad prompt is still written here; the set runs
+  there.
+
+Both are added to "When NOT to use". **What a caller has to do**: nothing, if
+the routing was already right. If you have been using this skill's UGC variant
+table for genuinely creator-style clips, move to `ugc-ads` —
+`npx ofox-skills` installs it.
+
 ## 1.13.0 — two defaults did not survive naming another model
 
 1.12.0 let a user say "use wan" / "use hailuo". Two entries in the defaults

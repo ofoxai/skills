@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.13.0"
+version: "1.13.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.13.0"
+  version: "1.13.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -445,13 +445,21 @@ AVOID: dialogue, subtitles, on-screen text other than the slogan, watermarks, ji
 ### UGC variant
 
 Five of the nine gallery ad prompts are creator-style clips (cases 23–27).
-This skill's `description` does not claim them, but the request "make it
-look like a real customer filmed it" lands here often enough that the slot
-differences are worth having. The boundary is what carries the clip: a
-creator holding, using and describing the product stays here; a scene
-carried by the performance and the exchange between people is
-`seedance-short-drama`, per this skill's `description`. Same skeleton as
-Template A; these slots change:
+
+⚠️ **UGC now has its own skill — [`ugc-ads`](../ugc-ads/SKILL.md) — and it is
+the better route.** The table below is a slot diff against this skill's
+cinematic template; that skill inverts the polish default outright, which is
+the part this file cannot do while its own archetypes are Luxury, Playful and
+Minimalist-tech. Hand "make it look like a real customer filmed it" to
+`ugc-ads`. Keep reading here only when the clip is fundamentally an ad that
+wants a creator-ish surface — and even then, compare with that skill first.
+
+This skill's `description` does not claim creator clips, but the request lands
+here often enough that the slot differences are worth having. The boundary is
+what carries the clip: a creator holding, using and describing the product
+goes to `ugc-ads`; a scene carried by the performance and the exchange between
+people is `seedance-short-drama`, per this skill's `description`. Same
+skeleton as Template A; these slots change:
 
 | Slot | Template A (cinematic) | UGC variant | Cases |
 |---|---|---|---|
@@ -1268,6 +1276,13 @@ plus the ad-creative-specific ones:
 
 - Dialogue-driven scenes with characters talking — use `seedance-short-drama`
   instead.
+- A clip that should look filmed by a real customer on a phone — use
+  [`ugc-ads`](../ugc-ads/SKILL.md). Everything this skill defaults to
+  (grading, a studio key, a slow-motion climax, a hero freeze) is a defect
+  there, and that skill inverts them explicitly.
+- Several cheap vertical drafts to choose from rather than one finished spot —
+  use [`shorts-reels`](../shorts-reels/SKILL.md), which owns the
+  draft-then-promote ladder. Write the ad prompt here and run the set there.
 - Plain catalog/listing footage (white background, literal orbit or
   turntable rotation, no mood or camera language) rather than a cinematic
   brand ad — use `seedance-product-video` instead. The border case is a

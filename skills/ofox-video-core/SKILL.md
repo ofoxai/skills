@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.22.0"
+version: "1.22.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.22.0"
+  version: "1.22.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -59,16 +59,33 @@ its real duration range, resolutions, modes and base per-second price. It needs
 **no API key** — `GET /v1/models` is public — so it is safe to run before the
 user has signed up, and it costs nothing.
 
-Worth knowing before quoting a price: at 720p text-to-video the ladder runs
-`seedance-2.0-mini` 4 cents/s → `wan-2.7` 10 cents/s → `seedance-2.5` 24 cents/s. When
-a user is going to generate several takes and keep one, drafting on a cheap
-model and rendering the keeper on `seedance-2.5` costs a fraction of drafting
-everything on 2.5. Say so when it's relevant — but don't switch models on
-someone's behalf, since the model changes the look, not just the price.
+The rate `models` prints is the one at each model's **own default
+resolution**, and that default is not the same tier for every model. It ranks
+models; it does not quote them. For the rate at the tier you are actually
+about to send, run `providers MODEL` — it prints the per-resolution,
+per-upstream matrix, and that is the quotable source:
 
-Parameter limits differ per model and the script enforces the real ones
-(`wan-*` is 2-15s and 720p/1080p only; `seedance-2.5` is 4-30s and the only one
-with `21:9`/`4:3`/`3:4`). The limits come from the live model list, cached for
+```bash
+bash references/ofox-video.sh models                              # rank
+bash references/ofox-video.sh providers bytedance/seedance-2.0-mini  # then quote
+```
+
+⚠️ **`providers` with no model argument prints the flagship's matrix, not the
+catalog.** Pass the id you mean.
+
+The spread between the cheap end and the flagship is large — several times the
+per-second rate at the same resolution — which is why, when a user is going to
+generate several takes and keep one, drafting on a cheap model and rendering
+the keeper on `seedance-2.5` costs a fraction of drafting everything on 2.5.
+Say so when it's relevant, with numbers you just read rather than remembered,
+and don't switch models on someone's behalf: the model changes the look, not
+just the price.
+
+Parameter limits differ per model — duration range, resolution tiers and
+aspect-ratio list all vary, and they vary *within* a family, so `wan-*` or
+`seedance-2.0-*` is not a safe thing to generalise over. The script enforces
+the real per-model ones and `models` prints them; read it rather than
+recalling a range. The limits come from the live model list, cached for
 24 hours, falling back to a bundled snapshot when offline — a fallback is
 always announced on stderr, never silent.
 

@@ -4,6 +4,47 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.22.1 — the snapshot refresh corrected the data and left the prose quoting the old data
+
+1.22.0's sibling snapshot refresh moved several catalog figures. The tables
+built from the snapshot moved with it; the **prose in this file that quoted
+those figures did not**, and nothing flags that kind of drift because there is
+no code path from a paragraph to the number it names.
+
+Two stale claims in "Which model, and what it costs", both re-checked live
+today against `providers`/`models`:
+
+- **`wan-2.7` was quoted at 10 cents/s at 720p. It is 8.6 cents/s.** The 0.1
+  was the model-level `pricing.output_video_per_second` field, which this
+  repo already documents as not-quotable — it is neither consistently the
+  cheapest tier nor the default one. The script has always billed and
+  estimated on the per-provider tier, so **no estimate or bill was ever
+  wrong**; only this document was. (The two figures either side of it were
+  correct and stay: `seedance-2.0-mini` 4 cents/s and `seedance-2.5`
+  24 cents/s at 720p are both real per-provider t2v rates. `seedance-2.0-mini`
+  is the case where the model-level field coincidentally equals the 720p tier
+  while its 480p tier is half that — worth knowing before anyone "corrects"
+  it back.)
+- **"`wan-*` is 2-15s and 720p/1080p only; `seedance-2.5` … the only one with
+  `21:9`/`4:3`/`3:4`"** — wrong on both halves now. `wan-3.0` and
+  `wan-3.0-prime` are 2-30s and do offer 480p, so the family glob no longer
+  holds; and `4:3`/`3:4` are offered by those two as well, with `21:9` on both
+  `hailuo-3` models. This file was also contradicting its own
+  `references/api-params.md`, which had the per-family ratio lists right.
+
+**The fix is not just the numbers.** Both passages now name the command that
+answers the question instead of carrying a copy of its answer: `models` to
+rank, `providers MODEL` to quote, `generate --dry-run` for a specific job.
+A figure that has drifted twice is a figure this file should not be holding.
+
+Also documented here for the first time: **`providers` with no model argument
+prints the flagship's matrix, not the catalog** — an easy way to read the most
+expensive model's rates while believing you are shopping for the cheapest.
+
+**What a caller has to do**: nothing. No behaviour, flag, output field or exit
+code changed — this release is documentation only. If you had copied the
+`wan-2.7` figure out of this file into your own notes, it was ~16% high.
+
 ## 1.22.0 — an attached frame sets the aspect ratio on every model, not just Seedance
 
 Until now, `aspect_ratio=adaptive` was applied for an image-to-video request

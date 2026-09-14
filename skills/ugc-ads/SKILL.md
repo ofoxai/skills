@@ -1,0 +1,728 @@
+---
+name: ugc-ads
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a handheld, phone-shot UGC clip: imperfect framing, one practical light, vertical, no cinematic grading, no beauty filter. It inverts the polish every other video skill here defaults to — a UGC clip that looks like an ad has failed. Use when a user wants a video that reads as filmed by a real customer rather than by an agency, e.g. "a real-looking phone unboxing of this product", "a creator first-impression clip for TikTok", "an honest review video, nothing slick", or "make it look like a customer shot it". Do not use for a polished brand ad (see seedance-ad-creative), plain catalog footage (see seedance-product-video), a dialogue scene between people (see seedance-short-drama), or a set of cheap vertical drafts to choose from (see shorts-reels).
+license: MIT
+version: "1.0.0"
+homepage: https://github.com/ofoxai/skills/tree/main/skills/ugc-ads
+metadata:
+  author: ofoxai
+  version: "1.0.0"
+  openclaw:
+    requires:
+      env: [OFOX_API_KEY]
+      bins: [curl, jq]
+    primaryEnv: OFOX_API_KEY
+    envVars:
+      - name: OFOX_API_KEY
+        required: true
+        description: Ofox API key. Create one at https://app.ofox.ai (Settings -> API Keys). The same key works across every Ofox skill.
+    emoji: "📱"
+    homepage: https://github.com/ofoxai/skills/tree/main/skills/ugc-ads
+---
+
+# ugc-ads: handheld, phone-shot, deliberately unpolished
+
+Turns a product and a situation into a clip that reads as something a real
+customer filmed on a phone — an unboxing, a first impression, a use-it-once
+review. Amateur texture is the deliverable, not a compromise.
+
+This skill is a thin, scenario-specific layer over
+[`ofox-video-core`](../ofox-video-core/SKILL.md). It owns the UGC prompt
+craft, the brief, the defaults and the pre-generation cost estimate;
+`ofox-video-core` owns talking to the Ofox API correctly and safely (the
+`OFOX_API_KEY` handling, the no-resubmit rule, error-code mapping,
+download/verification, and reporting the downloaded file's absolute
+`VIDEO_PATH`). **Read that skill's safety contract before using this one** —
+it is not restated here.
+
+The shared prompt craft — the vendor's formula, timestamps, transitions,
+camera vocabulary, consistency locks and negative lists — is in
+[`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md);
+the pre-prompt question rules in
+[`../ofox-video-core/references/creative-brief.md`](../ofox-video-core/references/creative-brief.md);
+the spend rule in
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md).
+This file carries only what is specific to UGC.
+
+## The inversion — read this before writing anything
+
+**Every other video scenario in this repo is aimed at polish, and so is most
+of the shared prompt guidance.** Its style vocabulary is full of cinematic
+anchors, studio keys and hero frames; the ad skill's own archetypes are
+Luxury, Playful and Minimalist-tech; its pacing shape is
+hook → showcase → slow-motion climax → hero freeze. All of that is correct
+for those scenarios and **wrong here**.
+
+| The default, everywhere else | Here |
+|---|---|
+| Cinematic colour grade, warm rim light | Whatever the room's own light does, including bad white balance |
+| A studio key, or golden hour | One practical source — a window, a ceiling lamp, a phone's own screen |
+| Smooth, motivated camera moves | Handheld drift, a small re-frame, an arm that gets tired |
+| Perfect framing, subject centred | The product half out of frame until a hand corrects it |
+| A slow-motion climax and a hero freeze | A flat action chain with no climax, ending "naturally, not promotionally" |
+| Skin that reads as clean | Skin that reads as skin |
+| A seamless backdrop | An actual kitchen counter with other people's objects on it |
+| `AVOID` is a backstop | `AVOID` is half the brief |
+
+**The failure mode is silent, and nothing in the tooling catches it.** A clip
+that comes back beautifully graded, stabilised and lit has not errored; it has
+rendered exactly what it was asked for. It is just no longer UGC, and the only
+place that gets noticed is in front of the audience it was meant to fool. So
+the check has to happen in the prompt, before the money moves.
+
+### The three habits that leak in
+
+1. **Style words carried from another scenario.** `cinematic`, `8K`,
+   `professional`, `studio`, `premium`, `glossy`, `film grain`, `shallow depth
+   of field`, `rim light`, `colour grade`. Every one of them is a defect here.
+   `film grain` is the subtle one: it is an anti-plastic anchor in the shared
+   guidance and it is still *film*, which a phone is not.
+2. **The ad beat structure.** The moment a timeline grows a climax and a hero
+   frame, the clip is an ad with handheld camerawork bolted on. UGC-style
+   prompts in the gallery are a flat chain of ordinary actions (cases 24–27).
+3. **A camera that behaves.** "Handheld" written once in a style line, and
+   then every beat describing a clean push-in, produces a clean push-in.
+
+**Before submitting, re-read your own prompt for the words in habit 1.** That
+takes seconds and is the single highest-value check in this skill.
+
+### Where the anti-polish vocabulary lives — load it, don't rewrite it
+
+It already exists, derived from real gallery cases, and it is deliberately
+**not** copied into this file: one copy gets corrected and the other keeps the
+old wording. In
+[`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md):
+
+| What you need | Section, in that file |
+|---|---|
+| The `AVOID` list itself | `Consistency locks and the negative list` → `Negative list — the frequent items` → the **UGC anti-polish** row (cases 25, 40). It covers colour grading, beauty filters and skin smoothing, dramatic slow motion, music, perfect lighting, and the CG look — quote that row, don't paraphrase it |
+| Phone-capture style anchors | `Style anchor — the texture layer` → the **Consumer capture** row (cases 20, 25, 40) |
+| Handheld camera phrasing | `Camera language` → `Camera movement` → the **Handheld / breathing** row |
+| Where the phone is | `Camera language` → `Camera position / angle`, and the **Phone POV** row under `Camera movement` |
+| Autofocus and exposure misbehaviour | `Camera language` → `Focus` → the **Autofocus hunting (UGC texture)** row |
+| The beat shape | `Pacing` → the closing note: UGC clips are a flat action chain with no climax |
+| Why a prohibition alone is not enough | `The plastic look is designed out, not forbidden` — the four faults that produce the AI-render look and the positive sentence that crowds each one out |
+
+That last row is the one to actually read. Its argument is the whole reason
+this skill needs a positive half: **a prohibition removes a class of thing
+without supplying what stands in its place**, and "not cinematic" leaves the
+model to pick its default, which is the cinematic one. The scenario-specific
+positive form is below, under "What actually reads as UGC".
+
+## What has been tested, and what has not
+
+**This scenario has no paid run of its own.** Nothing in this file is backed
+by a UGC clip generated through Ofox, because none has been generated. Be
+plain about that with the user rather than letting the confident tone imply
+otherwise.
+
+What it *is* built on, all of it real and none of it a UGC measurement:
+
+- **Gallery practice.** The collected creator-style prompts (cases 23–27, plus
+  30–33 for texture phrasing) are prompts somebody kept, with a finished video
+  attached — on platforms and with parameters that are mostly unrecorded. That
+  is evidence about what a good UGC prompt looks like, not about what this API
+  does with one.
+- **Mechanism facts measured in this repo**, which apply here because they are
+  about the API rather than about the genre: an attached photoreal-person
+  frame is refused at submission; asking the model for music has failed output
+  moderation on copyright; a prohibition on a *class of object* holds better
+  than one on a *tempo*; a camera move written only as a verb tends not to
+  happen. Each is cited where it is used below.
+
+Practical consequence: **the first clip bought through this skill is an
+experiment**, and it should be priced and described as one. Draft it small
+before anyone pays for a deliverable — see "Several takes, and the cheap
+vertical route".
+
+## Where the core skill lives
+
+Resolve once, before the first call:
+
+```bash
+for d in ../ofox-video-core \
+         ../ofoxai-skills-ofox-video-core \
+         ~/.agents/skills/ofox-video-core \
+         ~/.agents/skills/ofoxai-skills-ofox-video-core \
+         ~/.claude/skills/ofox-video-core; do
+  [ -f "$d/references/ofox-video.sh" ] && echo "$d" && break
+done
+```
+
+Examples below are written as `../ofox-video-core/...` (the skills.sh /
+ClawHub / `npx ofox-skills` layout, where a skill's directory is named after
+the skill). If the probe found a different directory — LobeHub unpacks each
+skill as `ofoxai-skills-<name>`, so the sibling there is
+`ofoxai-skills-ofox-video-core` — substitute it, in the `ofox-video.sh`
+commands and in the `references/*.md` links alike.
+
+**That `../` is relative to this skill's own directory**, which is also where
+the probe has to run. From anywhere else nothing resolves — use the absolute
+path the probe printed (candidates 3–5 are absolute already), or, in a clone
+of this repo, `skills/ofox-video-core/references/ofox-video.sh` from the repo
+root.
+
+Nothing found → the core skill isn't installed; see "If the script isn't
+found".
+
+## Before generating: the availability check
+
+Run this once per session (not on every request):
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh check
+```
+
+If it fails, follow `ofox-video-core`'s guidance (install `curl`/`jq`, or get
+an `OFOX_API_KEY` at `https://app.ofox.ai`) — don't dead-end the conversation,
+and don't re-run this check on every subsequent request once it has passed.
+
+`check` reports whether the key is **present**, not whether it is valid, and
+makes no network call. It reads an ordinary environment variable in the shell
+that runs the script — nothing is loaded from a `.env` file, so a project that
+keeps the key in one has to source it into the same shell first.
+
+A failing `check` is not a stop sign: `models`, `providers` and
+`generate --dry-run` all run without a key, so the brief, the prompt and the
+price can all be done first. See "Pricing a job with no API key".
+
+## Before writing the prompt: the brief
+
+The shared rules — the three tiers, one round of at most four questions, the
+shape of a question, the "Let the AI decide" discipline, the order with the
+approval gate, the fallback without `AskUserQuestion` — are in
+[`../ofox-video-core/references/creative-brief.md`](../ofox-video-core/references/creative-brief.md).
+This section adds only this scenario's question set.
+
+| Tier | UGC axes |
+|---|---|
+| **must-ask** | is there a product photo? It changes the whole route (see "People, products and what the API refuses"), and a photo that does not exist cannot be invented |
+| **ask-if-open** | who is on camera, which action chain the clip follows, whether anyone speaks |
+| **never-ask** | resolution, model, provider, duration when the user gave one, aspect ratio (vertical is this skill's default and saying so in the recap is enough). Two resolutions are **two rows in the cost table**, not a question |
+
+Five axes, four question slots. If the round is full, ask in this order:
+`Photo`, `On camera`, `Beat`, `Talk` — and let anything left fall to a default
+named in the recap.
+
+### The question set
+
+| # | Tier | `header` | Question | Options (1 = recommended, last = delegation) | Ask when |
+|---|---|---|---|---|---|
+| 1 | must-ask | `Photo` | Do you have a photo of the actual product? | **Yes — a local path (recommended)**: the real label and shape are locked into the opening frame, and everything the gallery collected that had to match a real SKU used one. **The photo must have no person in it** — not a hand, not a foot — or the job is refused at submission. / **No — describe it in text**: fine for a generic item; on a real product the label may drift. **No AI option** — a photo is a fact, not a taste. | No image attached and the user did not say there isn't one. |
+| 2 | ask-if-open | `On camera` | Who is in frame? | **Hands only (recommended)**: the most common real unboxing shape, and it keeps faces out of a generated clip entirely — fewer anatomy risks, no identity to hold. / **A creator, filming themselves**: arm's length or a propped phone; they are generated fresh from text, so they cannot be the same person in a second clip. / **A creator, filmed by someone else**: a friend holding the phone; allows a wider frame. / **Let the AI decide** — which means hands only. | The request doesn't say. |
+| 3 | ask-if-open | `Beat` | What happens, in order? | **Unboxing (recommended)**: parcel → cut/open → lift the item out → turn it over → first use. / **First impression**: already unpacked, one use, one reaction. / **Before / after**: the state that motivated the purchase, then the result. / **Haul**: several items shown in one sitting. / **Let the AI decide**. | The request names a product but not an action. |
+| 4 | ask-if-open | `Talk` | Does anyone speak? | **No — ambient sound only (recommended)**: room tone and the sounds the actions make; captions get added in an editor afterwards. / **One line at the end**: a single spontaneous-sounding sentence. / **Talking through it**: continuous commentary — budget the words per second, see "If the creator speaks". / **Let the AI decide**. | The request doesn't say, and the duration is long enough for a line. |
+
+Not asked: aspect ratio (9:16 unless the user says otherwise), resolution and
+duration (rows in the cost table), the model, the provider, the audio flag.
+
+### Skip rows specific to UGC
+
+On top of the generic rows in `creative-brief.md`:
+
+| Input says… | Axis | Value |
+|---|---|---|
+| a photo is attached, or a path is given | Photo | have one — and check it for hands, feet and faces before attaching |
+| "unboxing", "just arrived", "opening the parcel" | Beat | unboxing chain |
+| "review", "honest opinion", "what I think" | Beat + Talk | first impression, with a line |
+| "no face", "just my hands", "POV" | On camera | hands only |
+| "TikTok", "Reels", "Shorts", "vertical" | Aspect | 9:16, already the default |
+| "for the landing page", "for the website" | — | that is probably `seedance-ad-creative`; check before assuming UGC |
+| "polished", "cinematic", "premium", "hero shot" | — | the user is asking for the opposite of this skill — see "When NOT to use" |
+
+### From answers to prompt — traceability
+
+| Answer | Lands in |
+|---|---|
+| Photo: yes, path | `--frame-first-image PATH` (product alone), plus the anchor sentence at the top of the prompt; no `--aspect-ratio` flag |
+| Photo: no | a text PRODUCT line, and `--aspect-ratio 9:16` becomes effective |
+| On camera | the DEVICE line and what each beat says is in frame |
+| Beat | the timeline's action chain |
+| Talk | the AUDIO line, and a quoted line with a delivery note |
+| Duration | `--duration` and the timestamps |
+
+### The recap for this scenario
+
+```
+Brief:
+- Product: the ceramic pour-over kettle — photo at /Users/me/shots/kettle.jpg (given)
+- On camera: hands only (you chose)
+- Beat: unboxing — parcel, open, lift out, turn, first pour (AI's pick)
+- Talk: no dialogue, ambient sound only (AI's pick)
+- Vertical 9:16, 10s, 480p draft — with a 720p row below
+- Note: this scenario has no measured run behind it; the draft is the experiment
+```
+
+Then the full prompt, then the cost table, all in one message — the order and
+the rule for a change made at the gate are in `creative-brief.md`'s
+`Order, with the approval gate`.
+
+## What actually reads as UGC
+
+Four positive levers. They are the substance of the clip; the AVOID list is
+what stops the model reaching for its defaults underneath them.
+
+### 1. The device is part of the fiction
+
+No other scenario in this repo has a DEVICE line, and it is the single most
+load-bearing sentence here. Say **what the phone is doing**: propped against a
+mug on the table, held in one hand while the other works, at arm's length in
+front of a face, wedged on a shelf. Then give it the flaws a phone has —
+autofocus hunting, exposure shifting when a bright surface enters the frame,
+compression artefacts, a slight lens wobble. The phrasing for all of that is
+in the shared file's `Consumer capture` and `Autofocus hunting (UGC texture)`
+rows; use it as written.
+
+⚠️ A phone that never re-frames is a tripod. Put one small correction in the
+timeline — the hand tilts the phone up, the arm shifts to keep the product in
+shot — as its own beat with its own stamp. **A camera behaviour written only
+as an adjective in a style line does not reliably render**; the shared file's
+`A camera move needs its waypoint frames, not just a verb` is the measured
+version of that, and it applies to sloppiness exactly as it applies to an
+orbit.
+
+### 2. One practical light, and let it be uneven
+
+Name the source and where it is: a window to the left with the curtain half
+drawn, one warm ceiling bulb, the blue-white of an overhead kitchen light.
+Then say what it does *badly* — the near side of the product bright and the
+far side falling into shadow, a colour cast on a white wall, a blown highlight
+where the light hits gloss. The shared file's `The plastic look is designed
+out, not forbidden` has the general form (name sources, let them fall off);
+what UGC adds is that the unevenness is not a compromise to be minimised, it
+is the evidence that nobody set up a light.
+
+### 3. Framing that is a little wrong
+
+The product entering frame off-centre and being corrected. The item's top
+cropped for a second. A hand crossing the lens. Written as beats, not as a
+style word. Two cautions:
+
+- **Not so wrong that the product cannot be seen.** The clip still has a job.
+  The shared `Camera language` note on readability outranking the effect is the
+  right tie-breaker.
+- **Imperfection is an event, so it needs a stamp**, for the reason in lever 1.
+
+### 4. A real room, not a set — with one tension to manage
+
+A UGC set is supposed to be cluttered: the counter has other objects on it,
+the table has a used cup, there is a bag on a chair. **That directly conflicts
+with the one measured rule this repo has about invented text.** The shared
+file's `Unwanted text is designed out of the set, not forbidden in the list`
+found, across four jobs, that a set with no lettered surface produces no
+invented text and a set full of them produces it regardless of how strongly
+the AVOID list forbids it — and a real room is full of them. Book spines,
+packaging, a cereal box, a laptop.
+
+The resolution is not to empty the room, which would cost the scenario its
+whole point. It is:
+
+- keep the **lettered carriers out of the frame or out of focus** — the
+  shallow background a phone gives you at close range is doing that work
+  already, and it is the one bit of optical softness that is UGC-native rather
+  than cinematic;
+- **name the carriers you do not want as objects** in the AVOID list, not as
+  "text" — the same file records a bare "no text" failing on a busy set and an
+  object-by-object exclusion holding on a desk;
+- **accept the product's own packaging** as text you *want*, and lock it with
+  a photo rather than describing it — see below.
+
+## People, products and what the API refuses
+
+Two measured `ofox-video-core` facts decide the route, and together they are
+less restrictive than they first look:
+
+- **A photoreal person in an attached frame is refused at submission** on
+  `bytedance/seedance-2.5` (`input_moderation_failed`, nothing billed). It is
+  a rule about the picture you attach.
+- **A photoreal person generated from the prompt text is fine.** Several
+  20–30 second text-to-video jobs built entirely around people have completed
+  in this repo.
+
+So a UGC clip with a person in it is not blocked; it splits:
+
+| Half | How |
+|---|---|
+| The product must be exactly right (real label, real shape) | attach it as `--frame-first-image`, **with no person and no part of one anywhere in that image** — hands, feet and socks included |
+| A person must appear | write them into the timeline as text, entering after the product is established |
+
+That split is measured end to end on the ad scenario's job
+`ac927785-92ef-4e28-97b9-ff8172ec5554` (a product-only first frame, a person
+entering at 4s, the product's appearance unchanged at 19.6s). It is an ad, not
+a UGC clip, so read it as the *route* being proven, not the genre.
+
+**Hands are the UGC-native answer and they are also the safest one.** The same
+job's lesson about anatomy — escalate how much of a body is in frame, keep the
+full figure to one distant shot, never make a hand or a face the focal point —
+matters more here than there, because a phone-close unboxing puts hands in the
+middle of the frame by definition. Two things that help: keep the hand's job
+simple (one action per beat, holding or turning rather than gesturing), and
+keep the product, not the hand, as what the beat is about. A written size
+limit on a limb is **not** a defence — one measured job wrote `only the
+fingertips and the first knuckle ever visible` **twice**, once in the shot and
+once in AVOID, and the render showed most of the finger and the hand to the
+knuckles anyway. What kept that shot anatomically clean was the macro framing
+and one simple action, not the limit.
+
+**No person survives across jobs.** They are generated fresh each time, so a
+second clip is a different creator. Only the product can be locked.
+
+## The prompt template
+
+Vocabulary is not repeated here — timestamp formats and segment lengths,
+transition phrasing, camera and focus terms, the negative-list rows, asset
+role sentences are all in
+[`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md).
+What follows is the UGC shape.
+
+Slots in `<angle brackets>`; optional lines in `[square brackets]`.
+
+```
+STYLE: <consumer-capture anchor, from the shared file's Consumer capture row — real phone capture texture, sensor noise, compression artefacts, autofocus hunting, exposure shifts>. Vertical. Nothing is graded, lit or staged.
+DEVICE: <where the phone is: propped against a mug on the table, slightly too low | held in one hand, the other doing the work | at arm's length>. <Its flaws for this clip: the focus hunts once when the hand moves; the exposure lifts when the white box fills the frame.>
+SCENE: <a real room, named: a kitchen counter at the end of the day | a desk with the day's things still on it>. <The one light source, and where it is.> <What it does badly: the near side bright, the far side in shadow.>
+PRODUCT: <shape, material, colour, and any text on it verbatim in quotes>.
+         [image1 is the product exactly — <shape, label, colour>; ignore its background.]
+[PERSON: <only what is in frame — two hands, adult, no jewellery | a person in their 20s in a grey hoodie, seen from the chest up>. <No name, no wardrobe manifest: this is not a character that has to survive anything.>]
+
+0–<N>s    <one ordinary action>. <Where the phone is and what it does about it.> <the sound this action makes>
+<N>–<M>s  <the next action in the chain — no transition word; these are beats in one continuous shot unless the clip genuinely cuts>
+…
+<…>–<T>s  <the last action just finishes>. <The phone keeps recording for a moment.>
+
+AUDIO: <room tone of the actual room>, <two or three sounds the actions make: cardboard tearing, tape, a lid, a cup on a counter>. [<Speaker>: "<one line, in the language to be spoken>" — spontaneous, slightly breathless, not scripted.] No music.
+AVOID: <the UGC anti-polish row from prompt-structure.md's Negative list — the frequent items, quoted as written>; plus: tripod stability, gimbal smoothness, a studio or seamless backdrop, a professional model or presenter, an advertising voiceover, a slogan, a logo card, an end card; <the lettered objects in this room you do not want: book spine, cereal box, magazine, laptop screen, poster>; music, score, soundtrack, instrumental, percussion, humming, singing.
+```
+
+Five things about that shape:
+
+- **No header FORMAT line and no shot manifest.** UGC clips are short and
+  single-shot; the shared file's `Short prompts (10 seconds or less)` says to
+  skip the manifest, and a manifest is itself a tell.
+- **The timeline is beats inside one continuous shot, not cuts.** Say
+  `one continuous shot` in the first sentence if you mean it — the shared file
+  records that a timestamped list without that declaration reads as a cut
+  list. A real phone video does sometimes cut (they stopped and restarted);
+  if you want that, say `hard cut` explicitly, because an unnamed boundary
+  becomes one anyway.
+- **No climax and no hero frame.** The chain just ends. `the phone keeps
+  recording for a moment` (case 25's ending) is the UGC close.
+- **No music, ever.** Not a taste rule: a prompt asking this model for music
+  came back `output_moderation_failed` on audio copyright in this repo
+  (unbilled). Ambient and action sounds only; a track goes on in an editor.
+  The shared file's `Asking for music can fail output moderation on copyright`
+  has the measurement. Case 25 also lists music under STRICTLY AVOID for
+  genre reasons, so both arguments point the same way.
+- **The AVOID slot is a quote, not a paraphrase.** Open
+  `prompt-structure.md`, find the UGC anti-polish row, and put its wording in.
+  If that file is out of reach, see "If the script isn't found" — this is the
+  one thing in this skill that genuinely degrades without it.
+
+### Worked example — a 10-second vertical unboxing, hands only
+
+Text-to-video, no photo. **This example has not been generated** — it is the
+template filled in, not a clip anyone has paid for.
+
+```
+STYLE: real phone capture texture, slight sensor noise and compression artefacts, mild autofocus hunting, exposure shifting when a bright surface enters the frame. Vertical, one continuous shot. Nothing is graded, lit or staged.
+DEVICE: the phone is propped against a mug at the back of the table, slightly too low, so the table edge cuts across the bottom of the frame. The focus hunts once when the hands move in, and the exposure lifts when the white box fills the frame.
+SCENE: a kitchen table at the end of the day, a used cup and a set of keys pushed to one side. The only light is a window to the left with the curtain half drawn, so the near side of everything is bright and the far side falls into shadow; a cool cast on the white wall behind.
+PRODUCT: a matte black cylindrical hand grinder with a walnut knob and a folding steel crank, in a plain white cardboard box with no printing on it.
+PERSON: two adult hands, no jewellery, sleeves pushed up. Nothing above the wrists is ever in frame.
+
+0-3s    a hand slides the white box into the middle of the table; it arrives off-centre and the far corner is cropped, and the hand nudges it straight. The focus hunts briefly on the tabletop before settling. Sound: cardboard on wood, a chair creaking off-screen.
+3-6s    both hands work the tape at the seam, pull it off in one go and drop it beside the box; the flaps come up. Sound: tape tearing, the flaps.
+6-8.5s  one hand lifts the grinder out. It comes up slightly out of frame at the top and the other hand tips the phone back a touch to catch it. The exposure drops as the dark body fills the frame.
+8.5-10s the hands turn it over once, the crank folds out, and they set it down on the table. The phone keeps recording for a moment.
+
+AUDIO: kitchen room tone, a fridge hum, cardboard, tape, the crank clicking out, the grinder set down on wood. No dialogue. No music.
+AVOID: cinematic color grading, beauty filters, artificial skin smoothing, dramatic slow motion, music, perfect lighting; no beauty filter, grading, cinematic/CG look, fisheye, vignette, or legible text; tripod stability, gimbal smoothness, a studio or seamless backdrop, a professional model or presenter, an advertising voiceover, a slogan, a logo card, an end card; book spine, magazine, cereal box, laptop screen, poster, printed packaging other than the plain white box; music, score, soundtrack, instrumental, percussion, humming, singing; warped or extra fingers.
+```
+
+The AVOID list's first two clauses are the shared file's UGC anti-polish row
+verbatim — that is what "quote it" means. Everything after them is what this
+scenario adds on top.
+
+⚠️ **One clause in that row fights a real product, and you have to notice
+it.** It ends `…fisheye, vignette, or legible text` — written for a
+text-only clip where every letter would be invented. If the brief is an
+unboxing of a **real** product whose label the user wants readable, a blanket
+`no legible text` is now pointed at the thing they are advertising. The
+example above dodges it by giving the product a plain unprinted box, which is
+a legitimate choice and not the only one. When the label has to be legible:
+
+- **lock it in an attached first frame** rather than describing it — text
+  approved on a still and then preserved is the reliable route, measured in
+  this repo, and text rendered from a description is the classic failure;
+- **drop the `legible text` clause** from the quoted row and replace it with
+  the specific carriers you don't want (the lettered objects already listed in
+  the AVOID slot), so the prohibition removes the background signage without
+  removing the product's own label.
+
+That is the one edit to the shared row this scenario routinely needs. Make it
+deliberately and say you made it.
+
+## If the creator speaks
+
+One line usually beats a script. The shared file's
+`Dialogue and sound` → `Density — two tiers, not one` gives the measured word
+budgets: a talking-head runs about 3.5 words a second and a drama far below
+that, so a 10-second clip of continuous commentary is a talking-head budget
+and a single closing line is nowhere near it. Write the line in the language
+it should be spoken in — that is what decides the voice's language.
+
+The delivery note is where UGC lives: `spontaneous, slightly breathless, not
+scripted` (case 25), a false start, a word repeated. An advertising cadence
+in a handheld clip is the polish leak in audio form.
+
+`--generate-audio` defaults to `true` on the server, which is what you want
+for ambient sound. Set it `false` only if the user is laying their own audio
+over the clip.
+
+## Vertical by default
+
+`--aspect-ratio 9:16` on pure text-to-video. Two things to know:
+
+- **With a photo attached the flag stops being yours.** `ofox-video-core`
+  forces `adaptive` on `bytedance/seedance-2.5` and defaults to it on other
+  models that offer it, so the output follows the image. **Crop the photo to
+  9:16 before generating — crop, never pad**, since padding bakes the bars
+  into the video. Relay the `NOTE:` the script prints.
+- **Not every model offers 9:16.** Aspect-ratio lists differ per model and
+  they are catalog facts, so read them rather than assuming:
+  `ofox-video.sh models`. A ratio the model doesn't have is rejected locally,
+  free, before anything is submitted.
+
+## Recommended defaults
+
+| Parameter | Default | Why |
+|---|---|---|
+| `--aspect-ratio` | `9:16` on text-to-video; **not passed** when a photo is attached | UGC is vertical by default; with a frame attached the photo's crop decides the shape |
+| `--model` | the script's own default, **unless the user named one**, which always wins | the id the request will really carry is the `MODEL` line a `generate --dry-run` prints, and that is the id the cost table has to name. See "Choosing a model" |
+| `--duration` | short — a draft at the model's minimum, a deliverable in the low tens of seconds | a flat action chain has no reason to run long, and every second bills. `ofox-video.sh models` prints each model's range |
+| `--resolution` | draft at the model's cheapest tier, then re-render the keeper higher. When the user named neither, put the next tier up as a **second row of the same cost table** rather than asking | UGC is the one genre where a lower tier costs the least credibility — sensor noise and compression are in the brief. Still read the draft's frames before shipping it |
+| `--generate-audio` | leave at the server default (`true`) | room tone and action sounds are half of what makes it read as real |
+| `--seed` | let the script roll one and keep it | printed as `SEED` and written to the `.json` sidecar; the handle for "that take, rendered properly" |
+| `--frame-first-image` | only when a product photo exists, and only if it contains no person | the measured product-lock route; see "People, products and what the API refuses" |
+| `--real-person` | leave unset | untested on `bytedance/seedance-2.5` in this repo |
+
+## Choosing a model
+
+The model stays **never-ask** — the agent doesn't raise it. But never-ask is
+not "never listen": if the user names a model id or a shorthand, use it.
+
+**Model ids, prices, resolutions, durations and aspect ratios are deliberately
+not written down in this file.** They are catalog facts, they change, and this
+repo has recorded defects that trace to a hardcoded copy of somebody else's
+value table. Read them live, free, with no API key:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh models             # every model, its tiers and ranges
+bash ../ofox-video-core/references/ofox-video.sh providers MODEL    # that model's per-resolution rates
+```
+
+`providers` with no model argument prints the flagship's matrix, not the
+catalog — pass the id you actually mean. And the rate `models` shows is the
+one at each model's **own default resolution**, which differs between models,
+so it ranks rather than quotes. The number you put in front of a user comes
+from `generate --dry-run` at the parameters you are about to send.
+
+Two things worth saying to a user who is choosing: a cheaper model is a
+different look, not just a smaller bill — which cuts both ways here, since
+this is the scenario least harmed by a rough one. And **moderation policy is
+per-model**, so a prompt refused on one model can be accepted on another.
+
+## Before you spend: the approval gate
+
+**Never submit a paid job until the user has seen a cost table and said yes.**
+The rule, the required columns and where the numbers must come from are
+written down once for every Ofox skill in this repo:
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md).
+
+Get the numbers from `--dry-run`, which validates everything and prints the
+estimate **without sending a request**:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+  --prompt "..." --duration 10 --resolution 480p --aspect-ratio 9:16 \
+  --out-dir /absolute/path/to/out
+```
+
+Relay the `Estimated cost:` line it prints — never a number of your own — then
+wait for a yes, then re-run the identical command with `--dry-run` removed.
+The estimate a *real* run prints comes microseconds before the request goes
+out, too late to relay. Pass the same `--out-dir` to both: the dry run creates
+and enters it, so a bad path fails as exit `6` with nothing submitted.
+
+The brief recap goes in the **same message** as the prompt and the table,
+above them.
+
+**This skill has no measured cost anchor of its own**, because it has no paid
+run. Do not borrow one from another scenario and present it as this one's —
+the dry run is the only honest number, and it is available for free before
+anyone commits. Say alongside it that the genre is untested here, so the first
+clip is an experiment.
+
+Afterwards the **actual** bill is `VIDEO_COST` from the finished job. Report
+it as money, not as the raw ten-decimal string.
+
+## Several takes, and the cheap vertical route
+
+A UGC clip is a roll like any other, and this one has an extra reason to roll:
+the thing being judged — "does it read as real?" — is exactly the thing the
+prompt can ask for and not get.
+
+For several takes of one prompt, `batch` prices the whole set up front, waits
+for the takes concurrently, and tiles a contact sheet:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh batch --dry-run \
+  --prompt "..." --takes 4 --duration 4 --resolution 480p \
+  --aspect-ratio 9:16 --out-dir /absolute/path/to/out
+```
+
+Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`, and give the takes a row
+each — if one take in four is usable, that clip cost the whole total. Hand
+over the `CONTACT_SHEET` path on its own line, then the take paths beneath it;
+each `TAKE` line carries `seed=N`.
+
+**If the user wants several vertical drafts to choose from as the actual
+deliverable — Shorts or Reels raw material rather than one clip —
+[`shorts-reels`](../shorts-reels/SKILL.md) is that scenario**, and it carries
+the cheap-tier ladder and the draft-then-promote flow. The two compose: write
+the prompt with this skill's template, run the set through that one.
+
+## Pricing a job with no API key
+
+`models`, `providers` and `generate --dry-run` all work with `OFOX_API_KEY`
+unset. So when a user hasn't signed up yet, **quote the job first and let them
+decide whether it's worth registering** — don't open by sending them to a
+signup form.
+
+## If the script isn't found
+
+```
+bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
+```
+
+Nothing is broken — this skill delegates all execution to `ofox-video-core`
+and reaches it by relative path, and that path just missed. Two different
+situations wear this message, so run the probe in "Where the core skill lives"
+before deciding which:
+
+- **The probe printed a directory** — the core is installed and only the
+  directory *name* was wrong, which is the normal LobeHub case
+  (`ofoxai-skills-ofox-video-core`). Re-run against what the probe printed.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and the
+  fix belongs to whichever installer the user already has: `npx ofox-skills`
+  (this repo's own) or the underlying
+  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
+  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
+  publisher.
+
+Either way, name the missing skill and where it was expected rather than
+relaying the raw path error, which names neither.
+
+A broken link to a shared reference has the same two causes. **This skill
+degrades more than most when that happens**, and it is worth saying so: the
+question set, the template, the four levers and the defaults are all written
+out here, but the anti-polish AVOID list is deliberately *not*, and that list
+is half the brief. Without it, write the AVOID slot from the four categories
+named in "Where the anti-polish vocabulary lives" — grading, beauty filters
+and skin smoothing, dramatic slow motion, perfect lighting and the CG look —
+and tell the user the canonical wording was unavailable.
+
+## Exit codes worth knowing
+
+Full table in [`../ofox-video-core/SKILL.md`](../ofox-video-core/SKILL.md).
+The ones that come up:
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `1` | Parameter rejected locally, no network call, nothing billed | Fix the flag and retry freely |
+| `2` | Environment problem — `curl`/`jq` missing, or no `OFOX_API_KEY` | Ask the user to fix it; `check` reports the same |
+| `3` | API rejected it, or the job ended failed/cancelled/expired | Read the mapped message; a rejected create was not billed |
+| `4` | Timed out waiting — **the job is still running and billable** | `poll JOB_ID`, never re-run `generate` |
+| `5` | Ambiguous network failure on create | Do not retry blindly; check https://app.ofox.ai first |
+| `6` | `--out-dir` unusable | Fix the path; if it happened after a create, `poll JOB_ID` |
+
+## How long to tell the user it will take
+
+`generate` blocks while it polls, up to `--max-wait` (default 540s). A short
+low-resolution vertical clip is usually one to three minutes. Say so before
+starting, so the wait isn't silent.
+
+If your tool call can't stay open that long, use `create` (submits and returns
+a job id in seconds) followed by `poll`. That way a timeout can never strand a
+job whose id you never saw. For `batch`, the worst case is `takes x max-wait`
+— lower `--max-wait` for drafts, or create and poll the takes yourself.
+
+## Where the file lands
+
+Always pass `--out-dir`, and **make it an absolute path**. Without it the
+script writes to the current working directory — which, given that the
+examples here run from this skill's own directory, would drop the user's video
+inside an installed skill. Relay the **absolute** `VIDEO_PATH` the script
+prints, on its own line.
+
+Pass `--name` too — name the file after the clip rather than leaving the
+script to guess from the prompt's opening words, which here describe a phone's
+sensor noise. The clip lands as `<name>-<short job id>.mp4` with a `.json`
+sidecar holding the full job id, the prompt, the seed and the real cost.
+
+## Generating
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh generate \
+  --prompt "<the UGC prompt built above>" \
+  --name "<short clip name, e.g. hand grinder unboxing>" \
+  --duration 10 \
+  --resolution 480p \
+  --aspect-ratio 9:16 \
+  --out-dir /absolute/path/to/out
+```
+
+Drop `--aspect-ratio` when a product photo is attached — see "Vertical by
+default".
+
+This one call validates the parameters, submits the job, polls to completion,
+downloads the mp4, and prints `STATUS`, `JOB_ID`, `VIDEO_PATH`,
+`VIDEO_SECONDS`, `SEED` and `VIDEO_COST`. Report the **actual** values from
+that output — never the estimate, and never a path or cost you didn't see the
+script print. Do not re-implement any of the request, poll or download logic
+here.
+
+## Common failure modes and fixes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| The clip is beautiful and reads as an ad | Polish leaked in — style words carried from another scenario, a climax beat, or a camera that behaves | Re-read the prompt for `cinematic`, `studio`, `professional`, `film grain`, `rim light`, `shallow depth of field`, `slow motion`; flatten the beat chain; put the phone's misbehaviour in the timeline as stamped beats rather than in a style line. See "The inversion". New prompt, new cost table |
+| The camera is smooth despite "handheld" | A camera texture written once as an adjective. The shared file's measured rule is that a move written only as a verb tends not to happen; the same applies to instability | Write the re-frame as a beat with its own timestamp — "the hand tips the phone up to catch it" |
+| The lighting is flattering and even | The prompt named a light but not what it does badly | Name the source, its position, and the shadow or cast it leaves. Positive sentences, per the shared file's `The plastic look is designed out, not forbidden` |
+| Invented signage or garbled lettering on the shelf behind | A real room is full of lettered surfaces, and the negative list is only partly obeyed on such a set (measured, four jobs) | Move the carriers out of frame or out of focus and forbid them **as objects** — book spine, box, magazine, laptop — not as "text". See lever 4 |
+| Exit `3`, `input_moderation_failed` on an image job | The attached photo contains a person — a hand or a foot is enough | Attach a photo of the product alone and write the person in text. Nothing was billed |
+| Exit `3`, `output_moderation_failed` mentioning audio copyright | The prompt asked for music | Rewrite AUDIO as room tone plus recorded sounds, keep the music words in AVOID, and re-run — a new request, safe immediately |
+| Hands look wrong | Hands are the highest-risk anatomy and this genre puts them centre-frame | One simple action per beat, the product as the beat's subject rather than the hand, and no written "never more than X of the hand" clause — that was measured being ignored. Re-roll, or move to a wider framing |
+| The product's label is wrong or drifts | Text rendered from a description is the classic failure | Attach a real product photo as the first frame; text approved on a still and then preserved is a different and reliable task |
+| The clip has a music bed nobody asked for | `--generate-audio true` plus a prompt that didn't exclude music | Keep the music words in AVOID and name the ambient sounds you do want |
+| Exit `1` on `--aspect-ratio 9:16` | The model doesn't offer that ratio | `ofox-video.sh models` lists each model's ratios. Nothing was submitted, so this is free to fix |
+| The output isn't vertical even though 9:16 was passed | A frame is attached, so the ratio is `adaptive` and follows the image | Crop the photo to 9:16 and re-run. Crop, never pad |
+| Exit `4`, timed out waiting | Still running upstream, not failed | `poll JOB_ID` with the id printed before the timeout; never re-run `generate` |
+| Exit `5`, ambiguous network failure on create | No HTTP response at all — can't tell whether a job exists | Don't guess or retry; tell the user to check https://app.ofox.ai |
+
+## When NOT to use
+
+- **A polished brand or product ad** — `seedance-ad-creative`. Its UGC-variant
+  table is the ancestor of this skill; anything with a hero frame, a grade or
+  a slogan belongs there.
+- **Plain catalog or listing footage** — `seedance-product-video`.
+- **A scene carried by people talking to each other** —
+  `seedance-short-drama`. A creator talking to the camera about a product
+  stays here; a conversation between characters does not.
+- **Several cheap vertical drafts as the deliverable** — `shorts-reels`,
+  which owns that ladder. Write the prompt here, run the set there.
+- **The user can just film it.** A real unboxing on a real phone costs
+  nothing, shows the actual product and cannot fail an authenticity check.
+  Say so before quoting a job: this skill earns its keep when the product
+  isn't in hand, when the volume is too high to film, or when the shot is
+  needed before the stock arrives.
