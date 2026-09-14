@@ -4,6 +4,48 @@ All notable changes to the **seedance-anime-drama** skill. Versioning follows Se
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.12.1 — find both core skills instead of assuming their directory names
+
+Docs only; no script changes. Every example in this file calls its execution
+layers as `../ofox-video-core/...` and `../ofox-image-core/...`, which resolve
+only when a core skill's directory is named after the skill — true for
+skills.sh, ClawHub and `npx ofox-skills`, and **false for LobeHub**, which
+unpacks each skill to `~/.agents/skills/ofoxai-skills-<name>`. There the
+siblings are `ofoxai-skills-ofox-video-core` and `ofoxai-skills-ofox-image-core`,
+so this skill died on
+
+```
+bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
+```
+
+with both cores installed and sitting right next to it. Reproduced in a faked
+LobeHub layout on 2026-09-14.
+
+New **"Where the two core skills live"** section, placed above the two
+availability checks so it is read before the first call rather than after the
+first failure. This skill is the only one in the repo that reaches two
+execution layers, so it carries **two** probes — one per core, over the five
+known locations each — and says they resolve independently: one landing in a
+different place says nothing about the other. The ~100 example commands stay
+written the readable way; only the resolution rule is new.
+
+**"If the script isn't found" is no longer a single command.** It used to name
+`npx skills add ofoxai/skills` as the only fix, which tells a LobeHub user to
+abandon their installer for cores they have already installed. It now splits
+on each probe's result, and asks that the message name **which** core is
+missing — losing `ofox-image-core` alone stops Step 1 while Step 2 would still
+run, and the old copy blurred the two. The shared reference files
+(`prompt-structure.md`, `creative-brief.md`, `approval-gate.md` and the two
+`api-params.md`) get the same two-branch reading.
+
+"Running the script" now points at the probes rather than restating the
+relative paths as if they were fixed.
+
+Verified, not just written: in a faked LobeHub layout the two probes returned
+`../ofoxai-skills-ofox-video-core` and `../ofoxai-skills-ofox-image-core`, and
+a Step 1 image `--dry-run` and a Step 2 video `--dry-run` through them each
+exited 0 with nothing submitted.
+
 ## 1.12.0 — a real choice of video model for Step 2, not just a locked-in default
 
 Docs only; no script changes — `--model` already accepted all three models

@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.21.2"
+version: "1.21.3"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.21.2"
+  version: "1.21.3"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -752,14 +752,38 @@ discarded.
 
 ## For scenario skills built on this
 
-`seedance-short-drama`, `seedance-ad-creative`, and `seedance-product-video`
-invoke this skill's script (typically
-`../ofox-video-core/references/ofox-video.sh` relative to their own
-directory) rather than duplicating any of the request-building, polling,
-error-mapping, or download logic above. They own the scenario-specific
-prompt template and recommended parameter defaults; this skill owns the
-mechanics of talking to the API correctly and safely, and the numbers that
-go in front of the user.
+`seedance-short-drama`, `seedance-ad-creative`, `seedance-anime-drama` and
+`seedance-product-video` invoke this skill's script rather than duplicating
+any of the request-building, polling, error-mapping, or download logic above.
+They own the scenario-specific prompt template and recommended parameter
+defaults; this skill owns the mechanics of talking to the API correctly and
+safely, and the numbers that go in front of the user.
+
+**The path they invoke it by is a probe, not a constant.** Their examples are
+written `../ofox-video-core/references/ofox-video.sh`, which resolves under
+skills.sh, ClawHub and `npx ofox-skills`, where a skill's directory is named
+after the skill. It does not resolve on LobeHub, which unpacks each skill to
+`~/.agents/skills/ofoxai-skills-<name>` — the sibling there is
+`ofoxai-skills-ofox-video-core`, so a scenario skill hits `No such file or
+directory` with this skill sitting right next to it. Each scenario skill
+therefore carries a "Where the core skill lives" section — "Where the two
+core skills live" in `seedance-anime-drama`, which probes for
+`ofox-image-core` alongside — that runs the probe before the first call and
+substitutes what it finds:
+
+```bash
+for d in ../ofox-video-core \
+         ../ofoxai-skills-ofox-video-core \
+         ~/.agents/skills/ofox-video-core \
+         ~/.agents/skills/ofoxai-skills-ofox-video-core \
+         ~/.claude/skills/ofox-video-core; do
+  [ -f "$d/references/ofox-video.sh" ] && echo "$d" && break
+done
+```
+
+A new scenario skill built on this one wants that section too — the relative
+path on its own is a contract only with the installers that name directories
+after skills.
 
 **Don't restate the approval rules in a scenario skill.** Link
 [`references/approval-gate.md`](references/approval-gate.md) and add only what

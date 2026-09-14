@@ -4,6 +4,49 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.14.1 — find the core skill instead of assuming its directory name
+
+Docs only; no script changes. Every example in this file calls the execution
+layer as `../ofox-video-core/references/ofox-video.sh`, which resolves only
+when the core skill's directory is named after the skill — true for skills.sh,
+ClawHub and `npx ofox-skills`, and **false for LobeHub**, which unpacks each
+skill to `~/.agents/skills/ofoxai-skills-<name>`. There the sibling is
+`ofoxai-skills-ofox-video-core`, so this skill died on
+
+```
+bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
+```
+
+with the core skill installed and sitting right next to it. Reproduced in a
+faked LobeHub layout on 2026-09-14.
+
+New **"Where the core skill lives"** section, placed above the availability
+check so it is read before the first call rather than after the first failure.
+It carries a probe over the five known locations — the two sibling names, the
+two under `~/.agents/skills/`, and `~/.claude/skills/` — and says to substitute
+what it printed for `../ofox-video-core`, in the script commands and the
+`references/*.md` links alike. The ~100 example commands stay written the
+readable way; only the resolution rule is new.
+
+**"If the script isn't found" is no longer a single command.** It used to name
+`npx skills add ofoxai/skills` as the only fix, which tells a LobeHub user to
+abandon their installer for a core they have already installed. It now splits
+on the probe's result: a directory printed means the name was wrong and
+nothing needs installing; nothing printed means the core really is absent, and
+the fix is whichever installer the user already has. The shared reference
+files (`prompt-structure.md`, `creative-brief.md`, `approval-gate.md`,
+`api-params.md`) get the same two-branch reading, since they ship with
+`ofox-video-core` and go out of reach for the same reason.
+
+"Running the script" now points at the probe rather than restating the
+relative path as if it were fixed.
+
+Verified, not just written: in a faked LobeHub layout the probe returned
+`../ofoxai-skills-ofox-video-core` and a `--dry-run` generate through it
+exited 0 with nothing submitted; in the skills.sh layout it returned
+`../ofox-video-core`, identical to the hardcoded path, so the working case
+does not regress.
+
 ## 1.14.0 — a real choice of video model, not just a locked-in default
 
 Docs only; no script changes — `--model` already accepted all three models

@@ -4,6 +4,31 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.21.3 — the relative path scenario skills use is a probe, not a constant
+
+Docs only; no change to the script, the tests, the API calls or the billing.
+"For scenario skills built on this" described
+`../ofox-video-core/references/ofox-video.sh` as simply how a scenario skill
+invokes this one. That holds for skills.sh, ClawHub and `npx ofox-skills`,
+where a skill's directory is named after the skill, and **not** for LobeHub,
+which unpacks each skill to `~/.agents/skills/ofoxai-skills-<name>` — so a
+scenario skill there hits `No such file or directory` with this skill
+installed right beside it. Reproduced in a faked LobeHub layout on 2026-09-14.
+
+That section now states the two layouts, carries the probe the scenario skills
+run, and says a new scenario skill built on this one wants the same "Where the
+core skill lives" section. It also picks up `seedance-anime-drama`, which was
+missing from its list of dependants.
+
+`references/approval-gate.md` gets the same correction in two places, since it
+is read from a scenario skill's working directory: its opening no longer reads
+a missed link as proof the core is uninstalled — that is one of two causes, and
+the other is a directory name — and its `--dry-run` commands say to substitute
+whatever the calling skill's probe printed. A quote that cannot be produced
+because a path missed is not a reason to skip the gate.
+`references/creative-brief.md` carried the same "the file is missing, install
+the repo" opening and gets the same two-branch reading.
+
 ## 1.21.2 — the changelog for 1.21.1 quoted the literal it had just removed
 
 **Changelog text only; no change to the script, the tests, the API calls or

@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), or for anything not involving people/dialogue.
 license: MIT
-version: "1.12.0"
+version: "1.12.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.12.0"
+  version: "1.12.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -52,6 +52,30 @@ linked, not copied:
   file adds only what is specific to short drama.
 - [`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
   — never spend before an approved cost table.
+
+## Where the core skill lives
+
+Resolve once, before the first call:
+
+```bash
+for d in ../ofox-video-core \
+         ../ofoxai-skills-ofox-video-core \
+         ~/.agents/skills/ofox-video-core \
+         ~/.agents/skills/ofoxai-skills-ofox-video-core \
+         ~/.claude/skills/ofox-video-core; do
+  [ -f "$d/references/ofox-video.sh" ] && echo "$d" && break
+done
+```
+
+Examples below are written as `../ofox-video-core/...` (the skills.sh /
+ClawHub / `npx ofox-skills` layout, where a skill's directory is named after
+the skill). If the probe found a different directory — LobeHub unpacks each
+skill as `ofoxai-skills-<name>`, so the sibling there is
+`ofoxai-skills-ofox-video-core` — substitute it, in the `ofox-video.sh`
+commands and in the `references/*.md` links alike.
+
+Nothing found → the core skill isn't installed; see "If the script isn't
+found".
 
 ## Before generating: the availability check
 
@@ -804,22 +828,37 @@ whether it's worth registering.** Don't open by sending them to a signup form
 bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
 ```
 
-This means `ofox-video-core` isn't installed alongside this skill — not that
-anything is broken. This skill delegates all execution to it and reaches it by
-relative path. Fix: `npx skills add ofoxai/skills` (the whole repo). Say that
-plainly rather than relaying the raw path error, which names neither the
-missing skill nor the fix.
+Nothing is broken — this skill delegates all execution to `ofox-video-core`
+and reaches it by relative path, and that path just missed. Two different
+situations wear this same message, so run the probe in "Where the core skill
+lives" before deciding which one it is:
 
-The same missing install also makes the shared reference files this skill
-links to unreadable — `prompt-structure.md`, `creative-brief.md`,
-`approval-gate.md` and `api-params.md` ship with `ofox-video-core`, not with
-this skill (a scenario skill packages only its `SKILL.md` and
-`CHANGELOG.md`), and the fix is the same one command. Until then this skill
-still stands on its own: the prompt templates, the brief's question table and
-the defaults are all in this file. What is out of reach is the detail behind
-the general rules they point at — the full vocabulary lists, the wider
-question-flow rules, and the exact wording of the spend gate, which stays
-mandatory either way.
+- **The probe printed a directory** — the core is installed and only the
+  directory *name* was wrong, which is the normal LobeHub case
+  (`ofoxai-skills-ofox-video-core`). Re-run the command against what the
+  probe printed. Nothing needs installing.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and the
+  fix belongs to whichever installer the user already has: `npx ofox-skills`
+  (this repo's own, every skill into every agent) or the underlying
+  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
+  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
+  publisher. Naming only the skills.sh command to a LobeHub user reads as
+  "abandon your installer", which isn't the advice.
+
+Either way, say which skill is missing and where it is expected rather than
+relaying the raw path error, which names neither.
+
+The shared reference files this skill links to go the same way for the same
+reason — `prompt-structure.md`, `creative-brief.md`, `approval-gate.md` and
+`api-params.md` ship with `ofox-video-core`, not with this skill (a scenario
+skill packages only its `SKILL.md` and `CHANGELOG.md`). When the probe found
+a core but a link still doesn't resolve, the link is pointing at the wrong
+directory name and wants the same substitution; when it found nothing, they
+come back with the core. Until then this skill still stands on its own: the
+prompt templates, the brief's question table and the defaults are all in this
+file. What is out of reach is the detail behind the general rules they point
+at — the full vocabulary lists, the wider question-flow rules, and the exact
+wording of the spend gate, which stays mandatory either way.
 
 ## Exit codes worth knowing
 
@@ -863,9 +902,12 @@ it holding the full job id, the prompt and the real cost.
 ## Running the script
 
 Paths in the examples above are written relative to **this skill's own
-directory** (`skills/<this-skill>/`), which is where `../ofox-video-core/...`
-resolves from. If you are running from somewhere else, adjust accordingly —
-from the repo root it is `skills/ofox-video-core/references/ofox-video.sh`.
+directory**, and they assume the core sits beside it under its own name —
+the skills.sh / ClawHub / `npx ofox-skills` layout. "Where the core skill
+lives" at the top of this file has the probe for the other layouts;
+substitute whatever it printed for `../ofox-video-core`. If you are running
+from somewhere else entirely, adjust accordingly — from a clone's repo root
+it is `skills/ofox-video-core/references/ofox-video.sh`.
 
 ## Generating
 

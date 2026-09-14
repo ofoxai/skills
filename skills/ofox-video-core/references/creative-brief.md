@@ -24,9 +24,16 @@ happens on the free side of the gate.
 
 It lives in `ofox-video-core/references/` because that is the one skill every
 scenario in this repo depends on. If you are reading a skill that links here
-and the file is missing, the skill was installed without `ofox-video-core` —
-the rules below still apply; `npx skills add ofoxai/skills` gets you the whole
-repo.
+and the link missed, the rules below still apply either way, and there are two
+reasons it can miss. The link is written as `../ofox-video-core/...`, which is
+how skills.sh, ClawHub and `npx ofox-skills` name the directory; LobeHub
+unpacks each skill as `ofoxai-skills-<name>`, so there the file is present
+under a name the link doesn't use — the skill's own "Where the core skill
+lives" section (called "Where the two core skills live" in a skill that uses
+both) has the probe that finds it. Only if that probe comes back
+empty was the skill really installed without `ofox-video-core`, which
+`npx ofox-skills`, `npx skills add ofoxai/skills`, or installing
+`ofox-video-core` from the same publisher on LobeHub / ClawHub each fix.
 
 ## The three tiers
 

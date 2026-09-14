@@ -8,9 +8,17 @@ drifts is the one that spends someone's money without asking.
 
 It lives in `ofox-video-core/references/` because that is the one skill every
 scenario in this repo depends on. If you are reading a skill that links here
-and the file is missing, the skill was installed without `ofox-video-core` —
-the rule below still applies; `npx skills add ofoxai/skills` gets you the
-whole repo.
+and the link missed, the rule below still applies either way, and there are
+two reasons it can miss. The link is written as `../ofox-video-core/...`,
+which is how skills.sh, ClawHub and `npx ofox-skills` name the directory;
+LobeHub unpacks each skill as `ofoxai-skills-<name>`, so there it is
+`../ofoxai-skills-ofox-video-core/...` and the file is present under a name
+the link doesn't use — the skill's own "Where the core skill lives" section
+(called "Where the two core skills live" in a skill that uses both) has the
+probe that finds it. Only if that probe comes back empty was the
+skill really installed without `ofox-video-core`, which `npx ofox-skills`,
+`npx skills add ofoxai/skills`, or installing `ofox-video-core` from the same
+publisher on LobeHub / ClawHub each fix.
 
 ## The rule
 
@@ -65,6 +73,14 @@ bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
 bash ../ofox-image-core/references/ofox-image.sh generate --dry-run \
   --prompt "..." --quality high
 ```
+
+Those two lines assume each core sits beside the scenario skill under its own
+name. Under a LobeHub-style install the sibling is
+`../ofoxai-skills-ofox-video-core` (and `../ofoxai-skills-ofox-image-core`);
+substitute whatever the calling skill's core-location probe printed — the
+section is "Where the core skill lives", or "Where the two core skills live"
+in a skill that uses both. A quote that can't be produced because the path
+missed is not a reason to skip the gate — resolve the path and quote it.
 
 From inside `ofox-video-core` or `ofox-image-core` itself, its own script is
 `references/ofox-<video|image>.sh`. There is no `references/ofox-image.sh`

@@ -4,6 +4,30 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.10.3 — the link to the shared approval gate can miss without the file being gone
+
+Docs only; no change to the script, the tests, the API calls or the billing.
+This skill links `../ofox-video-core/references/approval-gate.md` three times.
+That relative path resolves only when the core skill's directory is named
+after the skill — true for skills.sh, ClawHub and `npx ofox-skills`, and
+**false for LobeHub**, which unpacks each skill to
+`~/.agents/skills/ofoxai-skills-<name>`. There the file sits under
+`ofoxai-skills-ofox-video-core` and the link points at a name nothing uses.
+This is the core-to-core half of the same breakage the four scenario skills
+carry, and it was missing from the original file list.
+
+"Before you spend" now says the link assumes a directory name, carries a probe
+over the five known locations, and — the part that matters — states that a
+link which does not resolve is **not** a reason to skip the gate: the rule is
+the paragraph above it and the dry run below it either way, and only the
+spec's detail travels with `ofox-video-core`.
+
+The "four things a scenario skill must not re-implement" list keeps telling
+scenario skills to link the gate rather than paraphrase it, and now adds that
+the directory-name caveat travels with the link — a "Where the core skill
+lives" probe near the top of a scenario skill is what stops that link reading
+as a missing file.
+
 ## 1.10.2 — the changelog for 1.10.1 quoted the literal it had just removed
 
 **Changelog text only; no change to the script, the tests, the API calls or
