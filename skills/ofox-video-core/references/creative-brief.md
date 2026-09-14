@@ -2,9 +2,10 @@
 
 ## What this file is
 
-**One spec, shared by every Seedance scenario skill in this repo** —
+**One spec, shared by every video scenario skill in this repo** —
 `seedance-short-drama`, `seedance-anime-drama`, `seedance-ad-creative`,
-`seedance-product-video`, and any scenario skill added later. It is the rule
+`seedance-product-video`, `keyframe-animation`, `product-demo`, and any
+scenario skill added later, `seedance-`-named or not. It is the rule
 for what to ask the user **before** a prompt exists. Each scenario skill links
 here and adds only its own question set; none of them restate what follows,
 because four paraphrases of "ask once, recommend first, never default to the

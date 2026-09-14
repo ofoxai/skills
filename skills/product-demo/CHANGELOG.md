@@ -1,0 +1,75 @@
+# Changelog
+
+All notable changes to the **product-demo** skill. Versioning follows SemVer.
+
+## 1.0.0 — first release
+
+A scenario skill for turning two screenshots of one interface into a short
+demo clip: the before state is attached as the first frame, the after state as
+the last frame, in one `ofox-video-core` job.
+
+**This scenario was expected to fail, and the test said otherwise.**
+Generative video models fabricate text, a UI is almost entirely text, and
+every other scenario skill in this repo carries an `AVOID: subtitles,
+on-screen text` line for that reason. Job `5e59baa2`,
+`bytedance/seedance-2.5`, 4 seconds, 480p, 44 cents billed, fed two genuine
+Chrome-rendered screenshots of one pricing panel that differed in four places
+(plan name, price, seat count, button label). The delivered clip's own frames
+show, at t=1.3s, the four changed values **mid-fade but correctly spelled and
+correctly positioned**, the unchanged labels still solid, and by t=2.0s every
+string crisp and correct. No garbling, no invented text, no layout drift.
+
+**So this skill does not carry the blanket anti-text AVOID line**, and that is
+a deliberate decision recorded in the skill itself rather than an omission.
+Those lines exist for text the model has to *invent*; with both endpoints
+supplied it is interpolating between two given renderings, and a blanket
+prohibition on text would be pointed at the user's own interface. The AVOID
+list instead forbids text-shaped things that are in **neither** capture
+(tooltip, toast, badge, cursor) and text that stops being text (blurred,
+doubled, malformed glyphs) — the real failure modes.
+
+What the skill deliberately does **not** claim, because one job cannot support
+it: anything about a pair differing in many places or in layout rather than in
+values; anything about a model other than `bytedance/seedance-2.5` (the
+catalog's `i2v` flag says nothing about locking both ends, and nothing at all
+about lettering); anything about a pointer or cursor, which would be an
+element in neither endpoint. Each of those is marked untested where it comes
+up.
+
+Also in this release:
+
+- **The timing note is borrowed from the sibling job and labelled as such.**
+  The front-loaded easing (about 53% of the change in the first quarter of the
+  clip, arrival at 3 seconds of 4, then a hold) was measured on the motion
+  clip `259c3ce2`, not on the UI clip, which was read for legibility instead.
+  The practical consequence — the tail of the clip is a hold on the final
+  state — is what the duration advice is written around.
+- **No hardcoded model, price, resolution or duration table.** Those are
+  catalog facts and the skill points at `ofox-video.sh models` / `providers` /
+  `generate --dry-run` instead. The one cost figure it prints carries the
+  exact parameter pair it was measured at.
+- **The core-directory probe ships from day one** — an ordered candidate list
+  rather than a hardcoded `../ofox-video-core/...`, so the skill works on
+  LobeHub's `ofoxai-skills-<name>` layout as well as skills.sh / ClawHub /
+  `npx ofox-skills`.
+- **Aspect ratio written against `ofox-video-core` 1.22.0**: with frames
+  attached, `adaptive` is *forced* on `bytedance/seedance-2.5` and *defaulted*
+  on a model whose catalog entry lists it. The advice is to crop both captures
+  to the target shape first — crop, never pad, since padding bakes the bars
+  into the video — and pass no `--aspect-ratio` on any model.
+- **A way to confirm both captures are attached before paying for the
+  answer.** A dry run quotes the price but names only the model, duration and
+  resolution, so a flag that didn't take looks exactly like a healthy quote.
+  The skill points at `generate --dry-run --print-payload`, greps the two
+  `frame_type` entries out of the request body, and says what one line or a
+  reversed order means. No new tooling — the flag already existed and its
+  output is dumped before the dry run stops.
+- **`--out-dir` is stated as absolute and passed to the dry run**, which is
+  where the script creates and enters it: a bad path exits `6` with nothing
+  submitted, instead of after a job is paid for.
+- **It says when not to buy.** A screen recording of the real app costs
+  nothing and is exact; the skill raises that before quoting a job.
+
+**What a caller has to do**: install `ofox-video-core` 1.22.0 or newer beside
+this skill. `npx ofox-skills` installs every skill in this repo, which is what
+keeps the sibling path resolvable.

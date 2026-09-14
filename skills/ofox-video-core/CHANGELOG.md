@@ -74,6 +74,14 @@ Three things found while fixing it, all real and all fixed here:
 `chain`'s sequence-level note about shots 2+ no longer claims `adaptive` is
 required on models that merely offer it.
 
+Also in this version, with no behaviour change: the three shared references a
+scenario skill links to (`approval-gate.md`, `creative-brief.md`,
+`prompt-structure.md`) described themselves as the spec for every
+**`seedance-*`** scenario skill. Scenario skills are no longer all named that
+way, and the approval gate in particular is the one file whose scope must not
+be readable as "doesn't apply to me" — it now says every scenario skill built
+on the cores, whatever it is called.
+
 ### The snapshot refresh moved the upstreams too, which broke two more things
 
 Regenerating the catalog did not only add models. **Every `alibaba/*` model

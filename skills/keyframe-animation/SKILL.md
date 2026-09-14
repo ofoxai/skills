@@ -1,0 +1,636 @@
+---
+name: keyframe-animation
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus two images you already have, a start frame and an end frame. Animates the motion between them as one video — both frames go into a single Ofox video job, the clip opens on A, closes on B, and the model fills the middle. Use when a user has two stills and wants the in-between animated, e.g. "here is the before and the after, animate the transition", "make a video that starts on this image and ends on that one", "tween these two frames", or "move the object from where it sits in the first picture to where it sits in the second". Do not use when only one image exists (animating a single frame is seedance-ad-creative or seedance-product-video), or when the pair is two states of a user interface (see product-demo).
+license: MIT
+version: "1.0.0"
+homepage: https://github.com/ofoxai/skills/tree/main/skills/keyframe-animation
+metadata:
+  author: ofoxai
+  version: "1.0.0"
+  openclaw:
+    requires:
+      env: [OFOX_API_KEY]
+      bins: [curl, jq]
+    primaryEnv: OFOX_API_KEY
+    envVars:
+      - name: OFOX_API_KEY
+        required: true
+        description: Ofox API key. Create one at https://app.ofox.ai (Settings -> API Keys). The same key works across every Ofox skill.
+    emoji: "🎞️"
+    homepage: https://github.com/ofoxai/skills/tree/main/skills/keyframe-animation
+---
+
+# keyframe-animation: start on image A, end on image B, fill in the middle
+
+Two stills you already have become one clip: image A is attached as the first
+frame, image B as the last frame, in the **same** job, and the model generates
+the motion between them.
+
+This skill is a thin, scenario-specific layer over
+[`ofox-video-core`](../ofox-video-core/SKILL.md). It owns what makes a usable
+A/B pair, the prompt for the middle, the duration advice, and the
+pre-generation cost estimate; `ofox-video-core` owns talking to the Ofox API
+correctly and safely (the `OFOX_API_KEY` handling, the no-resubmit rule,
+error-code mapping, download/verification, and reporting the downloaded file's
+absolute `VIDEO_PATH`). **Read that skill's safety contract before using this
+one** — it is not restated here.
+
+The shared prompt craft — the vendor's formula, timestamp rules, camera
+vocabulary, consistency locks, negative lists, and what a frame lock has been
+measured to hold — lives in
+[`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md).
+The rules for the questions that come **before** a prompt exists are in
+[`../ofox-video-core/references/creative-brief.md`](../ofox-video-core/references/creative-brief.md),
+and the spend rule is in
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md).
+This file carries only what is specific to a two-ended interpolation.
+
+## Where the core skill lives
+
+Resolve once, before the first call:
+
+```bash
+for d in ../ofox-video-core \
+         ../ofoxai-skills-ofox-video-core \
+         ~/.agents/skills/ofox-video-core \
+         ~/.agents/skills/ofoxai-skills-ofox-video-core \
+         ~/.claude/skills/ofox-video-core; do
+  [ -f "$d/references/ofox-video.sh" ] && echo "$d" && break
+done
+```
+
+Examples below are written as `../ofox-video-core/...` (the skills.sh /
+ClawHub / `npx ofox-skills` layout, where a skill's directory is named after
+the skill). If the probe found a different directory — LobeHub unpacks each
+skill as `ofoxai-skills-<name>`, so the sibling there is
+`ofoxai-skills-ofox-video-core` — substitute it, in the `ofox-video.sh`
+commands and in the `references/*.md` links alike.
+
+**That `../` is relative to this skill's own directory**, which is also where
+the probe has to run: every example below assumes the working directory is the
+one this `SKILL.md` sits in. From anywhere else nothing resolves — use the
+absolute path the probe printed (candidates 3–5 are absolute already), or, in
+a clone of this repo, `skills/ofox-video-core/references/ofox-video.sh` from
+the repo root.
+
+Nothing found → the core skill isn't installed; see "If the script isn't
+found".
+
+## Before generating: the availability check
+
+Run this once per session (not on every request):
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh check
+```
+
+If it fails, follow `ofox-video-core`'s guidance (install `curl`/`jq`, or get
+an `OFOX_API_KEY` at `https://app.ofox.ai`) — don't dead-end the conversation,
+and don't re-run this check on every subsequent request once it has passed.
+
+`check` reports whether the key is **present**, not whether it is valid; it
+makes no network call. The key is an ordinary environment variable in the
+shell that runs the script — the script reads nothing from a `.env` file on
+its own, so if a project keeps it in one it has to be sourced into the same
+shell before the command runs.
+
+**A failing `check` is not a stop sign for this conversation.** It exits `2`
+when `OFOX_API_KEY` is unset, but `models`, `providers` and
+`generate --dry-run` all run without a key — so a keyless user can still get
+the pair of frames read, the prompt written and the job priced, and only needs
+the key at the moment they say yes to the cost table. Do that work first
+rather than opening with a signup link; see "Pricing a job with no API key".
+
+## What this skill rests on: one measured job
+
+Everything below traces to a single real run, or it says it doesn't. The run:
+job `259c3ce2`, `bytedance/seedance-2.5`, 4 seconds, 480p, a first frame and
+a last frame attached in one job, **billed 44 cents**. The inputs were a red
+square on a flat background with no text, drawn at x=120–240 in the first
+frame and at x=614–734 in the last.
+
+| What was measured | The measurement |
+|---|---|
+| **Both ends are honoured, to the pixel** | scanning the *delivered video's own frames* for red: its first frame has the square at x=120–239, its last frame at x=614–733. Not "the job reported completed" — the artifact was read |
+| **The motion is front-loaded, not linear** | the same scan at t=1/2/3s gives x≈384, 564, 614. Against a total travel of 494 px that is roughly **53% of the distance covered in the first quarter of the clip, 90% by halfway, and arrival at 3 seconds of 4** |
+| **The last beat is a hold, not travel** | having arrived at ~3s, it stays. The final second of that clip delivers no movement |
+
+What that job does **not** establish, and this skill does not claim:
+
+- whether the front-loaded easing scales with duration — whether a 10-second
+  clip holds for two and a half seconds or for one. One duration was measured;
+  4 seconds;
+- whether first+last in one job works on any model other than
+  `bytedance/seedance-2.5`. The catalog lists `i2v` for the current video
+  models, but `i2v` says nothing about locking *both* ends at once — that
+  granularity is not in the catalog and has not been tested here;
+- whether a mismatched pair (two images of different pixel dimensions) works.
+  The measured pair were two renderings of one canvas;
+- anything about how a pair that differs wildly is interpolated. See "When the
+  two frames differ too much", which is reasoning, and labelled as such.
+
+## Before writing the prompt: the brief
+
+The shared rules — the three tiers, one round of at most four questions, the
+"Let the AI decide" discipline, the order with the approval gate, the fallback
+for a runtime without `AskUserQuestion` — are in
+[`../ofox-video-core/references/creative-brief.md`](../ofox-video-core/references/creative-brief.md).
+This section adds only this scenario's question set.
+
+Most of the axes other Seedance scenarios ask about are settled here by the
+two images themselves: the subject, the setting, the framing, the lighting and
+the output's shape are all in the pair. **Zero questions is the common case**
+when both files arrive with names that say which is which.
+
+| Tier | Keyframe axes |
+|---|---|
+| **must-ask** | does the second image exist? and, when the input leaves it ambiguous, which of the two is the **start**. Neither can be guessed: a frame that does not exist cannot be invented, and getting the order backwards produces a clip that runs the wrong way and costs the same |
+| **ask-if-open** | the path — what happens between the two frames, when the pair leaves more than one reading |
+| **never-ask** | duration, resolution, model, provider, audio (off by default here). Aspect ratio is not a question at all: with frames attached the clip follows the frames. Two durations or two resolutions are **two rows in the cost table**, which tells the user more than a question with two labels and no prices. Never-ask means the agent doesn't raise it — a model the user names by id or by shorthand is used instead of the default |
+
+### The question set
+
+| # | Tier | `header` | Question | Options (1 = recommended) | Ask when |
+|---|---|---|---|---|---|
+| 1 | must-ask | `Frames` | I need both ends of this: the picture the clip starts on and the picture it finishes on. Do you have the second one? | **Yes — I'll give a local path (recommended)**: both frames go into one job and the clip lands on both exactly. / **No, only one**: then this is not a two-ended job — animating a single frame is `seedance-ad-creative` or `seedance-product-video`, and I can hand it over. **No AI option** — a frame that does not exist cannot be invented. | Only one image is attached and the user did not name a second. |
+| 2 | must-ask | `Order` | Which of the two is where the clip **starts**? | the two filenames as the two options. **No AI option.** | Two images arrived and nothing in the names, the paths or the message says which comes first. Skip it whenever the names themselves state an order — `before`/`after`, `start`/`end`, `first`/`last`, `a`/`b`, `1`/`2`, `01`/`02`, `open`/`closed`, `old`/`new`, a timestamp or a frame number — or the message says so. The list is illustrative: any pair that reads as a sequence to you will read that way to the user. |
+| 3 | ask-if-open | `Path` | How should the subject get from the first picture to the second? | **Straight there (recommended)**: the plain reading of the pair, and the only one with a measured run behind it. / **Along an arc**: name the arc in the prompt (over, under, around the object between them). / **Something happens on the way**: describe it and it goes in the prompt as a beat — untested here, and the middle is the part the model invents. / **Let the AI decide**. | The two frames leave more than one plausible route between them. Skip it when the pair is a plain displacement. |
+
+Not asked: duration and resolution (rows in the cost table), the model, the
+provider, the audio flag, the aspect ratio.
+
+### Skip rows specific to this scenario
+
+On top of the generic rows in `creative-brief.md`:
+
+| Input says… | Axis | Value |
+|---|---|---|
+| filenames that state an order — `before`/`after`, `start`/`end`, `first`/`last`, `a`/`b`, `1`/`2`, `01`/`02`, `open`/`closed`, `old`/`new`, timestamps, frame numbers | Order | as named; don't ask. Treat these as examples of the pattern, not as the whole list |
+| "from this one to that one", in the order the files were attached | Order | attachment order |
+| "it should slide / travel / move across" | Path | straight |
+| "it should arc / swing / hop over" | Path | arc, described in the prompt |
+| "a quick transition", "short", "for a GIF" | duration | the model's minimum — `ofox-video.sh models` prints each model's range |
+
+### From answers to prompt — traceability
+
+| Answer | Lands in |
+|---|---|
+| Frames: two paths | `--frame-first-image A` and `--frame-last-image B` |
+| Order | which path goes on which of those two flags |
+| Path | the MOTION line of the prompt |
+| Duration | `--duration`, and a row in the cost table |
+
+### The recap for this scenario
+
+```
+Brief:
+- Start frame: /Users/me/shots/ball-left.png (given)
+- End frame:   /Users/me/shots/ball-right.png (given)
+- Path: straight across the table (inferred from "slide it over")
+- Duration / resolution / audio: 4s / 480p / off — one row below; 720p as a second row
+- Frame shape: 1024x576 on both files, so the clip comes out in that shape
+```
+
+Then the full prompt, then the cost table, all in one message — the order and
+the rule for a change made at the gate are in `creative-brief.md`'s "Order,
+with the approval gate".
+
+## What makes a good A/B pair
+
+The two frames are the only thing the job is anchored to, so the pair carries
+more weight here than a reference photo does anywhere else in this repo.
+
+- **Two states of one scene, not two pictures.** Same subject, same set, same
+  lighting, same camera position and the same distance from it. The measured
+  pair differed in exactly one thing — where the square sat — and the model
+  had one job to do. The further the pair drifts from that, the more of the
+  clip is the model's invention rather than your material.
+- **One change, or a small bounded set of them.** Every difference between A
+  and B has to be resolved somewhere in the middle, and you are paying for all
+  of them at once.
+- **Same pixel dimensions on both files.** The measured pair were two
+  renderings of one canvas. A mismatched pair has not been run here; matching
+  them first costs nothing and removes the question. `hal-image` or any
+  ImageMagick/`sips` call will do it, and reading the real pixels
+  (`sips -g pixelWidth -g pixelHeight <file>`, `identify <file>`) rather than
+  trusting a filename or an export dialog is this repo's standing habit.
+- **Crop to the shape you want the clip in, before generating.** With frames
+  attached the output follows the frames — see "The frame decides the shape"
+  below — so the aspect ratio is a crop you make first, not a flag you pass
+  afterwards.
+- **A local file beats a remote URL** when one is available.
+  `ofox-video-core` base64-encodes a local readable file into the request; a
+  publicly reachable URL has been rejected upstream at least once in this repo
+  (likely host-side hotlink protection). A URL works, it is just the
+  less-reliable of the two.
+- **No photoreal person in either frame.** `bytedance/seedance-2.5` refuses a
+  photoreal-person reference at submission (`input_moderation_failed`, nothing
+  billed) — a documented `ofox-video-core` behaviour, and the refusal happens
+  before any money moves. `--real-person true` exists for authorised
+  references but is untested on 2.5 in this repo.
+
+## Duration: the motion arrives early and then holds
+
+The one measured clip covered ~53% of the distance in its first second, ~90%
+by two, and had **arrived at three seconds of four**. The last beat is a hold.
+
+What to do with that:
+
+- **Budget for the hold.** If the user wants a visible half-second of stillness
+  at the end, the model already gives it. If they want the arrival to land on
+  the final frame, it won't — and no clause in the prompt is known to move it.
+- **Short is the honest default.** A longer clip buys more hold, not
+  necessarily more motion, and it bills per second. Start at the model's
+  minimum duration (`ofox-video.sh models` prints each model's range) and show
+  a longer option as a second row in the cost table rather than assuming it.
+- **Don't write "at an even speed" into the prompt.** The measured clip eased
+  regardless, and an instruction the tool measurably does not follow is a
+  liability rather than a rule — this repo has the scar to prove it. If even
+  pacing genuinely matters, that is a question for a real run, not for a
+  clause.
+- **Whether the hold scales with duration is untested.** At 10 seconds it
+  might hold for two and a half, or it might hold for one. One duration was
+  measured. Say so rather than extrapolating for the user.
+
+## When the two frames differ too much
+
+**This section is reasoning, not measurement.** The one run behind this skill
+used a pair that differed in one thing. Nothing here has been paid for.
+
+The middle of the clip is the part nobody supplied, and the further apart the
+endpoints, the more of it the model is inventing. Signals that a pair is
+asking for too much: a different set, a different camera position, a different
+subject, a different time of day, or several unrelated changes at once.
+
+Three routes, in the order worth trying:
+
+1. **Make the pair closer.** Re-shoot, re-render or re-crop B so it differs
+   from A in one bounded way. Cheapest by a wide margin — it costs no API
+   call at all.
+2. **Split it into two jobs and let the middle be a cut.** Two shorter A→B
+   clips joined in an editor beat one clip asked to invent a transition it was
+   never shown. Two jobs are two rows in the cost table.
+3. **Use `chain` instead** when what you actually have is a *sequence* rather
+   than two ends: `ofox-video.sh chain` carries the last frame of one job into
+   the first frame of the next and joins the clips. It is a different tool —
+   you give it prompts, not a destination frame — but for "keep going from
+   here" it is the one that fits.
+
+If the user wants the wide pair anyway, price it, say plainly that the middle
+is unmeasured territory, and suggest the cheapest resolution for the first
+attempt.
+
+## The prompt
+
+With both ends supplied, the prompt has a smaller job than in any other
+Seedance scenario: it is not describing a shot, it is describing **what
+happens between two pictures the model can already see**. Keep it to the
+subject, the single change, and what holds still.
+
+Vocabulary and the general formula are not repeated here — see
+[`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md).
+Two things from that file bear directly on this template: negative clauses are
+honoured more reliably than positive ones, and a camera verb on its own tends
+not to produce a camera move. The second is why this template asks the camera
+to stay put rather than asking it to travel.
+
+```
+SUBJECT: <the subject, in physical words — material, colour, shape, size relative to the frame>. It keeps the same shape, colour, proportions and markings from the first frame to the last.
+SCENE: <the setting, described once — it is the same setting in both frames>. The background, the lighting and the framing stay as they are; the camera does not move.
+MOTION: the <subject> travels from <where it is in the first frame — "the left third of the frame, on the table"> to <where it is in the last frame — "the right third, on the same table">, <along a straight line | in a shallow arc over the <object>>, staying <in contact with the surface | at the same height> the whole way. Nothing else in the frame moves.
+ENDING: it comes to rest in the position of the last frame and stays there.
+AVOID: a cut, a fade to black, a dissolve, a wipe; camera shake, zoom, pan or reframing; the <subject> changing shape, colour or size; a second <subject> appearing; motion blur smearing the <subject>; subtitles, captions, on-screen text, watermarks.
+```
+
+**About that last AVOID item.** It is here because the measured pair carried
+no lettering, so any text in the middle would be text the model invented —
+which is the failure mode every `AVOID: on-screen text` line in this repo
+exists for. **If your own two frames contain lettering** — a label, a sign, a
+readable screen — the premise flips: the model is then interpolating between
+two supplied renderings rather than inventing glyphs, and forbidding text
+fights your own material. Drop the item and read `product-demo`, which is
+built on exactly that case and has a measured run behind it.
+
+### Worked example
+
+Two renderings of one 1024x576 canvas: a red ceramic mug on a light wooden
+table, at the left in A and at the right in B, nothing else different.
+
+```
+SUBJECT: a red ceramic mug with a rounded handle, matte glaze, about one sixth of the frame's width. It keeps the same shape, colour, proportions and handle angle from the first frame to the last.
+SCENE: a light wooden table under even, soft, overhead light, a plain pale wall behind it. The background, the lighting and the framing stay as they are; the camera does not move.
+MOTION: the mug travels from the left third of the frame to the right third, along a straight line across the table, its base staying in contact with the tabletop the whole way and the handle keeping the same angle. Nothing else in the frame moves.
+ENDING: the mug comes to rest in the position of the last frame and stays there.
+AVOID: a cut, a fade to black, a dissolve, a wipe; camera shake, zoom, pan or reframing; the mug changing shape, colour or size; a second mug appearing; motion blur smearing the mug; subtitles, captions, on-screen text, watermarks.
+```
+
+Check the draft the same way the evidence job was checked: read the delivered
+clip's own first and last frames against the two inputs, and sample the middle
+— never take `STATUS completed` as proof the interpolation is the one you
+asked for.
+
+## The frame decides the shape
+
+With a frame attached, the output's aspect ratio follows the frame, and how it
+gets there depends on the model:
+
+- on `bytedance/seedance-2.5`, `ofox-video-core` **forces**
+  `aspect_ratio=adaptive` and prints a `NOTE:` saying so, because the API
+  requires it for image-to-video on that model. Anything you passed is
+  overridden;
+- on a model whose catalog entry lists `adaptive`, the script **defaults** to
+  it when you pass no `--aspect-ratio`, and keeps your value if you pass one;
+- on a model that does not offer `adaptive`, the script sends no ratio and
+  says so — the frame's shape may not survive.
+
+So: **don't pass `--aspect-ratio` on this route**, on any model. Crop both
+frames to the shape you want before generating; that crop is what actually
+decides the output. Relay the `NOTE:` the script prints — it names which of
+the three branches applied.
+
+This needs `ofox-video-core` 1.22.0 or newer. On an older core, a non-Seedance
+model with frames attached sent no ratio at all, with nothing printed to say
+so.
+
+## Recommended defaults
+
+| Parameter | Default | Why |
+|---|---|---|
+| `--frame-first-image` / `--frame-last-image` | both, in one `generate` call | the whole point of this skill; both ends were honoured to the pixel on the measured job |
+| `--model` | not passed — the script's own default applies, **unless the user named a model**, which always wins | the measured job ran on `bytedance/seedance-2.5`; whether both ends can be locked on another model is untested here, so say so before switching rather than after. `models` lists the models but does **not** mark which one the script defaults to — the `MODEL` line a `generate --dry-run` prints is what names the id that will really be sent, which is also the id the cost table has to carry |
+| `--duration` | the model's minimum for a plain A→B move | the motion arrives at about three quarters of the clip and holds; extra seconds buy hold and bill per second. `ofox-video.sh models` prints each model's range — don't quote a range from memory |
+| `--resolution` | the cheapest tier for the draft, the deliverable's tier for the final. **When the user named neither** — the common case — draft at the model's cheapest tier and put the next tier up as a *second row* of the same cost table, so the upgrade is priced rather than asked about | the measured job ran at 480p, the cheapest tier its model lists. Which tiers a model has is a catalog fact; `models` prints them, and dry-running both rows costs nothing |
+| `--aspect-ratio` | not passed | the attached frames decide it — see "The frame decides the shape" |
+| `--generate-audio` | `false` | a tween of two stills has nothing to sync to, and the server's default is `true`. Omit the flag only when the clip genuinely wants a track |
+| `--seed` | let the script roll one, and keep it | it prints `SEED` and writes it to the clip's `.json` sidecar, which is the handle for "that take, at a higher resolution". It reproduces a take only while the prompt is byte-identical |
+| `--real-person` | leave unset | photoreal people in a reference frame are refused at submission on `bytedance/seedance-2.5`; `true` is untested there |
+
+## Choosing a model
+
+The model stays **never-ask** — the agent doesn't raise it. But never-ask is
+not "never listen": if the user names a model, use it.
+
+**Model ids, prices, resolutions, durations and aspect ratios are not written
+down in this file on purpose.** They are catalog facts, they change, and this
+repo has five recorded defects that trace to a hardcoded copy of somebody
+else's value table — the most recent created by refreshing the data next to
+it. Read them live instead, free and with no API key:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh models      # models, tiers, ranges
+bash ../ofox-video-core/references/ofox-video.sh providers   # the price matrix
+```
+
+One thing worth telling the user before they switch: the first+last-frame
+combination has only been run here on `bytedance/seedance-2.5`. The catalog
+says the current models do `i2v`, but `i2v` does not distinguish "one end
+locked" from "both", so another model is an untested route, not a known-good
+one.
+
+## Before you spend: the approval gate
+
+**Never submit a paid job until the user has seen a cost table and said yes.**
+The rule, the table's required columns, where the numbers must come from, and
+what to do when no estimate is possible are written down once for every Ofox
+skill in this repo:
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md).
+Follow it rather than improvising.
+
+Get the numbers from `--dry-run`, which validates everything and prints the
+estimate **without sending a request**:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+  --prompt "..." \
+  --frame-first-image /path/to/A.png \
+  --frame-last-image  /path/to/B.png \
+  --duration 4 --resolution 480p --generate-audio false \
+  --out-dir /absolute/path/to/out
+```
+
+Relay the `Estimated cost:` line it prints — never a number of your own — then
+wait for a yes, then re-run the identical command with `--dry-run` removed.
+The estimate a *real* run prints comes microseconds before the request goes
+out, too late to relay; that is what `--dry-run` is for.
+
+The brief recap goes in the **same message** as the prompt and the table,
+above them.
+
+**The one cost anchor this skill has**, with the parameters it was measured
+at attached, because a figure without them is not a measurement:
+`bytedance/seedance-2.5`, 4 seconds, 480p, first+last frames, **44 cents
+billed**. It is not a quote for any other combination — an image-to-video job
+bills at the text-to-video tier, so a longer or higher clip scales from the
+dry run, never from this number.
+
+Afterwards the **actual** bill is `VIDEO_COST` from the finished job. Report
+it as money, not as the raw ten-decimal string. An estimate is never a bill.
+
+### Confirm both frames are attached, before the money moves
+
+The dry run's own output names the model, the duration and the resolution and
+says **nothing about the frames** — so a mistyped flag, or a path that quietly
+matched only one file, reads as a perfectly healthy quote and shows up in the
+delivered clip instead. `--print-payload` closes that: it dumps the request
+body on stderr *before* the dry run stops (the API key travels in a header,
+never in the body), and the two `frame_type` entries are the part to read:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run --print-payload \
+  --prompt "..." \
+  --frame-first-image /path/to/A.png \
+  --frame-last-image  /path/to/B.png \
+  --duration 4 --resolution 480p --generate-audio false \
+  --out-dir /absolute/path/to/out \
+  2>&1 >/dev/null | grep -o '"frame_type":"[a-z_]*"'
+```
+
+Measured output on a two-frame job:
+
+```
+"frame_type":"first_frame"
+"frame_type":"last_frame"
+```
+
+Two lines, in that order, is the confirmation. One line means one of the two
+flags didn't take; a different order means `--frame-first-image` and
+`--frame-last-image` are carrying the wrong paths, which is the same defect as
+a backwards clip and is free to fix at this point. Grep the payload rather
+than printing it whole: each local frame is base64-inlined into that JSON, so
+the body runs to megabytes.
+
+`--out-dir` is worth passing to the dry run for the same reason — the script
+creates and enters it here, and a path it can't use fails as exit `6` with
+nothing submitted. Pass the **same** directory to the real run; a different
+one afterwards re-opens the question the dry run just settled (an exit `6`
+after a create costs the job's price, and is recovered with
+`poll JOB_ID --out-dir <writable dir>`, never with a second `generate`).
+
+## Several takes to choose from
+
+The middle is generated, so it is a roll. When the user wants options rather
+than one clip, `batch` prices the whole set up front, waits on the takes
+concurrently, and builds a contact sheet:
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh batch --dry-run \
+  --prompt "..." --takes 3 \
+  --frame-first-image /path/to/A.png --frame-last-image /path/to/B.png \
+  --duration 4 --resolution 480p --out-dir /absolute/path/to/out
+```
+
+Quote `BATCH_COST_TOTAL`, not `BATCH_COST_PER_TAKE`, and give the takes a row
+each — the gate wants the itemised shape. If one take in three is usable, that
+clip cost the whole total. At `--dry-run` the total is the
+`Estimated cost: ~$… for N takes` line; the two `BATCH_COST_*` keys are what
+the real run prints afterwards.
+
+Hand the user the `CONTACT_SHEET` path on its own line; in this flow it is the
+artifact they look at first. Each `TAKE` line carries `seed=N`, which is the
+handle for re-rendering that take at a higher resolution.
+
+Submission is sequential and only the waiting runs in parallel, so a
+submission failure stops the remaining takes — but the whole total is
+committed within seconds of the yes. That is a real reduction in
+recoverability compared with running takes one at a time, and the cost table
+is the only place a batch can be stopped.
+
+## Pricing a job with no API key
+
+`models`, `providers` and `generate --dry-run` all work with `OFOX_API_KEY`
+unset. So when a user hasn't signed up yet, **quote the job first and let them
+decide whether it's worth registering** — don't open by sending them to a
+signup form.
+
+## If the script isn't found
+
+```
+bash: ../ofox-video-core/references/ofox-video.sh: No such file or directory
+```
+
+Nothing is broken — this skill delegates all execution to `ofox-video-core`
+and reaches it by relative path, and that path just missed. Two different
+situations wear this message, so run the probe in "Where the core skill lives"
+before deciding which:
+
+- **The probe printed a directory** — the core is installed and only the
+  directory *name* was wrong, which is the normal LobeHub case
+  (`ofoxai-skills-ofox-video-core`). Re-run the command against what the probe
+  printed. Nothing needs installing.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and the
+  fix belongs to whichever installer the user already has: `npx ofox-skills`
+  (this repo's own) or the underlying
+  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
+  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
+  publisher.
+
+Either way, say which skill is missing and where it was expected rather than
+relaying the raw path error, which names neither.
+
+A broken link to a shared reference has the same two causes: this skill
+packages only its `SKILL.md` and `CHANGELOG.md`, so `prompt-structure.md`,
+`creative-brief.md`, `approval-gate.md` and `api-params.md` are out of reach
+whenever the script is. The skill still works without them — the template, the
+question set and the defaults are written out here; what is unavailable is the
+depth behind the rules they reference.
+
+## Exit codes worth knowing
+
+Full table in [`../ofox-video-core/SKILL.md`](../ofox-video-core/SKILL.md).
+The ones that come up:
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `1` | Parameter rejected locally, no network call, nothing billed | Fix the flag and retry freely |
+| `2` | Environment problem — `curl`/`jq` missing, or no `OFOX_API_KEY` | Ask the user to fix it; `check` reports the same |
+| `3` | API rejected it, or the job ended failed/cancelled/expired | Read the mapped message; a rejected create was not billed |
+| `4` | Timed out waiting — **the job is still running and billable** | `poll JOB_ID`, never re-run `generate` |
+| `5` | Ambiguous network failure on create | Do not retry blindly; check https://app.ofox.ai first |
+| `6` | `--out-dir` unusable | Fix the path; if it happened after a create, `poll JOB_ID` |
+
+## How long to tell the user it will take
+
+`generate` blocks while it polls, up to `--max-wait` (default 540s). A short
+low-resolution clip is usually one to three minutes. Say so before starting,
+so the wait isn't silent.
+
+If your tool call can't stay open that long, use `create` (submits and returns
+a job id in seconds) followed by `poll`, instead of `generate`. That way a
+timeout can never strand a job whose id you never saw.
+
+## Where the file lands
+
+Always pass `--out-dir`, and **make it an absolute path**. Without it the
+script writes to the current working directory — which, given that the
+examples here run from this skill's own directory, would drop the user's video
+inside an installed skill. Relay the **absolute** `VIDEO_PATH` the script
+prints, on its own line.
+
+The dry run is where a bad directory gets caught: `generate --dry-run` (and
+`batch --dry-run`) creates and enters `--out-dir` before it quotes, and exits
+`6` without submitting anything if it can't. That only covers the directory
+you actually passed it, so give the real run the same one — swapping it
+afterwards puts you back to discovering the problem after the job is paid for.
+
+Pass `--name` too — you know what the clip is, so name the file after it
+rather than leaving the script to guess from the prompt's opening words. The
+clip lands as `<name>-<short job id>.mp4` with a `.json` sidecar holding the
+full job id, the prompt, the seed and the real cost.
+
+## Generating
+
+```bash
+bash ../ofox-video-core/references/ofox-video.sh generate \
+  --prompt "<the A-to-B prompt built above>" \
+  --name "<short description, e.g. mug slides right>" \
+  --frame-first-image "/absolute/path/to/A.png" \
+  --frame-last-image  "/absolute/path/to/B.png" \
+  --duration 4 \
+  --resolution 480p \
+  --generate-audio false \
+  --out-dir /absolute/path/to/out
+```
+
+No `--aspect-ratio` on purpose, on any model — see "The frame decides the
+shape".
+
+This one call validates the parameters, submits the job, polls to completion,
+downloads the mp4, and prints `STATUS`, `JOB_ID`, `VIDEO_PATH`,
+`VIDEO_SECONDS`, `SEED` and `VIDEO_COST`. Report the **actual** values from
+that output — never the estimate, and never a path or cost you didn't see the
+script print. Do not re-implement any of the request, poll or download logic
+here.
+
+## Common failure modes and fixes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Exit `1`, no network call made | A flag the model doesn't accept — a duration outside its range, a resolution it doesn't have | Read the error, which names the model's real values, and re-run. Nothing was submitted, so retrying is free |
+| Exit `1`, `references_conflict` | `--frame-first-image`/`--frame-last-image` together with an `input_references` array in `--extra-json` | Pick one meaning — locked frames, or identity references — and drop the other. They cannot be combined in one job |
+| Exit `3`, `input_moderation_failed` | One of the two frames contains a photoreal person. Refused at submission on `bytedance/seedance-2.5`; nothing billed | Use frames without a photoreal person, or crop them out. `--real-person true` is untested on that model here |
+| Exit `3`, `insufficient_credits` | Ofox balance too low | No charge was made; add credits at https://app.ofox.ai and retry |
+| Exit `3`, job ends `failed` with `output_moderation_failed` | The generated output failed a post-generation check — after the job ran, not at submission. Not billed | Retry as a **brand-new** `generate` with a different prompt or frames. A new request, not a resubmission |
+| The clip runs backwards | The two paths were passed on the wrong flags | Swap `--frame-first-image` and `--frame-last-image`. New job, new cost table — which is why `Order` is a must-ask when the input is ambiguous |
+| The subject reaches its destination early and then sits there | Expected, and measured: ~53% of the distance in the first quarter of the clip, arrival at 3 of 4 seconds on job `259c3ce2` | Nothing in the prompt is known to change it. Shorten the clip, or plan for the hold. Don't write "constant speed" — the measured clip eased anyway |
+| The output is the frames' shape, not the shape you wanted | Expected: with frames attached the clip follows the frames | Crop both frames to the target shape and generate again — a new job, billed again, which is why the crop happens before the first submission |
+| The middle invents something that is in neither frame | The pair was too far apart, so the middle was the model's to fill | Bring the pair closer, or split it into two shorter jobs. See "When the two frames differ too much" — reasoning, not measurement |
+| Readable lettering appears mid-clip that is in neither frame | The AVOID list's text items were dropped, or the pair has lettering in only one end | Keep the text items when your frames are text-free. When both frames genuinely carry the same lettering, `product-demo` is the skill with a measured run behind that case |
+| Exit `4`, timed out waiting | The job is still running upstream, not failed | Do **not** re-run `generate`; run `poll JOB_ID` with the id printed before the timeout |
+| Exit `5`, ambiguous network failure on create | No HTTP response at all — can't tell whether a job was created | Don't guess or retry; tell the user to check https://app.ofox.ai for a job that may already be running |
+| Exit `6`, `--out-dir` unusable | Local filesystem problem, not an API problem | The job is unaffected — fix the path and `poll JOB_ID --out-dir <writable dir>` rather than regenerating |
+
+## When NOT to use
+
+- **Only one image exists.** Animating a single still is `seedance-ad-creative`
+  (cinematic) or `seedance-product-video` (catalog-literal). This skill's whole
+  premise is that the destination is supplied.
+- **The pair is two states of a user interface** — a settings panel before and
+  after a toggle, a dashboard at two values. Use `product-demo`: it is the same
+  mechanism, but its measured behaviour and its prompt advice differ, and it
+  deliberately does not carry the anti-text line above.
+- **The two pictures are unrelated scenes.** Two ends with nothing in common
+  is a cut, not an interpolation, and this skill has nothing measured to say
+  about it. Two jobs and an editor are cheaper and more predictable.
+- **What you have is a sequence, not two ends** — "and then this happens, and
+  then this". That is `ofox-video-core`'s `chain`, which carries each clip's
+  last frame into the next job's first frame.

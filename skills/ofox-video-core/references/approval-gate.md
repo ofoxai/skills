@@ -1,7 +1,9 @@
 # The approval gate
 
 **One spec, shared by every Ofox skill in this repo** — `ofox-video-core`,
-`ofox-image-core`, and every `seedance-*` scenario skill built on them. They
+`ofox-image-core`, and every scenario skill built on them, whatever it is
+called (`seedance-*`, `keyframe-animation`, `product-demo`, and any added
+later — the rule is about spending someone's money, not about a name). They
 link here rather than each restating the rule, because four paraphrases of
 "show the price first" drift into four different rules, and the one that
 drifts is the one that spends someone's money without asking.
@@ -65,7 +67,7 @@ Put the prompt text in the message, in full, next to the table.
 arithmetic.**
 
 The two scripts live in two different skills, so the path depends on where
-you are running from. From a `seedance-*` scenario skill's own directory:
+you are running from. From a scenario skill's own directory:
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \

@@ -13,11 +13,12 @@ npx ofox-skills           # 把全部 skill 装进本机每一个 agent
 npx ofox-skills doctor    # 查哪些 agent 现在真的能看到它们
 ```
 
-报价不需要账号 —— 见下文。**请先读那一节：这里有四个 skill 会真实花钱。**
+报价不需要账号 —— 见下文。**请先读那一节：这里有六个 skill 会真实花钱。**
 
 ## 视频类 skill 会真实花钱 —— 先用这招查清再决定
 
-四个 `seedance-*` skill 调用 Ofox 视频 API，跑的是
+六个视频 skill（四个 `seedance-*` 再加 `keyframe-animation`、`product-demo`）
+调用 Ofox 视频 API，跑的是
 [Seedance 2.5](https://ofox.ai/models/bytedance/seedance-2.5?utm_source=github&utm_medium=readme&utm_campaign=skills)，
 **按生成秒数计费**。15 秒 720p 约 **$3.60**，4 秒 480p 草稿约 **$0.44**，还有更便宜的模型。
 生成本身是老虎机 —— 你往往要出好几条、留一条 —— 所以单条价格不等于总成本。
@@ -131,7 +132,7 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 ## Skills 一览
 
-九个 skill，分三组。下面的一句话说明是刻意精简的 ——
+十一个 skill，分三组。下面的一句话说明是刻意精简的 ——
 每个 `SKILL.md` 里有完整契约、全部参数和实测成本。
 
 ### 视频 —— Ofox 视频 API（Seedance 2.5），按秒计费
@@ -142,7 +143,9 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 | [seedance-ad-creative](skills/seedance-ad-creative/SKILL.md) | 电影感品牌/产品广告 —— 钩子、展示、慢动作高潮、英雄特写。可用产品图，也可纯文字描述。 |
 | [seedance-product-video](skills/seedance-product-video/SKILL.md) | 朴素的目录/商品页素材 —— 白背景、简单环绕或转台、字面准确、不用情绪光。有产品图保真度最好；泛品类或虚构产品用纯文字描述也行。 |
 | [seedance-anime-drama](skills/seedance-anime-drama/SKILL.md) | 动漫/漫画分镜。先生成角色图再让它动起来，所以同一个角色能跨镜保持一致。 |
-| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **库。** 上面四个调用的执行层：提交、轮询、下载、报出真实成本。装上但别直接调 —— 除非你要自己驱动 API。 |
+| [keyframe-animation](skills/keyframe-animation/SKILL.md) | 你手上已有的两张图：A 当首帧、B 当尾帧，同一个 job 里由模型补中间。两端实测逐像素还原，动作前段走完、末尾是定格。 |
+| [product-demo](skills/product-demo/SKILL.md) | 界面变更前后的两张截图，动画成一条片子。模型只交叉淡入淡出变了的那几个值，文字保持可读 —— 所以这一个刻意不带"禁止画面文字"那条规则。 |
+| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **库。** 上面六个调用的执行层：提交、轮询、下载、报出真实成本。装上但别直接调 —— 除非你要自己驱动 API。 |
 
 ### 图像
 

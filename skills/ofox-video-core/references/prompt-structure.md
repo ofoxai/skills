@@ -2,10 +2,11 @@
 
 ## What this file is
 
-The shared prompt-structure reference for every Seedance scenario skill in
+The shared prompt-structure reference for every video scenario skill in
 this repo — `seedance-short-drama`, `seedance-anime-drama`,
-`seedance-ad-creative`, `seedance-product-video`, and any scenario skill added
-later. A scenario skill loads this file **before it writes a prompt**, then
+`seedance-ad-creative`, `seedance-product-video`, `keyframe-animation`,
+`product-demo`, and any scenario skill added later, `seedance-`-named or not.
+A scenario skill loads this file **before it writes a prompt**, then
 applies its own scenario-specific template on top. `ofox-video-core/SKILL.md`
 links here and does not restate the content; scenario skills should do the
 same.

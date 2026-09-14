@@ -45,7 +45,8 @@ relative path, which only resolves when they are installed side by side.
 
 Skills in this repo:
   Video    ofox-video-core, seedance-short-drama, seedance-ad-creative,
-           seedance-product-video, seedance-anime-drama
+           seedance-product-video, seedance-anime-drama, keyframe-animation,
+           product-demo
   Image    ofox-image-core
   Secrets  hal-vault
   Media    hal-image
@@ -78,13 +79,16 @@ const bail = (result, suggestion) => {
 //
 // Scope is stated in the output and never guessed at. `skills ls` reports one
 // scope at a time, so a doctor that silently picked global would cheerfully
-// print "all 9 installed" to someone standing in a project that has none —
-// which is the one situation this command exists to catch.
+// print "all of them installed" to someone standing in a project that has
+// none — which is the one situation this command exists to catch. (The count
+// in that message comes from OURS.length, never from a number typed here:
+// a hardcoded total goes stale the next time a skill is added.)
 if (argv[0] === "doctor") {
   const OURS = [
     "ofox-video-core", "ofox-image-core",
     "seedance-short-drama", "seedance-ad-creative",
     "seedance-product-video", "seedance-anime-drama",
+    "keyframe-animation", "product-demo",
     "hal-vault", "hal-image", "cloudflare-drop",
   ];
 
