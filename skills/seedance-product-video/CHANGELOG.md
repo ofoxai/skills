@@ -4,6 +4,44 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.14.0 — a real choice of video model, not just a locked-in default
+
+Docs only; no script changes — `--model` already accepted all three models
+named below. Until now `model` sat in the never-ask row with the copy
+"script default, no flag needed", which reads as if `bytedance/seedance-2.5`
+were the only option. An explicit user request ("turn this into a listing
+video with wan") had no documented vocabulary in this file to map that word
+onto a real model id.
+
+- **New "Choosing a video model"**, right after `Recommended defaults`: a
+  table covering `bytedance/seedance-2.5` (default), `alibaba/wan-3.0-prime`
+  and `minimax/hailuo-3` — price and duration cap from the public catalog
+  (`GET /v1/models/catalog`, re-checkable, no key needed), and a real
+  moderation data point for each. The moderation column is the one part
+  that came from an actual paid call, not the catalog: a photoreal-portrait
+  i2v reference and a Re:Zero/Rem-styled anime t2v prompt were both rejected
+  on `seedance-2.5` (`input_moderation_failed`, and `output_moderation_failed`
+  for copyright after generating) and both accepted on `wan-3.0-prime` and
+  `hailuo-3`. Cited from `.trellis/spec/skills/external-api-integration.md`,
+  "Gotcha: moderation policy is per-model, not a platform-wide constant" —
+  stated as evidence about exactly those two content classes, not a general
+  clearance for either model. Noted as least relevant to this scenario's own
+  usual clips (inanimate products, no person in frame) and most relevant to
+  the out-of-scope presenter case.
+- **`hailuo-3`'s 15s duration cap flagged against this skill's own
+  durations**: it lands exactly at the segmented template's ceiling and
+  below the out-of-scope presenter clip's 30s.
+- **The never-ask row and the `--model` row now say the same thing**:
+  never-ask means the agent doesn't raise the question itself, not that an
+  explicit user choice gets overridden. A model named by id or by a
+  recognizable shorthand ("wan", "hailuo") is used instead of the
+  `seedance-2.5` default — never silently substituted back.
+
+What a caller can do now that they could not before: say "use wan for this
+listing video" or "try hailuo" and have the agent actually pass that model,
+instead of it defaulting back to Seedance 2.5 with no vocabulary to do
+otherwise.
+
 ## 1.13.0 — the per-waypoint shot size, downgraded from verified to once-held-once-failed
 
 **Docs only, and the run that forced it is not this skill's.** 1.11.0 wrote

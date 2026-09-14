@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.11.2"
+version: "1.12.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.11.2"
+  version: "1.12.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -170,7 +170,7 @@ shot, 9:16, in a 90s hand-drawn look, keep her lines" has settled every axis
 |---|---|
 | **must-ask** | how many shots this round; the aspect ratio **before** any image exists (the clip's shape follows the image); whether a character image the request implies actually exists |
 | **ask-if-open** | the animation look; dialogue or no dialogue |
-| **never-ask** | resolution, video model, image model, provider, duration once stated |
+| **never-ask** | resolution, video model, image model, provider, duration once stated. For the **video** model specifically, never-ask means the agent doesn't raise it proactively — it does **not** mean overriding an explicit choice: if the user names a video model for Step 2 (an id, or a shorthand like "wan"/"hailuo"), that model is used instead of the `seedance-2.5` default. See "Choosing a video model" below. (Step 1's image model is a separate, unrelated choice and is unaffected.) |
 
 ### The anime questions
 
@@ -823,11 +823,47 @@ fewer words, never a faster delivery.
 
 | Parameter | Default | Why |
 |---|---|---|
+| `--model` (Step 2, video) | `bytedance/seedance-2.5` (script default, no flag needed) — **unless the user named a different video model**, which always wins | current-generation model; see "Choosing a video model" for the other two options. This is the **video** step's model only — Step 1's image model is resolved separately by `ofox-image-core`'s own chain and is a different, out-of-scope choice |
 | `--duration` | `8` for one shot; for several timestamped shots in one job, sum 2–5s per shot (the two verified runs fit three shots into 8s, both text-to-video — see "Shots, cuts and jobs") | the gallery's segmented anime prompts run 24–30s, so a sequence often wants the longer end; a single frame-lock shot rarely does |
 | `--resolution` | `720p` | detail on line art and faces at a reasonable cost; `1080p` only for a hero shot the user will publish |
 | `--aspect-ratio` | not passed — `adaptive` follows the image; the ratio is settled by the brief before the image exists | see "The opening frame decides the output's shape" |
 | `--generate-audio` | `true` (server default) unless the brief's `Sound` answer is `No dialogue` and the user wants silence; ambience and score still need it on | dialogue needs an audio track |
 | image `--quality` | `high` for an opening frame; `medium` for a design sheet | the opening frame is the clip's literal first frame, so its fidelity reaches the deliverable; a sheet is discarded once the design is confirmed. **Not `standard`** — the chain's head (`openai/gpt-image-2`) rejects it at submission, accepting only `low`, `medium`, `high`, `auto` |
+
+## Choosing a video model
+
+Scoped to **Step 2** (the video shot) — Step 1's image model (the character
+frame or sheet) is a separate choice made by `ofox-image-core`'s own model
+chain and is untouched here.
+
+`model` stays **never-ask** for Step 2 — the agent doesn't raise it as a
+question of its own. But never-ask is not "never listen": `bytedance/seedance-2.5`
+is only the default because nobody asked for something else. If the user
+names a model — an id (`alibaba/wan-3.0-prime`, `minimax/hailuo-3`), or a
+shorthand like "wan" or "hailuo" — pass that as `--model` on the Step 2
+`generate` call instead of the default. Never silently substitute
+`seedance-2.5` for a model the user actually asked for.
+
+| Model | Cheapest tier (catalog) | Max resolution | Duration | Aspect ratios | Real moderation data point |
+|---|---|---|---|---|---|
+| `bytedance/seedance-2.5` (default) | 480p, 11 cents/s | 1080p | 4–30s | 7, incl. 21:9 | **Rejected** a photoreal-portrait i2v reference (`input_moderation_failed`) and a Re:Zero/Rem-styled anime t2v prompt after it had already generated (`output_moderation_failed`, copyright) — both free, nothing billed. See `.trellis/spec/skills/external-api-integration.md`, "Gotcha: moderation policy is per-model, not a platform-wide constant". |
+| `alibaba/wan-3.0-prime` ("wan") | 480p, 6.4 cents/s | 1080p | 2–30s — the shortest minimum of the three | 6 — no 21:9/9:21 | **Accepted** both of the clips seedance-2.5 rejected above, 12.8 cents each (2s/480p, its minimum) — including the Re:Zero/Rem-styled **anime** prompt, the content class this skill produces by default. Only these two content classes have been tested — not a general "no moderation" guarantee for this model. |
+| `minimax/hailuo-3` ("hailuo") | 768p, 8 cents/s — no 480p tier | 2k, uniquely among the three, at 13 cents/s | 4–15s — the shortest **maximum** of the three, so it's out for anything past 15s | 7, incl. 21:9 | **Accepted** the same two clips, 32 cents each (4s/768p, its minimum). Same caveat: two content classes tested, not a blanket clearance. |
+
+Price, max resolution, duration and aspect-ratio counts are catalog facts —
+`GET https://api.ofox.ai/v1/models/catalog`, no API key needed, publicly
+re-checkable any time — not results from a real generation. The moderation
+column is the one column here that came from a real, paid API call, and it
+is directly relevant to this skill: the anime t2v prompt that
+`wan-3.0-prime` and `hailuo-3` both completed and `seedance-2.5` refused for
+copyright is exactly the kind of prompt this scenario writes. Still, treat
+it as evidence about that one tested prompt, not a guarantee for every
+licensed-character request. `wan-3.0-prime` runs on a single `aliyun`
+upstream; `hailuo-3` has two (`minimax`, `novita`) that `ofox-video-core`
+does not currently pin the way Seedance's `byteplus`/`volcengine` pin works
+below. Note also `hailuo-3`'s 15s duration cap against the gallery's
+24–30s segmented anime prompts (see `--duration` above) — a long multi-shot
+sequence may not fit it.
 
 ## Several takes to choose from
 

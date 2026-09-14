@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.11.0"
+version: "1.12.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.11.0"
+  version: "1.12.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -80,7 +80,7 @@ energetic, slow orbit" has settled every axis.
 |---|---|
 | **must-ask** | is there a product photo? Ask this **first** — the answer changes the whole prompt route, and every gallery ad that had to match a real product, logo or person locked it to an image (cases 12, 13, 15, 24). |
 | **ask-if-open** | brand tone, the hero camera move, aspect ratio |
-| **never-ask** | resolution, model, provider, audio on/off, duration when the user gave one. 720p preview vs 1080p deliverable is **two rows in the cost table**, not a question. |
+| **never-ask** | resolution, model, provider, audio on/off, duration when the user gave one. 720p preview vs 1080p deliverable is **two rows in the cost table**, not a question. Never-ask means the agent doesn't raise it — not that an explicit user choice gets overridden: a model named by id or by a shorthand ("wan", "hailuo") is used instead of the `seedance-2.5` default. See "Choosing a video model" below. |
 
 If four slots are not enough: `Photo` first, then the axis that changes the
 picture most (`Tone`), then `Camera`, then `Aspect`; anything left falls to a
@@ -848,11 +848,39 @@ model wearing the same shoe. Only the product is locked.
 
 | Parameter | Default | Why |
 |---|---|---|
-| `--model` | `bytedance/seedance-2.5` (script default, no flag needed) | current-generation model |
+| `--model` | `bytedance/seedance-2.5` (script default, no flag needed) — **unless the user named a different model**, which always wins | current-generation model; see "Choosing a video model" for the other two options |
 | `--duration` | `10` when the user gives no length; otherwise the user's number | 10s is a cheap, readable draft length. **Every gallery ad prompt with a stated length runs 20–30s** (cases 13, 15, 25, 26, 27; case 12 rendered at 26s), and Template A needs 15s or more for its four beats. When the user gave no duration, say in the brief recap that the collected ads run longer and offer 15–20s as a row; Seedance 2.5 accepts 4–30 |
 | `--resolution` | `1080p` for a deliverable brand asset; `720p` as a cheaper draft/preview pass | brand assets are usually published, so higher fidelity is worth the extra cost — show both as rows in the cost table rather than asking (see the approval gate below) |
 | `--aspect-ratio` | `16:9` (landscape) unless the brief set another — **pure text-to-video only** | cinematic/hero framing for websites and YouTube; `9:16` for a vertical social cut, `1:1` for feed placements. **Does not apply once an image is attached** with the default model — `ofox-video-core` forces `adaptive` in that case (see above) |
 | `--generate-audio` | `true` (server default, no flag needed) | ambient/SFX track — no music, per the AUDIO line; the prompt says "no dialogue" and carries an AUDIO line |
+
+## Choosing a video model
+
+`model` stays **never-ask** — the agent doesn't raise it as a question on its
+own. But never-ask is not "never listen": `bytedance/seedance-2.5` is the
+default only because nobody asked for something else. If the user names a
+model — an id (`alibaba/wan-3.0-prime`, `minimax/hailuo-3`), or a shorthand
+like "wan" or "hailuo" — use that model, not the default. Never silently
+substitute `seedance-2.5` for a model the user actually asked for.
+
+| Model | Cheapest tier (catalog) | Max resolution | Duration | Aspect ratios | Real moderation data point |
+|---|---|---|---|---|---|
+| `bytedance/seedance-2.5` (default) | 480p, 11 cents/s | 1080p | 4–30s | 7, incl. 21:9 | **Rejected** a photoreal-portrait i2v reference (`input_moderation_failed`) and a Re:Zero/Rem-styled anime t2v prompt after it had already generated (`output_moderation_failed`, copyright) — both free, nothing billed. See `.trellis/spec/skills/external-api-integration.md`, "Gotcha: moderation policy is per-model, not a platform-wide constant". |
+| `alibaba/wan-3.0-prime` ("wan") | 480p, 6.4 cents/s | 1080p | 2–30s — the shortest minimum of the three | 6 — no 21:9/9:21 | **Accepted** both of the clips seedance-2.5 rejected above, 12.8 cents each (2s/480p, its minimum). Only these two content classes have been tested — not a general "no moderation" guarantee for this model. |
+| `minimax/hailuo-3` ("hailuo") | 768p, 8 cents/s — no 480p tier | 2k, uniquely among the three, at 13 cents/s | 4–15s — the shortest **maximum** of the three, so it's out for anything past 15s | 7, incl. 21:9 | **Accepted** the same two clips, 32 cents each (4s/768p, its minimum). Same caveat: two content classes tested, not a blanket clearance. |
+
+Price, max resolution, duration and aspect-ratio counts are catalog facts —
+`GET https://api.ofox.ai/v1/models/catalog`, no API key needed, publicly
+re-checkable any time — not results from a real generation. The moderation
+column is the one column here that came from a real, paid API call; treat
+it as evidence about exactly those two tested content classes on that date,
+not as a blanket policy for either model. A product ad with a person on
+screen is exactly the kind of shot that hits moderation (see "A model *and*
+a locked product" above), so this is worth checking before defaulting to
+`seedance-2.5` on a request that names a real person or a licensed
+character. `wan-3.0-prime` runs on a single `aliyun` upstream; `hailuo-3` has
+two (`minimax`, `novita`) that `ofox-video-core` does not currently pin the
+way Seedance's `byteplus`/`volcengine` pin works below.
 
 ## Which upstream renders it
 

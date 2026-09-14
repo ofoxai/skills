@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), or for anything not involving people/dialogue.
 license: MIT
-version: "1.11.1"
+version: "1.12.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.11.1"
+  version: "1.12.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -148,7 +148,7 @@ every axis — write the prompt.
 |---|---|
 | **must-ask** | which beat of a multi-scene script to render; whether an asset the request implies actually exists |
 | **ask-if-open** | aspect ratio, emotional arc, the camera register — which also fixes the shot count; a draft batch versus one final, but only when the user is already exploring; on a published deliverable, a second round adds the duration split and whether a slow-motion or freeze-frame beat belongs in the clip at all — see "Pacing questions belong in round two" in `creative-brief.md` |
-| **never-ask** | resolution, model, provider, audio on/off, duration once stated |
+| **never-ask** | resolution, model, provider, audio on/off, duration once stated. "Never-ask" means the agent never raises this proactively — it does **not** mean ignoring an explicit choice: if the user names a model (an id, or a shorthand like "wan"/"hailuo"), that model is used instead of the `seedance-2.5` default. See "Choosing a video model" below. |
 
 ### The short-drama questions
 
@@ -670,7 +670,7 @@ one.
 
 | Parameter | Default | Why |
 |---|---|---|
-| `--model` | `bytedance/seedance-2.5` (script default, no flag needed) | current-generation model |
+| `--model` | `bytedance/seedance-2.5` (script default, no flag needed) — **unless the user named a different model**, which always wins | current-generation model; see "Choosing a video model" for the other two options |
 | `--duration` | `10`; match the user's stated length; when the brief settles on several shots, sum 2–5s per shot | enough room for a short exchange; Seedance 2.5 accepts 4–30 |
 | `--resolution` | `720p` | realistic detail on faces and lip movement at a reasonable cost; `1080p` only for a hero shot the user will publish |
 | `--aspect-ratio` | whatever the brief's `Aspect` answer was; `9:16` when that question was skipped, delegated or never asked | short drama is consumed vertically on mobile feeds. Note the gallery's own short-drama sample skews landscape — 5 of the 6 cases that state a ratio are 16:9 (1, 2, 3, 7, 8) — so the default is about the audience, not about what the gallery did |
@@ -679,6 +679,32 @@ one.
 
 Always confirm the actual duration/aspect ratio with the user's request first
 (e.g. "15 seconds" in the trigger example overrides the 10s default).
+
+## Choosing a video model
+
+`model` stays **never-ask** — the agent does not raise this as a question of
+its own. But never-ask is not "never listen": `bytedance/seedance-2.5` is
+only the default because nobody asked for something else. If the user names
+a model — an id (`alibaba/wan-3.0-prime`, `minimax/hailuo-3`), or a shorthand
+like "wan" or "hailuo" — use that model, not the default. Never silently
+substitute `seedance-2.5` for a model the user actually asked for.
+
+| Model | Cheapest tier (catalog) | Max resolution | Duration | Aspect ratios | Real moderation data point |
+|---|---|---|---|---|---|
+| `bytedance/seedance-2.5` (default) | 480p, 11 cents/s | 1080p | 4–30s | 7, incl. 21:9 | **Rejected** a photoreal-portrait i2v reference (`input_moderation_failed`) and a Re:Zero/Rem-styled anime t2v prompt after it had already generated (`output_moderation_failed`, copyright) — both free, nothing billed. See `.trellis/spec/skills/external-api-integration.md`, "Gotcha: moderation policy is per-model, not a platform-wide constant". |
+| `alibaba/wan-3.0-prime` ("wan") | 480p, 6.4 cents/s | 1080p | 2–30s — the shortest minimum of the three, handy for a cheap draft | 6 — no 21:9/9:21 | **Accepted** both of the clips seedance-2.5 rejected above, 12.8 cents each (2s/480p, its minimum). Only these two content classes have been tested — not a general "no moderation" guarantee for this model. |
+| `minimax/hailuo-3` ("hailuo") | 768p, 8 cents/s — no 480p tier | 2k, uniquely among the three, at 13 cents/s | 4–15s — the shortest **maximum** of the three, so it's out for anything past 15s | 7, incl. 21:9 | **Accepted** the same two clips, 32 cents each (4s/768p, its minimum). Same caveat: two content classes tested, not a blanket clearance. |
+
+Price, max resolution, duration and aspect-ratio counts are catalog facts —
+`GET https://api.ofox.ai/v1/models/catalog`, no API key needed, publicly
+re-checkable any time — not results from a real generation. The moderation
+column is the one column in this table that came from a real, paid API
+call; read it as evidence about exactly those two tested content classes on
+that date, not as a blanket policy for either model. One more catalog fact
+worth knowing since it bears on moderation: `wan-3.0-prime` runs on a single
+`aliyun` upstream, while `hailuo-3` has two (`minimax`, `novita`) that
+`ofox-video-core` does not currently pin the way Seedance's
+`byteplus`/`volcengine` pin works below.
 
 ## Which upstream renders it
 

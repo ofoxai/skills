@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.13.0"
+version: "1.14.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.13.0"
+  version: "1.14.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -84,7 +84,7 @@ for my Etsy listing" plus an attached photo has settled every axis.
 |---|---|
 | **must-ask** | is there a product photo? which platform, hence which aspect ratio? Both come **first** — the answers decide the prompt route and the crop applied to the photo. |
 | **ask-if-open** | background, the camera motion |
-| **never-ask** | resolution, model, provider, audio (off in this scenario), duration. 720p vs 1080p is **two rows in the cost table**, not a question. |
+| **never-ask** | resolution, model, provider, audio (off in this scenario), duration. 720p vs 1080p is **two rows in the cost table**, not a question. Never-ask means the agent doesn't raise it — not that an explicit user choice gets overridden: a model named by id or by a shorthand ("wan", "hailuo") is used instead of the `seedance-2.5` default. See "Choosing a video model" below. |
 
 If four slots are not enough: the two must-ask items first, then
 `Background`, then `Motion`; anything left falls to a default and the cost
@@ -1251,13 +1251,42 @@ read frames, never a detector count alone` in
 
 | Parameter | Default | Why |
 |---|---|---|
-| `--model` | `bytedance/seedance-2.5` (script default, no flag needed) | current-generation model |
+| `--model` | `bytedance/seedance-2.5` (script default, no flag needed) — **unless the user named a different model**, which always wins | current-generation model; see "Choosing a video model" for the other two options |
 | `--duration` | `5` for the compact orbit; `10`–`15` for the segmented template | a full 360-degree orbit reads clearly in 5 seconds (official case 42 does it in 5s) and keeps cost low; three or four segments need 3–5s each; Seedance 2.5 accepts 4–30. The one clip here that ran past this range went to 30s, and it did so because it was carrying spoken lines and three separate demands — see "One clip outside this skill's own boundary" |
 | `--resolution` | `720p` | catalog/listing thumbnails rarely benefit from more; show `1080p` as a second row in the cost table when the target platform might require it |
 | `--aspect-ratio` | settled by the brief's `Aspect` question (must-ask); `1:1` is the recommended option | e-commerce platforms vary: `1:1` fits most marketplace grids (Amazon, Etsy, Shopify), `4:3` matches older catalog templates, `9:16` suits mobile-first storefronts and TikTok Shop, `16:9` suits a website product-detail page. With a photo attached the flag is not sent — the photo is cropped or padded to the ratio instead, per `Two ways to attach the photo` above. On the text-only route the flag really does decide the frame: `16:9` in, exactly 1280x720 out, measured on this scenario's own clips |
 | Motion | camera orbits, product still — **written as timestamped waypoint pictures**: two interior views, each carrying its own shot size, and **no closing return inside the move** | *Which* motion comes from the gallery: every rotation there is written as camera movement or as a hand turning the product, and none writes a fixed-camera turntable, which is also untested here. *How to write it* is measured rather than inferred, and the default would not survive without it: `the camera orbits ... a full 360 degrees` produced no orbit at all (job `1cf5ac46-058f-4615-a47b-067743f76f8c`), and the same prompt at the same seed with the angles written out as pictures produced a camera that moved (job `50f623b2-c54a-4d9d-9646-31dd06e2a926`). Three things are settled on top of that by a third, independent clip (job `8efeb556-bf38-45ec-940b-a792ef74bfcf`): a **shot size on every waypoint** kept the whole product in frame there, where an unstated one inherits the previous segment's macro closeness — ⚠️ though a fourth clip stated it and inherited a macro anyway (`cb6b7870`), so treat it as necessary and not sufficient and put a widening shot after a cut; the move covers about **half a turn** and stops, measured frame by frame; and a written return to the opening view **does not bring the camera home**, so that view belongs in the next segment after the cut. **Spacing** stays approximate — an interior view can arrive late or be absorbed, so no angle should be planned to land on a given second. Write each view as an appearance description rather than a camera position, which is reasoning from clip B's confound rather than a measurement. See "3. Camera motion: waypoint pictures, not a camera verb" and "4. A timestamp orders the pictures; it does not schedule them" |
 | `--generate-audio` | `false` (this scenario's default) | a silent product clip needs no audio track; this **overrides** the server's `generate_audio: true` default, unlike `seedance-short-drama`/`seedance-ad-creative` which leave audio on. Verified against `ofox-video-core`'s script: `--generate-audio false` sets `generate_audio: false` directly on the request — and measured end to end on all three of this scenario's clips, whose delivered files carry **no audio stream at all**, not a silent one. The one exception is the out-of-scope presenter clip, which left the flag off and took the server's `true` default; if a clip has spoken lines, this default is the wrong one and has to be dropped rather than set to `true` — omitting the flag is enough. |
 | `--real-person` | leave unset (`false`) | Seedance 2.5 image-to-video refuses photoreal people at submission; whether `true` lifts that on 2.5 is untested — prefer a photo of the product alone |
+
+## Choosing a video model
+
+`model` stays **never-ask** — the agent doesn't raise it as a question of
+its own. But never-ask is not "never listen": `bytedance/seedance-2.5` is
+only the default because nobody asked for something else. If the user names
+a model — an id (`alibaba/wan-3.0-prime`, `minimax/hailuo-3`), or a
+shorthand like "wan" or "hailuo" — use that model, not the default. Never
+silently substitute `seedance-2.5` for a model the user actually asked for.
+
+| Model | Cheapest tier (catalog) | Max resolution | Duration | Aspect ratios | Real moderation data point |
+|---|---|---|---|---|---|
+| `bytedance/seedance-2.5` (default) | 480p, 11 cents/s | 1080p | 4–30s | 7, incl. 21:9 | **Rejected** a photoreal-portrait i2v reference (`input_moderation_failed`) and a Re:Zero/Rem-styled anime t2v prompt after it had already generated (`output_moderation_failed`, copyright) — both free, nothing billed. See `.trellis/spec/skills/external-api-integration.md`, "Gotcha: moderation policy is per-model, not a platform-wide constant". |
+| `alibaba/wan-3.0-prime` ("wan") | 480p, 6.4 cents/s | 1080p | 2–30s — the shortest minimum of the three | 6 — no 21:9/9:21 (this skill's four `Aspect` options don't include either, but re-check the catalog before switching, since which other ratio is missing from the 6 hasn't been re-verified here) | **Accepted** both of the clips seedance-2.5 rejected above, 12.8 cents each (2s/480p, its minimum). Only these two content classes have been tested — not a general "no moderation" guarantee for this model. |
+| `minimax/hailuo-3` ("hailuo") | 768p, 8 cents/s — no 480p tier | 2k, uniquely among the three, at 13 cents/s | 4–15s — the shortest **maximum** of the three, exactly at this skill's segmented-template ceiling and below its out-of-scope 30s presenter clip | 7, incl. 21:9 | **Accepted** the same two clips, 32 cents each (4s/768p, its minimum). Same caveat: two content classes tested, not a blanket clearance. |
+
+Price, max resolution, duration and aspect-ratio counts are catalog facts —
+`GET https://api.ofox.ai/v1/models/catalog`, no API key needed, publicly
+re-checkable any time — not results from a real generation. The moderation
+column is the one column here that came from a real, paid API call; treat
+it as evidence about exactly those two tested content classes on that date,
+not a blanket policy for either model. This scenario's own clips are mostly
+inanimate products with no person in frame, so the moderation difference
+matters least here of the four scenario skills — it becomes directly
+relevant only for the out-of-scope presenter case (see "One clip outside
+this skill's own boundary"). `wan-3.0-prime` runs on a single `aliyun`
+upstream; `hailuo-3` has two (`minimax`, `novita`) that `ofox-video-core`
+does not currently pin the way Seedance's `byteplus`/`volcengine` pin works
+below.
 
 ## Which upstream renders it
 
