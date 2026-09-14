@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), or for anything not involving people/dialogue.
 license: MIT
-version: "1.12.1"
+version: "1.13.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.12.1"
+  version: "1.13.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -696,7 +696,7 @@ one.
 |---|---|---|
 | `--model` | `bytedance/seedance-2.5` (script default, no flag needed) — **unless the user named a different model**, which always wins | current-generation model; see "Choosing a video model" for the other two options |
 | `--duration` | `10`; match the user's stated length; when the brief settles on several shots, sum 2–5s per shot | enough room for a short exchange; Seedance 2.5 accepts 4–30 |
-| `--resolution` | `720p` | realistic detail on faces and lip movement at a reasonable cost; `1080p` only for a hero shot the user will publish |
+| `--resolution` | `720p` — a `seedance-2.5`/`wan-3.0-prime` value. On `minimax/hailuo-3` use `768p`: that model has no `720p` tier | realistic detail on faces and lip movement at a reasonable cost; `1080p` only for a hero shot the user will publish |
 | `--aspect-ratio` | whatever the brief's `Aspect` answer was; `9:16` when that question was skipped, delegated or never asked | short drama is consumed vertically on mobile feeds. Note the gallery's own short-drama sample skews landscape — 5 of the 6 cases that state a ratio are 16:9 (1, 2, 3, 7, 8) — so the default is about the audience, not about what the gallery did |
 | `--generate-audio` | `true` (server default, no flag needed) | dialogue needs an audio track — never set this `false` for a scene with spoken lines |
 | `--real-person` | leave unset (`false`) | see "Reference images and real people" — a text-described character does not need it, and its effect on 2.5 is untested |
@@ -725,10 +725,29 @@ re-checkable any time — not results from a real generation. The moderation
 column is the one column in this table that came from a real, paid API
 call; read it as evidence about exactly those two tested content classes on
 that date, not as a blanket policy for either model. One more catalog fact
-worth knowing since it bears on moderation: `wan-3.0-prime` runs on a single
-`aliyun` upstream, while `hailuo-3` has two (`minimax`, `novita`) that
-`ofox-video-core` does not currently pin the way Seedance's
-`byteplus`/`volcengine` pin works below.
+worth knowing since it bears on moderation: `wan-3.0-prime` runs on two
+upstreams (`alicloud`, `aliyun`) and `hailuo-3` on two (`minimax`, `novita`),
+neither of which `ofox-video-core` currently pins the way Seedance's
+`byteplus`/`volcengine` pin works below. So a job on either of those two
+models routes by weight, and a moderation result on one run is not
+guaranteed to repeat on the next.
+
+### What changes when the model changes
+
+The defaults table above was written for `seedance-2.5`. Two entries do not
+carry over unchanged:
+
+- **`--resolution 720p` does not exist on `minimax/hailuo-3`.** That model
+  offers `768p` and `2k` only, so pass `--resolution 768p` there. Sending
+  `720p` is rejected by the script locally, before submission, for free — a
+  wasted turn rather than a wasted dollar, but avoidable.
+- **`--duration`**: `hailuo-3` caps at **15s**, well under this skill's 4–30s
+  room on the other two. Re-check the duration the brief settled on against
+  the table above before submitting.
+
+`--aspect-ratio` needs no adjustment: it is validated per model, and if a
+frame image is ever attached, `ofox-video-core` 1.22.0+ handles the frame's
+shape per model and prints a `NOTE:` saying what it did.
 
 ## Which upstream renders it
 

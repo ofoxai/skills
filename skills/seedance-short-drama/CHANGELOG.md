@@ -4,6 +4,33 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.13.0 — the 720p default does not survive naming another model
+
+1.12.0 let a user say "use wan" / "use hailuo". The defaults table was written
+when `seedance-2.5` was the only option, and **`--resolution 720p` does not
+exist on `minimax/hailuo-3`**, which offers `768p` and `2k` only. The script
+rejects `720p` there locally, before submitting, at no cost — a wasted turn
+rather than a wasted dollar, but avoidable. The defaults row and a new "What
+changes when the model changes" section name the right tier, and flag
+`hailuo-3`'s 15s duration ceiling against this skill's 4–30s room.
+
+Aspect ratio needs no change here: this skill is text-to-video, where
+`--aspect-ratio` is validated per model and decides the frame directly. If a
+frame image is ever attached, `ofox-video-core` 1.22.0 now applies the frame's
+shape per model (forced on `seedance-2.5`, the default elsewhere when no ratio
+is passed) and prints a `NOTE:` saying which — on an older core a non-seedance
+model sent no `aspect_ratio` at all.
+
+Also corrected: this skill said `wan-3.0-prime` runs on a **single** `aliyun`
+upstream. The catalog now reports two (`alicloud`, `aliyun`) — every
+`alibaba/*` model gained a second upstream between 2026-09-02 and 2026-09-14.
+Since `ofox-video-core` pins only the Seedance family, a `wan-3.0-prime` or
+`hailuo-3` job routes by weight, so a moderation result on one run is not
+guaranteed to repeat. The moderation table's own dated-evidence caveat already
+said not to read it as policy; this says why that matters mechanically.
+
+Docs only.
+
 ## 1.12.1 — find the core skill instead of assuming its directory name
 
 Docs only; no script changes. Every example in this file calls the execution

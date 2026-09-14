@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.21.3"
+version: "1.22.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.21.3"
+  version: "1.22.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -111,9 +111,12 @@ What it does:
 - Joins the finished shots into one file with ffmpeg (`--no-concat` to skip),
   re-encoding only if the clips' codecs differ. Fails open: no join, never a
   lost shot.
-- Shot 1 takes a normal `--aspect-ratio`. Shots 2+ are image-to-video, which
-  Seedance 2.5 requires to be `adaptive`, so they inherit framing from the fed
-  frame — which is what keeps the sequence dimensionally consistent.
+- Shot 1 takes a normal `--aspect-ratio`. Shots 2+ are image-to-video: on
+  Seedance 2.5 the API requires `adaptive` there, so they inherit framing from
+  the fed frame whatever you passed; on another model they inherit it only when
+  you passed no `--aspect-ratio` and that model offers `adaptive` (an explicit
+  ratio is kept on every shot instead). Either way the sequence stays
+  dimensionally consistent, and each shot prints which of the two it did.
 
 `chain` needs `ffmpeg`, and checks for it **before** submitting anything, so
 a missing dependency never costs a paid shot.
@@ -631,18 +634,25 @@ with `jq: Argument list too long` before any network call was made. Fixed
 2026-08-29; see `.trellis/spec/skills/external-api-integration.md` for the
 general lesson.
 
-**`bytedance/seedance-2.5` (the default model) requires `aspect_ratio:
-"adaptive"` for any image-to-video request** — every other value fails,
-verified across multiple real attempts. When `--frame-first-image` or
-`--frame-last-image` is set and the effective model is
-`bytedance/seedance-2.5` (including the default, if `--model` wasn't
-passed), the script **forces** `aspect_ratio` to `adaptive` regardless of
-what `--aspect-ratio` was passed or left unset, and always prints a
-one-line `NOTE:` to stderr explaining the override — it never does this
-silently. This does not apply to other models (e.g.
-`bytedance/seedance-2.0` works with image-to-video without this
-requirement) — don't assume the requirement generalizes beyond
-`bytedance/seedance-2.5` without separately verifying it.
+**An attached frame changes what happens to `aspect_ratio`, and it is not
+the same on every model.** `bytedance/seedance-2.5` (the default model)
+**requires** `aspect_ratio: "adaptive"` for any image-to-video request —
+every other value fails, verified across multiple real attempts. Other
+models merely **offer** `adaptive`. The script treats those two differently
+on purpose, and announces every branch with a one-line `NOTE:` on stderr —
+it never changes, or declines to change, your aspect ratio silently:
+
+| Case | What the script sends |
+|---|---|
+| `bytedance/seedance-2.5` + a frame | `adaptive`, **overriding** any `--aspect-ratio` you passed. API requirement. |
+| another model + a frame + no `--aspect-ratio` | `adaptive`, when that model's catalog entry lists it — so the clip follows the frame's shape instead of the API's own default |
+| another model + a frame + an explicit `--aspect-ratio` | your value, untouched. These models do not require `adaptive`, so overriding your choice would be the tool overreaching. Pass `--aspect-ratio adaptive` if you want the frame's shape. |
+| a model whose catalog entry has no `adaptive`, or no catalog entry at all | no `aspect_ratio` field at all — never a value the model might reject |
+
+"Does this model offer `adaptive`" is read from the same live catalog
+(`video_attributes.aspect_ratios`, cache → live → stale cache → bundled
+snapshot) the rest of the validation uses, not from a hardcoded list, so a
+model Ofox adds tomorrow is handled without a script change.
 
 Report results honestly, the same way `cloudflare-drop` reports its mode:
 state which model/resolution/duration/aspect ratio were **actually used**

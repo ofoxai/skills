@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.12.1"
+version: "1.13.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.12.1"
+  version: "1.13.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -544,7 +544,10 @@ becomes an opening frame or an identity reference is the next subsection.
 
 `bytedance/seedance-2.5` forces `aspect_ratio: adaptive` whenever an image is
 attached, so the clip comes out at **the image's** aspect ratio, whatever
-`--aspect-ratio` says. That is why the brief asks for the ratio **before**
+`--aspect-ratio` says. On the other two models this skill offers, the script
+applies `adaptive` as the default when you pass no `--aspect-ratio` — which
+this skill never does — so the clip follows the image there too. That is why
+the brief asks for the ratio **before**
 Approval 1: the image has to be delivered at the target shape, which is what
 `--target-aspect` on the Step 1 command is for. There is no video flag that
 fixes it afterwards, and fixing it by regenerating is a second image bill —
@@ -686,12 +689,24 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 `ofox-video-core` auto-base64-encodes a local file path like this one — no
 need to upload it anywhere first.
 
-### `aspect_ratio: adaptive` will fire automatically here — expected, not a bug
+### `aspect_ratio: adaptive` is applied for you here — expected, not a bug
 
-**Don't pass `--aspect-ratio` in Step 2.** Every shot here attaches a frame
-to `bytedance/seedance-2.5`, so the script forces `adaptive` and prints a
-`NOTE:` every time; the flag has no effect. The shape comes from the image
-(see "The opening frame decides the output's shape").
+**Don't pass `--aspect-ratio` in Step 2.** Every shot here attaches a frame,
+and `ofox-video-core` (1.22.0+) sends `adaptive` for you, printing a `NOTE:`
+every time. Two different mechanisms reach the same place, and the flag is
+wrong in both:
+
+- on `bytedance/seedance-2.5`, the API **requires** `adaptive` with a frame
+  attached, so the script forces it and the flag has no effect;
+- on another model the user named (`alibaba/wan-3.0-prime`,
+  `minimax/hailuo-3`), `adaptive` is the **default the script applies because
+  you left the flag off**. Pass a ratio there and it is honoured instead —
+  which would fight the opening frame rather than follow it.
+
+The shape comes from the image either way (see "The opening frame decides the
+output's shape"). On `ofox-video-core` older than 1.22.0, a non-seedance model
+sent no `aspect_ratio` at all and the frame's shape could be silently lost —
+check the core skill's version before running a shot on a named model.
 
 ## Multiple characters in one shot: out of scope for v1
 
@@ -862,8 +877,8 @@ fewer words, never a faster delivery.
 |---|---|---|
 | `--model` (Step 2, video) | `bytedance/seedance-2.5` (script default, no flag needed) — **unless the user named a different video model**, which always wins | current-generation model; see "Choosing a video model" for the other two options. This is the **video** step's model only — Step 1's image model is resolved separately by `ofox-image-core`'s own chain and is a different, out-of-scope choice |
 | `--duration` | `8` for one shot; for several timestamped shots in one job, sum 2–5s per shot (the two verified runs fit three shots into 8s, both text-to-video — see "Shots, cuts and jobs") | the gallery's segmented anime prompts run 24–30s, so a sequence often wants the longer end; a single frame-lock shot rarely does |
-| `--resolution` | `720p` | detail on line art and faces at a reasonable cost; `1080p` only for a hero shot the user will publish |
-| `--aspect-ratio` | not passed — `adaptive` follows the image; the ratio is settled by the brief before the image exists | see "The opening frame decides the output's shape" |
+| `--resolution` | `720p` — a `seedance-2.5`/`wan-3.0-prime` value. On `minimax/hailuo-3` use `768p`: that model has no `720p` tier | detail on line art and faces at a reasonable cost; `1080p` only for a hero shot the user will publish (`2k` on `hailuo-3`, which has no `1080p` either) |
+| `--aspect-ratio` | not passed — `adaptive` follows the image on every model this skill offers; the ratio is settled by the brief before the image exists | see "The opening frame decides the output's shape" and "`aspect_ratio: adaptive` is applied for you here" |
 | `--generate-audio` | `true` (server default) unless the brief's `Sound` answer is `No dialogue` and the user wants silence; ambience and score still need it on | dialogue needs an audio track |
 | image `--quality` | `high` for an opening frame; `medium` for a design sheet | the opening frame is the clip's literal first frame, so its fidelity reaches the deliverable; a sheet is discarded once the design is confirmed. **Not `standard`** — the chain's head (`openai/gpt-image-2`) rejects it at submission, accepting only `low`, `medium`, `high`, `auto` |
 
@@ -895,12 +910,31 @@ is directly relevant to this skill: the anime t2v prompt that
 `wan-3.0-prime` and `hailuo-3` both completed and `seedance-2.5` refused for
 copyright is exactly the kind of prompt this scenario writes. Still, treat
 it as evidence about that one tested prompt, not a guarantee for every
-licensed-character request. `wan-3.0-prime` runs on a single `aliyun`
-upstream; `hailuo-3` has two (`minimax`, `novita`) that `ofox-video-core`
-does not currently pin the way Seedance's `byteplus`/`volcengine` pin works
+licensed-character request. `wan-3.0-prime` runs on two upstreams
+(`alicloud`, `aliyun`) and `hailuo-3` on two (`minimax`, `novita`), neither of
+which `ofox-video-core` currently pins the way Seedance's `byteplus`/`volcengine` pin works
 below. Note also `hailuo-3`'s 15s duration cap against the gallery's
 24–30s segmented anime prompts (see `--duration` above) — a long multi-shot
 sequence may not fit it.
+
+### What changes when the model changes
+
+Step 2's defaults table was written for `seedance-2.5`. Two entries do not
+carry over unchanged:
+
+- **`--resolution 720p` does not exist on `minimax/hailuo-3`.** That model
+  offers `768p` and `2k` only, so pass `--resolution 768p` there and price the
+  approval table's video row at its rate. Sending `720p` is rejected by the
+  script locally, before submission, for free — but the cost table is wrong
+  before that point.
+- **The opening frame's shape is applied by a different mechanism.** `adaptive`
+  is *forced* on `seedance-2.5` and is the *default when you pass no
+  `--aspect-ratio`* on the other two — see "`aspect_ratio: adaptive` is applied
+  for you here". Keep leaving the flag off and both behave the same way; the
+  script says which it did.
+
+Both need `ofox-video-core` 1.22.0 or newer. Step 1 is unaffected: the image
+model is `ofox-image-core`'s own chain and is not what the user named here.
 
 ## Several takes to choose from
 
@@ -1115,7 +1149,7 @@ plus this skill's own:
 | 2 (video) | Exit `3`, `output_moderation_failed`, *"the output video may be related to copyright restrictions"*, **on both upstreams** | A frame this model itself generated was fed back in as the next job's `--frame-first-image`. Measured 2026-09-06: `c192dbe6`'s own delivered last frame was refused as `5440c21e` on `byteplus` and again as `c4cff71a` on `volcengine`. Neither billed. Since the two upstreams moderate differently, both refusing points at the content — a stylised anime frame reads as closer to existing IP on the way back in than the text-to-image frame that opened the sequence did | The usual switch-upstream fix does not help here. Either continue with the words route instead (see "Continuing a previous clip" in the shared file — measured working on `c2eb32e1`), or regenerate the continuation's opening frame through `ofox-image-core` rather than reusing a delivered video frame. Budget for this before planning a long chained series |
 | 2 (video) | Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated output failed a post-generation content check, after the job ran — not billed (no `usage` field) | Retry with a brand-new `generate` call using a different prompt — a new request, safe to retry immediately |
 | 2 (video) | Exit `3`, request rejected when the API tries to use the reference image (commonly `error.code: invalid_request`) | The `IMAGE_PATH` doesn't exist locally and isn't a URL either, so `resolve_image_ref()` passed it through unchanged and the API rejected it as an unusable value — `ofox-video-core`'s docs confirm `bad_data_uri`/`download_failed`/`unreachable`/`not_image`/`too_large` only for `--real-person`'s reference-photo validation, not for `--frame-first-image`/`frame_images`, so don't assume one of those five specific codes here | Confirm the exact `IMAGE_PATH` printed in Step 1 still exists and is a valid, readable image file, then retry |
-| 2 (video) | Unexpected aspect ratio / frame shape in the output | `bytedance/seedance-2.5` + `--frame-first-image` always forces `aspect_ratio: adaptive` (printed as a `NOTE:`, never silent) — the output follows the image's own aspect ratio | Expected behavior, not a bug — the brief settles the ratio before Step 1 for exactly this reason, and `--target-aspect` on the Step 1 command is what keeps it. If it was missed, re-crop the existing frame (cropping only, never padding) and regenerate the shot — that is a second **video** bill, not a second image one |
+| 2 (video) | Unexpected aspect ratio / frame shape in the output | `bytedance/seedance-2.5` + `--frame-first-image` always forces `aspect_ratio: adaptive` (printed as a `NOTE:`, never silent) — the output follows the image's own aspect ratio. On another model the user named, the same `adaptive` is applied as the default because this skill passes no `--aspect-ratio`; on `ofox-video-core` older than 1.22.0 nothing was applied there at all, which is its own cause of a wrong shape | Expected behavior, not a bug — the brief settles the ratio before Step 1 for exactly this reason, and `--target-aspect` on the Step 1 command is what keeps it. If it was missed, re-crop the existing frame (cropping only, never padding) and regenerate the shot — that is a second **video** bill, not a second image one |
 | 2 (video) | A cut lands up to a second off its timestamp | Expected: the verified multi-shot runs placed cuts within about ±1s of the written stamps | Give each shot 2s or more of slack around a line or a decisive hit; if a cut must be frame-exact, use `chain` or separate jobs |
 | 2 (video) | Exit `4`, timed out waiting for completion | Job is still running upstream, not failed | Do **not** re-run `generate`; run `bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID` using the job id printed before the timeout |
 | 2 (video) | Exit `5`, ambiguous network failure on create | No HTTP response received at all — can't tell if a job was created | Do not guess or retry `generate`; check `https://app.ofox.ai` first, per `ofox-video-core`'s no-resubmit rule |

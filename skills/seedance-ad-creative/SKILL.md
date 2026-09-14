@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.12.1"
+version: "1.13.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.12.1"
+  version: "1.13.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -800,8 +800,11 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 
 **Do not pass `--aspect-ratio` on this route.** With an image attached,
 `ofox-video-core` forces `aspect_ratio` to `adaptive` on
-`bytedance/seedance-2.5` and prints a notice; the flag only takes effect on
-the pure text-to-video path. That is why the brief's Aspect question, when a
+`bytedance/seedance-2.5` and prints a notice, so on the default model the flag
+takes effect only on the pure text-to-video path. On another model the user
+named, leaving the flag off is what makes the script apply `adaptive` — pass a
+ratio there and it is honoured, which fights the photo instead of following
+it. Either way, omitting it is the route. That is why the brief's Aspect question, when a
 photo exists, means "crop the photo to this ratio first" — cropping only,
 never padding, so nothing is invented at the edges. Confirmed again on
 `60fbea52`: a requested `16:9` was ignored, and the clip still came out
@@ -874,8 +877,8 @@ model wearing the same shoe. Only the product is locked.
 |---|---|---|
 | `--model` | `bytedance/seedance-2.5` (script default, no flag needed) — **unless the user named a different model**, which always wins | current-generation model; see "Choosing a video model" for the other two options |
 | `--duration` | `10` when the user gives no length; otherwise the user's number | 10s is a cheap, readable draft length. **Every gallery ad prompt with a stated length runs 20–30s** (cases 13, 15, 25, 26, 27; case 12 rendered at 26s), and Template A needs 15s or more for its four beats. When the user gave no duration, say in the brief recap that the collected ads run longer and offer 15–20s as a row; Seedance 2.5 accepts 4–30 |
-| `--resolution` | `1080p` for a deliverable brand asset; `720p` as a cheaper draft/preview pass | brand assets are usually published, so higher fidelity is worth the extra cost — show both as rows in the cost table rather than asking (see the approval gate below) |
-| `--aspect-ratio` | `16:9` (landscape) unless the brief set another — **pure text-to-video only** | cinematic/hero framing for websites and YouTube; `9:16` for a vertical social cut, `1:1` for feed placements. **Does not apply once an image is attached** with the default model — `ofox-video-core` forces `adaptive` in that case (see above) |
+| `--resolution` | `1080p` for a deliverable brand asset; `720p` as a cheaper draft/preview pass — `720p` is a `seedance-2.5`/`wan-3.0-prime` value, and on `minimax/hailuo-3` the draft tier is `768p` (it has no `720p`) | brand assets are usually published, so higher fidelity is worth the extra cost — show both as rows in the cost table rather than asking (see the approval gate below) |
+| `--aspect-ratio` | `16:9` (landscape) unless the brief set another — **pure text-to-video only** | cinematic/hero framing for websites and YouTube; `9:16` for a vertical social cut, `1:1` for feed placements. **Once an image is attached this flag stops being yours on the default model** — `ofox-video-core` forces `adaptive` on `seedance-2.5` (see above). On another model it is honoured if you pass it, and `adaptive` is only the default when you don't |
 | `--generate-audio` | `true` (server default, no flag needed) | ambient/SFX track — no music, per the AUDIO line; the prompt says "no dialogue" and carries an AUDIO line |
 
 ## Choosing a video model
@@ -902,9 +905,32 @@ not as a blanket policy for either model. A product ad with a person on
 screen is exactly the kind of shot that hits moderation (see "A model *and*
 a locked product" above), so this is worth checking before defaulting to
 `seedance-2.5` on a request that names a real person or a licensed
-character. `wan-3.0-prime` runs on a single `aliyun` upstream; `hailuo-3` has
-two (`minimax`, `novita`) that `ofox-video-core` does not currently pin the
+character. `wan-3.0-prime` runs on two upstreams (`alicloud`,
+`aliyun`) and `hailuo-3` on two (`minimax`, `novita`), neither of which
+`ofox-video-core` currently pins the
 way Seedance's `byteplus`/`volcengine` pin works below.
+
+### What changes when the model changes
+
+The defaults table above was written for `seedance-2.5`. Two entries do not
+carry over unchanged:
+
+- **`--resolution 720p` does not exist on `minimax/hailuo-3`.** That model
+  offers `768p` and `2k` only, so the draft row of the cost table is `768p`
+  there, and the deliverable row is `2k` rather than `1080p`. Sending `720p`
+  is rejected by the script locally, before submission, for free — but quote
+  the right tier in the first place, or the cost table is wrong.
+- **The attached product photo's shape is handled per model.** With
+  `--frame-first-image`, `seedance-2.5` is *forced* to `aspect_ratio:
+  adaptive`; `wan-3.0-prime` and `hailuo-3` *default* to it only when you pass
+  no `--aspect-ratio`, and keep your value when you do. Either way the script
+  prints a `NOTE:` naming which it did — relay it. The advice to crop or pad
+  the photo to the brief's ratio before generating is unchanged and still the
+  thing that actually decides the output's shape.
+
+Both need `ofox-video-core` 1.22.0 or newer. Before that, a non-seedance model
+with a photo attached sent **no `aspect_ratio` at all**, and the photo's shape
+could be lost with nothing printed to say so.
 
 ## Which upstream renders it
 

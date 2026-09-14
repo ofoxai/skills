@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.14.1"
+version: "1.15.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.14.1"
+  version: "1.15.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -904,10 +904,12 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 (`bytedance/seedance-2.5`) — `ofox-video-core` forces `aspect_ratio` to
 `adaptive` whenever an image is attached with this model (verified against
 the real API: every other value fails for image-to-video on this model),
-overriding anything else and printing a notice when it does. The output's
-frame shape follows the **photo's** shape, which is why the brief settles
-the platform before anything is generated and the photo is cropped or padded
-to that ratio first.
+overriding anything else and printing a notice when it does. **Don't pass it
+on another model the user named either**: there, leaving it off is precisely
+what makes the script send `adaptive`, and passing a ratio is honoured
+instead. The output's frame shape follows the **photo's** shape, which is why
+the brief settles the platform before anything is generated and the photo is
+cropped or padded to that ratio first.
 
 If the reference image includes an actual person (e.g. a hand modeling a
 ring, a person wearing the product), Seedance 2.5 image-to-video refuses it
@@ -1277,8 +1279,8 @@ read frames, never a detector count alone` in
 |---|---|---|
 | `--model` | `bytedance/seedance-2.5` (script default, no flag needed) — **unless the user named a different model**, which always wins | current-generation model; see "Choosing a video model" for the other two options |
 | `--duration` | `5` for the compact orbit; `10`–`15` for the segmented template | a full 360-degree orbit reads clearly in 5 seconds (official case 42 does it in 5s) and keeps cost low; three or four segments need 3–5s each; Seedance 2.5 accepts 4–30. The one clip here that ran past this range went to 30s, and it did so because it was carrying spoken lines and three separate demands — see "One clip outside this skill's own boundary" |
-| `--resolution` | `720p` | catalog/listing thumbnails rarely benefit from more; show `1080p` as a second row in the cost table when the target platform might require it |
-| `--aspect-ratio` | settled by the brief's `Aspect` question (must-ask); `1:1` is the recommended option | e-commerce platforms vary: `1:1` fits most marketplace grids (Amazon, Etsy, Shopify), `4:3` matches older catalog templates, `9:16` suits mobile-first storefronts and TikTok Shop, `16:9` suits a website product-detail page. With a photo attached the flag is not sent — the photo is cropped or padded to the ratio instead, per `Two ways to attach the photo` above. On the text-only route the flag really does decide the frame: `16:9` in, exactly 1280x720 out, measured on this scenario's own clips |
+| `--resolution` | `720p` — a `seedance-2.5`/`wan-3.0-prime` value. On `minimax/hailuo-3` use `768p`: that model has no `720p` tier | catalog/listing thumbnails rarely benefit from more; show `1080p` as a second row in the cost table when the target platform might require it (`2k` on `hailuo-3`, which has no `1080p` either) |
+| `--aspect-ratio` | settled by the brief's `Aspect` question (must-ask); `1:1` is the recommended option | e-commerce platforms vary: `1:1` fits most marketplace grids (Amazon, Etsy, Shopify), `4:3` matches older catalog templates, `9:16` suits mobile-first storefronts and TikTok Shop, `16:9` suits a website product-detail page. With a photo attached, don't pass the flag — the photo is cropped or padded to the ratio instead, per `Two ways to attach the photo` above. That holds on every model, for two different reasons: `seedance-2.5` overrides the flag with `adaptive`, and another model defaults to `adaptive` precisely because you left the flag off (pass it there and it is honoured, which is not what this route wants). On the text-only route the flag really does decide the frame: `16:9` in, exactly 1280x720 out, measured on this scenario's own clips |
 | Motion | camera orbits, product still — **written as timestamped waypoint pictures**: two interior views, each carrying its own shot size, and **no closing return inside the move** | *Which* motion comes from the gallery: every rotation there is written as camera movement or as a hand turning the product, and none writes a fixed-camera turntable, which is also untested here. *How to write it* is measured rather than inferred, and the default would not survive without it: `the camera orbits ... a full 360 degrees` produced no orbit at all (job `1cf5ac46-058f-4615-a47b-067743f76f8c`), and the same prompt at the same seed with the angles written out as pictures produced a camera that moved (job `50f623b2-c54a-4d9d-9646-31dd06e2a926`). Three things are settled on top of that by a third, independent clip (job `8efeb556-bf38-45ec-940b-a792ef74bfcf`): a **shot size on every waypoint** kept the whole product in frame there, where an unstated one inherits the previous segment's macro closeness — ⚠️ though a fourth clip stated it and inherited a macro anyway (`cb6b7870`), so treat it as necessary and not sufficient and put a widening shot after a cut; the move covers about **half a turn** and stops, measured frame by frame; and a written return to the opening view **does not bring the camera home**, so that view belongs in the next segment after the cut. **Spacing** stays approximate — an interior view can arrive late or be absorbed, so no angle should be planned to land on a given second. Write each view as an appearance description rather than a camera position, which is reasoning from clip B's confound rather than a measurement. See "3. Camera motion: waypoint pictures, not a camera verb" and "4. A timestamp orders the pictures; it does not schedule them" |
 | `--generate-audio` | `false` (this scenario's default) | a silent product clip needs no audio track; this **overrides** the server's `generate_audio: true` default, unlike `seedance-short-drama`/`seedance-ad-creative` which leave audio on. Verified against `ofox-video-core`'s script: `--generate-audio false` sets `generate_audio: false` directly on the request — and measured end to end on all three of this scenario's clips, whose delivered files carry **no audio stream at all**, not a silent one. The one exception is the out-of-scope presenter clip, which left the flag off and took the server's `true` default; if a clip has spoken lines, this default is the wrong one and has to be dropped rather than set to `true` — omitting the flag is enough. |
 | `--real-person` | leave unset (`false`) | Seedance 2.5 image-to-video refuses photoreal people at submission; whether `true` lifts that on 2.5 is untested — prefer a photo of the product alone |
@@ -1307,10 +1309,32 @@ not a blanket policy for either model. This scenario's own clips are mostly
 inanimate products with no person in frame, so the moderation difference
 matters least here of the four scenario skills — it becomes directly
 relevant only for the out-of-scope presenter case (see "One clip outside
-this skill's own boundary"). `wan-3.0-prime` runs on a single `aliyun`
-upstream; `hailuo-3` has two (`minimax`, `novita`) that `ofox-video-core`
-does not currently pin the way Seedance's `byteplus`/`volcengine` pin works
+this skill's own boundary"). `wan-3.0-prime` runs on two upstreams
+(`alicloud`, `aliyun`) and `hailuo-3` on two (`minimax`, `novita`), neither of
+which `ofox-video-core` currently pins the way Seedance's `byteplus`/`volcengine` pin works
 below.
+
+### What changes when the model changes
+
+The defaults table above was written for `seedance-2.5`. Two entries do not
+carry over unchanged:
+
+- **`--resolution 720p` does not exist on `minimax/hailuo-3`.** That model
+  offers `768p` and `2k` only, so both rows of the cost table move there:
+  `768p` for the listing clip, `2k` for the higher tier. Sending `720p` is
+  rejected by the script locally, before submission, for free — but a cost
+  table quoting a tier the model doesn't have is wrong before that.
+- **The attached photo's shape is handled per model.** With
+  `--frame-first-image`, `seedance-2.5` is *forced* to `aspect_ratio:
+  adaptive`; `wan-3.0-prime` and `hailuo-3` *default* to it when you pass no
+  `--aspect-ratio` (which this skill's photo route already does), and keep
+  your value if you pass one. The script prints a `NOTE:` saying which — relay
+  it. Cropping or padding the photo to the brief's ratio before generating is
+  unchanged and is still what actually decides the output's shape.
+
+Both need `ofox-video-core` 1.22.0 or newer. Before that, a non-seedance model
+with a photo attached sent **no `aspect_ratio` at all**, so the photo's shape
+could be lost with nothing printed to say so.
 
 ## Which upstream renders it
 
@@ -1599,10 +1623,12 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
   --generate-audio false
 ```
 
-No `--aspect-ratio` flag here on purpose — with an image attached the
-default model forces `adaptive` anyway (see `Two ways to attach the photo`).
-Without a product photo (category prototype or fictional brand) the flag does
-take effect, and is set to the platform ratio the brief settled:
+No `--aspect-ratio` flag here on purpose, on any model — with an image
+attached the default model forces `adaptive`, and a model the user named
+defaults to `adaptive` **because** the flag is absent (see `Two ways to attach
+the photo` and `What changes when the model changes`). Without a product photo
+(category prototype or fictional brand) the flag does take effect, and is set
+to the platform ratio the brief settled:
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate \

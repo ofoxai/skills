@@ -1,10 +1,31 @@
 {
   "_snapshot_note": "Offline fallback for cost estimates only. ofox-video.sh reads the live catalog (GET /v2/models/catalog/...?include=provider_price, public, no API key) and only falls back here. Regenerate with: references/refresh-snapshot.sh",
-  "_snapshot_date": "2026-09-02",
+  "_snapshot_date": "2026-09-14",
   "models": [
     {
       "id": "alibaba/happyhorse-1.0",
       "provider_cards": [
+        {
+          "provider_type": "alicloud",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "720p",
+                  "price": "0.14"
+                },
+                {
+                  "resolution": "1080p",
+                  "price": "0.23"
+                },
+                {
+                  "price": "0.23"
+                }
+              ]
+            }
+          }
+        },
         {
           "provider_type": "aliyun",
           "pricing": {
@@ -13,7 +34,7 @@
               "tiers": [
                 {
                   "resolution": "720p",
-                  "price": "0.13"
+                  "price": "0.14"
                 },
                 {
                   "resolution": "1080p",
@@ -32,6 +53,27 @@
       "id": "alibaba/happyhorse-1.1",
       "provider_cards": [
         {
+          "provider_type": "alicloud",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "720p",
+                  "price": "0.14"
+                },
+                {
+                  "resolution": "1080p",
+                  "price": "0.18"
+                },
+                {
+                  "price": "0.18"
+                }
+              ]
+            }
+          }
+        },
+        {
           "provider_type": "aliyun",
           "pricing": {
             "video_pricing": {
@@ -39,14 +81,14 @@
               "tiers": [
                 {
                   "resolution": "720p",
-                  "price": "0.13"
+                  "price": "0.14"
                 },
                 {
                   "resolution": "1080p",
-                  "price": "0.17"
+                  "price": "0.18"
                 },
                 {
-                  "price": "0.17"
+                  "price": "0.18"
                 }
               ]
             }
@@ -58,6 +100,27 @@
       "id": "alibaba/wan-2.6",
       "provider_cards": [
         {
+          "provider_type": "alicloud",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "720p",
+                  "price": "0.086"
+                },
+                {
+                  "resolution": "1080p",
+                  "price": "0.15"
+                },
+                {
+                  "price": "0.15"
+                }
+              ]
+            }
+          }
+        },
+        {
           "provider_type": "aliyun",
           "pricing": {
             "video_pricing": {
@@ -65,7 +128,7 @@
               "tiers": [
                 {
                   "resolution": "720p",
-                  "price": "0.1"
+                  "price": "0.086"
                 },
                 {
                   "resolution": "1080p",
@@ -84,14 +147,14 @@
       "id": "alibaba/wan-2.7",
       "provider_cards": [
         {
-          "provider_type": "aliyun",
+          "provider_type": "alicloud",
           "pricing": {
             "video_pricing": {
               "unit": "per_second",
               "tiers": [
                 {
                   "resolution": "720p",
-                  "price": "0.1"
+                  "price": "0.086"
                 },
                 {
                   "resolution": "1080p",
@@ -99,6 +162,137 @@
                 },
                 {
                   "price": "0.15"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "provider_type": "aliyun",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "720p",
+                  "price": "0.086"
+                },
+                {
+                  "resolution": "1080p",
+                  "price": "0.15"
+                },
+                {
+                  "price": "0.15"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "alibaba/wan-3.0",
+      "provider_cards": [
+        {
+          "provider_type": "alicloud",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "480p",
+                  "price": "0.054"
+                },
+                {
+                  "resolution": "720p",
+                  "price": "0.11"
+                },
+                {
+                  "resolution": "1080p",
+                  "price": "0.21"
+                },
+                {
+                  "price": "0.21"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "provider_type": "aliyun",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "480p",
+                  "price": "0.0429"
+                },
+                {
+                  "resolution": "720p",
+                  "price": "0.0857"
+                },
+                {
+                  "resolution": "1080p",
+                  "price": "0.1714"
+                },
+                {
+                  "price": "0.1714"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "alibaba/wan-3.0-prime",
+      "provider_cards": [
+        {
+          "provider_type": "alicloud",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "480p",
+                  "price": "0.064"
+                },
+                {
+                  "resolution": "720p",
+                  "price": "0.13"
+                },
+                {
+                  "resolution": "1080p",
+                  "price": "0.26"
+                },
+                {
+                  "price": "0.26"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "provider_type": "aliyun",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "480p",
+                  "price": "0.064"
+                },
+                {
+                  "resolution": "720p",
+                  "price": "0.13"
+                },
+                {
+                  "resolution": "1080p",
+                  "price": "0.26"
+                },
+                {
+                  "price": "0.26"
                 }
               ]
             }
@@ -443,6 +637,100 @@
                 },
                 {
                   "price": "0.568"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "minimax/hailuo-3",
+      "provider_cards": [
+        {
+          "provider_type": "minimax",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "768p",
+                  "price": "0.08"
+                },
+                {
+                  "resolution": "2k",
+                  "price": "0.13"
+                },
+                {
+                  "price": "0.13"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "provider_type": "novita",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "768p",
+                  "price": "0.08"
+                },
+                {
+                  "resolution": "2k",
+                  "price": "0.13"
+                },
+                {
+                  "price": "0.13"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "minimax/hailuo-3-max",
+      "provider_cards": [
+        {
+          "provider_type": "minimax",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "480p",
+                  "price": "0.05"
+                },
+                {
+                  "resolution": "768p",
+                  "price": "0.08"
+                },
+                {
+                  "price": "0.08"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "provider_type": "novita",
+          "pricing": {
+            "video_pricing": {
+              "unit": "per_second",
+              "tiers": [
+                {
+                  "resolution": "480p",
+                  "price": "0.05"
+                },
+                {
+                  "resolution": "768p",
+                  "price": "0.08"
+                },
+                {
+                  "price": "0.08"
                 }
               ]
             }

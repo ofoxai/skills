@@ -4,6 +4,44 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.15.0 — two defaults did not survive naming another model
+
+1.14.0 let a user say "use wan" / "use hailuo". Two entries in the defaults
+table were written when `seedance-2.5` was the only option:
+
+- **`--resolution 720p` does not exist on `minimax/hailuo-3`**, which offers
+  `768p` and `2k` only — so *both* rows of this skill's cost table move there
+  (`768p` for the listing clip, `2k` for the higher tier; it has no `1080p`
+  either). The script rejects `720p` on that model locally, before submitting,
+  at no cost, but a cost table quoting a tier the model doesn't have is wrong
+  before that point. The defaults row and a new "What changes when the model
+  changes" section carry the right tiers.
+- **The attached photo's shape.** "With a photo attached the flag is not sent"
+  held because `seedance-2.5` overrides it. On another model nothing overrode
+  it and no `aspect_ratio` was sent at all, so the clip could come out in a
+  shape the photo never had — after it was paid for. `ofox-video-core` 1.22.0
+  fixes that in the tool: `adaptive` is forced on `seedance-2.5` and applied as
+  the default on a model that offers it when no `--aspect-ratio` was passed.
+  The `--aspect-ratio` row now says which mechanism applies where; the advice
+  is unchanged — don't pass the flag on the photo route — and cropping or
+  padding the photo to the brief's ratio first is still what decides the
+  output's shape.
+
+**What a caller has to do**: use `ofox-video-core` 1.22.0 or newer if a user
+names a model other than `seedance-2.5`. On an older core, pass
+`--aspect-ratio adaptive` explicitly with a photo attached, or stay on the
+default model.
+
+Docs only in this skill; the behaviour change is in `ofox-video-core`.
+
+Also corrected: this skill said `wan-3.0-prime` runs on a **single** `aliyun`
+upstream. The catalog now reports two (`alicloud`, `aliyun`) — every
+`alibaba/*` model gained a second upstream between 2026-09-02 and 2026-09-14.
+Since `ofox-video-core` pins only the Seedance family, a `wan-3.0-prime` or
+`hailuo-3` job routes by weight, so a moderation result on one run is not
+guaranteed to repeat. The moderation table's own dated-evidence caveat already
+said not to read it as policy; this says why that matters mechanically.
+
 ## 1.14.1 — find the core skill instead of assuming its directory name
 
 Docs only; no script changes. Every example in this file calls the execution

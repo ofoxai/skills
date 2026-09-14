@@ -4,6 +4,124 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.22.0 — an attached frame sets the aspect ratio on every model, not just Seedance
+
+Until now, `aspect_ratio=adaptive` was applied for an image-to-video request
+only when the model was literally `bytedance/seedance-2.5`. Name any other
+model with a frame attached — which became a documented thing to do the day
+before this, when the scenario skills started honouring "use wan"/"use
+hailuo" — and **no `aspect_ratio` field was sent at all**, so the opening
+frame's shape might not be honoured and nothing said so. You found out after
+paying for the clip.
+
+The guard now distinguishes a requirement from a default, because collapsing
+them would be wrong in both directions:
+
+| Case | Behaviour |
+|---|---|
+| `bytedance/seedance-2.5` + a frame | forces `adaptive`, overriding an explicit `--aspect-ratio`. API requirement, unchanged from 1.21.3 |
+| another model + a frame + no `--aspect-ratio` | defaults to `adaptive` when that model's catalog entry lists it — **new** |
+| another model + a frame + an explicit `--aspect-ratio` | keeps the caller's value. These models never demanded `adaptive`, so overriding a stated choice would be the tool overreaching |
+| catalog entry has no `adaptive`, or there is no entry at all | sends nothing extra, exactly as before — never invent a value the model may reject |
+
+Whether a model offers `adaptive` is read from `video_attributes.aspect_ratios`
+in the catalog the validation already loads (cache → live → stale cache →
+bundled snapshot → fail open), not from a second hardcoded model list. Every
+one of the four branches prints a `NOTE:` on stderr, including the two that
+add nothing: this code has never changed a caller's aspect ratio silently and
+still doesn't, and now it doesn't silently *decline* to either.
+
+**What a caller has to do**: nothing, if you only ever used the default model.
+If you pass `--model` with a frame attached, read the new `NOTE:` — on a
+non-seedance model an explicit `--aspect-ratio` now competes with the frame's
+own shape, and the ratio you pass wins. Omit the flag to get the frame's
+shape. Scenario skills that told an agent "don't pass `--aspect-ratio`,
+adaptive fires automatically" are true again as of this version, and say so
+against their own model list.
+
+Three things found while fixing it, all real and all fixed here:
+
+- **The rule was keyed on the string the caller typed, not the model.**
+  `--model seedance-2.5` (a documented alias the API accepts, along with
+  `seedance-2.5-20260807`) skipped the force entirely, so an explicit
+  `--aspect-ratio` on an alias went to the API as a request the API always
+  rejects. It now compares the catalog's canonical `id`, falling back to the
+  typed value when no entry is available. The bundled snapshot did not carry
+  `aliases` at all, so `refresh-snapshot.sh` now keeps that field and offline
+  runs resolve an alias like a live run does.
+
+- **`minimax/hailuo-3`'s only resolutions were rejected offline.** The
+  fallback union used when no model list is reachable still read
+  `480p 720p 1080p 4k`, so `768p` and `2k` — hailuo-3's entire range — were
+  refused locally on a cold cache with no network. A stale union rejects
+  requests the API would have accepted, which is worse than the round trip it
+  saves. Now `480p 720p 768p 1080p 2k 4k`. An uppercase `2K` is still rejected;
+  the API's value is lowercase.
+- **The bundled snapshot was from 2026-09-02 and predated four models**
+  (`alibaba/wan-3.0`, `alibaba/wan-3.0-prime`, `minimax/hailuo-3`,
+  `minimax/hailuo-3-max`), so an offline run got no per-model validation for
+  exactly the models users are now being told to ask for. Regenerated with
+  `refresh-snapshot.sh`; the pricing snapshot came with it and carries real
+  drift since then — happyhorse 1.0/1.1 720p 13 → 14 cents/s, happyhorse 1.1
+  1080p 17 → 18, wan 2.6/2.7 720p 10 → 8.6. The drift runs in **both**
+  directions, which matters because only one of them is dangerous: the two
+  happyhorse rates rose, so an offline estimate was **under**-quoting them by
+  up to 7.1%, while wan's 720p rate fell, so an offline estimate was
+  **over**-quoting it by 16.3%. Seedance rates are unchanged. Live estimates
+  were never affected — the snapshot is read only when the catalog fetch
+  fails.
+
+`chain`'s sequence-level note about shots 2+ no longer claims `adaptive` is
+required on models that merely offer it.
+
+### The snapshot refresh moved the upstreams too, which broke two more things
+
+Regenerating the catalog did not only add models. **Every `alibaba/*` model
+went from one upstream to two** (`aliyun` alone on 2026-09-02; `alicloud` +
+`aliyun` now), and the two `minimax/hailuo-3*` models arrived with `minimax`
++ `novita`. Two consequences, both fixed here:
+
+- **`--provider` refused slugs that `providers` had just printed.**
+  `VALID_PROVIDERS` is a hardcoded enum and did not contain `alicloud` or
+  `novita`, so `ofox-video.sh providers alibaba/wan-3.0` printed
+  `alicloud aliyun` and `--provider alicloud` then answered *"is not a known
+  Ofox provider slug"* — the script contradicting its own output, created the
+  moment the snapshot was refreshed. Both slugs added. The per-model check is
+  unchanged, so `--provider alicloud` on a Seedance model still fails with
+  *"does not serve"*, and an invented slug is still rejected.
+- **Upstream pricing is no longer uniform.** `alibaba/wan-3.0` charges
+  `alicloud` 11 cents/s and `aliyun` 8.57 cents/s at 720p — a 28% spread,
+  where every previous measurement had upstream prices matching exactly. The
+  code comment in `rate_for()` asserting that prices "happen to match across
+  providers" was therefore false and has been corrected: preferring the pinned
+  provider's card is load-bearing now, not a nicety. Unpinned, the lookup
+  takes the first card, which for `wan-3.0` is the dearer one — the safe
+  direction per "never under-quote", but by array order rather than by design,
+  and recorded as such.
+
+**Not changed, deliberately**: which models get pinned. `alibaba/*` and
+`minimax/*` still route by weight. Pinning them would mean guessing at
+upstream behaviour nobody has measured, which is exactly what the pin rule
+warns against; it stays with Fizzy #841.
+
+`references/api-params.md` corrections that fell out of the same refresh: the
+upstream table said "all eight video models" and listed `aliyun` alone for
+every `alibaba/*` row; the model count was 8 (now 12); the duration row was
+missing Wan 3.0 (2–30) and Hailuo 3 (4–15) / Hailuo 3 Max (5–15); the
+resolution row named Hailuo 3 but not Hailuo 3 Max (`480p` `768p`, also no
+`720p`). Every count and table in that file now carries the date it was
+measured, because this is the second time a figure there has gone stale
+silently.
+
+New suite: `references/test/aspect-adaptive.test.sh`, 39 assertions over all
+four rows above plus the alias case and the text-to-video paths that must stay
+untouched. Free by
+construction — every case runs under `--dry-run` with the API base pointed at
+an unroutable address. Its model list is seeded from the bundled snapshot
+rather than hand-typed, and it asserts its own preconditions so a snapshot
+change can't quietly turn a row into a no-op. All eleven existing suites
+still pass.
+
 ## 1.21.3 — the relative path scenario skills use is a probe, not a constant
 
 Docs only; no change to the script, the tests, the API calls or the billing.

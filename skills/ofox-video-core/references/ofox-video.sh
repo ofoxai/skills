@@ -64,14 +64,18 @@
 #   --frame-first-image URL|PATH image-to-video: first frame. Accepts a remote
 #                               http(s):// URL (used as-is) or a local,
 #                               readable file path (base64-encoded into a
-#                               data: URI automatically). NOTE: for
-#                               bytedance/seedance-2.5 (the default model),
-#                               attaching any frame image forces
-#                               aspect_ratio=adaptive regardless of
-#                               --aspect-ratio — a visible notice is printed
-#                               when this happens, it is never silent.
+#                               data: URI automatically). Attaching a frame
+#                               affects aspect_ratio: on
+#                               bytedance/seedance-2.5 (the default model) it
+#                               is FORCED to adaptive, overriding
+#                               --aspect-ratio, because the API requires it;
+#                               on any other model that lists adaptive it is
+#                               only the DEFAULT when you passed no
+#                               --aspect-ratio, and an explicit ratio is kept
+#                               as you wrote it. Every one of those paths
+#                               prints a notice — none of them is silent.
 #   --frame-last-image URL|PATH  image-to-video: last frame (same URL/local
-#                               file support and adaptive-override behavior)
+#                               file support and aspect_ratio behavior)
 #   --real-person true|false
 #   --callback-url URL          must be https://
 #   --extra-json JSON           merged into the request body as-is (advanced:
@@ -189,7 +193,12 @@ MODELS_CACHE_TTL="${OFOX_MODELS_TTL:-86400}" # 24h
 # Fallback only. Per-model limits come from GET /v1/models; these unions of
 # every video model's advertised values are used when that list is
 # unavailable, so a valid request is never blocked by a missing model list.
-VALID_RESOLUTIONS="480p 720p 1080p 4k"
+# A union that has gone stale rejects a request the API would have accepted,
+# which is worse than the round trip it saves: 768p and 2k (minimax/hailuo-3)
+# were missing here until 2026-09-14, so hailuo's only two resolutions were
+# refused offline. Re-check this against the catalog when refreshing the
+# bundled snapshot.
+VALID_RESOLUTIONS="480p 720p 768p 1080p 2k 4k"
 VALID_ASPECT_RATIOS="21:9 16:9 4:3 1:1 3:4 9:16 adaptive"
 
 # Set by load_models(): the file holding the model list, and where it came
@@ -209,9 +218,30 @@ MODELS_SOURCE=""
 # with a single upstream, weighted routing is already deterministic, so pinning
 # would change nothing while adding a hardcoded fact that can rot.
 #
-# Pricing is identical across upstreams (verified tier by tier), so this is a
-# region/reliability/moderation choice, never a cost one.
-VALID_PROVIDERS="openai anthropic gemini azure_foundry foundry aws_bedrock bedrock google_vertex vertex aliyun volcengine byteplus deepseek moonshot zhipu minimax grok jina tencent"
+# Re-measured 2026-09-14, and the fact rotted exactly as predicted. Every
+# alibaba/* model now reports TWO upstreams (alicloud + aliyun), and the two
+# minimax/hailuo-3* models added since report minimax + novita. So the
+# "single upstream, nothing to pin" rationale above no longer holds for
+# alibaba/* — those requests route by weight today and are not pinned.
+# Deliberately left that way here: whether the two alibaba upstreams differ
+# behaviourally has not been measured, and pinning on an unmeasured guess is
+# what this comment already warns against. Tracked with the hailuo-3 pinning
+# question (Fizzy #841).
+#
+# Pricing was identical across upstreams on 2026-08-30 (verified tier by
+# tier), and that is ALSO no longer universally true: alibaba/wan-3.0 prices
+# alicloud at 0.11/s and aliyun at 0.0857/s for 720p, a 28% spread. Every
+# other model still matches across its upstreams. rate_for() prefers the
+# pinned provider's card for this reason; when nothing is pinned it takes the
+# first card, which for wan-3.0 happens to be the dearer one — the safe
+# direction per "never under-quote", but by array order, not by design. Do not
+# "simplify" the pinned-card preference away.
+#
+# This list is the global set of slugs the script will accept at all; whether
+# a given slug serves a given model is checked separately against the catalog
+# below. alicloud and novita were missing here until 2026-09-14, so `providers
+# MODEL` printed upstreams that `--provider` then refused.
+VALID_PROVIDERS="openai anthropic gemini azure_foundry foundry aws_bedrock bedrock google_vertex vertex alicloud aliyun volcengine byteplus deepseek moonshot zhipu minimax novita grok jina tencent"
 DEFAULT_SEEDANCE_PROVIDER="byteplus"
 
 # ---------------------------------------------------------------------------
@@ -810,6 +840,17 @@ cmd_generate() {
   # fallback. Everything here happens before any create call.
   local entry="" ok_resolutions="$VALID_RESOLUTIONS" ok_aspects="$VALID_ASPECT_RATIOS"
   local min_dur="" max_dur="" ok_modes=""
+  # ok_aspects falls back to the union of every model's values, so it cannot
+  # answer "does THIS model support X". model_aspects is set only from a real
+  # catalog entry and stays empty otherwise — the image-to-video block below
+  # needs that distinction to fail open instead of inventing a value.
+  local model_aspects=""
+  # The catalog's canonical id for whatever the caller typed. Every model has
+  # documented aliases ('seedance-2.5', 'seedance-2.5-20260807' for
+  # bytedance/seedance-2.5) and the API takes them, so a rule keyed on a model
+  # id has to compare against the resolved id, not the typed string. Stays as
+  # typed when no catalog entry was available.
+  local model_canonical="$model"
 
   if [ "${OFOX_SKIP_MODEL_VALIDATION:-}" != "1" ] && load_models; then
     entry="$(model_entry "$model")"
@@ -830,7 +871,9 @@ cmd_generate() {
       echo "ERROR: --model '$model' exists but does not support video generation (/v1/videos). Run 'ofox-video.sh models' to see the video models." >&2
       return 1
     else
-      local v_res v_asp v_min v_max v_modes
+      local v_res v_asp v_min v_max v_modes v_id
+      v_id="$(printf '%s' "$entry" | jq -r '.id // empty' 2>/dev/null)"
+      [ -n "$v_id" ] && model_canonical="$v_id"
       v_res="$(entry_list "$entry" '.video_attributes.resolutions')"
       v_asp="$(entry_list "$entry" '.video_attributes.aspect_ratios')"
       v_min="$(entry_num "$entry" '.video_attributes.min_duration_seconds')"
@@ -838,6 +881,7 @@ cmd_generate() {
       v_modes="$(entry_list "$entry" '.video_attributes.modes')"
       [ -n "$v_res" ] && ok_resolutions="$v_res"
       [ -n "$v_asp" ] && ok_aspects="$v_asp"
+      [ -n "$v_asp" ] && model_aspects="$v_asp"
       [ -n "$v_min" ] && min_dur="$v_min"
       [ -n "$v_max" ] && max_dur="$v_max"
       [ -n "$v_modes" ] && ok_modes="$v_modes"
@@ -998,19 +1042,54 @@ cmd_generate() {
     return 6
   fi
 
-  # --- bytedance/seedance-2.5 image-to-video requires aspect_ratio=adaptive ---
-  # Verified against the real API (see the seedance-2.5-image-to-video
-  # research): every other aspect_ratio value fails once frame_images is
-  # attached for this model, whether the caller passed one explicitly or
-  # left it at the client default. Force it, and always say so — never
-  # silently change a value the caller passed (or didn't pass).
-  if { [ -n "$frame_first" ] || [ -n "$frame_last" ]; } && [ "$model" = "bytedance/seedance-2.5" ]; then
-    if [ -n "$aspect_ratio" ] && [ "$aspect_ratio" != "adaptive" ]; then
-      echo "NOTE: forcing aspect_ratio=adaptive for bytedance/seedance-2.5 image-to-video (required by the API); ignoring requested aspect ratio '$aspect_ratio'." >&2
+  # --- image-to-video and aspect_ratio -------------------------------------
+  # 'adaptive' means two different things depending on the model, and
+  # collapsing them would be a defect in either direction:
+  #
+  #   bytedance/seedance-2.5 + a frame image REQUIRES aspect_ratio=adaptive.
+  #     Verified against the real API (see the seedance-2.5-image-to-video
+  #     research): every other value fails once frame_images is attached, so
+  #     it is forced even over a ratio the caller passed explicitly. Matched
+  #     on the catalog's canonical id, so the documented aliases ('seedance-2.5')
+  #     get the same treatment as the full id.
+  #   Any other model that lists 'adaptive' merely SUPPORTS it. There it is
+  #     the right default when the caller named no ratio — without it the
+  #     attached frame's shape may not be honoured, and you only find that
+  #     out after paying for the clip — but an explicit ratio is a choice
+  #     this model never demanded, so overriding it would be overreach.
+  #
+  # "Does this model support adaptive" comes from the same catalog entry the
+  # validation above already read (video_attributes.aspect_ratios), never
+  # from a second hardcoded model list. When no entry was available
+  # model_aspects is empty and nothing is added: fail open rather than invent
+  # a value the model may reject.
+  #
+  # Every branch says what it did. This block never changes — nor declines to
+  # change — an aspect ratio silently.
+  if [ -n "$frame_first" ] || [ -n "$frame_last" ]; then
+    if [ "$model_canonical" = "bytedance/seedance-2.5" ]; then
+      if [ -n "$aspect_ratio" ] && [ "$aspect_ratio" != "adaptive" ]; then
+        echo "NOTE: forcing aspect_ratio=adaptive for bytedance/seedance-2.5 image-to-video (required by the API); ignoring requested aspect ratio '$aspect_ratio'." >&2
+      else
+        echo "NOTE: forcing aspect_ratio=adaptive for bytedance/seedance-2.5 image-to-video (required by the API)." >&2
+      fi
+      aspect_ratio="adaptive"
+    elif [ "$aspect_ratio" = "adaptive" ]; then
+      echo "NOTE: $model image-to-video: sending aspect_ratio=adaptive as requested; the clip follows the attached frame's shape." >&2
+    elif [ -n "$aspect_ratio" ]; then
+      if list_contains "adaptive" "$model_aspects"; then
+        echo "NOTE: $model image-to-video: keeping the aspect ratio you asked for ('$aspect_ratio'). Unlike bytedance/seedance-2.5, this model does not require 'adaptive', so your value stands — pass --aspect-ratio adaptive if you want the clip to follow the attached frame's shape instead." >&2
+      else
+        echo "NOTE: $model image-to-video: keeping the aspect ratio you asked for ('$aspect_ratio'); this model does not offer 'adaptive', so the attached frame's shape cannot be inherited automatically." >&2
+      fi
+    elif list_contains "adaptive" "$model_aspects"; then
+      aspect_ratio="adaptive"
+      echo "NOTE: $model image-to-video: no --aspect-ratio was passed, defaulting to aspect_ratio=adaptive (this model's catalog entry lists it) so the clip follows the attached frame's shape. Pass --aspect-ratio to pick a fixed ratio instead." >&2
+    elif [ -n "$model_aspects" ]; then
+      echo "NOTE: $model image-to-video: sending no aspect_ratio — this model does not offer 'adaptive' (it accepts: $model_aspects), so the attached frame's shape may not be preserved. Pass --aspect-ratio to choose one yourself." >&2
     else
-      echo "NOTE: forcing aspect_ratio=adaptive for bytedance/seedance-2.5 image-to-video (required by the API)." >&2
+      echo "NOTE: $model image-to-video: sending no aspect_ratio — no catalog entry for this model was available (offline, unknown id, or per-model checks skipped), so 'adaptive' support could not be confirmed and inventing a value could get the request rejected. Pass --aspect-ratio to set one explicitly." >&2
     fi
-    aspect_ratio="adaptive"
   fi
 
   # --- build the request payload ---
@@ -1661,8 +1740,13 @@ rate_for() {
     [ -f "$f" ] || return 1
   fi
 
-  # Prefer the pinned provider's own card: prices happen to match across
-  # providers today, but that is an observation, not a contract.
+  # Prefer the pinned provider's own card. Prices matched across providers on
+  # 2026-08-30, but that was only ever an observation, and on 2026-09-14 it
+  # stopped being true: alibaba/wan-3.0 charges 0.11/s on alicloud and
+  # 0.0857/s on aliyun at 720p. So this preference is load-bearing now, not a
+  # nicety. With nothing pinned, first() takes the first card in catalog
+  # order, which for wan-3.0 is the dearer one — the right direction per
+  # "never under-quote", but not a guarantee any future model will keep.
   local price
   price="$(jq -r --arg m "$model" --arg r "$res" --arg t "$mode" --arg p "$want_provider" '
     (.provider_cards // (.models[]? | select(.id == $m) | .provider_cards) // [])
@@ -1960,16 +2044,19 @@ cmd_chain() {
 
   local n=${#shots[@]}
   echo "Chaining $n shots. Each shot after the first opens on the previous shot's closing frame." >&2
+  # What happens to shots 2+ is model-dependent: seedance-2.5 is forced to
+  # 'adaptive' by the API, every other model only defaults to it when the
+  # caller named no ratio and its catalog entry offers it. Each shot's own
+  # generate call prints exactly which of those it did — this is the
+  # sequence-level summary, so it must not claim more than the model gives.
   if [ "$n" -gt 1 ]; then
-    case "$model" in
-      bytedance/seedance-2.5)
-        if [ -n "$aspect" ]; then
-          echo "NOTE: --aspect-ratio $aspect applies to shot 1 only. Shots 2+ are image-to-video, which $model requires to be 'adaptive' — they inherit their framing from the fed frame, so the sequence stays dimensionally consistent." >&2
-        else
-          echo "NOTE: shots 2+ are image-to-video and inherit their framing from the fed frame, so the sequence stays dimensionally consistent." >&2
-        fi
-        ;;
-    esac
+    if [ "$model" = "bytedance/seedance-2.5" ] && [ -n "$aspect" ]; then
+      echo "NOTE: --aspect-ratio $aspect applies to shot 1 only. Shots 2+ are image-to-video, which $model requires to be 'adaptive' — they inherit their framing from the fed frame, so the sequence stays dimensionally consistent." >&2
+    elif [ -n "$aspect" ]; then
+      echo "NOTE: --aspect-ratio $aspect is passed to every shot, including the image-to-video ones (2+). A model that requires 'adaptive' there overrides it; a model that merely offers 'adaptive' keeps your value. Each shot prints which of those it did — omit --aspect-ratio to let shots 2+ inherit the fed frame's shape instead." >&2
+    else
+      echo "NOTE: shots 2+ are image-to-video and inherit their framing from the fed frame wherever the model offers 'adaptive' — each shot prints which it did, so the sequence stays dimensionally consistent." >&2
+    fi
   fi
 
   [ -n "$chain_dry" ] && DRY_RUN_ACTIVE=1

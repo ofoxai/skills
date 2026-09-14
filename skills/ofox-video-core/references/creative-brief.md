@@ -237,8 +237,10 @@ Then continue with the same flow.
    cost table is; see `approval-gate.md`.
 9. **Asking an axis that an earlier paid step has already frozen.** In a
    two-phase flow, anything the generated asset fixes — the frame shape most
-   of all, because an attached image forces `adaptive` — must be asked before
-   that asset is paid for. Asked afterwards, the only fix is paying again.
+   of all, because an attached image drives the clip's shape through
+   `adaptive` (forced on `bytedance/seedance-2.5`, the default on other models
+   that offer it) — must be asked before that asset is paid for. Asked
+   afterwards, the only fix is paying again.
 10. **Leaving a must-ask asset question until last.** Four questions about
     mood and camera, and only then discovering there is no usable asset,
     invalidates the answers already given: the whole prompt route changes.

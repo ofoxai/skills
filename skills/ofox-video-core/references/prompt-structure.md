@@ -1644,7 +1644,7 @@ separate field for each. They **cannot be combined in one job**
 | API field | `frame_images` | `input_references` |
 | `ofox-video.sh` | `--frame-first-image PATH-or-URL`, `--frame-last-image PATH-or-URL` — local files preferred, auto base64 | no dedicated flag — pass `{"input_references":[…]}` through `--extra-json` |
 | Limits | one first, one last | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video; a video must be a URL |
-| Aspect ratio on `bytedance/seedance-2.5` | forced to `adaptive`; output ratio follows the image, so **crop the image to the target ratio before generating** — cropping only, never padding, per the measured runs below. When `ofox-image-core` generated the frame, `--target-aspect W:H` does this for you | not tested here; if the API rejects a fixed ratio, `--aspect-ratio adaptive` is the thing to try |
+| Aspect ratio | on `bytedance/seedance-2.5`, forced to `adaptive`; on another model that offers `adaptive`, the default when you pass no `--aspect-ratio` (an explicit one is kept). Either way the output ratio follows the image, so **crop the image to the target ratio before generating** — cropping only, never padding, per the measured runs below. When `ofox-image-core` generated the frame, `--target-aspect W:H` does this for you | not tested here; if the API rejects a fixed ratio, `--aspect-ratio adaptive` is the thing to try |
 | Gallery prompts using this meaning | 42 (first + last frame, 5s, `360-degree orbit`); the `0-3s (first-frame reference <2pic>)` span of 43 | 1, 2, 11, 12, 13, 23, 29, 34, 37, 40, 43, 44, 57, 59 |
 | Real-person content | refused at submission on `bytedance/seedance-2.5` (`input_moderation_failed`, verified, nothing billed) | not tested in this repo either way; do not assume it passes |
 
@@ -1824,10 +1824,12 @@ semantics you can use.
   be a URL. Case 59's 18 images and case 12's six reference clips exceed those
   limits — page-level capabilities, not reproducible through this API.
 - **Attaching a frame on `bytedance/seedance-2.5` forces `aspect_ratio:
-  adaptive`**; the script does this and prints a NOTE. The output ratio
-  follows the image, so the ratio has to be decided **before** the image
-  exists — a scenario skill that generates the image asks for platform and
-  ratio first.
+  adaptive`**; the script does this and prints a NOTE. On any other model
+  that offers `adaptive` the script uses it as the **default** instead —
+  applied when you passed no `--aspect-ratio`, skipped when you did, and
+  announced either way. The output ratio follows the image, so the ratio has
+  to be decided **before** the image exists — a scenario skill that generates
+  the image asks for platform and ratio first.
 - **Local files beat URLs for `frame_images`** — a valid public image URL has
   been rejected upstream with a download error while the same file,
   base64-encoded, went through.

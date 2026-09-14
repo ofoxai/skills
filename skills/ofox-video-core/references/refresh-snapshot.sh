@@ -30,7 +30,7 @@ jq --arg date "$(date -u +%Y-%m-%d)" '{
   object: "list",
   data: [ .data[]
     | select(.supported_endpoints[]? == "/v1/videos")
-    | {id, is_deprecated, expiration_date,
+    | {id, aliases, is_deprecated, expiration_date,
        pricing: {output_video_per_second: .pricing.output_video_per_second},
        supported_endpoints, video_attributes}
   ]

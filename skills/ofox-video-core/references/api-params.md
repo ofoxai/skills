@@ -13,11 +13,11 @@ Seedance 2.5) before it ever calls the API.
 
 | Field | Type | Required | `ofox-video.sh` flag | Notes |
 |---|---|---|---|---|
-| `model` | string | yes | `--model` | Default `bytedance/seedance-2.5`. Run `ofox-video.sh models` for the live list with each model's limits and base price — 8 video models at last check. |
+| `model` | string | yes | `--model` | Default `bytedance/seedance-2.5`. Run `ofox-video.sh models` for the live list with each model's limits and base price — 12 video models at last check (2026-09-14; it was 8 on 2026-09-02, so treat any count written here as a date-stamped observation, not a constant). |
 | `prompt` | string | yes | `--prompt` | Text description of the video. |
-| `duration` | integer | no | `--duration` | Seconds, any integer in the chosen model's range. The script enforces each model's real range (Seedance 2.5 4–30, Wan 2.x 2–15, HappyHorse 3–15, Seedance 2.0* 4–15), read from the live model list. |
-| `resolution` | string | no | `--resolution` | Validated per model. Seedance 2.5: `480p` `720p` `1080p`. Seedance 2.0: also `4k` (lowercase, as the API reports it). Wan 2.x / HappyHorse: `720p` `1080p` only. No video model advertises `1K` or `2K` — an earlier version of this table listed them in error. |
-| `aspect_ratio` | string | no | `--aspect-ratio` | Validated per model. Seedance 2.5: `21:9` `16:9` `4:3` `1:1` `3:4` `9:16` `adaptive`. Seedance 2.0*: `16:9` `9:16` `1:1` `adaptive`. Wan 2.x / HappyHorse: `16:9` `9:16` `1:1`. `3:2`, `2:3` and `9:21` are supported by **no** video model — an earlier version of this table listed them in error, and they were passing client-side validation only to be rejected by the API. **`bytedance/seedance-2.5` image-to-video requires `adaptive`** — see below, the script forces this for you and prints a notice when it does. |
+| `duration` | integer | no | `--duration` | Seconds, any integer in the chosen model's range. The script enforces each model's real range (Seedance 2.5 4–30, Wan 3.0* 2–30, Wan 2.x 2–15, HappyHorse 3–15, Seedance 2.0* 4–15, **Hailuo 3 4–15**, Hailuo 3 Max 5–15), read from the live model list. Note Hailuo 3 caps at **15s**, half Seedance 2.5's ceiling — a duration a scenario skill picked for the default model may not fit it. |
+| `resolution` | string | no | `--resolution` | Validated per model. Seedance 2.5 / Wan 3.0*: `480p` `720p` `1080p`. Seedance 2.0: also `4k` (lowercase, as the API reports it). Wan 2.x / HappyHorse: `720p` `1080p` only. **Hailuo 3: `768p` `2k` only; Hailuo 3 Max: `480p` `768p` only — neither has a `720p` tier at all**, so the `720p` default every scenario skill recommends is rejected locally on both. `2k` is valid (lowercase, on Hailuo 3 only); an uppercase `2K` and `1K` are advertised by **no** video model — an earlier version of this table listed both in error. |
+| `aspect_ratio` | string | no | `--aspect-ratio` | Validated per model. Seedance 2.5 / Hailuo 3*: `21:9` `16:9` `4:3` `1:1` `3:4` `9:16` `adaptive`. Wan 3.0*: the same minus `21:9`. Seedance 2.0*: `16:9` `9:16` `1:1` `adaptive`. Wan 2.x / HappyHorse: `16:9` `9:16` `1:1`. `3:2`, `2:3` and `9:21` are supported by **no** video model — an earlier version of this table listed them in error, and they were passing client-side validation only to be rejected by the API. **Attaching a frame changes this field per model** — see below; the script decides and prints a notice either way. |
 | `size` | string | no | `--size` | `WIDTHxHEIGHT` (e.g. `1280x720`) — alternative to `resolution`. Don't send both unless you've confirmed the model accepts it; prefer `resolution` for Seedance 2.5. |
 | `generate_audio` | boolean | no | `--generate-audio true\|false` | Default `true` server-side. |
 | `seed` | integer | no | `--seed` | Deterministic generation. |
@@ -87,7 +87,10 @@ happens when you don't say which:
 > across the channels currently serving that model — and which provider serves
 > any single request is not predictable.
 
-Measured 2026-08-30 across all eight video models:
+Re-measured 2026-09-14 across all twelve video models. **Run
+`ofox-video.sh providers MODEL` rather than trusting this table** — it is a
+dated observation, and the 2026-08-30 version of it is already wrong: every
+`alibaba/*` model listed one upstream then and lists two now.
 
 | Model | Upstreams |
 |---|---|
@@ -95,8 +98,30 @@ Measured 2026-08-30 across all eight video models:
 | `bytedance/seedance-2.0` | `byteplus`, `volcengine` |
 | `bytedance/seedance-2.0-fast` | `byteplus`, `volcengine` |
 | `bytedance/seedance-2.0-mini` | `byteplus`, `volcengine` |
-| `alibaba/wan-2.6`, `alibaba/wan-2.7` | `aliyun` |
-| `alibaba/happyhorse-1.0`, `-1.1` | `aliyun` |
+| `alibaba/wan-2.6`, `alibaba/wan-2.7` | `alicloud`, `aliyun` — **two since 2026-09-14; was `aliyun` alone on 2026-08-30** |
+| `alibaba/wan-3.0`, `alibaba/wan-3.0-prime` | `alicloud`, `aliyun` |
+| `alibaba/happyhorse-1.0`, `-1.1` | `alicloud`, `aliyun` — **two since 2026-09-14** |
+| `minimax/hailuo-3`, `-3-max` | `minimax`, `novita` |
+
+This is the rot the "pin the upstream" spec predicted out loud: a model that
+serves from one upstream today can serve from two tomorrow, at which point an
+unpinned request starts routing by weight and any upstream-dependent
+behaviour (moderation above all) becomes irreproducible without a `--provider`
+pin. `ofox-video-core` pins only the `bytedance/seedance-*` family by prefix,
+so `alibaba/*` and `minimax/*` requests are currently unpinned and route by
+weight. Whether those upstreams differ in **moderation** has not been
+measured — do not assume either way.
+
+They do differ in **price**, on one model: `alibaba/wan-3.0` charges
+`alicloud` 11 cents/s and `aliyun` 8.57 cents/s at 720p, a 28% spread
+(measured 2026-09-14; every other model still matches across its upstreams).
+An unpinned `wan-3.0` job can therefore be billed at either rate. The
+estimate quotes the dearer card, so it does not under-quote — pin with
+`--provider aliyun` if you want the cheaper one, and re-check this before
+assuming any other model's upstreams price alike.
+
+Tracked with the `minimax/hailuo-3` pinning question (Fizzy #841); nothing
+here changes which models get pinned.
 
 ### The two that serve Seedance
 
@@ -207,19 +232,35 @@ bash references/ofox-video.sh generate \
   --frame-first-image "/Users/me/photos/dog.jpg"
 ```
 
-### `bytedance/seedance-2.5` image-to-video requires `aspect_ratio: adaptive`
+### An attached frame and `aspect_ratio`: required on seedance-2.5, a default elsewhere
 
 Verified against the real API: with the default model
 (`bytedance/seedance-2.5`), attaching `frame_images` and sending any
 `aspect_ratio` value other than `adaptive` fails — every documented
 aspect ratio (or omitting it) was rejected across multiple real attempts,
-while `adaptive` succeeded. `ofox-video.sh` forces `aspect_ratio` to
-`adaptive` automatically whenever `--frame-first-image`/`--frame-last-image`
-is combined with `bytedance/seedance-2.5` (the effective model, whether
-passed explicitly or left at the default), and always prints a `NOTE:` to
-stderr when it does — it never overrides silently. This requirement is
-specific to `bytedance/seedance-2.5`; `bytedance/seedance-2.0` does
-image-to-video without it (verified separately, not assumed).
+while `adaptive` succeeded. That requirement is **specific to
+`bytedance/seedance-2.5`**; `bytedance/seedance-2.0` does image-to-video
+without it (verified separately, not assumed).
+
+So `adaptive` means two different things depending on the model, and
+`ofox-video.sh` keeps them apart. What it sends when a frame is attached:
+
+| Case | Behaviour |
+|---|---|
+| `bytedance/seedance-2.5` | forces `adaptive`, **overriding** an explicitly-passed ratio — API requirement |
+| another model, no `--aspect-ratio` passed | defaults to `adaptive` when that model's catalog entry lists it, so the clip follows the frame's shape |
+| another model, `--aspect-ratio` passed | keeps the caller's value. Not an API requirement here, so overriding it would be overreach |
+| catalog entry has no `adaptive`, or there is no entry | sends no `aspect_ratio` at all — never invents a value the model may reject |
+
+Every one of those prints a `NOTE:` to stderr, including the ones where
+nothing is added: the script never changes, or declines to change, an aspect
+ratio silently. Support for `adaptive` is read from
+`video_attributes.aspect_ratios` in the catalog described above — the same
+cache → live → stale → snapshot ladder, no second hardcoded model list.
+
+Until 2026-09-14 only the first row existed, so naming any other model with a
+frame attached sent **no `aspect_ratio` field at all** and the frame's shape
+could be quietly lost — a defect you paid for before discovering it.
 
 **The converse is now confirmed too: with no image attached,
 `--aspect-ratio` controls the output ratio exactly.** Verified 2026-09-05 on
