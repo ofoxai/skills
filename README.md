@@ -14,13 +14,14 @@ npx ofox-skills          # install every skill into every agent on this machine
 npx ofox-skills doctor    # check which agents can actually see them
 ```
 
-No account needed to price a job — see below. Read that part first: ten of
+No account needed to price a job — see below. Read that part first: twelve of
 these skills spend real money.
 
 ## The video and image skills cost real money — here's how to check before you commit
 
-The eight video skills — the four `seedance-*` ones plus `keyframe-animation`,
-`product-demo`, `ugc-ads` and `shorts-reels` — call Ofox's video API, which runs
+The ten video skills — the four `seedance-*` ones plus `keyframe-animation`,
+`product-demo`, `ugc-ads`, `shorts-reels`, `talking-head` and `explainer` —
+call Ofox's video API, which runs
 [Seedance 2.5](https://ofox.ai/models/bytedance/seedance-2.5?utm_source=github&utm_medium=readme&utm_campaign=skills)
 and bills per second of generated video. A 15-second 720p clip runs about
 **$3.60**; a 4-second 480p draft is about **$0.44**, and there are cheaper
@@ -173,7 +174,7 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 ## Skills
 
-Fifteen skills in three groups. The one-liners below are deliberately short —
+Seventeen skills in three groups. The one-liners below are deliberately short —
 each `SKILL.md` carries the full contract, the flags, and the measured costs.
 
 ### Video — Ofox video API (Seedance 2.5), bills per second
@@ -188,7 +189,9 @@ each `SKILL.md` carries the full contract, the flags, and the measured costs.
 | [product-demo](skills/product-demo/SKILL.md) | Two screenshots of your interface, before and after a state change, animated as one clip. The model cross-fades only the values that differ; the strings stay legible, so this one carries no anti-text rule. |
 | [ugc-ads](skills/ugc-ads/SKILL.md) | Handheld, phone-shot creator clips — unboxing, first impression, honest review. Deliberately inverts the polish the other scenarios default to: one practical light, imperfect framing, no grading, no beauty filter. |
 | [shorts-reels](skills/shorts-reels/SKILL.md) | Several cheap vertical 9:16 drafts in one priced batch, a contact sheet to pick from, then one proper re-render of the winner. Brings the format and the economics; the prompt comes from whichever scenario skill fits. |
-| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **Library.** The execution layer the eight above call: submit, poll, download, report the real cost. Install it, don't invoke it — unless you're driving the API directly. |
+| [talking-head](skills/talking-head/SKILL.md) | A portrait plus a short script, as one person saying those words to camera. You supply the text and the model generates the voice — audio can't be uploaded. The only skill here that doesn't default to Seedance 2.5: it refuses a real person's photo, so this one runs on `wan-3.0-prime`. |
+| [explainer](skills/explainer/SKILL.md) | An article, doc or release note as a short spoken clip. A 30-second clip holds about ninety words — under a tenth of a 1,200-word post — so it doesn't summarise the piece. It picks the one idea worth saying, and helps you choose which. |
+| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **Library.** The execution layer the ten above call: submit, poll, download, report the real cost. Install it, don't invoke it — unless you're driving the API directly. |
 
 ### Image — Ofox image API, bills per output token
 

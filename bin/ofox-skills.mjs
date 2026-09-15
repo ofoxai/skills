@@ -47,7 +47,7 @@ ofox-image-core, and seedance-anime-drama needs both.
 Skills in this repo:
   Video    ofox-video-core, seedance-short-drama, seedance-ad-creative,
            seedance-product-video, seedance-anime-drama, keyframe-animation,
-           product-demo, ugc-ads, shorts-reels
+           product-demo, ugc-ads, shorts-reels, talking-head, explainer
   Image    ofox-image-core, image-edit, product-image
   Secrets  hal-vault
   Media    hal-image
@@ -91,6 +91,7 @@ if (argv[0] === "doctor") {
     "seedance-product-video", "seedance-anime-drama",
     "keyframe-animation", "product-demo",
     "ugc-ads", "shorts-reels",
+    "talking-head", "explainer",
     "image-edit", "product-image",
     "hal-vault", "hal-image", "cloudflare-drop",
   ];

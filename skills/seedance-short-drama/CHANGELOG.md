@@ -4,6 +4,30 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.13.2 — routing against two new neighbours
+
+**Documentation only. No flag, default, price, prompt template or behaviour
+changed.**
+
+`talking-head` and `explainer` ship alongside this skill, and both produce
+spoken video with a realistic human in frame — which is close enough to this
+skill's territory that an agent choosing between them needs the boundary
+written down. The boundary is **who is being spoken to**: characters talking
+to each other is short drama; a single speaker facing the audience is not.
+
+Two edits carry it. The frontmatter `description`'s "do not use for" clause
+now names both — a script read from a portrait the user supplies is
+`talking-head`, an idea that still has to be chosen out of an article is
+`explainer` — which is the line an agent actually reads when deciding whether
+to load this skill at all. "When NOT to use" gains the same boundary with the
+reasoning, including the fact that `talking-head` runs a different model
+because `bytedance/seedance-2.5` refuses a real person's photograph at
+submission.
+
+Nothing about this skill's own scope moved: a monologue *inside* a scene is
+still short drama, and the dialogue budget, shot density and camera-register
+guidance are untouched.
+
 ## 1.13.1 — a seed does not reproduce a take, and this skill said it did
 
 **Documentation only. No flag, default, price or behaviour changed.**

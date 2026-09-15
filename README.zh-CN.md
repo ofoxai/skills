@@ -13,12 +13,12 @@ npx ofox-skills           # 把全部 skill 装进本机每一个 agent
 npx ofox-skills doctor    # 查哪些 agent 现在真的能看到它们
 ```
 
-报价不需要账号 —— 见下文。**请先读那一节：这里有十个 skill 会真实花钱。**
+报价不需要账号 —— 见下文。**请先读那一节：这里有十二个 skill 会真实花钱。**
 
 ## 视频类和图像类 skill 会真实花钱 —— 先用这招查清再决定
 
-八个视频 skill（四个 `seedance-*` 再加 `keyframe-animation`、`product-demo`、
-`ugc-ads`、`shorts-reels`）调用 Ofox 视频 API，跑的是
+十个视频 skill（四个 `seedance-*` 再加 `keyframe-animation`、`product-demo`、
+`ugc-ads`、`shorts-reels`、`talking-head`、`explainer`）调用 Ofox 视频 API，跑的是
 [Seedance 2.5](https://ofox.ai/models/bytedance/seedance-2.5?utm_source=github&utm_medium=readme&utm_campaign=skills)，
 **按生成秒数计费**。15 秒 720p 约 **$3.60**，4 秒 480p 草稿约 **$0.44**，还有更便宜的模型。
 生成本身是老虎机 —— 你往往要出好几条、留一条 —— 所以单条价格不等于总成本。
@@ -151,7 +151,7 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 ## Skills 一览
 
-十五个 skill，分三组。下面的一句话说明是刻意精简的 ——
+十七个 skill，分三组。下面的一句话说明是刻意精简的 ——
 每个 `SKILL.md` 里有完整契约、全部参数和实测成本。
 
 ### 视频 —— Ofox 视频 API（Seedance 2.5），按秒计费
@@ -166,7 +166,9 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 | [product-demo](skills/product-demo/SKILL.md) | 界面变更前后的两张截图，动画成一条片子。模型只交叉淡入淡出变了的那几个值，文字保持可读 —— 所以这一个刻意不带"禁止画面文字"那条规则。 |
 | [ugc-ads](skills/ugc-ads/SKILL.md) | 手机实拍感的 UGC 短片 —— 开箱、初体验、真实测评。刻意反转其它场景默认的"精致"：只用一个现场光源、构图不完美、不调色、不磨皮。 |
 | [shorts-reels](skills/shorts-reels/SKILL.md) | 一次批量出好几条便宜的竖屏 9:16 草稿，先报价，再用联系表挑一条，最后只把选中的那条重渲好。它管格式和成本账；prompt 交给对应的场景 skill 写。 |
-| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **库。** 上面八个调用的执行层：提交、轮询、下载、报出真实成本。装上但别直接调 —— 除非你要自己驱动 API。 |
+| [talking-head](skills/talking-head/SKILL.md) | 一张人像加一段短文案，生成这个人对着镜头把这段话说出来。**你给文字、模型生成配音 —— 音频无法上传**（实测）。这是这里唯一不默认用 Seedance 2.5 的 skill：2.5 在提交阶段就拒真人照片，所以它跑 `wan-3.0-prime`。 |
+| [explainer](skills/explainer/SKILL.md) | 把一篇文章、文档或更新说明变成一条口播短片。**30 秒大约只装得下九十个词**（一篇 1200 词长文的不到十分之一），所以它不做"文章摘要"，而是挑出唯一值得说的那一个点 —— 并帮你选是哪一个。 |
+| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **库。** 上面十个调用的执行层：提交、轮询、下载、报出真实成本。装上但别直接调 —— 除非你要自己驱动 API。 |
 
 ### 图像 —— Ofox 图像 API，按输出 token 计费
 
