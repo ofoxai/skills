@@ -2,12 +2,12 @@
 
 All notable changes to the **ugc-ads** skill. Versioning follows SemVer.
 
-## 1.0.0 — first release (not yet published)
+## 1.0.0 — first release
 
-1.0.0 has never shipped, so the live-fire findings of 2026-09-15 — the paid
-run, and the template change it forced — are folded into this entry rather
-than given a version of their own. Publishing a 1.1.0 whose 1.0.0 nobody can
-install would be a version history that describes nothing.
+The live-fire findings of 2026-09-15 — the paid run, and the template change
+it forced — landed before this version went out, so they are part of the first
+release rather than a version of their own. What ships here is the corrected
+skill, not the one that was tested.
 
 A scenario skill for handheld, phone-shot creator clips — an unboxing, a first
 impression, a use-it-once review — where amateur texture is the deliverable

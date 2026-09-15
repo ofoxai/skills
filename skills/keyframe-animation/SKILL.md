@@ -2,11 +2,11 @@
 name: keyframe-animation
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus two images you already have, a start frame and an end frame. Animates the motion between them as one video — both frames go into a single Ofox video job, the clip opens on A, closes on B, and the model fills the middle. Use when a user has two stills and wants the in-between animated, e.g. "here is the before and the after, animate the transition", "make a video that starts on this image and ends on that one", "tween these two frames", or "move the object from where it sits in the first picture to where it sits in the second". Do not use when only one image exists (animating a single frame is seedance-ad-creative or seedance-product-video), or when the pair is two states of a user interface (see product-demo).
 license: MIT
-version: "1.0.0"
+version: "1.0.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/keyframe-animation
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "1.0.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]

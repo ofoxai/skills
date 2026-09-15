@@ -2,10 +2,11 @@
 
 All notable changes to the **shorts-reels** skill. Versioning follows SemVer.
 
-## 1.0.0 — first release (not yet published)
+## 1.0.0 — first release
 
-1.0.0 has never shipped, so the live-fire findings of 2026-09-15 are folded
-into this entry rather than given a version of their own.
+The live-fire findings of 2026-09-15 — this scenario's own paid batch —
+landed before this version went out, so they are part of the first release
+rather than a version of their own.
 
 A scenario skill for short-form social raw material: several cheap vertical
 9:16 drafts in one priced batch, a contact sheet to pick from, then a single
