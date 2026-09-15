@@ -71,6 +71,74 @@ else
   fail "shots file should yield 2 shots" "$(printf '%s' "$out" | head -3 | tr '\n' ' ')"
 fi
 
+echo
+echo "=== A templated prompt in a shots file is refused, not billed line by line ==="
+# The defect this guards: references/prompt-structure.md teaches multi-line
+# templated prompts, --shots-file is one prompt per LINE, and nothing connected
+# the two. A 5-line prompt became 5 full-length jobs with a plausible estimate.
+printf 'STYLE: 35mm film texture, warm grade\nSUBJECT: a red ceramic mug on a light table\nCAMERA: locked, breathing sway\nSOUND: room tone, no music\nAVOID: subtitles, on-screen text, watermarks\n' > "$WORK/template.txt"
+out=$(run_chain --shots-file "$WORK/template.txt" --duration 29 --resolution 720p)
+code=$?
+if [ "$code" -ne 0 ]; then
+  pass "a shots file of template labels is rejected (exit $code)"
+else
+  fail "a templated shots file must be refused" "exit 0: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+if printf '%s' "$out" | grep -q 'line 1' && printf '%s' "$out" | grep -q 'STYLE: 35mm film texture'; then
+  pass "the refusal names the offending line and quotes it"
+else
+  fail "the refusal must name the offending line" "$(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+if printf '%s' "$out" | grep -q -- '--shot'; then
+  pass "the refusal names the way out (one --shot per prompt)"
+else
+  fail "the refusal must give a way out" "$(printf '%s' "$out" | tr '\n' ' ')"
+fi
+if ! printf '%s' "$out" | grep -qi 'submitting job'; then
+  pass "nothing was submitted when the shots-file guard fired"
+else
+  fail "must not submit when the shots-file guard fires" "output mentions submitting"
+fi
+# It has to beat the estimate too: a plausible-looking price is most of how
+# this defect survived review.
+if ! printf '%s' "$out" | grep -qi 'estimated cost'; then
+  pass "the guard fires before any cost estimate is printed"
+else
+  fail "the guard must precede the estimate" "$(printf '%s' "$out" | grep -i 'estimated cost' | head -1)"
+fi
+# One bad line in an otherwise fine file is still a refusal — that line would
+# have been billed as a job.
+printf 'a white cup on a dark table, steam rising\nAVOID: subtitles, watermarks\n' > "$WORK/mixed.txt"
+out=$(run_chain --shots-file "$WORK/mixed.txt" --duration 4 --resolution 480p)
+if [ $? -ne 0 ] && printf '%s' "$out" | grep -q 'line 2'; then
+  pass "a single template line in an otherwise valid file is caught"
+else
+  fail "one label line should still refuse" "$(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+
+# The guard must not swallow real prompts. A numbered shot heading, a
+# lowercase label and a mid-sentence colon are all legitimate one-line shots.
+printf 'SHOT 1: a cup on a table, static camera\nfoo: the camera pushes in\nthe cup, seen from above: steam rising\n' > "$WORK/notatemplate.txt"
+out=$(run_chain --shots-file "$WORK/notatemplate.txt" --duration 4 --resolution 480p --dry-run)
+if printf '%s' "$out" | grep -qi '3 shots'; then
+  pass "numbered, lowercase and mid-sentence colons are not treated as labels"
+else
+  fail "the guard is over-eager" "$(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+
+# A repeated --shot is the documented way out, so it must actually take a
+# multi-line value as ONE prompt.
+out=$(run_chain --shot "STYLE: 35mm film texture
+SUBJECT: a red ceramic mug
+AVOID: subtitles" --duration 4 --resolution 480p --dry-run)
+if printf '%s' "$out" | grep -qi 'chaining 1 shots' && printf '%s' "$out" | grep -q 'SHOTS_REQUESTED 1'; then
+  pass "a multi-line --shot stays one prompt, one job"
+else
+  fail "--shot must accept a multi-line prompt whole" "$(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+
+echo
+echo "=== Argument handling, continued ==="
 out=$(run_chain --shot "a" --shot "b" --duration 99)
 if [ $? -eq 1 ] && printf '%s' "$out" | grep -qi 'duration'; then
   pass "a bad parameter fails the chain before shot 1 is submitted"
@@ -149,6 +217,25 @@ if command -v ffmpeg >/dev/null 2>&1; then
       pass "the extracted frame is from the end, not the start"
     else
       fail "last-frame must not return the opening frame" "bytes matched frame 1"
+    fi
+    # How far before the end, exactly. SKILL.md states 0.1s, and a number in a
+    # doc that nothing checks is the kind that drifts. This clip is 2.000s at
+    # 10fps, so duration-0.1 lands on the frame at 1.9s.
+    ffmpeg -nostdin -loglevel error -ss 1.9 -i "$WORK/vids/clip.mp4" -frames:v 1 \
+      -y "$WORK/vids/at1.9.png" 2>/dev/null
+    if [ -n "$frame" ] && cmp -s "$frame" "$WORK/vids/at1.9.png"; then
+      pass "last-frame steps back 0.1s from the ffprobe duration, as documented"
+    else
+      fail "last-frame's step-back should be 0.1s" "frame did not match t=1.9s of a 2.000s clip"
+    fi
+    # And it is not the 0.5s fallback window, which only runs when the seek
+    # above yields nothing.
+    ffmpeg -nostdin -loglevel error -ss 1.5 -i "$WORK/vids/clip.mp4" -frames:v 1 \
+      -y "$WORK/vids/at1.5.png" 2>/dev/null
+    if [ -n "$frame" ] && ! cmp -s "$frame" "$WORK/vids/at1.5.png"; then
+      pass "the 0.5s fallback window is not the normal path"
+    else
+      fail "last-frame took the fallback on a clip with a readable duration" "matched t=1.5s"
     fi
   else
     printf 'skip  ffmpeg could not synthesize a test clip\n'

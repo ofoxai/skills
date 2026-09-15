@@ -4,6 +4,76 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.26.0 — a templated prompt in a shots file was five jobs, and the estimate looked fine
+
+`--shots-file` is one prompt per **line**. `references/prompt-structure.md`
+teaches prompts written across **several** lines — `STYLE:` / `SUBJECT:` /
+`SCENE:` / `CAMERA:` / `CONSISTENCY:` / `SOUND:` / `AVOID:` and a timestamped
+body — and every scenario skill built on this one writes them that way.
+Nothing anywhere connected those two facts, so an author following this
+repo's own craft guidance into this repo's own file format had their prompt
+shredded into fragments, each fragment billed as a full-length job.
+
+Found by a blind router test today and then reproduced directly: a 5-line
+single prompt printed `Chaining 5 shots` and
+`Estimated cost: ~$34.80 for 5 takes (29s x $0.24/s x 5)`. With the 9-line
+template `music-video` teaches, one prompt is nine jobs.
+
+**What made it survive review is that nothing goes wrong.** A fragment is a
+valid prompt, so there is no crash and no error; the shot count is right there
+in `--dry-run`, and the price it sits next to is arithmetically correct for
+the shots the script believes it has. The only tell is a number a reader has
+to already be suspicious of.
+
+**The guard.** A shots-file line that opens with an ALL-CAPS label —
+`^[A-Z][A-Z ]*:` — is refused. It fires while the file is being parsed, so it
+lands **before the estimate is printed and before anything is submitted**,
+the same placement as the ffmpeg pre-check and for the same reason. The
+message names the offending line and its line number, says in one sentence
+what the file format actually is, and gives the way out: one `--shot` per
+prompt, which takes a multi-line value as a single prompt.
+
+**What it deliberately does not do:**
+
+- **It does not re-join the lines into one prompt.** That would be guessing at
+  someone's intent with their money, and a wrong guess buys a 29-second job.
+  Stopping is the whole fix.
+- **It does not narrow the pattern to a known label list.** Any leading
+  `[A-Z ]+:` trips it, which means a genuine one-line prompt opening with a
+  label (`CLOSE UP: a mug on a table`) is refused too. That asymmetry is
+  chosen: a false positive costs one edit to the command, a false negative
+  costs a job per line. Digits end the label, so `SHOT 1: ...` is not caught.
+- **It does not touch `--shot`.** Checked rather than assumed: a repeated
+  `--shot "multi\nline"` is one argv element and reaches the payload as one
+  `prompt` with embedded newlines (verified with `--print-payload`). There was
+  nothing to fix on that path, and validating it would have broken the
+  documented way out.
+
+**Why a minor rather than a major**, since the guard rejects input that used
+to be accepted: nothing it rejects could have been what the caller wanted. A
+shots file of template labels has never produced a usable sequence — it
+produced N billed fragments — and a file of real one-line prompts, which is
+what the flag is for, is unaffected. The strict-SemVer reading is defensible;
+this is recorded here rather than argued away.
+
+Also in this release, from the same blind test: **`last-frame`'s step-back is
+now a number.** `SKILL.md` said it grabs a frame "just before the end", which
+left a tester unable to tell a user what the resulting seam would be. Read out
+of `extract_last_frame` and then measured on a 2.000s clip at 10fps: the
+normal path seeks to `duration - 0.1s` (duration from `ffprobe`) and takes the
+first frame at or after it — the frame at 1.9s on that clip. The `-sseof -0.5`
+branch is a **fallback**, reached only when ffprobe reports no duration or
+that seek yields no frame, and it returns the first frame of the final half
+second — 1.5s on the same clip. Both figures are in `SKILL.md` and both are
+now asserted in the suite, because a number in a doc that nothing checks is
+the kind that drifts.
+
+Tests: `references/test/chain.test.sh`, 18 checks to 28. The guard cases
+assert the refusal exits non-zero, names the offending line, offers `--shot`,
+prints no estimate, and submits nothing; plus that the pattern does not eat
+`SHOT 1:`, a lowercase label or a mid-sentence colon, and that a multi-line
+`--shot` still resolves to exactly one job. Free by construction, as ever.
+
 ## 1.25.0 — two local subcommands, for the two things the API will not do
 
 `frame-at VIDEO --at SECONDS` and `mux-audio VIDEO AUDIO`. Both are local

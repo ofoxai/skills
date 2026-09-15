@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.25.0"
+version: "1.26.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.25.0"
+  version: "1.26.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -113,6 +113,42 @@ bash references/ofox-video.sh chain \
 Or `--shots-file shots.txt`, one prompt per line (blank lines and `#`
 comments ignored). Capped at 10 shots per run.
 
+⚠️ **One prompt per line means one prompt per line — a templated prompt does
+not go in this file.** `references/prompt-structure.md` teaches prompts
+written across several lines (`STYLE:` / `SUBJECT:` / `SCENE:` / `CAMERA:` /
+`CONSISTENCY:` / `SOUND:` / `AVOID:`, plus a timestamped body), and every
+scenario skill writes them that way. Put one of those in a shots file and
+each *line* becomes its own separately billed job: a 5-line prompt priced out
+at $34.80 for five 29-second jobs, and the estimate looked entirely ordinary,
+because a fragment is a valid prompt — nothing crashes, you just buy five
+quarter-sentences at full length.
+
+So the script now **refuses** a shots file whose lines open with an ALL-CAPS
+label, naming the offending line, before the estimate is printed and before
+anything is submitted. It does not try to re-join the lines for you: guessing
+at what someone meant, with their money, is worse than stopping.
+
+The signal is deliberately broad — any leading `[A-Z ]+:` — so a genuine
+one-line prompt that opens with a label (`CLOSE UP: a mug on a table`) is
+caught too. That trade is on purpose: a false positive costs one edit to the
+command, a false negative costs a job per line. `--shot` takes such a prompt
+as written, and `SHOT 1: ...` is not caught at all, since a digit ends the
+label.
+
+**For a multi-line prompt, use a repeated `--shot`** — one `--shot` value is
+one prompt however many newlines it contains, which is the case a shots file
+cannot express:
+
+```bash
+bash references/ofox-video.sh chain \
+  --shot "$(cat shot1.txt)" \
+  --shot "$(cat shot2.txt)" \
+  --duration 8 --resolution 480p
+```
+
+A shots file is for the other case: short one-line prompts, one per shot,
+which is what the example above is.
+
 **Verified behavior**: shot 2 opens on very nearly the exact frame it was
 fed — cup position and scale, window frame, table grain, light direction all
 carried over — and then follows its own prompt from there. This is real
@@ -160,6 +196,23 @@ bash references/ofox-video.sh last-frame clip.mp4 [--out-dir DIR]
 
 No API call, no key, no cost. Grabs a frame just before the end (the literal
 final frame is often a fade), for feeding into a later `generate` by hand.
+
+**"Just before" is 0.1 second.** The step-back is not a guess you have to
+make — it seeks to `duration - 0.1s`, reading the duration from `ffprobe`,
+and takes the first frame at or after that point. So on a clip whose frame
+interval is under 0.1s the frame is within one frame of the end, and it is
+never the literal last frame unless that frame happens to land exactly there.
+Measured on a 2.000s clip at 10fps: the frame returned is the one at 1.9s.
+
+**The fallback is 0.5 second**, and only runs when `ffprobe` reports no
+duration or that seek yields no frame: `-sseof -0.5` takes the first frame of
+the final half second. Same clip, that branch returns the frame at 1.5s.
+
+Why the number matters: what you extract here is what a later job opens on,
+so it fixes the seam. Carry the original clip whole and append the new one and
+the overlap is that 0.1s (or 0.5s on the fallback), not a duration you have to
+work out. `frame-at`, below, is the command for stepping back further on
+purpose.
 
 ### Grabbing the frame at a chosen second
 

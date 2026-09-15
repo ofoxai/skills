@@ -2143,6 +2143,35 @@ cmd_mux_audio() {
 
 MAX_SHOTS=10
 
+shot_looks_like_prompt_fragment() {
+  # True when a --shots-file line opens with an ALL-CAPS label ("STYLE:",
+  # "AVOID:", "CONTINUES FROM:") — the shape of one line lifted out of a
+  # multi-line templated prompt, which references/prompt-structure.md teaches
+  # and every scenario skill writes. A shots file is one prompt per LINE, so
+  # such a file silently becomes one separately billed job per label. This is
+  # the cheapest reliable signal: no whole one-line shot prompt opens with a
+  # bare uppercase label, while every template line does.
+  #
+  # POSIX classes rather than [A-Z]: a glob range is collation-ordered in some
+  # locales and would match lowercase too. Digits are deliberately excluded, so
+  # "SHOT 1: ..." — a plausible way to write a real one-line prompt — passes.
+  local line="$1" label
+  case "$line" in
+    *:*) ;;
+    *) return 1 ;;
+  esac
+  label="${line%%:*}"
+  [ -z "$label" ] && return 1
+  case "$label" in
+    [[:upper:]]*) ;;
+    *) return 1 ;;
+  esac
+  case "$label" in
+    *[![:upper:][:space:]]*) return 1 ;;
+  esac
+  return 0
+}
+
 cmd_chain() {
   local shots=() shots_file="" out_dir="$PWD" duration="" resolution=""
   local model="$DEFAULT_MODEL" concat="auto" aspect="" chain_dry=""
@@ -2194,13 +2223,38 @@ cmd_chain() {
       echo "ERROR: cannot read --shots-file '$shots_file'." >&2
       return 1
     fi
-    local line
+    local line lineno=0 file_shots=0 frag_count=0 frag_line="" frag_no=""
     while IFS= read -r line || [ -n "$line" ]; do
+      lineno=$((lineno + 1))
       case "$line" in
         ''|'#'*) continue ;;
       esac
       shots+=("$line")
+      file_shots=$((file_shots + 1))
+      if shot_looks_like_prompt_fragment "$line"; then
+        frag_count=$((frag_count + 1))
+        if [ -z "$frag_no" ]; then
+          frag_no="$lineno"
+          frag_line="$line"
+        fi
+      fi
     done < "$shots_file"
+
+    # Refuse before the estimate, for the same reason the ffmpeg check sits
+    # ahead of shot 1: a fragment submitted as a prompt is a full-price job
+    # bought for a quarter of a sentence, and the estimate it would print looks
+    # entirely plausible. Stopping is the whole fix — re-joining the lines would
+    # be guessing at someone's intent with their money.
+    if [ "$frag_count" -gt 0 ]; then
+      echo "ERROR: --shots-file '$shots_file' line $frag_no reads as part of a multi-line prompt, not as a shot of its own:" >&2
+      echo "    $frag_line" >&2
+      echo "  --shots-file is one prompt per line: every non-blank line becomes its own separately billed job, so a templated prompt written across several lines is submitted as several fragments ($frag_count of $file_shots lines here open with an ALL-CAPS label)." >&2
+      echo "  Pass one --shot per prompt instead — a repeated --shot takes a multi-line value as a single prompt:" >&2
+      echo "    ofox-video.sh chain --shot \"\$(cat shot1.txt)\" --shot \"\$(cat shot2.txt)\" --duration 8" >&2
+      echo "  That is also the answer if the line really is a whole prompt that happens to open with a label ('CLOSE UP: ...'): --shot takes it as written, no file involved." >&2
+      echo "  Nothing was submitted and nothing was billed." >&2
+      return 1
+    fi
   fi
 
   if [ "${#shots[@]}" -eq 0 ]; then
