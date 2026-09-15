@@ -1822,8 +1822,13 @@ semantics you can use.
 - **`frame_images` and `input_references` are mutually exclusive.** One job
   either locks a frame or borrows appearance, not both.
 - **`input_references` limits**: ≤9 images, ≤3 audio, ≤1 video; a video must
-  be a URL. Case 59's 18 images and case 12's six reference clips exceed those
-  limits — page-level capabilities, not reproducible through this API.
+  be a URL, audio may be a `data:` URI. Case 59's 18 images and case 12's six
+  reference clips exceed those limits — page-level capabilities, not
+  reproducible through this API. ⚠️ **The audio allowance is not a voice
+  input.** A real speech clip was accepted and fetched, and the delivered
+  track was the model's own audio, not the clip
+  (`d8561509-dcc6-4f2c-8864-a193cd239b14`, 2026-09-15). Nothing here can be
+  made to speak a supplied line — see `api-params.md`.
 - **Attaching a frame on `bytedance/seedance-2.5` forces `aspect_ratio:
   adaptive`**; the script does this and prints a NOTE. On any other model
   that offers `adaptive` the script uses it as the **default** instead —

@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), or for anything not involving people/dialogue.
 license: MIT
-version: "1.13.0"
+version: "1.13.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.13.0"
+  version: "1.13.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -809,14 +809,18 @@ Hand the user the `CONTACT_SHEET` path on its own line, the same way you hand
 over a video — in this flow it is the artifact they actually look at first,
 since it is how they pick. Then list the individual take paths beneath it.
 
-Each `TAKE` line carries `seed=N`. That seed is the handle for "take 3 was the
-good one": re-run the same prompt with that seed on a better model or higher
-resolution to reproduce that take rather than rolling a new one.
+Each `TAKE` line carries `seed=N`. That seed is how "take 3 was the good one"
+gets written down at all: re-running the same prompt with that seed on a
+better model or higher resolution **aims at** that take. It does not return
+it — measured 2026-09-15, three submissions of one byte-identical request on a
+fixed seed came back as two visibly different clips and one refusal, so this
+API is not reproducible even with nothing changed. Say that before the user
+pays for the re-render; a promotion is another roll at the same shot.
 
 A single `generate` prints a `SEED` line too, and records it in the clip's
 `.json` sidecar along with the resolution and aspect ratio. So "that one was
 good, give me it at 1080p" works off one clip — you do not need a batch to
-get a reusable handle.
+get a handle worth re-submitting.
 
 Worth offering when the user is exploring (the brief's `Drafts` question):
 draft cheap on `bytedance/seedance-2.0-mini` at 480p, then render the winner

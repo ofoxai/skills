@@ -502,7 +502,7 @@ over the clip.
 | `--duration` | short — a draft at the model's minimum, a deliverable in the low tens of seconds | a flat action chain has no reason to run long, and every second bills. `ofox-video.sh models` prints each model's range |
 | `--resolution` | draft at the model's cheapest tier, then re-render the keeper higher. When the user named neither, put the next tier up as a **second row of the same cost table** rather than asking | UGC is the one genre where a lower tier costs the least credibility — sensor noise and compression are in the brief. Still read the draft's frames before shipping it |
 | `--generate-audio` | leave at the server default (`true`) | room tone and action sounds are half of what makes it read as real |
-| `--seed` | let the script roll one and keep it | printed as `SEED` and written to the `.json` sidecar; the handle for "that take, rendered properly" |
+| `--seed` | let the script roll one and keep it | printed as `SEED` and written to the `.json` sidecar, which is what lets "that take, rendered properly" be re-submitted at all. It does **not** reproduce it: measured, an identical request on a fixed seed came back a visibly different clip. Say a re-render is another roll aimed at the same shot before the user pays for it |
 | `--frame-first-image` | only when a product photo exists, and only if it contains no person | the measured product-lock route; see "People, products and what the API refuses" |
 | `--real-person` | leave unset | untested on `bytedance/seedance-2.5` in this repo |
 

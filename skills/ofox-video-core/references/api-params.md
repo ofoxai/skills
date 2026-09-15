@@ -20,9 +20,9 @@ Seedance 2.5) before it ever calls the API.
 | `aspect_ratio` | string | no | `--aspect-ratio` | Validated per model. Seedance 2.5 / Hailuo 3*: `21:9` `16:9` `4:3` `1:1` `3:4` `9:16` `adaptive`. Wan 3.0*: the same minus `21:9`. Seedance 2.0*: `16:9` `9:16` `1:1` `adaptive`. Wan 2.x / HappyHorse: `16:9` `9:16` `1:1`. `3:2`, `2:3` and `9:21` are supported by **no** video model — an earlier version of this table listed them in error, and they were passing client-side validation only to be rejected by the API. **Attaching a frame changes this field per model** — see below; the script decides and prints a notice either way. |
 | `size` | string | no | `--size` | `WIDTHxHEIGHT` (e.g. `1280x720`) — alternative to `resolution`. Don't send both unless you've confirmed the model accepts it; prefer `resolution` for Seedance 2.5. |
 | `generate_audio` | boolean | no | `--generate-audio true\|false` | Default `true` server-side. |
-| `seed` | integer | no | `--seed` | Deterministic generation. |
+| `seed` | integer | no | `--seed` | Ofox documents this as "deterministic generation". **Measured otherwise** — an identical request on a fixed seed returned visibly different clips, and one of three submissions failed outright. See the Seed section below before telling a user a take can be reproduced. |
 | `frame_images` | array | no | `--frame-first-image URL\|PATH`, `--frame-last-image URL\|PATH` | Image-to-video via first/last frame. Accepts a remote URL (used as-is) or a local readable file path (auto base64-encoded into a `data:image/<ext>;base64,...` URI). The script builds the `{type, image_url, frame_type}` objects for you — pass either or both flags. |
-| `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Element types are `image_url`, `audio_url`, `video_url` — see below. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. |
+| `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Element types are `image_url`, `audio_url`, `video_url` — see below. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. **An accepted `audio_url` does not become the clip's audio** — see the audio section below before building anything on it. |
 | `real_person` | boolean | no | `--real-person true\|false` | Default `false`. Routes an **authorized** real-person reference image through Ofox's privacy-preserving preprocessing, which is otherwise refused by the upstream. Ofox documents this for `bytedance/seedance-2.0`; **not confirmed for 2.5** — see the real-person section below. |
 | `callback_url` | string | no | `--callback-url` | Must be `https://` and must not point to a private network. |
 | `provider` | object | no | `--provider SLUG` | Pins the upstream that serves the job. **Defaults to `byteplus` for `bytedance/seedance-*`** — see below. `--provider auto` sends no pin. `provider.options.<slug>` passthrough is not exposed as a flag; use `--extra-json`. |
@@ -58,6 +58,41 @@ A working source, if the input is something this API produced: the
 unauthenticated ranged GET returned `HTTP 206 video/mp4`, and the upstream
 fetched it successfully. Those links are documented as temporary (may expire
 within 24h), so this works for a fresh job, not an archival one.
+
+### An `audio_url` reference is accepted, fetched, and does not become the audio
+
+**Measured 2026-09-15**, because the field's own limits ("≤3 audio clips, each
+≤15s", and a `too_many_references` error code that enumerates "3 audio") read
+like a capability and nobody had ever sent one.
+
+Two runs settle it:
+
+1. **A well-formed but unresolvable URL, free** — a rejected create bills
+   nothing. `HTTP 400`, `error.code: invalid_request`, upstream message
+   `input_references[0]: url must be a public HTTPS URL (or data: URI):
+   cannot resolve hostname: lookup … no such host`. So the server parses the
+   element, knows the type, and got as far as **DNS resolution** — it tries to
+   fetch the file. It also names `data:` URIs as acceptable, so audio needs no
+   hosting, unlike a `video_url`.
+2. **A real 5-second speech clip as a `data:` URI**, `bytedance/seedance-2.5`,
+   job `d8561509-dcc6-4f2c-8864-a193cd239b14`, billed 55 cents. The job
+   completed normally — **and the delivered audio track is not the audio that
+   was sent.** Compared as RMS envelopes: the input is near-continuous speech,
+   the output is sparse, correlation 0.41. The model generated its own track,
+   as it does without any reference at all.
+
+So the field is real, validated and fetched; what it is *for* is not what the
+limits imply. Concretely:
+
+- **Supplying a voice track and getting it spoken back (lip-sync) does not
+  work here.** Not on this model, not through this field.
+- Whether an audio reference influences *anything* — pacing, mood, cuts — is
+  undecided. One run cannot separate "ignored" from "weakly conditioning", and
+  the next run of the same request would differ anyway (see the Seed section).
+- The catalog's `capabilities.audio_input: false` — `false` on every video
+  model — described the outcome better than this parameter table did. When a
+  capability flag and a parameter's documented limits disagree, the flag was
+  the one worth believing, and it took 55 cents to find that out.
 
 ### What v2v does — and what one real run did not settle
 
@@ -356,24 +391,37 @@ handoffs existed.
 ### Seed
 
 Without `--seed` the script used to send none, leaving the server to pick one
-and report it nowhere — so nothing generated could be reproduced. `generate`
-and `create` now roll a seed when the caller doesn't supply one (the same way
-`batch` always has), send it, and print it as a `SEED <n>` line. It is
-random either way; choosing it client-side is what makes it recordable.
+and report it nowhere — so a take could not even be described after the fact.
+`generate` and `create` now roll a seed when the caller doesn't supply one
+(the same way `batch` always has), send it, and print it as a `SEED <n>` line.
+It is random either way; choosing it client-side is what makes it recordable.
 
 Between the seed and the handoff, a sidecar written by `generate`, or by
 `create` + `poll` into the same `--out-dir`, holds everything needed to
-re-render the same shot at a different resolution.
+re-submit the same request at a different resolution.
 
-**Re-rendering means replaying the sidecar's `prompt` unaltered.** A seed
-reproduces a take only against a byte-identical prompt: two 2026-09-05 jobs
-on seed `642303335`, identical in every parameter and differing only in one
-paragraph's wording, returned visibly different subjects rather than
+**The docs call this field "Deterministic generation". It is not, on this
+API.** Measured 2026-09-15 on `bytedance/seedance-2.0-mini`, 4s / 480p /
+16:9, seed `424242`, one byte-identical prompt, three submissions:
+`2e45464c-9ea7-4836-96dd-93dffb5ef58d` and
+`ef83ccb8-7147-416f-a4af-e2fb04a618d1` both completed and are visibly
+different clips (the subject's position and its pixel area differ by 13x at
+t=1s, and again at t=3s), while `cf877512-3faf-42b5-92ad-2e83fa55dabf` failed
+`output_moderation_failed` on the same request and was not billed. So a fixed
+seed narrows nothing you can promise a user; it records what was asked for.
+Measured on that model at that tier — no model has ever been measured
+reproducing a take here, including the ones this file previously implied did.
+
+**A byte-identical prompt is necessary but not sufficient.** Two 2026-09-05
+jobs on seed `642303335`, identical in every parameter and differing only in
+one paragraph's wording, returned visibly different subjects rather than
 different takes on one subject
 (`1cf5ac46-058f-4615-a47b-067743f76f8c`, `50f623b2-c54a-4d9d-9646-31dd06e2a926`).
-That is why the sidecar stores the prompt as submitted — so the replay does
-not depend on anyone retyping it. `SKILL.md`'s "Reproducing a shot" has the
-full statement.
+That run establishes *changed prompt → changed result*; it says nothing about
+the converse, which the 2026-09-15 runs above tested directly and disproved.
+The sidecar stores the prompt as submitted so a re-attempt does not depend on
+anyone retyping it. `SKILL.md`'s "Re-attempting a shot" has the full
+statement.
 
 `frame_images` is replaced by a `frame_images_count` — a resolved
 `--frame-first-image` is a base64 data URI that can exceed a megabyte, and

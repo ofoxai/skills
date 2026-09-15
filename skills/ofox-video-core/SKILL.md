@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.22.1"
+version: "1.23.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.22.1"
+  version: "1.23.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -176,12 +176,12 @@ Every option `generate` takes works here. What `batch` adds:
 - **An estimate before it spends anything**, and a real total afterward built
   from each job's own `usage.video_cost` — never from the estimate.
 - **Every take reports its seed** (`TAKE 3 <job-id> seed=1852049 <cost> <path>`).
-  This is what makes "take 3 was the good one" actionable: the takes differ
-  only by seed, so re-running the **same prompt** with that seed on a better
-  model or a higher resolution reproduces that take rather than rolling a new
-  one. Without the seed there is no way back to a specific take, only a
-  reroll. `same prompt` is load-bearing — see "Reproducing a shot" for how
-  little of it can change.
+  The takes differ only by seed, so the seed is how "take 3 was the good one"
+  gets recorded at all — without it there is nothing to name a take by. It is
+  **not** a guarantee: re-running the same prompt and seed at a higher
+  resolution aims at that take, and a fixed seed has been measured returning a
+  visibly different clip on an identical request. See "Re-attempting a shot"
+  before promising a user their take back.
 - **`BATCH_COST_TOTAL` is the number to quote**, not `BATCH_COST_PER_TAKE`.
   Gacha means most takes go in the bin: if one take in three is usable, that
   clip cost you the whole total, because you paid for the two you threw away.
@@ -197,8 +197,10 @@ Every option `generate` takes works here. What `batch` adds:
   certainly break the rest, and each attempt is real money. A take that fails
   *after* submission is a different case and does not stop the others; see
   "Multiple takes of one prompt" below.
-- **A warning if you pass `--seed`**, since a fixed seed means you may be
-  paying N times for N identical clips.
+- **A warning if you pass `--seed`**, since a fixed seed makes every take ask
+  for the same generation — billed N times for variation you did not choose.
+  (Not "N identical clips": they may still differ, because a fixed seed does
+  not make this API reproducible. The advice is the same either way.)
 
 Takes are **created one at a time and waited for concurrently**, each as its
 own job through the same path a single `generate` uses. The sequential half is
@@ -569,13 +571,15 @@ prompt, the real cost, and the `request` as submitted — the only place
 echoes none of them. Full field table in
 [`references/api-params.md`](references/api-params.md).
 
-## Reproducing a shot
+## Re-attempting a shot
 
 Every job now has a seed: without `--seed` the script rolls one, sends it,
 and prints it as `SEED <n>`. Before, the server picked a seed and reported it
-nowhere, so nothing could be regenerated — only re-rolled.
+nowhere, so a take could not even be described after the fact, let alone
+aimed at again. **Recording the request is what the seed buys — not a
+guarantee, see below.**
 
-That seed and the rest of the request land in the sidecar, so re-rendering
+That seed and the rest of the request land in the sidecar, so re-submitting
 the same shot at a higher resolution is a matter of reading it back:
 
 ```bash
@@ -587,23 +591,60 @@ payload in `<out-dir>/.ofox-request-<job id>.json` for the poll to pick up
 and clean away. Poll into a different `--out-dir` and the handoff is simply
 not found — the sidecar omits `request`, nothing fails.
 
-**The seed reproduces a take only when the prompt is byte-identical**, and
-"byte-identical" is not a figure of speech. Measured on 2026-09-05: two jobs
-ran the same seed `642303335` at the same duration, resolution, aspect ratio
-and model, differing only in the wording of one paragraph in the middle of
-the prompt — and they came back with visibly *different subjects*, not merely
-different takes on one subject (a wide steel collar on a short body versus a
-narrow collar on a longer body, with the one asymmetric feature pointing the
-other way). Jobs `1cf5ac46-058f-4615-a47b-067743f76f8c` and
-`50f623b2-c54a-4d9d-9646-31dd06e2a926`.
+### A fixed seed does not make this API reproducible
 
-So the claim above stands and this is its boundary: the seed is the handle for
-"that one was good, render it properly at 1080p", where nothing but
-`--resolution` (or `--model`) moves. It is **not** a handle for "that one was
-good, now fix the third shot" — editing the prompt and keeping the seed does
-not preserve the parts you liked. Read the prompt back out of the sidecar
-rather than retyping it, which is what the `jq` line above is for; a retyped
-prompt is a new prompt.
+Not even with a byte-identical prompt. **Measured 2026-09-15**: three jobs on
+`bytedance/seedance-2.0-mini`, 4s / 480p / 16:9, seed `424242`, the same
+one-sentence prompt submitted verbatim each time.
+
+| Job | Outcome |
+|---|---|
+| `2e45464c-9ea7-4836-96dd-93dffb5ef58d` | completed, 8 cents |
+| `cf877512-3faf-42b5-92ad-2e83fa55dabf` | **failed** `output_moderation_failed`, not billed |
+| `ef83ccb8-7147-416f-a4af-e2fb04a618d1` | completed, 8 cents |
+
+The two that completed are not the same clip. Locating the single red balloon
+in extracted frames: at t=1s it sits at (484, 419) with 23,668 red pixels in
+one and at (431, 335) with 1,785 in the other — a different position and
+**13x the area**. Same at t=3s. That is a different generation, not encoding
+noise. The middle row is the sharper point: one of three runs of an identical
+request did not come back at all.
+
+Measured on that model, at that duration and tier. Nothing here says a
+different model is better behaved — but nothing in this repo ever measured one
+that was, either, and the claim this passage used to make had never been
+tested on any model.
+
+**A byte-identical prompt is still necessary; it is just not sufficient.**
+Measured on 2026-09-05: two jobs ran the same seed `642303335` at the same
+duration, resolution, aspect ratio and model, differing only in the wording of
+one paragraph in the middle of the prompt — and they came back with visibly
+*different subjects*, not merely different takes on one subject (a wide steel
+collar on a short body versus a narrow collar on a longer body, with the one
+asymmetric feature pointing the other way). Jobs
+`1cf5ac46-058f-4615-a47b-067743f76f8c` and
+`50f623b2-c54a-4d9d-9646-31dd06e2a926`. That run tested *changed prompt →
+changed result* and established it. Until 2026-09-15 this document read the
+converse off it — "the seed reproduces a take when the prompt is
+byte-identical" — which nobody had tested. It is false.
+
+So what the seed is actually for:
+
+- **Recording what was sent.** A job whose seed nobody knows cannot even be
+  described, let alone re-attempted. That is why the script rolls and prints
+  one.
+- **Re-attempting a take** — the same prompt, the same seed, `--resolution`
+  stepped up. Treat it as another roll aimed at the same shot, not as the same
+  clip larger, and **say so to the user before they pay for it**. A
+  re-render that comes back different is the documented behaviour, not a
+  fault.
+- It is **not** a handle for "that one was good, now fix the third shot".
+  Editing the prompt and keeping the seed preserves nothing you liked — that
+  is the 2026-09-05 measurement — and even leaving the prompt alone does not.
+
+Read the prompt back out of the sidecar rather than retyping it, which is what
+the `jq` line above is for; a retyped prompt is a new prompt, and starting
+from a new prompt removes the one condition that is at least necessary.
 
 A sidecar that cannot be written is a warning, never a failed download — the
 video is what the user paid for.
@@ -626,6 +667,14 @@ Key flags: `--model` (default `bytedance/seedance-2.5`), `--duration`,
 `--poll-interval SECONDS` (default 6). Full parameter reference:
 `references/api-params.md`. Pricing and the cost-estimate formula:
 `references/pricing.md`.
+
+⚠️ **There is no way to supply the audio.** `input_references` documents an
+audio allowance and the server really does accept, validate and fetch an
+`audio_url` — and then generates its own track anyway: a real speech clip was
+supplied and the delivered audio is not it (measured, job
+`d8561509-dcc6-4f2c-8864-a193cd239b14`). No lip-sync, no voice-over input. Use
+`--generate-audio` and the prompt for what the clip says; add a supplied voice
+track in an editor afterwards. Details in `references/api-params.md`.
 
 ### Image-to-video: local files, remote URLs, and the `adaptive` aspect ratio
 

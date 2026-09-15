@@ -64,18 +64,23 @@ skills check for both and tell you what's missing.
 `hal-vault`, `hal-image` and `cloudflare-drop` don't touch the Ofox API and
 cost nothing to run.
 
-## Every clip can be reproduced
+## Every clip is recorded, and can be aimed at again
 
-Generation is a slot machine, so the take you keep is worth being able to get
-back. Each finished clip lands as `<name>-<short job id>.mp4` — pass `--name`
-and it is named after the scene instead of a bare job id — with a `.json`
-sidecar beside it holding the full job id, the prompt, the seed, the request
-as submitted, and what it actually cost.
+Generation is a slot machine, so the take you keep is worth being able to
+describe afterwards. Each finished clip lands as `<name>-<short job id>.mp4` —
+pass `--name` and it is named after the scene instead of a bare job id — with
+a `.json` sidecar beside it holding the full job id, the prompt, the seed, the
+request as submitted, and what it actually cost.
 
 The seed is the part that matters. Without one the server picks its own and
-reports it nowhere, so "that take was good, give me it at 1080p" means rolling
-the dice again. Recorded, it re-renders the same shot at a different
-resolution rather than producing a different shot.
+reports it nowhere, so "that take was good, give me it at 1080p" has nothing
+to point at. Recorded, the whole request can be re-submitted at a different
+resolution.
+
+**What that is not is a reproduction.** Measured 2026-09-15: three submissions
+of one byte-identical request on a fixed seed came back as two visibly
+different clips and one refusal. A re-render aims at a take; it does not
+return it — and these skills are written to say so before anyone pays for one.
 
 To see what this looks like at the other end, the
 [Seedance 2.5 prompts and examples](https://ofox.ai/seedance-2-5-prompts?utm_source=github&utm_medium=case&utm_campaign=skills)

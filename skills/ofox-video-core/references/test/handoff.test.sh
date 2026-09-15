@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # handoff.test.sh — the seed, and the create -> poll request handoff.
 #
-# Both exist for one reason: making a generated shot reproducible. The API
+# Both exist for one reason: making a generated shot recordable — not
+# reproducible, which this API is not (see SKILL.md, "Re-attempting a
+# shot"). The API
 # echoes neither resolution, aspect ratio nor seed on a poll, so what the
 # sidecar knows is whatever the client recorded at create time — and create
 # and poll are separate processes, so that record has to survive on disk.
@@ -63,8 +65,8 @@ body() {
 PAYLOAD='{"model":"bytedance/seedance-2.5","prompt":"a handoff run","duration":8,"resolution":"480p","aspect_ratio":"9:16","seed":418715175}'
 
 echo "=== generate sends a seed even when the caller does not pick one ==="
-# Without one the server chooses a seed and reports it nowhere, so nothing
-# generated could be reproduced — only re-rolled. --print-payload dumps the
+# Without one the server chooses a seed and reports it nowhere, so a take
+# could not even be described afterwards. --print-payload dumps the
 # request body that would have been sent, and --dry-run returns before
 # sending it, so this is observable for free.
 payload_seed() { # extra args...
@@ -77,7 +79,7 @@ s1="$(payload_seed)"
 if [ -n "$s1" ]; then
   pass "the payload carries a seed with no --seed given ($s1)"
 else
-  fail "no seed in the payload" "the run would not be reproducible"
+  fail "no seed in the payload" "the run would not be recordable"
 fi
 
 s2="$(payload_seed)"

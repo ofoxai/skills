@@ -362,7 +362,7 @@ so.
 | `--resolution` | the cheapest tier for the draft, the deliverable's tier for the final. **When the user named neither** — the common case — draft at the model's cheapest tier and put the next tier up as a *second row* of the same cost table, so the upgrade is priced rather than asked about | the measured job ran at 480p, the cheapest tier its model lists. Which tiers a model has is a catalog fact; `models` prints them, and dry-running both rows costs nothing |
 | `--aspect-ratio` | not passed | the attached frames decide it — see "The frame decides the shape" |
 | `--generate-audio` | `false` | a tween of two stills has nothing to sync to, and the server's default is `true`. Omit the flag only when the clip genuinely wants a track |
-| `--seed` | let the script roll one, and keep it | it prints `SEED` and writes it to the clip's `.json` sidecar, which is the handle for "that take, at a higher resolution". It reproduces a take only while the prompt is byte-identical |
+| `--seed` | let the script roll one, and keep it | it prints `SEED` and writes it to the clip's `.json` sidecar, which is what lets "that take, at a higher resolution" be re-submitted at all. It does **not** reproduce it: measured, an identical request on a fixed seed came back a visibly different clip. A byte-identical prompt is necessary and not sufficient — tell the user a re-render is another roll aimed at the same shot before they pay for it |
 | `--real-person` | leave unset | photoreal people in a reference frame are refused at submission on `bytedance/seedance-2.5`; `true` is untested there |
 
 ## Choosing a model
@@ -486,8 +486,9 @@ clip cost the whole total. At `--dry-run` the total is the
 the real run prints afterwards.
 
 Hand the user the `CONTACT_SHEET` path on its own line; in this flow it is the
-artifact they look at first. Each `TAKE` line carries `seed=N`, which is the
-handle for re-rendering that take at a higher resolution.
+artifact they look at first. Each `TAKE` line carries `seed=N`, which is how a
+take is named and re-submitted at a higher resolution — an aim at that take,
+not a promise of it (see the `--seed` row above).
 
 Submission is sequential and only the waiting runs in parallel, so a
 submission failure stops the remaining takes — but the whole total is

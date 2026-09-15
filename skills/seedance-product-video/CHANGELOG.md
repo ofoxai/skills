@@ -4,6 +4,45 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.15.1 — a seed does not reproduce a take, and this skill said it did
+
+**Documentation only. No flag, default, price or behaviour changed.**
+
+This skill's batch/promotion section told the agent that re-running a take's
+seed with the same prompt at a higher resolution "reproduce[s] that take
+rather than rolling a new one". That was inherited from `ofox-video-core`,
+where it had been written from a 2026-09-05 measurement that only tested the
+*other* direction: one seed, two prompts a paragraph apart, visibly different
+subjects. The converse was never run.
+
+It has been now. Three submissions of one byte-identical request —
+`bytedance/seedance-2.0-mini`, 4s / 480p / 16:9, seed `424242` — returned:
+
+| Job | Outcome |
+|---|---|
+| `2e45464c-9ea7-4836-96dd-93dffb5ef58d` | completed, 8 cents |
+| `cf877512-3faf-42b5-92ad-2e83fa55dabf` | **failed** `output_moderation_failed`, not billed |
+| `ef83ccb8-7147-416f-a4af-e2fb04a618d1` | completed, 8 cents |
+
+The two completed clips are different generations — the single red balloon
+sits in a different place and at 13x the pixel area at t=1s, and again at
+t=3s. One identical request in three did not come back at all.
+
+**What this changes for a caller**: a promotion is another roll aimed at the
+same shot, not that shot enlarged, and the agent has to say so *before* the
+user pays for it. A byte-identical prompt is still necessary — read it out of
+the sidecar rather than retyping it — it is just not sufficient. The full
+record, including the 2026-09-05 pair it replaces, is in `ofox-video-core`
+1.23.0.
+
+Also corrected here: the section stating "the seed reproduces a take only
+while the prompt is byte-identical", which made the same inverted claim in
+this skill's own words, against this scenario's own grinder pair. The pair's
+finding stands — one edited paragraph moved the product's appearance — it just
+establishes necessity, not sufficiency. A product clip is where a client
+notices a promotion that came back different, so the section now says to price
+and describe it as another roll.
+
 ## 1.15.0 — two defaults did not survive naming another model
 
 1.14.0 let a user say "use wan" / "use hailuo". Two entries in the defaults

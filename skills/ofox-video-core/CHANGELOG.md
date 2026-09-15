@@ -4,6 +4,90 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.23.0 — the seed does not reproduce a take, and an audio reference is not a voice input
+
+Two measurements, both paid, both correcting something this skill shipped as
+fact.
+
+### A fixed seed does not make this API reproducible
+
+Since 1.16.0 this skill has said, in `SKILL.md`'s "Reproducing a shot", in
+`references/api-params.md`'s Seed section, in the `batch` seed bullet and in a
+comment in the script itself, that **the seed reproduces a take when the
+prompt is byte-identical**. That sentence was never tested. It is false.
+
+Measured 2026-09-15 — `bytedance/seedance-2.0-mini`, 4s / 480p / 16:9, seed
+`424242`, one byte-identical prompt, three submissions:
+
+| Job | Outcome |
+|---|---|
+| `2e45464c-9ea7-4836-96dd-93dffb5ef58d` | completed, 8 cents |
+| `cf877512-3faf-42b5-92ad-2e83fa55dabf` | **failed** `output_moderation_failed`, not billed |
+| `ef83ccb8-7147-416f-a4af-e2fb04a618d1` | completed, 8 cents |
+
+The two completed clips are different generations: locating the single red
+balloon in extracted frames, at t=1s it is at (484, 419) with 23,668 red
+pixels in one and at (431, 335) with 1,785 in the other — different position,
+13x the area. Same at t=3s. And one submission of three did not come back at
+all.
+
+**How the wrong claim got in.** The 2026-09-05 pair
+(`1cf5ac46-058f-4615-a47b-067743f76f8c`, `50f623b2-c54a-4d9d-9646-31dd06e2a926`)
+ran one seed across two prompts differing by a paragraph and came back with
+different subjects. That measurement is sound and stays in the docs — it
+establishes *changed prompt → changed result*. The sentence written from it
+asserted the **converse**, which the run never touched. A byte-identical
+prompt is necessary; it is not sufficient, and nothing about this API is.
+
+**What changed in the files:**
+
+- `SKILL.md`'s section is now "Re-attempting a shot", with the three jobs, the
+  2026-09-05 pair kept and re-scoped to what it actually proves, and a
+  three-bullet statement of what the seed is for: recording the request,
+  aiming at a take again, and **not** a promise to a user.
+- The `batch` seed bullet no longer says re-running with a take's seed
+  "reproduces that take".
+- `references/api-params.md`: the `seed` row now says Ofox documents the field
+  as "deterministic generation" and that this was measured otherwise; the Seed
+  section carries the same correction.
+- `references/ofox-video.sh`: the same-seed batch NOTE now says the takes ask
+  for the same generation and are billed for each, while stating that they may
+  still differ because the API is not reproducible — **the advice to drop
+  `--seed` from a batch is unchanged**, only its reason is. The usage header
+  and the per-take seed comment lost the "reproduces that take" claim.
+
+**Nothing about behaviour changed** — no request field, no estimate, no exit
+code. What changed is what a caller can promise a user. If you are building a
+"render the keeper at 1080p" flow on top of this skill, price it as another
+roll aimed at the same shot and say so before the user pays.
+
+### `input_references` accepts audio, fetches it, and ignores it
+
+`references/api-params.md` has listed "≤3 audio clips (each ≤15s)" and an
+error code enumerating a 3-audio limit since the skill's first release. Both
+are accurate about the field and misleading about the capability. Two runs,
+2026-09-15:
+
+- **Free, HTTP 400 `invalid_request`** on a well-formed but unresolvable URL:
+  `input_references[0]: url must be a public HTTPS URL (or data: URI): cannot
+  resolve hostname: lookup … no such host`. The server parses the element,
+  knows `audio_url`, and reaches DNS — it really does try to fetch. It also
+  accepts `data:` URIs for audio, so no hosting is needed (unlike a video
+  reference).
+- **55 cents**, job `d8561509-dcc6-4f2c-8864-a193cd239b14` — a real 5-second
+  speech clip as a `data:` URI on `bytedance/seedance-2.5`. Completed
+  normally, and **the delivered audio is not the supplied audio**: the input's
+  RMS envelope is near-continuous speech, the output's is sparse, correlation
+  0.41. The model generated its own track.
+
+So: no lip-sync, no voice-over input, no way to make a clip speak a line you
+supply. Whether an audio reference weakly conditions anything is undecided and
+one run cannot settle it. The catalog's `capabilities.audio_input: false`
+turned out to describe reality better than this skill's own parameter table —
+recorded in `api-params.md` under "An `audio_url` reference is accepted,
+fetched, and does not become the audio", and flagged in the
+`input_references` row and in `prompt-structure.md`'s limits bullet.
+
 ## 1.22.1 — the snapshot refresh corrected the data and left the prose quoting the old data
 
 1.22.0's sibling snapshot refresh moved several catalog figures. The tables
@@ -819,6 +903,14 @@ Three more facts from the same two runs, none of which changed any behaviour:
   `SKILL.md`'s `Reproducing a shot` and `Batch`'s seed bullet, and in
   `api-params.md`'s `Seed`, which is also why the sidecar stores the prompt as
   submitted — so a replay never depends on retyping it.
+
+  *(⚠️ **1.23.0 withdraws the first half of this bullet.** The two grinder
+  clips establish *changed prompt → changed result*, which stands. The
+  sentence written from them asserts the converse — identical prompt →
+  reproduced take — and the converse was never run. Three 2026-09-15
+  submissions of one byte-identical request on a fixed seed returned two
+  visibly different clips and one outright failure. The seed records a
+  request; it does not reproduce a take, at any prompt. Read 1.23.0.)*
 - **The no-resubmit rule has survived a real transport fault**, for the first
   time in this repo. Both jobs dropped their TLS connection mid-poll
   (`curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL`), the script retried

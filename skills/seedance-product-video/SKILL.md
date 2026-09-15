@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.15.0"
+version: "1.15.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.15.0"
+  version: "1.15.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -1479,23 +1479,30 @@ Hand the user the `CONTACT_SHEET` path on its own line, the same way you hand
 over a video — in this flow it is the artifact they actually look at first,
 since it is how they pick. Then list the individual take paths beneath it.
 
-Each `TAKE` line carries `seed=N`. That seed is the handle for "take 3 was the
-good one": re-run the same prompt with that seed on a better model or higher
-resolution to reproduce that take rather than rolling a new one.
+Each `TAKE` line carries `seed=N`. That seed is how "take 3 was the good one"
+gets written down at all: re-running the same prompt with that seed on a
+better model or higher resolution **aims at** that take. It does not return
+it — measured 2026-09-15, three submissions of one byte-identical request on a
+fixed seed came back as two visibly different clips and one refusal, so this
+API is not reproducible even with nothing changed. Say that before the user
+pays for the re-render; a promotion is another roll at the same shot.
 
 A single `generate` prints a `SEED` line too, and records it in the clip's
 `.json` sidecar along with the resolution and aspect ratio. So "that one was
 good, give me it at 1080p" works off one clip — you do not need a batch to
-get a reusable handle.
+get a handle worth re-submitting.
 
-**The seed reproduces a take only while the prompt is byte-identical.**
-Measured on this scenario's own pair: both clips ran seed `642303335` and the
-grinder is visibly a different design in each — a wide steel collar on a short
-body in one, a narrow collar on a longer body with the crank pointing the
-other way in the other. One paragraph of prompt text changed and the product's
-appearance moved with it. So "that take was good, give it to me at 1080p" is
-still the seed's job; "that take was good, let me tweak one line and keep the
-look" is not something the seed can do.
+**A byte-identical prompt is necessary for a re-render to land anywhere near
+its draft — and it is not sufficient.** Measured on this scenario's own pair:
+both clips ran seed `642303335` and the grinder is visibly a different design
+in each — a wide steel collar on a short body in one, a narrow collar on a
+longer body with the crank pointing the other way in the other. One paragraph
+of prompt text changed and the product's appearance moved with it. So "that
+take was good, let me tweak one line and keep the look" is not something the
+seed can do. Neither, on the evidence above, is "that take was good, give it
+to me at 1080p, identical" — that is an aim, not a guarantee, and a product
+clip is exactly where a client notices the difference. Price and describe a
+promotion as another roll at the same shot.
 
 Worth offering when the user is exploring: draft cheap on
 `bytedance/seedance-2.0-mini` at 480p, then render the winner on

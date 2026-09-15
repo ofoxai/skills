@@ -315,8 +315,8 @@ What comes back, and what to do with each part:
   because it is how they pick. It needs `ffmpeg`; without it the sheet is
   skipped with a reason and the videos are untouched.
 - **`TAKE N <job-id> seed=<n> <cost> <path>`** — one per take. List the paths
-  beneath the sheet. **The seed is the handle** for "take 3 was the good one";
-  see "Promoting the winner".
+  beneath the sheet. **The seed is how a take gets named and re-submitted** —
+  not a guarantee of getting it back; see "Picking, and promoting the winner".
 - **`BATCH_COST_TOTAL`** — the real total, built from each job's own usage.
   This is the number to report, never `BATCH_COST_PER_TAKE`.
 
@@ -370,10 +370,12 @@ bash ../ofox-video-core/references/ofox-video.sh contact-sheet <take-3.mp4> \
   --out-dir /absolute/path/to/out
 ```
 
-### The seed is the handle, and here is exactly how far it goes
+### Promoting a take is another roll, aimed at that take
 
 Each take differs from its siblings only by seed, and the seed is printed and
-written into the clip's `.json` sidecar. To re-render take 3 properly:
+written into the clip's `.json` sidecar — which is what makes "take 3" a thing
+you can name and re-submit at all. It is **not** a promise that take 3 comes
+back. To aim at it:
 
 ```bash
 bash ../ofox-video-core/references/ofox-video.sh generate \
@@ -387,24 +389,32 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 and `RES` are whatever the promotion steps up to — change one of them, not
 both, if you want the result to stay recognisable.
 
-Three honest boundaries on that, all of them cheap to respect:
+Four honest boundaries on that, all of them cheap to respect:
 
-- **The prompt must be byte-identical.** Measured in this repo: two jobs with
-  the same seed, model and parameters, differing only in the wording of one
-  paragraph, came back with visibly *different subjects*. Read the prompt back
-  out of the sidecar rather than retyping it —
-  `jq -r '.request.prompt' <sidecar>.json`. A retyped prompt is a new prompt.
+- **A promotion can come back different even when you change nothing but the
+  resolution.** Measured in this repo: three submissions of one byte-identical
+  request on a fixed seed returned two visibly different clips (the subject in
+  a different position, at 13x the pixel area) and one outright failure. A
+  fixed seed does not make this API reproducible. **Say this before the
+  promotion is paid for** — a user who was promised "the same clip, bigger"
+  and got a different one has been mis-sold by the agent, not by the API.
+- **The prompt must still be byte-identical.** Necessary, just not sufficient.
+  Measured separately: two jobs with the same seed, model and parameters,
+  differing only in the wording of one paragraph, came back with visibly
+  *different subjects*. Read the prompt back out of the sidecar rather than
+  retyping it — `jq -r '.request.prompt' <sidecar>.json`. A retyped prompt is
+  a new prompt, and gives up the one condition that does matter.
 - **So the seed is not a handle for "that one, but fix the third beat."** Edit
   the prompt and the seed preserves nothing you liked. That is a new draft
   round, not a promotion.
-- **Across models, treat a promotion as a re-roll of the same idea, not the
-  same clip at higher fidelity.** `ofox-video-core` documents the seed as the
-  handle for a re-render where only `--resolution` or `--model` moves, and a
-  resolution bump is the case with the strongest claim. Nothing in this repo
-  has measured a seed carrying a take across two different models — and a
-  different model is a different look by construction. Say that to the user
-  before they pay for the promotion, so a different-looking result isn't a
-  surprise.
+- **Across models it is further still from the same clip.** A different model
+  is a different look by construction, and nothing in this repo has measured a
+  seed carrying a take across two models. A resolution bump remains the
+  closest-aimed promotion available — closest, not guaranteed.
+
+When a user genuinely needs *this exact file* larger, the honest answer is
+that this API does not offer that, and an upscale of the take you already have
+is a different tool. Promote when the idea is what you are buying again.
 
 ### When to step up to a dearer model, and when not to
 
@@ -466,7 +476,7 @@ refusal rather than a look, changing model is a route, not a downgrade.
 | `--duration` (drafts) | the model's minimum unless the thing being judged needs longer | duration multiplies across every take |
 | `--max-wait` | lower than the 540s default for short drafts — 240 is generous | keeps a batch inside a single tool call |
 | `--concurrency` | leave at 4 | the default is derived from the account's measured rate limit; the ceiling is 10 and it is the whole limit |
-| `--seed` | **do not pass it to a batch** | a fixed seed means paying N times for N identical clips; the script warns. Seeds are an *output* here, not an input |
+| `--seed` | **do not pass it to a batch** | it removes the one axis a batch varies on purpose — every take then asks for the same generation, and you are billed for each. They may still come back different, because a fixed seed does not make this API reproducible (measured), but that variation is the server's rather than one you chose, so you have paid N times for nothing you can steer. The script warns. Seeds are an *output* here, not an input |
 | `--name` | always | takes land as `<name>-<short job id>.mp4`, which is what makes a contact sheet legible later |
 | `--generate-audio` | leave at the server default unless the scenario skill says otherwise | short-form is usually watched muted, but the track costs nothing extra |
 
@@ -574,12 +584,12 @@ the promotion reads its prompt back out of.
 | Symptom | Cause | Fix |
 |---|---|---|
 | The user wanted five different clips and got five near-identical ones | `batch` rolls one prompt N times | That is the `Set` question. Write one prompt per idea and use `create` + a single multi-id `poll` — see "First: 'five clips' means two different things". The spent batch is not recoverable |
-| All five takes look the same | A `--seed` was passed to the batch, or the prompt leaves almost nothing to vary | Don't pass `--seed` to `batch` (the script warns). Otherwise the prompt is over-specified for this purpose — loosen it, or accept that this idea has one look |
+| All five takes look the same | The prompt leaves almost nothing to vary. (A `--seed` passed to the batch makes every take ask for the same generation — it is not *why* they matched, since a fixed seed does not guarantee identical output, but it does mean you paid five times for one request) | Loosen the prompt, or accept that this idea has one look. And don't pass `--seed` to `batch` (the script warns) |
 | `STATUS batch_partial` | A create was rejected, or a take failed after submission | Read `TAKES_*`: submitted takes were billed and downloaded, not-submitted ones were not. Fix what the rejection named and run a new, smaller batch for the remainder |
 | No contact sheet | `ffmpeg` isn't installed | The videos are untouched and the sheet is skipped with a reason. Install `ffmpeg`, then `ofox-video.sh contact-sheet <files…>` to build it after the fact — no API call, no cost |
 | Exit `1` on `--aspect-ratio 9:16` | The chosen model doesn't offer that ratio | `ofox-video.sh models` lists each model's ratios. Nothing was submitted, so this is free to fix — pick another cheap model that has it |
 | Exit `1` on `--duration` | Below the model's minimum or above its maximum; the budget models cap lower than the flagship | `models` prints each range. Free to fix |
-| The promoted clip doesn't look like the draft it came from | A different model, or a prompt that wasn't byte-identical | Expected across models — say so before the promotion is paid for. Read the prompt from the sidecar rather than retyping it; for the closest match, promote by resolution first and change model only if you have to |
+| The promoted clip doesn't look like the draft it came from | Nothing is guaranteed to reproduce here — a fixed seed and a byte-identical prompt have been measured returning a different clip. A changed model, or a retyped prompt, makes it likelier | Not recoverable after the fact; it is the documented behaviour, not a fault. Before the next promotion: say it up front, read the prompt from the sidecar rather than retyping it, and change resolution only — that is the closest aim available |
 | The batch timed out | Wall clock exceeded `--max-wait` | Use the resume command `batch` printed, or `poll` the job ids. The jobs are running and billable; a second `batch` pays twice |
 | The bill is bigger than expected | Takes x duration x rate — duration multiplies across every take | Nothing to fix after the fact. Before the next one: shorter drafts, fewer takes, and the total on screen before the yes |
 | Exit `5`, ambiguous network failure on create | No HTTP response at all — can't tell whether a job exists | Don't guess or retry; tell the user to check https://app.ofox.ai for jobs that may already be running |

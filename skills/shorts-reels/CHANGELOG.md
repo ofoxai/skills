@@ -69,13 +69,23 @@ Also in this release:
   failing the same way are prompt problems that a dearer model renders more
   expensively. Plus the non-reason: moderation policy is per-model, so a model
   change can be a route rather than a downgrade.
-- **The seed's boundaries, stated three ways.** The prompt must be
-  byte-identical (measured: same seed, one paragraph reworded, visibly
-  different subjects), so the promotion reads its prompt back out of the
+- **The seed's boundaries, stated four ways — a promotion is another roll
+  aimed at a take, never that take returned.** Measured 2026-09-15: three
+  submissions of one byte-identical request on a fixed seed came back as two
+  visibly different clips and one `output_moderation_failed`, so this API is
+  not reproducible even with nothing changed. A byte-identical prompt is still
+  necessary (measured separately: same seed, one paragraph reworded, visibly
+  different subjects), which is why the promotion reads its prompt out of the
   sidecar; the seed is not a handle for "that one, but fix the third beat";
-  and across two different models a promotion is a re-roll of the same idea,
-  not the same clip at higher fidelity — nothing in this repo has measured a
-  seed carrying a take across models.
+  and across two different models it is further still — nothing in this repo
+  has measured a seed carrying a take across models. The skill's instruction
+  is to say all of this *before* the promotion is paid for.
+- **`--seed` still doesn't belong on a batch, for a corrected reason.** Not
+  "you would pay N times for N identical clips" — that rests on a
+  reproducibility this API doesn't have. It removes the only axis a batch
+  varies deliberately: every take asks for the same generation, each is
+  billed, and whatever variation comes back is the server's rather than one
+  you chose.
 - **Batch mechanics relayed rather than reinvented**: stop on first rejected
   create, a post-submission failure not stopping the others, `batch_partial`
   and the `TAKES_*` counters, concurrent waiting at the default 4, the

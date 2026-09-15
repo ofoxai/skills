@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.13.1"
+version: "1.13.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.13.1"
+  version: "1.13.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -1106,14 +1106,18 @@ Hand the user the `CONTACT_SHEET` path on its own line, the same way you hand
 over a video — in this flow it is the artifact they actually look at first,
 since it is how they pick. Then list the individual take paths beneath it.
 
-Each `TAKE` line carries `seed=N`. That seed is the handle for "take 3 was the
-good one": re-run the same prompt with that seed on a better model or higher
-resolution to reproduce that take rather than rolling a new one.
+Each `TAKE` line carries `seed=N`. That seed is how "take 3 was the good one"
+gets written down at all: re-running the same prompt with that seed on a
+better model or higher resolution **aims at** that take. It does not return
+it — measured 2026-09-15, three submissions of one byte-identical request on a
+fixed seed came back as two visibly different clips and one refusal, so this
+API is not reproducible even with nothing changed. Say that before the user
+pays for the re-render; a promotion is another roll at the same shot.
 
 A single `generate` prints a `SEED` line too, and records it in the clip's
 `.json` sidecar along with the resolution and aspect ratio. So "that one was
 good, give me it at 1080p" works off one clip — you do not need a batch to
-get a reusable handle.
+get a handle worth re-submitting.
 
 Worth offering when the user is exploring: draft cheap on
 `bytedance/seedance-2.0-mini` at 480p, then render the winner on

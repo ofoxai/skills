@@ -60,7 +60,9 @@
 #                               shot is should say so. Sanitized before use.
 #   --size WxH                  e.g. 1280x720 (alternative to --resolution)
 #   --generate-audio true|false default: true (server-side default)
-#   --seed N
+#   --seed N                    recorded and re-submittable, NOT reproducible:
+#                               an identical request on a fixed seed has been
+#                               measured returning a different clip.
 #   --frame-first-image URL|PATH image-to-video: first frame. Accepts a remote
 #                               http(s):// URL (used as-is) or a local,
 #                               readable file path (base64-encoded into a
@@ -1096,10 +1098,11 @@ cmd_generate() {
 
   # Roll a seed when the caller didn't pick one, exactly as batch already
   # does for its takes. Without this the server picks a seed and reports it
-  # nowhere — the poll response carries no seed field — so a clip could never
-  # be reproduced, not even to re-render the same shot at a higher
+  # nowhere — the poll response carries no seed field — so a clip could not
+  # even be described afterwards, let alone aimed at again at a higher
   # resolution. Choosing it here costs nothing (it is random either way) and
-  # makes every job repeatable.
+  # makes every job recordable. Recordable, not reproducible: an identical
+  # request on a fixed seed has been measured coming back different.
   if [ -z "$seed" ]; then
     seed=$(( (RANDOM << 15 | RANDOM) & 0x7FFFFFFF ))
   fi
@@ -1436,7 +1439,7 @@ cmd_batch() {
   fi
 
   if [ -n "$seed_given" ] && [ "$takes" -gt 1 ]; then
-    echo "NOTE: --seed $seed_given is fixed, so all $takes takes may come back identical — and you would be billed for each. Drop --seed to let them vary." >&2
+    echo "NOTE: --seed $seed_given is fixed, so all $takes takes ask for the same generation and you are billed for each. They may still come back different — a fixed seed does not make this API reproducible (measured 2026-09-15) — but the variation is then the server's, not one you chose. Drop --seed to let the takes vary on purpose." >&2
   fi
 
   # --- estimate before spending ---
@@ -1502,9 +1505,11 @@ cmd_batch() {
     echo "--- creating take $i/$takes ---" >&2
     # Give each take an explicit seed when the caller didn't pick one. Without
     # this, takes differ only by a seed the API chose and never told us, so
-    # "take 3 was the good one, render that properly" is impossible — you can
-    # only reroll and hope. With it, the seed is a handle: the same prompt and
-    # seed on a better model reproduces that take.
+    # "take 3 was the good one" cannot even be written down afterwards. With
+    # it the take is at least identifiable and re-submittable — NOT
+    # reproducible: an identical request on a fixed seed was measured
+    # returning a visibly different clip (2026-09-15, see SKILL.md's
+    # "Re-attempting a shot"). The seed is a record, not a guarantee.
     local take_args=(${passthrough[@]+"${passthrough[@]}"}) take_seed=""
     if [ -z "$seed_given" ]; then
       take_seed=$(( (RANDOM << 15 | RANDOM) & 0x7FFFFFFF ))
