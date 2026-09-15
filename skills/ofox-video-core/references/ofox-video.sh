@@ -19,6 +19,8 @@
 #   ofox-video.sh chain --shot "..." --shot "..." [OPTIONS]
 #   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]  (local, no API call)
 #   ofox-video.sh last-frame VIDEO [--out-dir DIR]                (local, no API call)
+#   ofox-video.sh frame-at VIDEO --at SECONDS [--out-dir DIR]     (local, no API call)
+#   ofox-video.sh mux-audio VIDEO AUDIO [--out-dir DIR]           (local, no API call)
 #
 # generate OPTIONS:
 #   --model NAME              default: bytedance/seedance-2.5. This skill has a
@@ -480,6 +482,10 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh chain --shot "..." --shot "..." [--shots-file FILE] [--no-concat] [OPTIONS]
   ofox-video.sh contact-sheet VIDEO [VIDEO...] [--out-dir DIR]
   ofox-video.sh last-frame VIDEO [--out-dir DIR]
+  ofox-video.sh frame-at VIDEO --at SECONDS [--out-dir DIR]
+  ofox-video.sh mux-audio VIDEO AUDIO [--out-dir DIR]
+         contact-sheet/last-frame/frame-at/mux-audio are local ffmpeg work:
+         no API call, no key, no cost
 
 Downloads are named <slug>-<short job id>.<ext>, where the slug comes from
 --name or, without it, from the prompt. Each video gets a .json sidecar
@@ -1949,6 +1955,174 @@ cmd_last_frame() {
   return 0
 }
 
+probe_duration() {
+  # Seconds as a decimal, or empty if ffprobe is absent or the file has no
+  # readable duration. Callers must cope with empty rather than assume.
+  ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \
+    "$1" 2>/dev/null | head -1
+}
+
+cmd_frame_at() {
+  # Pull the frame at a given second out of a clip. Same zero-cost local shape
+  # as last-frame, but this one sits ON the spending path: what it writes gets
+  # fed straight into a paid image-to-video job. So --at is required rather
+  # than defaulted (a guessed timestamp is a job billed for the wrong picture),
+  # and a timestamp past the end is an error rather than an empty file.
+  local video="" out_dir="" at=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --at)
+        [ $# -lt 2 ] && { echo "ERROR: --at requires a value in seconds." >&2; return 1; }
+        at="$2"; shift 2
+        ;;
+      --out-dir)
+        [ $# -lt 2 ] && { echo "ERROR: --out-dir requires a value." >&2; return 1; }
+        out_dir="$2"; shift 2
+        ;;
+      -*)
+        echo "ERROR: unknown option '$1' for frame-at." >&2
+        return 1
+        ;;
+      *)
+        video="$1"; shift
+        ;;
+    esac
+  done
+
+  if [ -z "$video" ]; then
+    echo "ERROR: give a video file. Usage: ofox-video.sh frame-at VIDEO --at SECONDS [--out-dir DIR]" >&2
+    return 1
+  fi
+  if [ ! -r "$video" ]; then
+    echo "ERROR: cannot read '$video'." >&2
+    return 1
+  fi
+  if [ -z "$at" ]; then
+    echo "ERROR: --at SECONDS is required — say which second to grab." >&2
+    echo "  For the closing frame use 'last-frame' instead; it steps back off the final frame, which is often a fade." >&2
+    return 1
+  fi
+  case "$at" in
+    *[!0-9.]* | "" | *.*.* | .)
+      echo "ERROR: --at must be a non-negative number of seconds, got '$at'." >&2
+      return 1
+      ;;
+  esac
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ERROR: ffmpeg is required to extract a frame." >&2
+    echo "  macOS: brew install ffmpeg   Debian/Ubuntu: sudo apt-get install ffmpeg" >&2
+    return 2
+  fi
+
+  # Refuse a timestamp past the end up front, and say how long the clip is.
+  # Left to ffmpeg this is a silent no-op that writes nothing, and the caller
+  # finds out by submitting a paid job with a missing frame.
+  local dur
+  dur="$(probe_duration "$video")"
+  if [ -n "$dur" ] && awk -v a="$at" -v d="$dur" 'BEGIN { exit !(a >= d) }'; then
+    echo "ERROR: --at $at is past the end of '$video' (duration ${dur}s)." >&2
+    echo "  For the closing frame use 'last-frame'." >&2
+    return 1
+  fi
+
+  [ -z "$out_dir" ] && out_dir="$(dirname "$video")"
+  mkdir -p "$out_dir" 2>/dev/null
+  local abs_dir base stamp dest
+  abs_dir="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_dir="$out_dir"
+  base="$(basename "$video")"
+  stamp="$(printf '%s' "$at" | tr '.' 'p')"
+  dest="${abs_dir%/}/${base%.*}-frame-${stamp}s.png"
+
+  if ! ffmpeg -nostdin -loglevel error -ss "$at" -i "$video" \
+    -update 1 -frames:v 1 -y "$dest" 2>/dev/null || [ ! -s "$dest" ]; then
+    rm -f "$dest" 2>/dev/null
+    echo "ERROR: could not extract a frame at ${at}s from '$video'." >&2
+    return 3
+  fi
+  echo "FRAME_AT $dest"
+  return 0
+}
+
+cmd_mux_audio() {
+  # Put your own audio track on a clip. No API call, no key, no cost — the
+  # terminal step for anything scored to music the caller already has, because
+  # an audio reference sent to the API does not come back as the clip's audio
+  # (measured; see references/api-params.md).
+  #
+  # Replaces the clip's own track rather than mixing with it: generated clips
+  # arrive with a model-made soundtrack, and layering two is never what the
+  # caller meant.
+  local video="" audio="" out_dir=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --out-dir)
+        [ $# -lt 2 ] && { echo "ERROR: --out-dir requires a value." >&2; return 1; }
+        out_dir="$2"; shift 2
+        ;;
+      -*)
+        echo "ERROR: unknown option '$1' for mux-audio." >&2
+        return 1
+        ;;
+      *)
+        if [ -z "$video" ]; then video="$1"; else audio="$1"; fi
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$video" ] || [ -z "$audio" ]; then
+    echo "ERROR: give a video and an audio file. Usage: ofox-video.sh mux-audio VIDEO AUDIO [--out-dir DIR]" >&2
+    return 1
+  fi
+  local f
+  for f in "$video" "$audio"; do
+    if [ ! -r "$f" ]; then
+      echo "ERROR: cannot read '$f'." >&2
+      return 1
+    fi
+  done
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ERROR: ffmpeg is required to mux audio." >&2
+    echo "  macOS: brew install ffmpeg   Debian/Ubuntu: sudo apt-get install ffmpeg" >&2
+    return 2
+  fi
+
+  [ -z "$out_dir" ] && out_dir="$(dirname "$video")"
+  mkdir -p "$out_dir" 2>/dev/null
+  local abs_dir base dest
+  abs_dir="$(cd "$out_dir" 2>/dev/null && pwd)" || abs_dir="$out_dir"
+  base="$(basename "$video")"
+  dest="${abs_dir%/}/${base%.*}-with-audio.mp4"
+
+  # The result runs to the shorter of the two. That is a real loss of someone
+  # else's material, so it is reported rather than swallowed — a note, not a
+  # failure, because a slightly-off pair is still the file they asked for.
+  local vdur adur
+  vdur="$(probe_duration "$video")"
+  adur="$(probe_duration "$audio")"
+  if [ -n "$vdur" ] && [ -n "$adur" ]; then
+    awk -v v="$vdur" -v a="$adur" 'BEGIN {
+      d = v - a; if (d < 0) d = -d
+      if (d <= 0.5) exit 0
+      if (a > v)
+        printf "NOTE: the audio is %.1fs and the picture is %.1fs — the result runs %.1fs and the audio is truncated by %.1fs.\n", a, v, v, d
+      else
+        printf "NOTE: the picture is %.1fs and the audio is %.1fs — the result runs %.1fs; the picture is truncated by %.1fs.\n", v, a, a, d
+      exit 0
+    }' >&2
+  fi
+
+  if ! ffmpeg -nostdin -loglevel error -i "$video" -i "$audio" \
+    -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k -shortest \
+    -y "$dest" 2>/dev/null || [ ! -s "$dest" ]; then
+    rm -f "$dest" 2>/dev/null
+    echo "ERROR: could not mux '$audio' onto '$video'." >&2
+    return 3
+  fi
+  echo "MUXED $dest"
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # chain: N shots, each opening on the previous shot's closing frame
 #
@@ -3120,6 +3294,16 @@ main() {
     last-frame)
       shift
       cmd_last_frame "$@"
+      return $?
+      ;;
+    frame-at)
+      shift
+      cmd_frame_at "$@"
+      return $?
+      ;;
+    mux-audio)
+      shift
+      cmd_mux_audio "$@"
       return $?
       ;;
     poll)

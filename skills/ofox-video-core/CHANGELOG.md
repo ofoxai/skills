@@ -4,6 +4,44 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.25.0 — two local subcommands, for the two things the API will not do
+
+`frame-at VIDEO --at SECONDS` and `mux-audio VIDEO AUDIO`. Both are local
+ffmpeg work in the shape `last-frame` and `contact-sheet` already had: no API
+call, no key, no cost, and an ffmpeg check that fires **before** anything else
+happens rather than half way through.
+
+They exist because two things this API is documented as offering turned out
+not to be offerings, and both gaps have a local answer:
+
+- **`frame-at`** — a video reference cannot extend a clip past one job's
+  duration ceiling, and must be a hosted URL besides. Extending a clip you
+  already have therefore runs through a frame, not through `input_references`.
+  `last-frame` covers "carry on from the end"; `frame-at` covers "re-shoot
+  from second 3.2", which is the same mechanism pointed at a chosen moment.
+- **`mux-audio`** — an `audio_url` reference is parsed, validated and fetched,
+  and the delivered clip still carries a model-generated track (measured
+  2026-09-15, job `d8561509`, 55 cents). So putting a specific track on a clip
+  is a local mux, and this is now the only place that claim lives as code.
+
+Three decisions inside them worth naming, each because the alternative was
+silent:
+
+- **`--at` is required, not defaulted.** The frame it writes is usually about
+  to be fed to a paid image-to-video job, so a guessed timestamp buys a job of
+  the wrong picture.
+- **A timestamp at or past the end is an error naming the clip's real
+  duration.** Left to ffmpeg it writes nothing and returns success, and the
+  caller finds out by paying for a job with a missing frame.
+- **`mux-audio` replaces the clip's own track rather than mixing**, and when
+  the two inputs differ in length by more than half a second it says which one
+  was cut and by how much. It still writes the file — truncating someone's
+  music is worth a note, not a failure.
+
+Tests: `references/test/localtools.test.sh`, 32 checks, free by construction —
+no socket is opened and no key is read. Fixtures are synthesized with lavfi at
+run time, so the suite carries no binaries.
+
 ## 1.24.0 — naming where the camera is puts the camera in the shot
 
 One measurement, documentation only — no script change, no flag change.

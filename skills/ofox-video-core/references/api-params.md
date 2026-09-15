@@ -86,6 +86,9 @@ limits imply. Concretely:
 
 - **Supplying a voice track and getting it spoken back (lip-sync) does not
   work here.** Not on this model, not through this field.
+- **Putting a specific track on the delivered clip is a local mux**, not an
+  API parameter: `ofox-video.sh mux-audio clip.mp4 track.mp3`. No call, no
+  key, no cost. That is the whole of the answer to "can I supply the audio".
 - Whether an audio reference influences *anything* — pacing, mood, cuts — is
   undecided. One run cannot separate "ignored" from "weakly conditioning", and
   the next run of the same request would differ anyway (see the Seed section).

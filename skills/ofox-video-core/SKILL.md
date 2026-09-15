@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.24.0"
+version: "1.25.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.24.0"
+  version: "1.25.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -161,6 +161,25 @@ bash references/ofox-video.sh last-frame clip.mp4 [--out-dir DIR]
 No API call, no key, no cost. Grabs a frame just before the end (the literal
 final frame is often a fade), for feeding into a later `generate` by hand.
 
+### Grabbing the frame at a chosen second
+
+```bash
+bash references/ofox-video.sh frame-at clip.mp4 --at 3.2 [--out-dir DIR]
+```
+
+No API call, no key, no cost. `last-frame` answers *where did this clip end*;
+`frame-at` answers *what did it look like at second 3.2* — which is what you
+need to re-shoot a clip from a chosen point rather than only past its end.
+
+`--at` is required rather than defaulted: this frame is usually about to be
+fed to a paid image-to-video job, so a guessed timestamp is a job billed for
+the wrong picture. A timestamp at or past the end is an error naming the
+clip's real duration, not an empty file.
+
+What it does **not** give you: re-shooting from second 3.2 regenerates
+everything after 3.2. There is no mechanism here for changing the middle of a
+clip and keeping the ending you already have.
+
 ## Generating several takes (`batch`)
 
 Video generation is a slot machine: you generate several, keep one. `batch`
@@ -239,6 +258,26 @@ bash references/ofox-video.sh contact-sheet clip1.mp4 clip2.mp4 [--out-dir DIR]
 
 No API call, no key, no cost. Useful for comparing takes from separate runs,
 or rebuilding a sheet you skipped.
+
+### Putting your own audio on a clip
+
+```bash
+bash references/ofox-video.sh mux-audio clip.mp4 track.mp3 [--out-dir DIR]
+```
+
+No API call, no key, no cost — and **the only way to get a specific audio
+track onto a clip.** Sending the audio to the API as an `input_references`
+element does not do it: the field is parsed, validated and fetched, and the
+delivered clip still carries a model-generated track. That is measured, not
+inferred — see `references/api-params.md`.
+
+It **replaces** the clip's own audio rather than mixing with it: generated
+clips arrive with a model-made soundtrack, and layering two is never what the
+caller meant.
+
+The result runs to the shorter of the two inputs. When they differ by more
+than half a second the command says which one was cut and by how much, and
+still writes the file — a mismatch is a note, not a failure.
 
 ## How long this blocks, and why that matters
 
