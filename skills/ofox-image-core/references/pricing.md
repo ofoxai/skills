@@ -165,7 +165,7 @@ that gets requested, and the flag only decides *which* size that is, which is
 why a dry run has to carry the same flag the real call will. See `SKILL.md`'s
 "The size enum cannot express 16:9 or 9:16".
 
-`bailian/qwen-image-3.0-pro` remains unchecked either way.
+`qwen/qwen-image-3.0-pro` remains unchecked either way.
 
 ## Pre-flight estimates: the token anchor table
 
@@ -183,7 +183,7 @@ earlier call **with that same model**:
 | Model | Measured at `--quality` / `--size` | Measured output tokens | When | Rough cost/image at today's rate | Invoice-checked? |
 |---|---|---|---|---|---|
 | `google/gemini-3.1-flash-image` | `low` / `512x512` — the one call whose flags were written down; this model ignores `--size` anyway | **1120** | 2026-08-29, 3 calls | ~6.7 cents | **yes** — see the invoice section above |
-| `microsoft/mai-image-2.5-flash` | `low` / `1024x1024` | **1024** | 2026-09-02, 2 calls | ~2.67 cents | no — formula only |
+| `microsoft/mai-image-2.5-flash` | `low` / `1024x1024` | **1024** | 2026-09-02, 2 calls | ~2.0 cents | no — formula only |
 | `openai/gpt-image-2` | `low` / `1024x1024` | **196** | 2026-09-02, 3 calls | ~0.6 cents | no — formula only |
 | `openai/gpt-image-2` | `high` / `1792x1024` | **5063** | 2026-09-04, 1 call | **~15.4 cents** | no — the job's own reported `IMAGE_COST` |
 
@@ -266,11 +266,16 @@ it — do not conflate the two:
   invoice line is checked against each one. Do not flip either `false` to
   `true` without one.
 
-**Decision record: the chain was reordered on this finding.** `gpt-image-2`'s
-per-token rate is 15% *higher* than `mai-image-2.5-flash`'s, but it uses 196
-output tokens against 1024 — so a single image from `gpt-image-2` is actually
-**~4.5x cheaper** than one from `mai-image-2.5-flash`, the opposite of what a
-chain ordered by per-token rate implies.
+**Decision record: the chain was reordered on this finding.** `gpt-image-2`
+uses 196 output tokens against `mai-image-2.5-flash`'s 1024 — so a single image
+from `gpt-image-2` is **~3.4x cheaper** at today's rates, the opposite of what
+a chain ordered by per-token rate implies. When the decision was taken it was
+~4.5x, and `gpt-image-2`'s per-token rate was 15% *higher*; both of those moved
+on 2026-09-15 when Ofox cut `mai-image-2.5-flash`'s `output_image` from
+0.000026 to 0.0000195, which now makes `gpt-image-2`'s rate 54% higher and the
+per-image gap correspondingly smaller. The direction of the conclusion is
+unchanged — fewer tokens still beats a lower rate here — but the ratio is a
+vendor's number, not ours, and it is quoted here with the date it was true.
 
 On 2026-09-02, with this finding already in front of them, the repo owner
 looked at both figures and deliberately kept `mai-image-2.5-flash` first —
@@ -371,3 +376,94 @@ Ofox exposes **no billing endpoint** — `/v1/usage`, `/v1/billing`,
 answer 404. The invoice figure above came from the console at
 `https://app.ofox.ai`. That is why the cost has to be computed client-side
 from rates and token counts: there is nothing to query.
+
+## Editing (`POST /v1/images/edits`) — a third term, and two readings of it
+
+An edit bills something a generation does not: **the image you upload**. The
+response says so directly, splitting the input for the first time:
+
+```json
+"usage": {
+  "input_tokens": 608,
+  "input_tokens_details": { "image_tokens": 576, "text_tokens": 32 },
+  "output_tokens": 301,
+  "output_tokens_details": { "image_tokens": 301 },
+  "total_tokens": 909
+}
+```
+
+576 of 608 input tokens were the picture. The catalog publishes a
+`pricing.image` rate separate from `pricing.prompt` ($0.000008 against
+$0.000005 for `openai/gpt-image-2`), presumably for exactly this. Which leaves
+two readings and **no invoice to settle them**:
+
+```
+flat   = input_tokens * prompt_rate + output_tokens * output_image
+       = 608*0.000005 + 301*0.00003                     = 0.01207
+split  = text_tokens * prompt_rate
+       + image_tokens * image_rate
+       + output_tokens * output_image
+       = 32*0.000005 + 576*0.000008 + 301*0.00003       = 0.013798
+```
+
+13% apart. `edit_cost_for()` returns the **dearer** and prints a NOTE saying
+it did, by the never-under-quote rule — a table that errs high costs a
+moment's surprise, one that errs low gets a bill approved that nobody agreed
+to. When a model publishes no `pricing.image`, the two readings collapse into
+one and the choice is moot.
+
+**Do not let the generations formula's invoice check launder this one.** That
+check (the table above) covers one model, on the other endpoint, with no
+image-input term in it. Nothing about it transfers here. Both readings stay
+unverified until someone reconciles an edit against a console line.
+
+### Measured edits
+
+| Date | Model | Input size | in (img+txt) | out | Output size | Computed |
+|---|---|---|---|---|---|---|
+| 2026-09-15 | `openai/gpt-image-2` | 854x480 (16:9) | 608 (576+32) | 301 | 1672x941 | 0.013798 |
+| 2026-09-15 | `openai/gpt-image-2` | 320x180 (16:9) | 273 (240+33) | 129 | 1672x941 | 0.005955 |
+| 2026-09-15 | `openai/gpt-image-2` | 256x256 (1:1) | 289 (256+33) | 229 | 1254x1254 | 0.009083 |
+
+Two things in that table are worth more than the dollar figures, because they
+mean an edit anchor has a **different shape** from a generation anchor:
+
+1. **A near-constant output pixel budget, spent on the input's aspect ratio.**
+   The two 16:9 inputs returned 1672x941; the 1:1 input returned 1254x1254.
+   Those are 1,573,352 and 1,572,516 pixels — 0.05% apart — so the endpoint
+   looks like it targets ~1.57 MP and takes the shape from the upload. 1.777
+   is also the 16:9 that the generations `size` enum cannot express at all, so
+   an edit reaches a ratio a generation cannot request.
+
+   The 1:1 run exists because the first two could not establish this. Both
+   were 16:9, and "output follows the input ratio" and "output is a fixed
+   1672x941" explain two 16:9 samples equally well — the first was written
+   down as the finding anyway. One cheap run at a different ratio (0.9 cents)
+   settled it. Keep the habit: when every sample shares the value of the
+   variable a claim is about, the claim is not yet measured.
+2. **Output tokens are not fixed by `(model, quality, output size)`.** All
+   three were identical across the two 16:9 runs; the counts were 301 and 129.
+   The generation-side working model ("output_tokens is fixed by model + size
+   + quality, not by what is being drawn") does **not** hold here. What the
+   counts track is the upload, which is why `print_edit_estimate` keys on the
+   input image's size.
+
+   A second pattern from the same table has since been **withdrawn**: output
+   tokens came to roughly half the input image tokens on both 16:9 runs
+   (0.523, 0.538), which was recorded as a pattern worth testing rather than a
+   law. The 256x256 run tested it: 229/256 = 0.895. Input image tokens are not
+   linear in input pixels either — 256x256 bills 256 while 854x480, with 6.3x
+   the pixels, bills 576. Nothing had to change in the script, because the
+   pattern was deliberately never implemented as a formula; that decision is
+   what made this a free correction instead of a systematic under-quote.
+
+So `print_edit_estimate()` matches an anchor on the **input image's size**,
+measured from the caller's own file, rather than on the `(quality, size)` pair
+a generation is matched on. No match quotes the dearest point, labelled
+`ROUGH UPPER BOUND`. Nothing is interpolated.
+
+### Cheaper inputs are cheaper edits
+
+A directly actionable consequence, and the only lever a caller has here:
+downscaling the source from 854x480 to 320x180 took the bill from 1.4 cents to
+0.6. If the job does not need the extra input resolution, do not pay for it.

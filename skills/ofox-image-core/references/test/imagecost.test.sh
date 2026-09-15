@@ -52,6 +52,16 @@ sed -e '/^main "\$@"$/d' -e '/^exit \$?$/d' "$TARGET" > "$LIB"
 # shellcheck source=/dev/null
 . "$LIB"
 
+# The lib is sourced from a copy in $WORK, so the script's own SCRIPT_DIR — and
+# with it MODELS_SNAPSHOT — resolves next to the copy, where nothing exists.
+# The effect was invisible with a network: the snapshot rung of the fallback
+# ladder was simply unreachable here, and this suite died outright offline
+# ("no model list available") while claiming in its own header that it falls
+# back to the bundled snapshot. Point both back at the real reference dir.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODELS_SNAPSHOT="$SCRIPT_DIR/../models-snapshot.json"
+TOKEN_ANCHORS="$SCRIPT_DIR/../token-anchors.json"
+
 load_models >/dev/null 2>&1 || true
 if [ -z "${MODELS_FILE:-}" ]; then
   echo "FAIL  no model list available (live, cache or snapshot) — cannot price anything"
@@ -193,13 +203,37 @@ else
   fail "a model swap must be surfaced" "$(tr '\n' ' ' <"$ERRLOG")"
 fi
 # And it must be priced as the model that ran, not the one that was asked for.
+#
+# The expectation is DERIVED from the rates the loaded list reports, not typed
+# in. It used to be the literal 0.026694, and that broke on 2026-09-15 with no
+# code change at all: Ofox moved mai-image-2.5-flash's output_image from
+# 0.000026 to 0.0000195 and the suite started failing at HEAD. A hardcoded copy
+# of an external API's number is this repo's most-repeated defect, and a test
+# is not exempt from it — the number is the vendor's, the invariant is ours.
+#
+# What is actually under test is the invariant: the figure must follow the
+# model that RAN. So compute it here, independently of image_cost_for's own jq,
+# and additionally require the two models to disagree — a formula that ignored
+# the model id entirely would satisfy the arithmetic but not that.
+#
+# The one hardcoded figure in this file stays hardcoded on purpose: the
+# $0.06723950 invoice line at the top is a fact about a bill that was really
+# paid, not a rate that can move under it.
+expect_cost_for() { # <model> <input tokens> <output tokens>
+  jq -r --arg m "$1" --argjson i "$2" --argjson o "$3" '
+    first(.data[] | select(.id == $m or ((.aliases // []) | index($m)) != null))
+    | (((.pricing.input // .pricing.prompt) | tonumber) * $i
+       + (.pricing.output_image | tonumber) * $o)
+    | . * 100000000 | round / 100000000 | tostring' "$MODELS_FILE"
+}
 swapped="$(image_cost_for "$RESPONSE_MODEL" 14 1024)"
 asked="$(image_cost_for "$GPT" 14 1024)"
-if [ "$swapped" = "0.026694" ] && [ "$swapped" != "$asked" ]; then
+want_swapped="$(expect_cost_for "$MAI" 14 1024)"
+if [ "$swapped" = "$want_swapped" ] && [ "$swapped" != "$asked" ]; then
   pass "the swapped-in model is priced at its own rate (\$$swapped, not \$$asked)"
 else
   fail "a swapped model was priced at the requested model's rate" \
-    "swapped='$swapped' asked='$asked'"
+    "swapped='$swapped' want='$want_swapped' asked='$asked'"
 fi
 
 echo

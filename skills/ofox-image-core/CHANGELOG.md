@@ -4,6 +4,181 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.11.0 — image editing (`POST /v1/images/edits`), and an endpoint that bills you for your typos
+
+New `edit` subcommand. It takes an image you already have and changes it,
+which this skill has documented as out of scope since v1 and which was the
+thing blocking two scenario skills. Nothing about `generate` changes.
+
+```bash
+bash references/ofox-image.sh edit --image ./photo.png \
+  --prompt "Replace the background with a beach at sunset. Keep the person unchanged." \
+  --dry-run
+```
+
+A local file is the primary input; `--image-url` also takes a public URL or a
+`data:` URI, but hosting is never a precondition. Shares `generate`'s model
+resolution, `--dry-run`, exit codes, geometry flags
+(`--target-aspect`/`--target-size`) and absolute-path reporting. The endpoint
+is multipart-only — a JSON body is rejected outright — so there is no
+`--extra-json` here; `--extra-form KEY=VALUE` is the passthrough, and
+`--dry-run` prints a `FORM_FIELDS` line of field **names** where `generate`
+prints a payload.
+
+**Which models can edit is a live lookup, not a table.** Each `/v1/models`
+entry's `supported_endpoints` already names `/v1/images/edits` or does not, so
+that is what the script reads — `models --endpoint edits` lists them, and
+`model_unavailable_reason()`/`resolve_model()` now take the endpoint as a
+parameter instead of hardcoding one. Confirmed predictive in both directions:
+`qwen/qwen-image-3.0-pro` (flag absent) is refused with a new
+`endpoint_not_supported`, and seven models carrying the flag ran an edit
+across three vendors. No static edit-support list was added, and a test
+asserts none appears later. Worth recording that the capability was **not**
+where it was first looked for: `image_attributes.supported_params` lists
+generation fields only, which reads as "the catalog says nothing about
+editing" when the answer is one field over.
+
+**Costs are measured, and `edit` bills something `generate` never does.** Three
+real edits on `openai/gpt-image-2`: an 854x480 input cost 0.013798, a 320x180
+input 0.005955, and a 256x256 input 0.009083. Edits *do* report `usage`, more richly than
+generations — `input_tokens_details` splits the prompt's text from the
+uploaded image, and **576 of 608 input tokens on the first run were the
+picture**, billed off a `pricing.image` rate the catalog publishes separately
+from `pricing.prompt`. That leaves two defensible readings of the same
+numbers, 13% apart, with no invoice to settle them; `edit_cost_for()` returns
+the **dearer**, per the never-under-quote rule, and says so in a NOTE. New
+`edit_anchors` section in `token-anchors.json`, kept separate from the
+generation anchors because the same model spent visibly different output
+tokens on the two endpoints.
+
+**The estimate is matched on the input image, not on `(quality, size)`.** Two
+of the measured points share a model, a quality and a byte-identical 1672x941
+output and still differ 2.3x in output tokens — so keying an edit estimate the
+way a generation estimate is keyed would key it on the wrong thing. The script
+measures the caller's own `--image` and quotes the point measured at that
+input size; with no match it quotes the dearest, labelled
+`ROUGH UPPER BOUND`. An incidental finding recorded in
+`references/api-params.md`: output geometry is a **near-constant ~1.57 MP
+budget spent on the input's aspect ratio** — 854x480 and 320x180 both returned
+1672x941 (which is 1.777, the 16:9 that `generate`'s `size` enum cannot
+express at all) and 256x256 returned 1254x1254, a 0.05% identical pixel count.
+
+A second pattern from the same runs was written down and then **withdrawn
+before release**: output tokens looked like roughly half the input image
+tokens on the two 16:9 runs (0.523, 0.538). It was recorded as a pattern to
+test rather than a law, and deliberately never implemented as a formula; the
+256x256 run tested it and it is false (229/256 = 0.895). Input image tokens
+are not linear in input pixels either — 854x480 has 6.3x the pixels of
+256x256 and bills 2.25x the tokens. Keeping it out of the code is why losing
+it cost nothing: an interpolating `print_edit_estimate` would now be quoting
+roughly half of what an unmatched input size actually bills.
+
+The 256x256 run was added in review, because the first two could not support
+the sentence written from them: both were 16:9, and "output follows the input
+ratio" and "output is a fixed 1672x941 for this model" fit two 16:9 samples
+equally well. The conclusion survived at 0.9 cents — but until a different
+ratio was sent it was the untested half of a two-directional claim, which is
+the shape this repo's spec calls out as its sharpest recurring defect.
+
+### ⚠️ The finding that cost the most, and the one to carry elsewhere
+
+**`/v1/images/edits` does not validate parameters the way
+`/v1/images/generations` does, and the failure mode is a bill rather than a
+free 400.** `generate` gets an unknown `--quality` refused upstream for
+nothing. Sending `quality=ultra_not_a_value` to six models on this endpoint —
+*as a guard, precisely so the probe would be rejected and therefore free* —
+had all six ignore the value, render, and bill.
+
+Two consequences:
+
+- The client-side checks in `edit` are not a round-trip saving the way
+  `generate`'s are; they are the only guard. The `--quality` error message
+  says so. `edit` deliberately checks against the documented **union** only
+  and does **not** apply `model_qualities()`'s per-model enumeration, because
+  that set was read off a *generations* refusal and this repo has already been
+  bitten by assuming two endpoints of one API behave symmetrically.
+- More generally: **a free probe is only free if the thing you expect to
+  reject it actually does.** The guarded-probe technique used throughout this
+  repo to map an API at zero cost silently spends money against an endpoint
+  that ignores unknown parameters. Verify the guard is refused once, on a
+  model already known to reject the request for another reason, before fanning
+  a guarded probe across a list.
+
+Also new: `edit` reminds the caller on every success to compare the result
+against `INPUT_IMAGE` (printed next to `IMAGE_PATH` for that purpose), because
+`STATUS completed` cannot distinguish an edit from a redraw of the prompt. On
+the runs behind this release it genuinely edits — a UI screenshot asked for one
+button colour change came back with every string intact and 58% of all changed
+pixels inside the button, 1.1% of the frame — but that is evidence about three
+runs, not a property to assume.
+
+Error mapping gains `model_not_found` (404) and `endpoint_not_supported`
+(400), both observed, and `print_api_error` now prints `error.param`. Noted in
+`api-params.md`: on this endpoint `error.code` is **null** on validation
+rejections, so it is neither semantic nor guaranteed — `error.type` remains
+the classifier and nothing branches on `code`.
+
+New suite `references/test/edit.test.sh`, 50 cases, free by construction.
+
+### Found in review, before release
+
+**`models-snapshot.json` was regenerated, and that made `edit` work offline at
+all.** The bundled snapshot dated from 2026-08-30, before Ofox advertised
+`/v1/images/edits` on anything. With a cold cache and no network the script
+fell back to it and refused every model in `MODEL_CHAIN` — *"--model
+'openai/gpt-image-2' exists but does not serve /v1/images/edits, so it cannot
+edit an image"* — confidently, and wrongly, about a model that does. The live
+list carries the endpoint on 11 of 16 image models. Same defect class the
+video side hit the same day, same fix (`references/refresh-snapshot.sh`), and
+the image side had simply never been refreshed.
+
+Regenerating is a behaviour change, so here is what moved:
+
+| | Before (2026-08-30) | After (2026-09-15) |
+|---|---|---|
+| image models | 14 | 16 — `openai/gpt-image-2.5-flare` and `-sunburst` are new |
+| serving `/v1/images/edits` | **0** | 11 |
+| qwen ids | `bailian/qwen-image-3.0{,-pro}` | `qwen/qwen-image-3.0{,-pro}`, old ids kept as aliases |
+| `microsoft/mai-image-2.5-flash` `output_image` | 0.000026 | **0.0000195** |
+
+Only one price moved, and it moved **down**, so the stale copy had been
+*over*-quoting that model offline by 33% — the harmless direction, which is
+why nobody noticed. The figure it fed is corrected in `token-anchors.json`
+(`cost_per_image` 0.026694 → 0.020038), `pricing.md`, `SKILL.md`'s chain table
+and the chain comment in the script: ~2.67 cents/image becomes ~2.0, and
+`gpt-image-2`'s advantage over it 4.5x becomes ~3.4x. The token counts behind
+those figures are measurements and did not move; only the multiplication did.
+
+`refresh-snapshot.sh` itself had two bugs the refresh exposed. It selected on
+`/v1/images/generations` alone, so a future edit-only model would be dropped
+and then reported as "not in the Ofox model list"; and it kept only
+`pricing.output_image`, so an offline edit estimate lost its entire
+input-token component — a measured $0.0138 edit quoted at $0.0090, a **35%
+under-quote wearing the exact-match `ROUGH` label rather than a bound**. Both
+fixed, and `edit.test.sh` now asserts both against the shipped file.
+
+**`edit.test.sh` was not hermetic.** It warmed the real model list from
+`api.ofox.ai` and then pointed the base at an unroutable address, so every
+model-support assertion silently tested whichever data source happened to be
+present — scoring 39/0, 37/2, 36/3 and 30/9 on repeated runs of one commit.
+Now nothing in it reaches the network: behavioural assertions run against a
+hand-written fixture catalog installed in the cache, the bundled snapshot is
+tested separately and deliberately as *shipped content*, and three closing
+assertions check that the base URL was never unset, that no executable line
+names the real API, and that the cache stayed in the temp dir. Verified over
+repeated runs with an empty `XDG_CACHE_HOME`, a warm real one, `HOME`
+relocated, and the outer base URL pointed at production: 50/0 every time.
+
+**`imagecost.test.sh` failed at HEAD for the same root cause** — it asserted a
+literal `0.026694`, which is a copy of a rate Ofox owns, and the rate moved.
+The expectation is now derived from the loaded list; the invariant under test
+was always "the figure follows the model that *ran*", not that specific
+number. The one hardcoded figure left is the $0.06723950 invoice line, which
+is a fact about a bill that was really paid. That suite also silently could
+not reach its own snapshot fallback (the sourced copy resolved `SCRIPT_DIR` to
+a temp dir), so it died outright offline while its header claimed otherwise;
+it now runs on either rung.
+
 ## 1.10.3 — the link to the shared approval gate can miss without the file being gone
 
 Docs only; no change to the script, the tests, the API calls or the billing.

@@ -18,8 +18,9 @@
 #
 # Usage:
 #   ofox-image.sh check
-#   ofox-image.sh models
+#   ofox-image.sh models [--endpoint generations|edits]
 #   ofox-image.sh generate --prompt "..." --quality VAL [--model NAME] [OPTIONS]
+#   ofox-image.sh edit --image FILE --prompt "..." [--model NAME] [OPTIONS]
 #
 # generate OPTIONS:
 #   --model NAME              optional, default "auto": the first available
@@ -38,7 +39,7 @@
 #                               the user before every spend, default or not.
 #                               Documented in depth here: openai/gpt-image-2,
 #                               google/gemini-3.1-flash-image,
-#                               bailian/qwen-image-3.0-pro. Every other image
+#                               qwen/qwen-image-3.0-pro. Every other image
 #                               model Ofox serves also works; only their
 #                               size/quality support is undocumented here.
 #   --dry-run                 validate everything, resolve the model, build the
@@ -113,10 +114,76 @@
 #   --out-name NAME      optional base filename (no extension, no path
 #                          separators). Default: ofox_image_<timestamp>_<pid>.
 #
+# edit OPTIONS (POST /v1/images/edits — take an image you already have and
+# change it, rather than drawing a new one from the prompt alone):
+#   --image PATH         the image to edit, as a local file. This is the
+#                          primary input: it is measured working and needs no
+#                          hosting anywhere. png/jpeg/webp only — the API
+#                          enumerates exactly those three.
+#   --image-url URL      alternative to --image: a public URL, or a
+#                          data:image/...;base64,... URI. Confirmed accepted
+#                          at validation 2026-09-15 (a data: URI got past file
+#                          handling to model validation). The value is written
+#                          to a temp file and read back with curl's
+#                          -F "field=<file", never passed as a command-line
+#                          argument — a base64 data URI of any real photo
+#                          exceeds ARG_MAX and would die before the network.
+#                        Exactly one of --image / --image-url is required.
+#   --prompt TEXT        required BY THIS SCRIPT. Whether the API requires it
+#                          is untested and deliberately so: the only way to
+#                          find out is to send an edit without one, and on
+#                          this endpoint a request that is not rejected is a
+#                          request that renders and bills. An edit with no
+#                          instruction has no meaning anyway.
+#   --quality VAL        optional. Same union as generate. NOTE THE ASYMMETRY,
+#                          it is the expensive one: /v1/images/generations
+#                          rejects a bad --quality with a free HTTP 400, and
+#                          /v1/images/edits DOES NOT — measured 2026-09-15,
+#                          quality=ultra_not_a_value was silently ignored and
+#                          six edits rendered and billed. So the client-side
+#                          check below is not a convenience that saves a round
+#                          trip, as it is on generate; here it is the only
+#                          thing standing between a typo and a bill.
+#   --size VAL           optional, same enum as generate, validated for typos
+#                          only. Whether this endpoint honours it is UNTESTED
+#                          (see --quality: finding out costs a real edit). All
+#                          three measured runs passed no --size and got back a
+#                          size in no enum, matching the INPUT's aspect ratio
+#                          at a near-constant ~1.57 MP: 1672x941 from both a
+#                          854x480 and a 320x180 input, 1254x1254 from a
+#                          256x256 one. 1672x941 is 1.777, i.e. the 16:9 that
+#                          generate's size enum cannot express at all.
+#   --n N                optional, integer 1-10. Multiplies the spend; and
+#                          because this endpoint validates so little, a value
+#                          it does not like is more likely to render than to
+#                          be refused.
+#   --output-format VAL  optional. One of: png jpeg webp
+#   --background VAL     optional. One of: transparent opaque auto
+#   --target-aspect W:H  optional, same contract as generate: measure the
+#   --target-size WxH      written file and centre-crop to the target, or fail
+#                          loudly. Same reason as generate — an attached
+#                          frame's ratio becomes the finished video's ratio.
+#   --extra-form K=V     optional, repeatable. Escape hatch for a multipart
+#                          field with no flag. This endpoint is multipart, so
+#                          there is no --extra-json equivalent: a JSON body is
+#                          rejected outright (measured — an application/json
+#                          body with model set came back "You must provide a
+#                          model parameter", i.e. the field was never seen).
+#   --dry-run            validate everything, resolve the model, assemble and
+#                          print the multipart field list, quote a cost — then
+#                          stop. No request, no key needed, nothing billed.
+#   --out-dir DIR        optional, default: current directory.
+#   --out-name NAME      optional base filename (no extension, no separators).
+#
 # Out of scope for this script (see skills/ofox-image-core/SKILL.md):
-#   - input_images / image-to-image generation (Qwen-only field on this same
-#     endpoint) — text-to-image only.
-#   - POST /v1/images/edits (a different, multipart-form endpoint).
+#   - input_images / image-to-image on the GENERATIONS endpoint (a Qwen-only
+#     field). Editing an existing image is what 'edit' above is for; this
+#     refers to the separate, silently-ignored-if-misspelled field on
+#     /v1/images/generations, which stays unexposed.
+#   - Masked / inpainting edits. The endpoint may or may not accept a 'mask'
+#     field; nothing here establishes that it does, and finding out costs a
+#     billed edit per attempt. Pass one via --extra-form if you want to try,
+#     and record what happens.
 #
 # Exit codes:
 #   0  success — image(s) decoded and saved, usage token counts printed.
@@ -128,9 +195,9 @@
 #      a local filesystem problem, caught BEFORE any network call is made
 #      (out-dir is resolved up front for exactly this reason: no reason to
 #      spend money on a request whose output can't be written anywhere).
-#   5  ambiguous network failure on the generate call — no HTTP response was
-#      received at all (curl exit nonzero, no HTTP status). Unlike the video
-#      API, there is no job id and no poll endpoint to check afterwards —
+#   5  ambiguous network failure on the generate/edit call — no HTTP response
+#      was received at all (curl exit nonzero, no HTTP status). Unlike the
+#      video API, there is no job id and no poll endpoint to check afterwards —
 #      the only way to find out whether this was billed is to check your
 #      usage/billing history at https://app.ofox.ai. Do not blindly retry.
 #
@@ -165,7 +232,10 @@ GENERATE_MAX_TIME=300
 # whitelist — --model is checked against the live model list (see load_models),
 # so any image model Ofox offers works. This is only what gets named in help
 # text when we have no list to name real models from.
-DOCUMENTED_MODELS="openai/gpt-image-2 google/gemini-3.1-flash-image bailian/qwen-image-3.0-pro"
+# qwen/qwen-image-3.0-pro was qwen/qwen-image-3.0-pro until 2026-09-15; Ofox
+# kept the old id as an alias, so both resolve, but this line is help text and
+# should name the id the catalog does.
+DOCUMENTED_MODELS="openai/gpt-image-2 google/gemini-3.1-flash-image qwen/qwen-image-3.0-pro"
 
 # THE image model priority chain — the single definition in this repo. Every
 # consumer (this skill's docs, and every scenario skill built on it) resolves
@@ -175,17 +245,24 @@ DOCUMENTED_MODELS="openai/gpt-image-2 google/gemini-3.1-flash-image bailian/qwen
 # Ranked by measured cost PER IMAGE, not by the catalog's per-output-token
 # rate — the two rankings disagree here. At the one --quality/--size pair
 # measured on both models (low / 1024x1024, 2026-09-02), openai/gpt-image-2
-# costs 15% more per output token than microsoft/mai-image-2.5-flash but
-# spends only 196 output tokens on an image against mai-flash's 1024, which
-# more than cancels the higher per-token rate out: ~0.6 cents/image against
-# ~2.67 cents/image, gpt-image-2 cheaper by about 4.5x. Do not re-derive this
-# order from the rate card alone — the comparable figure is rate x that
-# model's own measured token count, and google/gemini-3.1-flash-lite-image
-# and microsoft/mai-image-2.5 below have no per-image measurement yet, only
-# the per-token rate.
+# costs more per output token than microsoft/mai-image-2.5-flash but spends
+# only 196 output tokens on an image against mai-flash's 1024, which more than
+# cancels the higher per-token rate out: ~0.6 cents/image against ~2.0
+# cents/image, gpt-image-2 cheaper by about 3.4x. Do not re-derive this order
+# from the rate card alone — the comparable figure is rate x that model's own
+# measured token count, and google/gemini-3.1-flash-lite-image and
+# microsoft/mai-image-2.5 below have no per-image measurement yet, only the
+# per-token rate.
+#
+# The cents are rates x measured tokens, and the rates are Ofox's to change.
+# They did on 2026-09-15: mai-flash's output_image went 0.000026 -> 0.0000195,
+# moving its row from ~2.67 to ~2.0 cents and the gap from 4.5x to 3.4x with
+# no token count moving and no code changing. The script itself always prices
+# from the live list, so this comment block is the only thing that can go
+# stale — re-check it whenever references/refresh-snapshot.sh is run.
 #
 #   openai/gpt-image-2                   ~0.6 cents/image     preferred
-#   microsoft/mai-image-2.5-flash        ~2.67 cents/image    second
+#   microsoft/mai-image-2.5-flash        ~2.0 cents/image     second
 #   google/gemini-3.1-flash-lite-image   0.000030 USD/token   no per-image figure yet
 #   microsoft/mai-image-2.5              0.000047 USD/token   same vendor, better quality
 #
@@ -242,6 +319,23 @@ VALID_QUALITIES="auto low medium high standard hd"
 VALID_OUTPUT_FORMATS="png jpeg webp"
 VALID_BACKGROUNDS="transparent opaque auto"
 NO_N_MODEL="google/gemini-3.1-flash-image"
+
+# The two endpoints this script speaks to, spelled exactly as /v1/models lists
+# them in each entry's supported_endpoints array. They are values, not
+# literals scattered through the code, because every capability question here
+# ("can this model do that?") is answered by looking one of them up in the
+# live catalog rather than by consulting a table in this file.
+GENERATIONS_ENDPOINT="/v1/images/generations"
+EDITS_ENDPOINT="/v1/images/edits"
+
+# The file formats POST /v1/images/edits accepts as input, quoted from its own
+# rejection message (2026-09-15, a text/plain upload): "Supported file formats
+# are 'image/jpeg', 'image/png', and 'image/webp'." That is the API
+# enumerating its own set, which is the only basis on which a list like this
+# earns a place in this script — the same standard model_qualities() is held
+# to. It is checked locally because the alternative is uploading a file that
+# was never going to work.
+EDIT_INPUT_FORMATS="png jpg jpeg webp"
 
 # --quality is a PER-MODEL enum, and VALID_QUALITIES above is the union of
 # every value any model takes. Validating only against the union is what let
@@ -602,16 +696,27 @@ output_image_rate() {
 }
 
 model_unavailable_reason() {
-  # $1 = model id. Prints why this model cannot be used, or nothing when it
-  # can. Only checks that cost nothing: the model list is public and keyless.
-  local entry
+  # $1 = model id, $2 = the endpoint it has to serve (default: generations).
+  # Prints why this model cannot be used, or nothing when it can. Only checks
+  # that cost nothing: the model list is public and keyless.
+  #
+  # The endpoint is a PARAMETER, not a second hardcoded list, and that is the
+  # whole answer to "which models accept an edit". Ofox already publishes it:
+  # every entry's supported_endpoints array names /v1/images/edits or does
+  # not. Confirmed predictive in both directions on 2026-09-15 — a model whose
+  # array omits it (qwen/qwen-image-3.0-pro) is refused with
+  # `endpoint_not_supported`, and seven whose array carries it all ran an edit.
+  # So no static edit-support table exists here, deliberately: this repo has
+  # five documented defects from keeping its own copy of an external API's
+  # value table, and the newest was created by refreshing the data next to it.
+  local entry endpoint="${2:-$GENERATIONS_ENDPOINT}"
   entry="$(model_entry "$1")"
   if [ -z "$entry" ]; then
     echo "not in the Ofox model list"
     return 0
   fi
-  if ! printf '%s' "$entry" | jq -e '(.supported_endpoints // []) | index("/v1/images/generations")' >/dev/null 2>&1; then
-    echo "does not serve /v1/images/generations"
+  if ! printf '%s' "$entry" | jq -e --arg e "$endpoint" '(.supported_endpoints // []) | index($e)' >/dev/null 2>&1; then
+    echo "does not serve $endpoint"
     return 0
   fi
   if printf '%s' "$entry" | jq -e '.is_deprecated == true' >/dev/null 2>&1; then
@@ -631,6 +736,12 @@ resolve_model() {
   # This runs BEFORE any estimate is printed and before any request is built,
   # on purpose. A quote that says "the preferred model" and a run that uses
   # something else is a user approving a price they were never shown.
+  # $1 = the endpoint the resolved model has to serve (default: generations).
+  # The chain itself is not duplicated per endpoint: all four entries happen
+  # to serve both today, and if one ever stops, this walk skips it for exactly
+  # the reason the catalog gives. A second chain would be a second thing to
+  # forget to update.
+  local endpoint="${1:-$GENERATIONS_ENDPOINT}"
   local preferred reason candidate rate_pref rate_used
   preferred="${MODEL_CHAIN%% *}"
   RESOLVED_MODEL=""
@@ -646,7 +757,7 @@ resolve_model() {
   fi
 
   for candidate in $MODEL_CHAIN; do
-    reason="$(model_unavailable_reason "$candidate")"
+    reason="$(model_unavailable_reason "$candidate" "$endpoint")"
     if [ -z "$reason" ]; then
       RESOLVED_MODEL="$candidate"
       break
@@ -727,6 +838,77 @@ image_cost_for() {
     ((.pricing.input // .pricing.prompt) // empty | tonumber) as $ri
     | (.pricing.output_image // empty | tonumber) as $ro
     | ($i * $ri + $o * $ro)
+    | . * 100000000 | round / 100000000
+    | tostring' 2>/dev/null
+}
+
+# Compute what one EDIT actually cost. Separate from image_cost_for because
+# an edit's bill has a component a generation's does not: the input image.
+#
+# Measured 2026-09-15, openai/gpt-image-2, an 854x480 PNG in, 1672x941 out:
+#
+#   "usage": {
+#     "input_tokens": 608,
+#     "input_tokens_details": { "image_tokens": 576, "text_tokens": 32 },
+#     "output_tokens": 301,
+#     "output_tokens_details": { "image_tokens": 301 },
+#     "total_tokens": 909
+#   }
+#
+# So the answer to "do edits report usage the way generations do" is: yes, and
+# then some — input_tokens_details splits the prompt's text from the uploaded
+# image, and the catalog carries a `pricing.image` rate ($0.000008 for
+# gpt-image-2) distinct from `pricing.prompt` ($0.000005) that exists for
+# exactly that. 576 of the 608 input tokens on that run were the picture.
+#
+# Which leaves two readings of the same numbers and no invoice to settle them:
+#
+#   flat  (generations' own formula, every input token at the prompt rate)
+#           608*0.000005 + 301*0.00003            = 0.01207
+#   split (text at the prompt rate, image at the image rate)
+#           32*0.000005 + 576*0.000008 + 301*0.00003 = 0.013798
+#
+# 13% apart. This returns the DEARER of the two rather than picking a
+# favourite, because the standing rule is never to under-quote: erring high
+# costs a moment's surprise and erring low gets a bill approved that nobody
+# agreed to. Neither reading has been held against a console billing line —
+# note that image_cost_for's formula has only ever been invoice-checked on ONE
+# model either, and on the other endpoint, so nothing about it transfers here
+# by assumption.
+edit_cost_for() {
+  # $1 = model id, $2 = input tokens, $3 = output tokens,
+  # $4 = input image tokens ("" when the response didn't split them),
+  # $5 = input text tokens ("").
+  local model="$1" in_tok="$2" out_tok="$3" img_tok="${4:-}" txt_tok="${5:-}" entry
+  case "$in_tok$out_tok" in
+    *[!0-9]* | '') return 1 ;;
+  esac
+  case "$img_tok" in *[!0-9]*) img_tok="" ;; esac
+  case "$txt_tok" in *[!0-9]*) txt_tok="" ;; esac
+  # Only trust the split when both halves are present and actually add up. A
+  # partial or inconsistent split is a response shape we have not seen, and
+  # guessing at it is how a 26x quote happened last time.
+  if [ -z "$img_tok" ] || [ -z "$txt_tok" ] ||
+    [ "$((img_tok + txt_tok))" -ne "$in_tok" ]; then
+    img_tok=""
+    txt_tok=""
+  fi
+  entry="$(model_entry "$model")" || return 1
+  [ -n "$entry" ] || return 1
+
+  printf '%s' "$entry" | jq -er \
+    --argjson i "$in_tok" --argjson o "$out_tok" \
+    --arg img "${img_tok:-}" --arg txt "${txt_tok:-}" '
+    ((.pricing.input // .pricing.prompt) // empty | tonumber) as $ri
+    | (.pricing.output_image // empty | tonumber) as $ro
+    # pricing.image is the per-input-image-token rate. Several models publish
+    # no such key; for them the image half simply bills at the text rate, so
+    # the two readings collapse into one and the max below is a no-op.
+    | ((.pricing.image // null) | if . == null then $ri else (. | tonumber) end) as $rimg
+    | ($i * $ri + $o * $ro) as $flat
+    | (if $img == "" then $flat
+       else (($txt | tonumber) * $ri + ($img | tonumber) * $rimg + $o * $ro) end) as $split
+    | (if $split > $flat then $split else $flat end)
     | . * 100000000 | round / 100000000
     | tostring' 2>/dev/null
 }
@@ -990,6 +1172,157 @@ EOF
   return 0
 }
 
+edit_anchor_measurements() {
+  # $1 = model id. One measured EDIT per line, TSV:
+  #   <output_tokens>\t<input_tokens>\t<input_size>\t<quality>\t<measured>
+  # Kept in a separate section of token-anchors.json from the generation
+  # anchors, and read by a separate function, because an edit's token counts
+  # are not a generation's: the same model on the same day reported 196 output
+  # tokens for a 1024x1024 generation and 301 for an edit, and an edit also
+  # bills 576 input tokens for the picture that a generation never has. Reusing
+  # anchor_measurements() here would quote one endpoint's numbers for the
+  # other's request — the borrowed-number failure that file exists to refuse.
+  [ -f "$TOKEN_ANCHORS" ] || return 1
+  jq -r --arg m "$1" '
+    (.edit_anchors[$m] // empty) as $a
+    | ([$a] + ($a.additional_measurements // []))
+    | map(select((.output_tokens | type) == "number"))
+    | .[]
+    | [ (.output_tokens | tostring),
+        ((.input_tokens // 0) | tostring),
+        (.input_size // "unrecorded"),
+        (.quality // "unrecorded"),
+        (.measured // "an earlier run") ]
+    | @tsv
+  ' "$TOKEN_ANCHORS" 2>/dev/null
+}
+
+print_edit_estimate() {
+  # $1 = model id, $2 = image count (n), $3 = the --quality this request will
+  # send ("" when omitted, which lets the server default apply),
+  # $4 = the input image's measured WxH, or "" when it could not be measured.
+  #
+  # Same contract as print_estimate: ALWAYS exactly one "Estimated cost:" line,
+  # because an agent can relay a number or the words "cannot be predicted" but
+  # cannot notice a line that was never printed.
+  #
+  # An edit's estimate is weaker than a generation's, and the wording says so
+  # rather than hiding it. A generation anchor is valid for a (quality, size)
+  # pair; an edit has a THIRD axis nobody has varied — the input image's own
+  # dimensions, which is what the 576 input image tokens were charged for and
+  # which scales with the picture the caller happens to pass. One measured
+  # point on one model at one input size is not a bound on anything, and
+  # labelling it one would repeat the mistake that got a 0.6-cent quote
+  # approved for a 15.4-cent frame.
+  local model="$1" count="${2:-1}" req_q="${3:-}" in_size="${4:-}"
+  local rate rate_img per_image total tail
+  local best="" best_tokens=-1 points=0 exact="" bound=""
+  local m_out m_in m_insize m_q m_date measurements
+  local a_out a_in a_insize a_q a_date
+
+  load_models >/dev/null 2>&1 || true
+  rate="$(output_image_rate "$model")" || rate=""
+  measurements="$(edit_anchor_measurements "$model")" || measurements=""
+
+  # Same shape as print_estimate: quote the point measured at this request's
+  # own conditions when one exists, otherwise the DEAREST point, never an
+  # interpolation between them. The condition that matters differs though.
+  # For a generation it is (quality, size); for an edit the two measured
+  # points have identical output size, quality and model and still differ 2.3x
+  # in output tokens, while tracking the INPUT image closely — so the input's
+  # size is what a point is matched on here.
+  while IFS="$(printf '\t')" read -r m_out m_in m_insize m_q m_date; do
+    [ -n "${m_out:-}" ] || continue
+    case "$m_out" in '' | *[!0-9]*) continue ;; esac
+    points=$((points + 1))
+    if [ -n "$in_size" ] && [ "$m_insize" = "$in_size" ]; then
+      exact="$m_out|$m_in|$m_insize|$m_q|$m_date"
+    fi
+    if [ "$m_out" -gt "$best_tokens" ]; then
+      best_tokens="$m_out"
+      best="$m_out|$m_in|$m_insize|$m_q|$m_date"
+    fi
+  done <<EOF
+$measurements
+EOF
+
+  if [ -n "$exact" ]; then
+    best="$exact"
+  elif [ -n "$best" ]; then
+    bound=1
+  fi
+
+  if [ -z "$best" ]; then
+    # No figures in this message, on purpose. It is the one place where the
+    # right answer is "there is no number", and a number quoted here to
+    # illustrate why — even another model's, even clearly labelled — is a
+    # number an agent can lift into a cost table. The reasoning survives
+    # without it; the reader who wants the evidence has the file named below.
+    echo "Estimated cost: cannot be predicted for '$model' — no real EDIT's token counts have been recorded for it (see references/token-anchors.json, edit_anchors). Its generation anchors do not transfer: the one model measured on both spent visibly different output tokens on the two endpoints, and an edit additionally bills the uploaded image, which a generation has no equivalent of. Say so plainly; do not substitute a generation figure, another model's figure, or anything derived from one." >&2
+    return 0
+  fi
+
+  a_out="${best%%|*}"; best="${best#*|}"
+  a_in="${best%%|*}"; best="${best#*|}"
+  a_insize="${best%%|*}"; best="${best#*|}"
+  a_q="${best%%|*}"
+  a_date="${best#*|}"
+  [ -n "$a_date" ] || a_date="an earlier run"
+
+  if [ -z "$rate" ]; then
+    echo "Estimated cost: cannot be predicted — no published output_image rate for '$model' (offline, or the model is missing from the list). Its measured edit spent $a_out output tokens and $a_in input tokens (input image $a_insize, --quality $a_q); the rate to multiply them by is what's missing." >&2
+    return 0
+  fi
+  rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '.pricing.image // empty' 2>/dev/null)" || rate_img=""
+  [ -n "$rate_img" ] || rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '(.pricing.input // .pricing.prompt) // empty' 2>/dev/null)" || rate_img=""
+  [ -n "$rate_img" ] || rate_img=0
+
+  per_image="$(awk -v o="$a_out" -v i="$a_in" -v r="$rate" -v ri="$rate_img" \
+    'BEGIN { printf "%.4f", o * r + i * ri }')"
+  total="$(awk -v o="$a_out" -v i="$a_in" -v r="$rate" -v ri="$rate_img" -v n="$count" \
+    'BEGIN { printf "%.4f", (o * r + i * ri) * n }')"
+
+  if [ -n "$DRY_RUN_ACTIVE" ]; then
+    tail="Nothing is being billed by this run."
+  else
+    tail="The exact figure is the EDIT_COST line below, computed from the response's own token counts."
+  fi
+
+  local label="ROUGH"
+  [ -n "$bound" ] && label="ROUGH UPPER BOUND"
+
+  if [ "$count" -gt 1 ] 2>/dev/null; then
+    printf 'Estimated cost: %s ~$%s total = %s images x ~$%s each (%s output + %s input tokens, measured %s on an input image of %s at --quality %s). %s\n' \
+      "$label" "$total" "$count" "$per_image" "$a_out" "$a_in" "$a_date" "$a_insize" "$a_q" "$tail" >&2
+  else
+    printf 'Estimated cost: %s ~$%s (%s output + %s input tokens, measured %s on an input image of %s at --quality %s). %s\n' \
+      "$label" "$per_image" "$a_out" "$a_in" "$a_date" "$a_insize" "$a_q" "$tail" >&2
+  fi
+
+  # The input image is the axis that makes this weaker than a generation
+  # estimate, so it gets named every time, and gets named louder when the
+  # request's own input is a different size from the measured one.
+  if [ -n "$bound" ]; then
+    if [ -n "$in_size" ]; then
+      echo "  UPPER BOUND because nothing has been measured on a $in_size input for '$model'; this is the dearest of $points measured point(s), quoted as a ceiling so the figure errs high rather than low. An edit bills the uploaded picture as input tokens, and the points on record move with it but NOT in proportion to it — 240 image tokens for a 320x180 input, 256 for 256x256, 576 for 854x480, which is 6.3x the pixels of the last for 2.25x the tokens. That is exactly why nothing is interpolated between them; see references/token-anchors.json's edit_anchors." >&2
+    else
+      echo "  UPPER BOUND because the input image could not be measured (ffprobe missing, or --image-url was used), so no measured point can be matched to it. This is the dearest of $points measured point(s). Nothing is interpolated; see references/token-anchors.json's edit_anchors." >&2
+    fi
+  else
+    echo "  Measured on an input image of exactly this size, which is the condition that matters most on this endpoint: two of the points on record share a model, a quality and an identical 1672x941 output and still differ 2.3x in output tokens, tracking the input rather than the output. The token count is still only exact after the fact." >&2
+  fi
+  if [ "$points" -le 1 ]; then
+    echo "  Single sample: '$model' has been measured on exactly one edit, so this is not a ceiling anyone has tested — on the generations endpoint the same model's measured points sit 26x apart across two flags. Measure more pairs and add them to references/token-anchors.json rather than leaning on this line." >&2
+  fi
+  if [ -n "$req_q" ] && [ "$req_q" != "$a_q" ]; then
+    echo "  Different --quality too: you are sending '$req_q', the measurement was at '$a_q'. On the generations endpoint that one flag moved the token count 26x." >&2
+  fi
+  if [ "$count" -gt 1 ] 2>/dev/null; then
+    echo "  And --n $count multiplies it: whether output tokens scale linearly with --n has never been measured on either endpoint." >&2
+  fi
+  return 0
+}
+
 infer_extension() {
   # $1 = the --output-format value the caller requested (may be empty).
   # The documented response shape has no format/output_format field of its
@@ -1013,13 +1346,26 @@ ofox-image.sh — Ofox image generation API client (synchronous: request,
 decode, save; no job id, no polling).
 
   ofox-image.sh check
-  ofox-image.sh models
+  ofox-image.sh models [--endpoint generations|edits]
   ofox-image.sh generate --prompt "..." --quality VAL [--model NAME] [OPTIONS]
+  ofox-image.sh edit --image FILE --prompt "..." [--model NAME] [OPTIONS]
+
+generate draws a new image from text. edit changes an image you already have
+(POST /v1/images/edits, multipart) — pass the file with --image and say what
+to change with --prompt. Not every model can edit: 'models --endpoint edits'
+lists the ones that can, read live from the catalog.
 
 --model is optional: omit it (or pass "auto") to use the first available
 model in the cheapest-first priority chain, resolved before anything is
-quoted. Add --dry-run to any generate call to validate it and print a rough
-cost estimate without sending a request — no API key needed.
+quoted. Add --dry-run to any generate or edit call to validate it and print a
+rough cost estimate without sending a request — no API key needed.
+
+Two things about edit that generate does not have. It bills the image you
+upload as input tokens on top of the output (576 of 608 input tokens on the
+one measured run), and it does NOT reject bad parameter values the way
+generate does — an unknown --quality was silently accepted and rendered a
+billable image. The client-side checks are the guard there, so --dry-run
+first is worth more here, not less.
 
 Producing a first frame for a video job? Pass --target-aspect 16:9 (or
 --target-size 1280x720). The size enum this API accepts has no 16:9 or 9:16
@@ -1111,28 +1457,62 @@ cmd_models() {
   # Lists the image models with their per-image output price. Needs no API key
   # — GET /v1/models is public — so it is safe to run before signing up.
   check_curl_jq || return 2
+
+  # --endpoint decides which capability is being listed. This is how "which
+  # models accept an edit" is answered in this skill: by asking the catalog,
+  # live, every time. There is no edit-support table in this file to go stale.
+  local endpoint="$GENERATIONS_ENDPOINT" what="image generation"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --endpoint)
+        [ $# -ge 2 ] || { echo "ERROR: --endpoint requires a value (generations|edits)." >&2; return 1; }
+        case "$2" in
+          generations) endpoint="$GENERATIONS_ENDPOINT"; what="image generation" ;;
+          edits) endpoint="$EDITS_ENDPOINT"; what="image editing" ;;
+          *) echo "ERROR: --endpoint must be 'generations' or 'edits' (got '$2')." >&2; return 1 ;;
+        esac
+        shift 2
+        ;;
+      *) echo "ERROR: unknown option '$1' for models." >&2; return 1 ;;
+    esac
+  done
+
   load_models || true
   if [ -z "$MODELS_FILE" ]; then
     echo "ERROR: could not obtain a model list (no network, no cache, no bundled snapshot)." >&2
     return 3
   fi
 
-  echo "Image models (source: $MODELS_SOURCE)"
+  echo "Models serving $endpoint ($what) — source: $MODELS_SOURCE"
   echo
-  jq -r '
+  jq -r --arg e "$endpoint" '
     ["MODEL", "$/OUTPUT IMAGE TOKEN"],
     (.data[]
-      | select((.supported_endpoints // []) | index("/v1/images/generations"))
+      | select((.supported_endpoints // []) | index($e))
       | [ .id + (if .is_deprecated then " (deprecated)" else "" end),
           (.pricing.output_image // "-") ])
     | @tsv' "$MODELS_FILE" | column -t -s "$(printf '\t')"
 
   echo
-  echo "Prices are per output image token, not per image. 'generate' turns that"
-  echo "into an IMAGE_COST line for you; references/pricing.md has the formula"
-  echo "and the invoice it was verified against. This skill documents these in depth:"
-  echo "  $DOCUMENTED_MODELS"
-  echo "Others work but their size/quality support is not documented here."
+  echo "Prices are per output image token, not per image. 'generate' and 'edit'"
+  echo "turn that into an IMAGE_COST/EDIT_COST line for you; references/pricing.md"
+  echo "has the formula and the invoice it was verified against."
+  if [ "$endpoint" = "$EDITS_ENDPOINT" ]; then
+    echo
+    # "live" would be a lie on the snapshot/stale-cache rungs, and this block
+    # is reachable from all of them. Name the source the header already
+    # printed instead of asserting the best case.
+    echo "This list IS the answer to 'which models accept an edit' — it is read"
+    echo "from each model's supported_endpoints (source: $MODELS_SOURCE, see the"
+    echo "header above), never from a table in this script. Confirmed both ways"
+    echo "on 2026-09-15: a model missing from this list is refused with"
+    echo "endpoint_not_supported, and models on it ran."
+    echo "An edit also bills the image you upload, which a generation never does."
+  else
+    echo "This skill documents these in depth:"
+    echo "  $DOCUMENTED_MODELS"
+    echo "Others work but their size/quality support is not documented here."
+  fi
 
   # Show the default that a caller who omits --model would actually get,
   # resolved right now against this same list — not just the head of the
@@ -1141,7 +1521,7 @@ cmd_models() {
   echo "Priority chain used when --model is omitted (cheapest first):"
   local rank=1 candidate reason
   for candidate in $MODEL_CHAIN; do
-    reason="$(model_unavailable_reason "$candidate")"
+    reason="$(model_unavailable_reason "$candidate" "$endpoint")"
     if [ -n "$reason" ]; then
       printf '  %s. %s  [unavailable: %s]\n' "$rank" "$candidate" "$reason"
     else
@@ -1149,7 +1529,7 @@ cmd_models() {
     fi
     rank=$((rank + 1))
   done
-  resolve_model 2>/dev/null
+  resolve_model "$endpoint" 2>/dev/null
   echo "Resolves right now to: $RESOLVED_MODEL"
   if [ -n "$MODEL_FALLBACK_FROM" ]; then
     echo "  (fallback from $MODEL_FALLBACK_FROM — $MODEL_FALLBACK_REASON; $MODEL_PRICE_DELTA)"
@@ -1178,25 +1558,41 @@ cmd_models() {
 # ---------------------------------------------------------------------------
 
 print_api_error() {
-  # $1 = context ("generate"), $2 = http_code, $3 = response body
-  local context="$1" http_code="$2" body="$3" err_type code message
+  # $1 = context ("generate" or "edit"), $2 = http_code, $3 = response body
+  local context="$1" http_code="$2" body="$3" err_type code message param
   err_type=$(printf '%s' "$body" | jq -r '.error.type // empty' 2>/dev/null)
   code=$(printf '%s' "$body" | jq -r '.error.code // empty' 2>/dev/null)
   message=$(printf '%s' "$body" | jq -r '.error.message // empty' 2>/dev/null)
+  param=$(printf '%s' "$body" | jq -r '.error.param // empty' 2>/dev/null)
   echo "ERROR: Ofox API rejected the $context request (HTTP $http_code)." >&2
   case "$err_type" in
     invalid_request_error)
-      echo "  error.type: invalid_request_error — the request itself was rejected as malformed or unsupported (e.g. an unknown extra_body.provider.type, or another bad field/value). See the upstream message below for the specific reason." >&2
+      echo "  error.type: invalid_request_error — the request itself was rejected as malformed or unsupported. On /v1/images/edits this is also the type for a missing image ('at least one image or image_url is required'), an unsupported input format, and a missing/invalid API key. See the upstream message below for the specific reason." >&2
+      ;;
+    model_not_found)
+      echo "  error.type: model_not_found — the model id does not exist. Observed with error.code 404. Run 'ofox-image.sh models' for the current list; a typo in a vendor prefix (bailian/ vs qwen/, say) lands here." >&2
+      ;;
+    endpoint_not_supported)
+      echo "  error.type: endpoint_not_supported — the model exists but does not serve this endpoint. Observed with error.code 400, on a model whose catalog supported_endpoints array omits it. Run 'ofox-image.sh models --endpoint edits' to see which models accept an edit; this script normally catches this before the request, so seeing it means the model list was unavailable or the check was skipped." >&2
       ;;
     "")
       echo "  (no error.type in the response body)" >&2
       ;;
     *)
-      echo "  error.type: $err_type — not yet confirmed/documented for /v1/images/generations (only invalid_request_error has been observed so far). See the raw upstream message below and https://ofox.ai/docs/api/openai/images for current guidance." >&2
+      echo "  error.type: $err_type — not yet confirmed/documented for this endpoint (observed so far: invalid_request_error, image_generation_user_error, model_not_found, endpoint_not_supported). See the raw upstream message below and https://ofox.ai/docs/api/openai/images for current guidance." >&2
       ;;
   esac
   if [ -n "$code" ]; then
-    echo "  error.code: $code (on the one real rejection observed so far this was just the HTTP status number, not a semantic string — error.type above is the useful classifier here, unlike the video API)." >&2
+    # Measured 2026-09-15 on /v1/images/edits: code is 404 for model_not_found
+    # and 400 for endpoint_not_supported — the HTTP status again — but it is
+    # literally null on the two validation rejections (missing image, bad
+    # mimetype), which instead carry a `param` field the generations endpoint
+    # has never sent. So code is neither a semantic string nor reliably
+    # present. error.type is the classifier; nothing here branches on code.
+    echo "  error.code: $code (the HTTP status again, not a semantic string — and on this endpoint it can be absent entirely. error.type above is the classifier.)" >&2
+  fi
+  if [ -n "$param" ]; then
+    echo "  error.param: $param" >&2
   fi
   if [ -n "$message" ]; then
     echo "  Upstream message: $message" >&2
@@ -1744,6 +2140,610 @@ cmd_generate() {
 }
 
 # ---------------------------------------------------------------------------
+# edit: validate params, assemble a multipart form, POST, decode, save
+#
+# POST /v1/images/edits takes an image you already have and changes it. The
+# measured contract, all of it from real calls rather than from documentation:
+#
+#   multipart ONLY. An application/json body with "model" set came back
+#     "You must provide a model parameter" — the field was not even seen. So
+#     this builds -F form fields; there is no JSON payload to print.
+#   an image is required. Neither image nor image_url -> 400
+#     invalid_request_error, "at least one image or image_url is required".
+#   input formats are enumerated by the API's own refusal: image/jpeg,
+#     image/png, image/webp.
+#   the model is checked BEFORE any parameter. A model whose catalog entry
+#     omits /v1/images/edits is refused with endpoint_not_supported, and that
+#     refusal fires ahead of any field validation.
+#   and the one that costs money: PARAMETERS ARE BARELY VALIDATED. --quality
+#     ultra_not_a_value was accepted and rendered, six times, on six models.
+#     The generations endpoint refuses a bad quality for free; this one bills
+#     you for it. Every client-side check below is therefore load-bearing in a
+#     way the same check on generate is not.
+#
+# What an edit really is, checked against the artifact rather than against
+# STATUS completed (2026-09-15, openai/gpt-image-2, an 854x480 UI screenshot
+# in, "change only the blue button to green, leave every other pixel alone"):
+# every string in the source survived verbatim — "Billing Settings",
+# "$29.00", "Seats included 3" — and the button turned green. Mean absolute
+# difference against the rescaled source was 5.27/255 overall but 84.27 inside
+# the button, which is 1.1% of the frame and accounted for 58% of all
+# substantially changed pixels. A text-to-image generation from that prompt
+# could not have reproduced that text. It edits the image.
+# ---------------------------------------------------------------------------
+
+cmd_edit() {
+  if ! check_curl_jq; then return 2; fi
+
+  local model=""
+  local image=""
+  local image_url=""
+  local prompt=""
+  local quality=""
+  local size=""
+  local n=""
+  local output_format=""
+  local background=""
+  local out_dir="$PWD"
+  local out_name=""
+  local dry_run=""
+  local target_aspect=""
+  local target_size=""
+  local extra_form=()
+  local key val
+
+  while [ $# -gt 0 ]; do
+    key="$1"
+    case "$key" in
+      --model|--image|--image-url|--prompt|--quality|--size|--n|--output-format|--background|--out-dir|--out-name|--target-aspect|--target-size|--extra-form)
+        if [ $# -lt 2 ]; then
+          echo "ERROR: $key requires a value." >&2
+          return 1
+        fi
+        val="$2"
+        shift 2
+        ;;
+      --dry-run)
+        dry_run=1
+        shift
+        continue
+        ;;
+      *)
+        echo "ERROR: unknown option '$key' for edit." >&2
+        return 1
+        ;;
+    esac
+    case "$key" in
+      --model) model="$val" ;;
+      --image) image="$val" ;;
+      --image-url) image_url="$val" ;;
+      --prompt) prompt="$val" ;;
+      --quality) quality="$val" ;;
+      --size) size="$val" ;;
+      --n) n="$val" ;;
+      --output-format) output_format="$val" ;;
+      --background) background="$val" ;;
+      --out-dir) out_dir="$val" ;;
+      --out-name) out_name="$val" ;;
+      --target-aspect) target_aspect="$val" ;;
+      --target-size) target_size="$val" ;;
+      --extra-form) extra_form+=("$val") ;;
+    esac
+  done
+
+  # --- validation: all of it before the one billable call. On this endpoint
+  #     that is not a nicety. The API validates almost nothing itself, so a
+  #     check skipped here is a bill, not a round trip. ---
+
+  [ -n "$dry_run" ] && DRY_RUN_ACTIVE=1
+
+  # --- the input image ---
+  if [ -n "$image" ] && [ -n "$image_url" ]; then
+    echo "ERROR: pass --image or --image-url, not both." >&2
+    return 1
+  fi
+  if [ -z "$image" ] && [ -z "$image_url" ]; then
+    echo "ERROR: an input image is required — pass --image PATH (a local file, the primary path) or --image-url URL." >&2
+    echo "  The API says the same thing if you don't: 'at least one image or image_url is required'." >&2
+    return 1
+  fi
+
+  local image_ext=""
+  if [ -n "$image" ]; then
+    if [ ! -f "$image" ]; then
+      echo "ERROR: --image '$image' is not a file that exists." >&2
+      return 1
+    fi
+    if [ ! -r "$image" ]; then
+      echo "ERROR: --image '$image' exists but cannot be read (permissions)." >&2
+      return 1
+    fi
+    if [ ! -s "$image" ]; then
+      echo "ERROR: --image '$image' is empty." >&2
+      return 1
+    fi
+    # Absolute, like every path this script reports. INPUT_IMAGE is printed
+    # next to IMAGE_PATH so the two can be compared, and a relative path is
+    # only resolvable from whatever directory the caller happened to be in.
+    local image_dir image_base
+    image_dir="$(cd "$(dirname "$image")" 2>/dev/null && pwd)" || image_dir=""
+    image_base="$(basename "$image")"
+    [ -n "$image_dir" ] && image="${image_dir%/}/$image_base"
+    # Extension check against the set the API enumerated in its own refusal.
+    # Cheap, and it turns "upload 4MB then get told no" into an instant local
+    # error. It is a format check only — the API reads the real mimetype and
+    # has the final say, so a correctly-named file with the wrong bytes still
+    # comes back as invalid_request_error (free, nothing rendered).
+    image_ext="${image##*.}"
+    image_ext="$(printf '%s' "$image_ext" | tr '[:upper:]' '[:lower:]')"
+    if ! list_contains "$image_ext" "$EDIT_INPUT_FORMATS"; then
+      echo "ERROR: --image '$image' does not look like a supported format. This endpoint enumerates exactly three: image/jpeg, image/png, image/webp (so .$EDIT_INPUT_FORMATS)." >&2
+      echo "  That list is the API's own wording from a real rejection, not a guess. Convert the file first, e.g. 'ffmpeg -i in.gif out.png'." >&2
+      return 1
+    fi
+  fi
+
+  # --- the model, resolved against the EDITS endpoint ---
+  local model_from_chain=""
+  if [ -z "$model" ] || [ "$model" = "auto" ]; then
+    model_from_chain=1
+    resolve_model "$EDITS_ENDPOINT"
+    model="$RESOLVED_MODEL"
+    if [ -n "$MODEL_FALLBACK_FROM" ]; then
+      echo "NOTE: falling back to '$model' — the preferred '$MODEL_FALLBACK_FROM' is $MODEL_FALLBACK_REASON. Price: $MODEL_PRICE_DELTA." >&2
+    elif [ -n "$MODEL_CHAIN_EXHAUSTED" ]; then
+      echo "NOTE: no model in the priority chain can serve an edit ('$model', the preferred one, is $MODEL_CHAIN_EXHAUSTED). It is being used anyway so there is a definite model to quote, but expect the API to reject it — say so before asking anyone to approve this." >&2
+    fi
+  fi
+
+  if [ "${OFOX_SKIP_MODEL_VALIDATION:-}" != "1" ] && load_models; then
+    local entry
+    entry="$(model_entry "$model")"
+    if [ -z "$entry" ]; then
+      if [ "$MODELS_SOURCE" = "snapshot" ] || [ "$MODELS_SOURCE" = "stale-cache" ]; then
+        echo "NOTE: '$model' is not in the $MODELS_SOURCE model list, which may just be out of date. Sending it anyway; the API will validate it." >&2
+      else
+        echo "ERROR: --model '$model' is not in the Ofox model list. Run 'ofox-image.sh models --endpoint edits' to see what can edit." >&2
+        return 1
+      fi
+    elif ! printf '%s' "$entry" | jq -e --arg e "$EDITS_ENDPOINT" '(.supported_endpoints // []) | index($e)' >/dev/null 2>&1; then
+      # Caught locally against the same field the API decides on, so this
+      # costs nothing. Left to the API it is a free rejection too, but
+      # only because the model check happens to run before anything renders —
+      # not a property worth depending on.
+      echo "ERROR: --model '$model' exists but does not serve $EDITS_ENDPOINT, so it cannot edit an image." >&2
+      if [ -n "$model_from_chain" ]; then
+        echo "  No --model was passed, so '$model' came from the priority chain (MODEL_CHAIN), not from anything you typed." >&2
+      fi
+      echo "  Run 'ofox-image.sh models --endpoint edits' for the models that can. That list is read live from each model's supported_endpoints; this script keeps no edit-support table of its own." >&2
+      return 1
+    elif printf '%s' "$entry" | jq -e '.is_deprecated == true' >/dev/null 2>&1; then
+      echo "NOTE: '$model' is marked deprecated by Ofox. It still runs for now; consider moving to a current model." >&2
+    fi
+  fi
+
+  # --- the rest of the parameters ---
+  if [ -z "$prompt" ]; then
+    echo "ERROR: --prompt is required — it is the instruction describing what to change." >&2
+    echo "  Required by this script, not known to be required by the API: the only way to find that out is to send an edit without one, and on this endpoint anything that is not rejected renders and bills." >&2
+    return 1
+  fi
+
+  # --quality: the union check only, and deliberately NOT the per-model
+  # enumeration model_qualities() holds. That set was read off a rejection
+  # from /v1/images/generations, and this repo has already been bitten by
+  # assuming two endpoints of one API behave symmetrically — image models
+  # carry no image_attributes to match video_attributes, and this endpoint's
+  # response shape differs from generations' too. Applying a generations
+  # enumeration here would be inferring, not measuring.
+  #
+  # The union check stays, and matters more here than it does on generate:
+  # generate's version saves a free round trip, this one is the only thing
+  # that catches a typo before it is billed.
+  if [ -n "$quality" ] && ! list_contains "$quality" "$VALID_QUALITIES"; then
+    echo "ERROR: --quality '$quality' is not a documented value. Valid values: $VALID_QUALITIES" >&2
+    echo "  Worth catching locally: measured 2026-09-15, this endpoint does NOT reject an unknown --quality the way /v1/images/generations does — it ignored the value and rendered a billable image anyway. A typo here costs money, not a round trip." >&2
+    return 1
+  fi
+
+  if [ -n "$size" ] && ! list_contains "$size" "$VALID_SIZES"; then
+    echo "ERROR: --size '$size' is not a documented value. Valid values: $VALID_SIZES" >&2
+    return 1
+  fi
+
+  if [ -n "$n" ]; then
+    case "$n" in
+      ''|*[!0-9]*)
+        echo "ERROR: --n must be a positive integer (got '$n')." >&2
+        return 1
+        ;;
+    esac
+    if [ "$n" -lt 1 ] || [ "$n" -gt 10 ]; then
+      echo "ERROR: --n must be between 1 and 10 (got $n)." >&2
+      return 1
+    fi
+    if [ "$model" = "$NO_N_MODEL" ]; then
+      echo "ERROR: --n is not supported by $NO_N_MODEL at all (documented gotcha: passing n, even n=1, errors for this model). Omit --n." >&2
+      return 1
+    fi
+  fi
+
+  if [ -n "$output_format" ] && ! list_contains "$output_format" "$VALID_OUTPUT_FORMATS"; then
+    echo "ERROR: --output-format '$output_format' is not a documented value. Valid values: $VALID_OUTPUT_FORMATS" >&2
+    return 1
+  fi
+
+  if [ -n "$background" ] && ! list_contains "$background" "$VALID_BACKGROUNDS"; then
+    echo "ERROR: --background '$background' is not a documented value. Valid values: $VALID_BACKGROUNDS" >&2
+    return 1
+  fi
+
+  if [ -n "$out_name" ]; then
+    case "$out_name" in
+      */*)
+        echo "ERROR: --out-name must be a bare filename with no path separators (got '$out_name')." >&2
+        return 1
+        ;;
+      "")
+        echo "ERROR: --out-name must not be empty." >&2
+        return 1
+        ;;
+    esac
+  fi
+
+  local form_item
+  for form_item in ${extra_form+"${extra_form[@]}"}; do
+    case "$form_item" in
+      *=*) : ;;
+      *)
+        echo "ERROR: --extra-form must be KEY=VALUE (got '$form_item')." >&2
+        return 1
+        ;;
+    esac
+    case "${form_item%%=*}" in
+      ''|image|image_url|model|prompt)
+        echo "ERROR: --extra-form '${form_item%%=*}' collides with a field this script sets from a flag. Use the flag." >&2
+        return 1
+        ;;
+    esac
+  done
+
+  # --- the target ratio (same contract, same reason, as generate) ---
+  local target_active="" target_label=""
+  local target_rw="" target_rh="" target_px_w="" target_px_h=""
+  local pair reduced
+
+  if [ -n "$target_aspect" ] && [ -n "$target_size" ]; then
+    echo "ERROR: pass --target-aspect or --target-size, not both — --target-size '$target_size' already fixes the ratio." >&2
+    return 1
+  fi
+  if [ -n "$target_aspect" ]; then
+    if ! pair="$(parse_ratio_pair "$target_aspect" ':')"; then
+      echo "ERROR: --target-aspect must be W:H with two positive integers (got '$target_aspect'). Examples: 16:9, 9:16, 4:3, 1:1." >&2
+      return 1
+    fi
+    reduced="$(reduce_ratio "${pair% *}" "${pair#* }")"
+    target_rw="${reduced% *}"
+    target_rh="${reduced#* }"
+    target_label="${target_rw}:${target_rh}"
+    target_active=1
+  elif [ -n "$target_size" ]; then
+    if ! pair="$(parse_ratio_pair "$target_size" 'x')"; then
+      echo "ERROR: --target-size must be WxH with two positive integers (got '$target_size'). Examples: 1280x720, 1792x1008." >&2
+      return 1
+    fi
+    target_px_w="${pair% *}"
+    target_px_h="${pair#* }"
+    reduced="$(reduce_ratio "$target_px_w" "$target_px_h")"
+    target_rw="${reduced% *}"
+    target_rh="${reduced#* }"
+    target_label="${target_px_w}x${target_px_h} (${target_rw}:${target_rh})"
+    target_active=1
+  fi
+  if [ -n "$target_active" ]; then
+    if ! check_image_tools; then return 2; fi
+    # No size is picked for the caller here, unlike generate. On generate the
+    # requested --size decides the delivered pixels, so choosing it well is
+    # what makes a target reachable. On edits all three measured runs passed no
+    # --size and got back a size in no enum, matching the INPUT's ratio at a
+    # near-constant ~1.57 MP (1672x941 from two 16:9 inputs, 1254x1254 from a
+    # 1:1 one). Whether --size is even honoured here is untested, so picking
+    # one on the caller's behalf would be acting on a guess. The crop still
+    # happens; it just works from whatever comes back.
+    echo "NOTE: the delivered file will be measured and centre-cropped to $target_label." >&2
+    echo "  No --size is chosen for you on this endpoint: the three measured edits each returned a size matching the INPUT image's aspect ratio at a near-constant ~1.57 megapixels (854x480 and 320x180 both gave 1672x941; 256x256 gave 1254x1254), and whether --size is honoured here has not been established. So the delivered ratio follows your input, not your target — the crop works from the real file either way, and will fail loudly rather than hand back the wrong ratio if your input's shape cannot cover $target_label." >&2
+  fi
+
+  # --out-dir before the network call, same as generate.
+  local out_dir_input="$out_dir"
+  mkdir -p "$out_dir" 2>/dev/null
+  out_dir=$(cd "$out_dir" 2>/dev/null && pwd)
+  if [ -z "$out_dir" ]; then
+    echo "ERROR: --out-dir '$out_dir_input' could not be created or entered (bad path or missing permissions)." >&2
+    return 4
+  fi
+
+  if [ -z "$dry_run" ]; then
+    if ! check_api_key; then return 2; fi
+  fi
+
+  # --- assemble the multipart form ---
+  #
+  # curl argument pairs, built once and used by both --dry-run (to print) and
+  # the real call (to send). Two spellings matter here and are not
+  # interchangeable:
+  #   -F "image=@PATH"        attach the file at PATH as an upload
+  #   -F "image_url=<PATH"    read the FIELD VALUE out of PATH
+  # The second is what keeps a data: URI off the command line. A base64 data
+  # URI of any real photo runs past this machine's ARG_MAX (1,048,576 bytes)
+  # and dies with "Argument list too long" before a single byte is sent — the
+  # exact failure ofox-video.sh's frame_images build already had to fix.
+  local -a form=()
+  local url_file=""
+  if [ -n "$image" ]; then
+    form+=(-F "image=@$image")
+  else
+    url_file="$(mktemp "${TMPDIR:-/tmp}/ofox-edit-url.XXXXXX")" || url_file=""
+    if [ -z "$url_file" ]; then
+      echo "ERROR: could not create a temp file to hold --image-url." >&2
+      return 4
+    fi
+    printf '%s' "$image_url" >"$url_file"
+    form+=(-F "image_url=<$url_file")
+  fi
+  form+=(-F "model=$model")
+  form+=(-F "prompt=$prompt")
+  [ -n "$quality" ] && form+=(-F "quality=$quality")
+  [ -n "$size" ] && form+=(-F "size=$size")
+  [ -n "$n" ] && form+=(-F "n=$n")
+  [ -n "$output_format" ] && form+=(-F "output_format=$output_format")
+  [ -n "$background" ] && form+=(-F "background=$background")
+  for form_item in ${extra_form+"${extra_form[@]}"}; do
+    form+=(-F "$form_item")
+  done
+
+  # Measure the input so the estimate can say whether the anchor's input size
+  # matches this request's. Best-effort: a missing ffprobe must not block an
+  # edit, since no target was asked for (CONTRIBUTING rule 6, fail open).
+  local input_measured=""
+  if [ -n "$image" ]; then
+    input_measured="$(measure_image_file "$image")" || input_measured=""
+  fi
+
+  print_edit_estimate "$model" "${n:-1}" "$quality" "$input_measured"
+
+  if [ -n "$dry_run" ]; then
+    [ -n "$url_file" ] && rm -f "$url_file"
+    echo "DRY RUN — nothing was submitted and nothing was billed." >&2
+    echo "Re-run without --dry-run to edit." >&2
+    echo "STATUS dry_run"
+    echo "MODEL $model"
+    echo "ENDPOINT $EDITS_ENDPOINT"
+    if [ -n "$image" ]; then
+      echo "INPUT_IMAGE $image"
+      [ -n "$input_measured" ] && echo "INPUT_SIZE_ACTUAL $input_measured"
+    else
+      echo "INPUT_IMAGE_URL_BYTES ${#image_url}"
+    fi
+    [ -n "$quality" ] && echo "QUALITY $quality"
+    [ -n "$size" ] && echo "SIZE $size"
+    echo "N ${n:-1}"
+    if [ -n "$target_active" ]; then
+      echo "TARGET_ASPECT ${target_rw}:${target_rh}"
+      [ -n "$target_px_w" ] && echo "TARGET_SIZE ${target_px_w}x${target_px_h}"
+    fi
+    # The multipart field list, the edits equivalent of generate's payload.
+    # Names only — never the values, because --extra-form is a passthrough and
+    # this line must not become somewhere a secret can be printed. The uploaded
+    # file's path is shown above as INPUT_IMAGE and its bytes are never echoed.
+    local f names=""
+    for f in "${form[@]}"; do
+      case "$f" in
+        -F) continue ;;
+      esac
+      names="$names ${f%%=*}"
+    done
+    echo "FORM_FIELDS${names}"
+    if [ -n "$MODEL_FALLBACK_FROM" ]; then
+      echo "MODEL_FALLBACK_FROM $MODEL_FALLBACK_FROM"
+      echo "MODEL_FALLBACK_REASON $MODEL_FALLBACK_REASON"
+      echo "MODEL_PRICE_DELTA $MODEL_PRICE_DELTA"
+    fi
+    [ -n "$MODEL_CHAIN_EXHAUSTED" ] && echo "MODEL_CHAIN_EXHAUSTED $MODEL_CHAIN_EXHAUSTED"
+    return 0
+  fi
+
+  # --- the one and only network call ---
+
+  echo "Requesting image edit from Ofox (model=$model)..." >&2
+  local tmp_body http_code curl_rc body
+  tmp_body=$(mktemp)
+  http_code=$(curl -sS -o "$tmp_body" -w '%{http_code}' \
+    --connect-timeout "$CONNECT_TIMEOUT" --max-time "$GENERATE_MAX_TIME" \
+    -X POST "$API_BASE/images/edits" \
+    -H "Authorization: Bearer $OFOX_API_KEY" \
+    "${form[@]}")
+  curl_rc=$?
+  body=$(cat "$tmp_body")
+  rm -f "$tmp_body"
+  [ -n "$url_file" ] && rm -f "$url_file"
+
+  if [ "$curl_rc" -ne 0 ]; then
+    echo "ERROR: could not reach the Ofox API (curl exit $curl_rc) — no HTTP response was received at all." >&2
+    echo "This is a synchronous, no-job-id endpoint: there is no poll/dashboard job entry to check by id." >&2
+    echo "Check your usage/billing history at ${GET_KEY_URL} before deciding whether to retry." >&2
+    return 5
+  fi
+
+  if [ "$http_code" != "200" ]; then
+    print_api_error "edit" "$http_code" "$body"
+    return 3
+  fi
+
+  # --- decode and save ---
+
+  local count
+  count=$(printf '%s' "$body" | jq -r '.data | length' 2>/dev/null)
+  if [ -z "$count" ] || [ "$count" = "null" ] || ! [ "$count" -gt 0 ] 2>/dev/null; then
+    echo "ERROR: got HTTP 200 but the response has no usable data[] entries — unexpected response shape." >&2
+    echo "Raw response body:" >&2
+    printf '%s\n' "$body" >&2
+    return 3
+  fi
+
+  # The edits response DOES carry output_format (generations' does not), so
+  # prefer what the API says it wrote over what we asked for, and fall back to
+  # the request only when the field is absent.
+  local resp_format ext base_name
+  resp_format=$(printf '%s' "$body" | jq -r '.output_format // empty' 2>/dev/null)
+  ext=$(infer_extension "${resp_format:-$output_format}")
+  base_name="${out_name:-ofox_edit_$(date +%Y%m%d%H%M%S)_$$}"
+
+  local idx=0 item b64 stem outpath rawpath paths=() raw_paths=()
+  local measured_size="" final_size="" crop_dims
+  while IFS= read -r item; do
+    b64=$(printf '%s' "$item" | jq -r '.b64_json // empty')
+    if [ -z "$b64" ]; then
+      echo "ERROR: data[$idx] has no b64_json field — unexpected response shape." >&2
+      echo "Raw response body:" >&2
+      printf '%s\n' "$body" >&2
+      return 3
+    fi
+    if [ "$count" -gt 1 ]; then
+      stem="${out_dir%/}/${base_name}_${idx}"
+    else
+      stem="${out_dir%/}/${base_name}"
+    fi
+    if [ -n "$target_active" ]; then
+      rawpath="${stem}-uncropped.${ext}"
+      outpath="${stem}.${ext}"
+    else
+      rawpath="${stem}.${ext}"
+      outpath="$rawpath"
+    fi
+    if ! decode_b64_to_file "$b64" "$rawpath"; then
+      echo "ERROR: failed to base64-decode image data[$idx] to $rawpath." >&2
+      return 3
+    fi
+    raw_paths+=("$rawpath")
+
+    local this_measured=""
+    this_measured="$(measure_image_file "$rawpath")" || this_measured=""
+    [ "$idx" -eq 0 ] && measured_size="$this_measured"
+
+    if [ -n "$target_active" ]; then
+      if [ -z "$this_measured" ]; then
+        echo "ERROR: could not measure '$rawpath', so the target ${target_rw}:${target_rh} cannot be guaranteed." >&2
+        echo "The edited image is on disk and was billed; it is NOT cropped and its ratio is unverified." >&2
+        return 3
+      fi
+      local mw="${this_measured%x*}" mh="${this_measured#*x}"
+      if ! crop_dims="$(crop_dims_for "$mw" "$mh" "$target_rw" "$target_rh")"; then
+        echo "ERROR: '$rawpath' measured ${this_measured}, too small to hold one whole unit of ${target_rw}:${target_rh}." >&2
+        echo "The edit was performed and billed; it is on disk uncropped. Nothing wrong-ratio was written to ${outpath}." >&2
+        return 3
+      fi
+      local cw="${crop_dims% *}" ch="${crop_dims#* }"
+      if [ -n "$target_px_w" ] &&
+        { [ "$cw" -lt "$target_px_w" ] || [ "$ch" -lt "$target_px_h" ]; }; then
+        echo "ERROR: '$rawpath' measured ${this_measured}; cropped to ${target_rw}:${target_rh} that is only ${cw}x${ch}, short of the requested ${target_px_w}x${target_px_h}." >&2
+        echo "This script crops and scales down, never up. The edit was performed and billed and is on disk at the -uncropped path." >&2
+        return 3
+      fi
+      if ! crop_image_to "$rawpath" "$outpath" "$cw" "$ch" "$target_px_w" "$target_px_h"; then
+        echo "ERROR: ffmpeg could not crop '$rawpath' to ${cw}x${ch}." >&2
+        echo "The edit was performed and billed and is on disk uncropped at that path." >&2
+        return 3
+      fi
+      if [ "$idx" -eq 0 ]; then
+        if [ -n "$target_px_w" ]; then
+          final_size="${target_px_w}x${target_px_h}"
+        else
+          final_size="${cw}x${ch}"
+        fi
+      fi
+    fi
+    paths+=("$outpath")
+    idx=$((idx + 1))
+  done < <(printf '%s' "$body" | jq -c '.data[]')
+
+  local resp_model resp_size resp_quality
+  local input_tokens output_tokens total_tokens in_image_tokens in_text_tokens
+  resolve_response_model "$model" "$body"
+  resp_model="$RESPONSE_MODEL"
+  resp_size=$(printf '%s' "$body" | jq -r '.size // "unknown"')
+  resp_quality=$(printf '%s' "$body" | jq -r '.quality // "unknown"')
+  input_tokens=$(printf '%s' "$body" | jq -r '.usage.input_tokens // "unknown"')
+  output_tokens=$(printf '%s' "$body" | jq -r '.usage.output_tokens // "unknown"')
+  total_tokens=$(printf '%s' "$body" | jq -r '.usage.total_tokens // "unknown"')
+  in_image_tokens=$(printf '%s' "$body" | jq -r '.usage.input_tokens_details.image_tokens // empty')
+  in_text_tokens=$(printf '%s' "$body" | jq -r '.usage.input_tokens_details.text_tokens // empty')
+
+  echo "STATUS completed"
+  for outpath in "${paths[@]}"; do
+    echo "IMAGE_PATH $outpath"
+  done
+  if [ -n "$target_active" ]; then
+    for rawpath in "${raw_paths[@]}"; do
+      echo "IMAGE_PATH_UNCROPPED $rawpath"
+    done
+  fi
+  # The source, printed next to the result on purpose: the question that
+  # decides whether an edit worked is "how does this compare with the input",
+  # and an agent that has to go and find the input is an agent that will
+  # answer from STATUS completed instead.
+  [ -n "$image" ] && echo "INPUT_IMAGE $image"
+  [ -n "$input_measured" ] && echo "INPUT_SIZE_ACTUAL $input_measured"
+  echo "MODEL $resp_model"
+  echo "MODEL_SOURCE $RESPONSE_MODEL_SOURCE"
+  if [ "$resp_model" != "$model" ]; then
+    echo "MODEL_REQUESTED $model"
+  fi
+  echo "SIZE $resp_size"
+  if [ -n "$measured_size" ]; then
+    echo "SIZE_ACTUAL $measured_size"
+    if [ "$measured_size" != "$resp_size" ] && [ "$resp_size" != "unknown" ]; then
+      echo "NOTE: the API reported SIZE $resp_size but the file measures $measured_size. The file is the fact; the response field is not." >&2
+    fi
+  else
+    echo "SIZE_ACTUAL unmeasured"
+    echo "NOTE: could not measure the written file's real dimensions (ffprobe missing or unreadable file), so SIZE above is unverified. Install ffmpeg to have this checked: brew install ffmpeg / sudo apt-get install ffmpeg." >&2
+  fi
+  if [ -n "$final_size" ]; then
+    echo "SIZE_FINAL $final_size"
+    echo "TARGET_ASPECT ${target_rw}:${target_rh}"
+  fi
+  echo "QUALITY $resp_quality"
+  echo "USAGE_INPUT_TOKENS $input_tokens"
+  # The line a generation has no equivalent of, and the reason edit_cost_for
+  # exists: on the measured run 576 of 608 input tokens were the uploaded
+  # picture, billed at a rate the catalog publishes separately.
+  [ -n "$in_image_tokens" ] && echo "USAGE_INPUT_IMAGE_TOKENS $in_image_tokens"
+  [ -n "$in_text_tokens" ] && echo "USAGE_INPUT_TEXT_TOKENS $in_text_tokens"
+  echo "USAGE_OUTPUT_TOKENS $output_tokens"
+  echo "USAGE_TOTAL_TOKENS $total_tokens"
+
+  local cost=""
+  load_models >/dev/null 2>&1 || true
+  cost="$(edit_cost_for "$resp_model" "$input_tokens" "$output_tokens" "$in_image_tokens" "$in_text_tokens")" || cost=""
+  if [ -n "$cost" ]; then
+    echo "EDIT_COST $cost"
+    echo "NOTE: EDIT_COST is the DEARER of two readings of the same token counts — every input token at the prompt rate, versus the prompt's text at that rate and the uploaded image at the catalog's separate pricing.image rate. They were 13% apart on the measured run and no invoice has settled which is right, so this errs high by rule. See references/pricing.md." >&2
+  else
+    echo "NOTE: could not compute a cost — no published rates available for" >&2
+    echo "'$resp_model' (offline, or the model is missing from the list)." >&2
+    echo "The token counts above are exact; see references/pricing.md for the" >&2
+    echo "formula to apply by hand." >&2
+  fi
+
+  # An edit that ran is not an edit that edited. The endpoint could in
+  # principle have ignored the upload and rendered the prompt, and STATUS
+  # completed cannot tell those apart — only the artifact can.
+  echo "NOTE: verify the result against the input before delivering it. Open both and check that what you did NOT ask to change is unchanged; a job that completes proves the request was accepted, not that the image was edited rather than redrawn." >&2
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
 
@@ -1755,12 +2755,18 @@ main() {
       return $?
       ;;
     models)
-      cmd_models
+      shift
+      cmd_models "$@"
       return $?
       ;;
     generate)
       shift
       cmd_generate "$@"
+      return $?
+      ;;
+    edit)
+      shift
+      cmd_edit "$@"
       return $?
       ;;
     -h|--help|"")

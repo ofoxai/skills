@@ -17,12 +17,12 @@ body directly, always base64-encoded (no URL option, ever).
 
 | Field | Type | Required | `ofox-image.sh` flag | Notes |
 |---|---|---|---|---|
-| `model` | string | yes | `--model` (optional flag) | The API field is required; the flag is not — omit it and the script resolves one from its cheapest-first priority chain (`MODEL_CHAIN` in `ofox-image.sh`, the only place that list exists) and reports any fallback. Run `ofox-image.sh models` for the live list — 14 image models at last check, and the script accepts any of them. Documented in depth here: `openai/gpt-image-2`, `google/gemini-3.1-flash-image` (this is "Nano Banana 2" — use this exact model id string, **not** `-preview`; the model catalog page's URL slug differs from the actual API model id), `bailian/qwen-image-3.0-pro`. Others work but their size/quality support is not documented here. |
+| `model` | string | yes | `--model` (optional flag) | The API field is required; the flag is not — omit it and the script resolves one from its cheapest-first priority chain (`MODEL_CHAIN` in `ofox-image.sh`, the only place that list exists) and reports any fallback. Run `ofox-image.sh models` for the live list — 16 image models as of 2026-09-15, and the script accepts any of them. Documented in depth here: `openai/gpt-image-2`, `google/gemini-3.1-flash-image` (this is "Nano Banana 2" — use this exact model id string, **not** `-preview`; the model catalog page's URL slug differs from the actual API model id), `qwen/qwen-image-3.0-pro`. Others work but their size/quality support is not documented here. |
 | `prompt` | string | yes | `--prompt` | Text description of the image. |
 | `quality` | string | yes per doc | `--quality` | One of `auto`/`low`/`medium`/`high`/`standard`/`hd` — that is the union across models, and **no model is known to accept all six**. The script requires you to pass one explicitly rather than guessing a safe default, and since 1.7.0 validates it twice: against the union, then against the resolved model's own accepted set where that set has been enumerated first-hand. So `openai/gpt-image-2` + `standard` is now a client-side rejection at `--dry-run` (exit `1`, no call) instead of a submission-time HTTP 400. Where a model has never enumerated its set, the union still stands — see "Confirmed gotcha: supported `--quality` values differ per model" below. |
 | `n` | integer | no | `--n` | 1-10, server default 1. **`google/gemini-3.1-flash-image` does not support `n` at all — passing it (even `n: 1`) errors.** The script rejects `--n` client-side whenever the effective model is Gemini, and also rejects an `n` key set via `--extra-json` for that model. |
 | `size` | string | no | `--size` | One of `auto`/`1024x1024`/`1536x1024`/`1024x1536`/`256x256`/`512x512`/`1792x1024`/`1024x1792`. **This enum cannot express 16:9 or 9:16** — see the ratio table below. `--target-aspect W:H` / `--target-size WxH` are not API fields: they are client-side, and they pick this value, then crop the written file to the ratio asked for. |
-| `input_images` | string[] | no | not exposed — out of scope | URL or base64, 1-3 items, **Qwen only**, for image-to-image. **Any other field name is silently ignored** — the request silently degrades to text-to-image with no error, so get the field name exactly right if you ever add this. Out of scope for `ofox-image-core` v1 (text-to-image only); the script rejects `input_images` set via `--extra-json` with a clear message rather than silently sending a request that would ignore it. |
+| `input_images` | string[] | no | not exposed — out of scope | URL or base64, 1-3 items, **Qwen only**, for image-to-image. **Any other field name is silently ignored** — the request silently degrades to text-to-image with no error, so get the field name exactly right if you ever add this. Still unexposed, and still rejected when set via `--extra-json`, rather than silently sending a request that would ignore it. **If you want to change an existing image, that is `ofox-image.sh edit` (`POST /v1/images/edits`), not this field** — a different endpoint, working on every model whose catalog entry carries it rather than on Qwen alone. This row stays out of scope because a field name that degrades silently to text-to-image is a trap, not because editing is. |
 | `output_format` | string | no | `--output-format` | One of `png`/`jpeg`/`webp`. The script maps `jpeg` to a `.jpg` file extension; `png`/`webp` keep their own extension. Defaults to `png` when not set (the documented example uses `png`, it's lossless, and it's the safest cross-model assumption — the response body itself does not include an explicit format field to infer from). |
 | `background` | string | no | `--background` | One of `transparent`/`opaque`/`auto`. No cross-field requirement with `output_format` is documented for this endpoint specifically (some background/format interactions are common in similar APIs, but this hasn't been confirmed here) — the script does not enforce one; if you get an unexpected error combining `background: transparent` with a non-alpha format, that's a starting hypothesis to test, not yet a confirmed rule. |
 | `stream` | boolean | no | not exposed — out of scope | Default `false`. `ofox-image.sh` only parses a plain JSON response body, not a streamed one — the script rejects `stream: true` set via `--extra-json`. |
@@ -171,7 +171,7 @@ still had to be cropped to `1792x1008` before it could be attached to a
 `bytedance/seedance-2.5` job, which inherits the attached frame's own ratio
 (`aspect_ratio: adaptive` is forced). **Measure the file and crop regardless
 of the model**; what changes per model is how big the correction is, not
-whether one is needed. `bailian/qwen-image-3.0-pro` is still untested.
+whether one is needed. `qwen/qwen-image-3.0-pro` is still untested.
 
 `ofox-image.sh`'s printed `SIZE` line is taken directly from the response
 body (see the table above), so it inherits this unreliability. Its
@@ -186,6 +186,195 @@ trusting `SIZE`/the response's `size` field. This is the same "don't trust a doc
 about media output without checking the real artifact" pattern as the
 `mirror_urls`/`unsigned_urls` and `aspect_ratio: adaptive` lessons in
 `.trellis/spec/skills/external-api-integration.md` for the video skill.
+
+## Edit request fields (`POST /v1/images/edits`)
+
+**No longer out of scope.** This endpoint was excluded from `ofox-image-core`
+through v1.10.3 and is implemented as `ofox-image.sh edit` from 1.11.0. It
+takes an image you already have and changes it, which is a different thing
+from `input_images` on the generations endpoint (still unexposed, still
+Qwen-only, still silently ignored under any other field name).
+
+Everything below is from real calls made on 2026-09-15, not from
+documentation. The rejections cost nothing; the two successes are recorded in
+`references/token-anchors.json` under `edit_anchors`.
+
+### It is multipart-only
+
+An `application/json` body with `model` set came back *"You must provide a
+model parameter"* — the field was never seen. So the request is built from
+`-F` form fields and there is no JSON payload; `ofox-image.sh edit --dry-run`
+prints a `FORM_FIELDS` line (names only) where `generate` would print a
+payload.
+
+| Field | Type | Required | `ofox-image.sh edit` flag | Notes |
+|---|---|---|---|---|
+| `image` | file upload | one of these two | `--image PATH` | The primary path, and the one to prefer: it needs no hosting anywhere. Sent as `-F "image=@PATH"`. |
+| `image_url` | string | one of these two | `--image-url URL` | A public URL, or a `data:image/...;base64,...` URI — the data URI was **confirmed accepted at validation** (it got past file handling to the model check, where a deliberately bogus model produced `model_not_found`). Sent as `-F "image_url=<tmpfile"`, never as a command-line value: a base64 data URI of any real photo exceeds `ARG_MAX` and would die locally before the network. |
+| `model` | string | yes | `--model` (optional flag) | Optional flag, required API field — the script resolves one from `MODEL_CHAIN` **against the edits endpoint** when it is omitted. Which models can edit is not a list in this repo; see below. |
+| `prompt` | string | required by the script | `--prompt` | Whether the API requires it is **untested and deliberately so**: the only way to find out is to send an edit without one, and on this endpoint anything not rejected renders and bills. |
+| `quality` | string | no | `--quality` | Not required here, unlike generations. Omitting it returned `"quality": "low"`. **Not validated upstream** — see the warning below. |
+| `size` | string | no | `--size` | Validated locally for typos only. Whether this endpoint honours it is **untested**. Both measured runs omitted it and got a size derived from the input's aspect ratio. |
+| `n` | integer | no | `--n` | 1-10. Multiplies the spend. |
+| `output_format` | string | no | `--output-format` | `png`/`jpeg`/`webp`. Unlike generations, the **response echoes this field**, so the script names the saved file from what the API says it wrote and falls back to the request only when the field is absent. |
+| `background` | string | no | `--background` | `transparent`/`opaque`/`auto`. The response echoes it (`"opaque"` observed). |
+| `mask` | file upload | unknown | via `--extra-form` | Whether masked/inpainting edits are supported is **not established**. Finding out costs a billed edit per attempt, so it was left alone. Pass one through `--extra-form` if you want to try, and record the result here. |
+
+Input formats are enumerated by the API's own refusal of a `text/plain`
+upload: *"Supported file formats are 'image/jpeg', 'image/png', and
+'image/webp'."* That is the API enumerating its own set, which is the only
+basis on which the script keeps a local copy of it.
+
+### ⚠️ This endpoint does not validate parameters the way generations does — and the failure mode is a bill
+
+`POST /v1/images/generations` rejects a bad `--quality` with a free HTTP 400
+(that is the whole basis of the per-model table above). `POST
+/v1/images/edits` **does not**. Measured 2026-09-15: `quality=ultra_not_a_value`
+was sent to six models as a deliberate guard, on the assumption it would be
+refused the way the sibling endpoint refuses it. All six ignored the value,
+rendered, and billed.
+
+Two things follow, and the second is the general one:
+
+- **The client-side checks in `ofox-image.sh edit` are not a round-trip
+  saving, they are the guard.** On `generate`, a validation check that the API
+  would also make saves a few seconds. Here it saves the money. This is the
+  one place in this skill where a *false rejection* is arguably better than
+  permissiveness, which inverts the rule the `--quality` table above is built
+  on — so the script checks `--quality` against the documented **union** only,
+  and deliberately does **not** apply `model_qualities()`'s per-model
+  enumeration, because that set was read off a *generations* refusal and
+  assuming two endpoints of one API behave symmetrically is a mistake this
+  repo has already made (see "don't assume two endpoints expose symmetric
+  metadata" below and in the spec).
+- **A free probe is only free if the thing you expect to reject it does.**
+  The technique of pairing a probe with a deliberately-invalid guard
+  parameter, used throughout this repo to map an API at $0, silently costs
+  money on an endpoint that ignores unknown parameters. Verify that the guard
+  itself is refused — on a model you have already established rejects the
+  request for a different reason — before fanning a guarded probe out across
+  a list.
+
+### Which models can edit is a live lookup, not a table
+
+Each `/v1/models` entry's `supported_endpoints` array names
+`/v1/images/edits` or does not, and that is the whole answer. Confirmed
+predictive in both directions on 2026-09-15:
+
+| Direction | Evidence |
+|---|---|
+| array omits it → refused | `qwen/qwen-image-3.0-pro` → `400 endpoint_not_supported`, before any parameter was looked at, nothing billed |
+| array carries it → runs | seven models ran an edit: `openai/gpt-image-2`, `google/gemini-2.5-flash-image`, `google/gemini-3-pro-image`, `google/gemini-3.1-flash-image`, `google/gemini-3.1-flash-lite-image`, `microsoft/mai-image-2.5`, `microsoft/mai-image-2.5-flash` |
+
+Four of the eleven models advertising the endpoint are untested
+(`microsoft/mai-image-2.5-pro`, `openai/gpt-image-1.5`,
+`openai/gpt-image-2.5-flare`, `openai/gpt-image-2.5-sunburst`) and
+deliberately stay that way: the flag has been predictive on every model
+tested, the script reads it live, and confirming the remaining four costs a
+billed edit each for no decision it would change.
+
+Note that `image_attributes.supported_params` is **not** where this lives — it
+lists generation fields only (`prompt`, `n`, `size`, `quality`,
+`output_format`, `stream`, `user`) and several image models have no
+`image_attributes` block at all. Looking there and concluding "the catalog
+advertises nothing about editing" is easy to do and wrong; the capability is
+one field over. Run `ofox-image.sh models --endpoint edits` for the current
+list.
+
+### Response (`POST /v1/images/edits`, HTTP 200)
+
+Same `data[].b64_json` shape as generations, with a richer `usage` and three
+echoed fields generations does not send:
+
+```json
+{
+  "background": "opaque",
+  "created": 1789452894,
+  "data": [{ "index": 0, "b64_json": "<base64>" }],
+  "model": "openai/gpt-image-2",
+  "output_format": "png",
+  "quality": "low",
+  "size": "1672x941",
+  "usage": {
+    "input_tokens": 608,
+    "input_tokens_details": { "image_tokens": 576, "text_tokens": 32 },
+    "output_tokens": 301,
+    "output_tokens_details": { "image_tokens": 301 },
+    "total_tokens": 909
+  }
+}
+```
+
+So **yes, edits report `usage`** — and then some. `input_tokens_details`
+splits the prompt's text from the uploaded image, and **the image you upload
+is billed**: 576 of those 608 input tokens were the picture. A generation has
+no equivalent component. `openai/gpt-image-2` also *does* send `model` on this
+endpoint, having never sent it on generations.
+
+### Cost: measured, and quoted as the dearer of two readings
+
+Three real edits, `openai/gpt-image-2`, server-default quality:
+
+| Input | `input_tokens` (image + text) | `output_tokens` | Output size | `EDIT_COST` |
+|---|---|---|---|---|
+| 854x480 (16:9) | 608 (576 + 32) | 301 | 1672x941 | 0.013798 |
+| 320x180 (16:9) | 273 (240 + 33) | 129 | 1672x941 | 0.005955 |
+| 256x256 (1:1) | 289 (256 + 33) | 229 | 1254x1254 | 0.009083 |
+
+The catalog publishes a `pricing.image` rate ($0.000008 for `gpt-image-2`)
+separate from `pricing.prompt` ($0.000005), which is presumably what the
+uploaded image bills at. That leaves two readings of the same numbers and no
+invoice to settle them — 608×0.000005 + 301×0.00003 = 0.01207, against
+32×0.000005 + 576×0.000008 + 301×0.00003 = 0.013798, **13% apart**.
+`edit_cost_for()` returns the dearer, by the never-under-quote rule. Neither
+reading has been reconciled against a console billing line, and note that
+`image_cost_for`'s formula was only ever invoice-checked on *one* model on the
+*other* endpoint, so nothing transfers here by assumption.
+
+**Two findings that contradict what the generations anchors would lead you to
+expect**, and both are why an edit estimate is matched on the input image
+rather than on `(quality, size)`:
+
+1. **Output geometry: a near-constant pixel budget, spent on the input's
+   aspect ratio.** Three runs: 854x480 and 320x180 (both 16:9) returned
+   1672x941, and 256x256 (1:1) returned 1254x1254. Those two output sizes are
+   1,573,352 and 1,572,516 pixels — 0.05% apart — so the endpoint appears to
+   target about 1.57 MP and choose the shape from the upload. Note that
+   1672x941 is 1.777, the 16:9 the generations `size` enum *cannot express at
+   all*: an edit reaches a ratio a generation cannot request.
+
+   The third run was made during review, because the first two could not
+   support the sentence that had been written from them. Both were 16:9, so
+   "the output follows the input's ratio" and "the output is a fixed 1672x941
+   for this model at this quality" fit the data equally well; only a different
+   input ratio separates them. The conclusion survived — but it was an untested
+   half of it until a 1:1 input was actually sent.
+2. **Output tokens are not fixed by `(model, quality, output size)`.** Those
+   three were identical across the two 16:9 runs and the counts were 301 and
+   129. They track the upload instead, which is why the estimate is keyed on
+   the input image's size. ~~Output tokens land at roughly half the input
+   image tokens (0.523, 0.538)~~ — **withdrawn**: written as a pattern to test
+   rather than a law, tested at 256x256, and false (229/256 = 0.895). It was
+   never implemented as a formula, which is why it cost nothing to lose; had
+   `print_edit_estimate` interpolated on it, every unmatched input size would
+   now be quoted at about half what it bills. Input image tokens are not
+   linear in input pixels either: 256x256 bills 256 tokens and 854x480, with
+   6.3x the pixels, bills 576.
+
+### An edit is verifiably an edit, not a redraw of the prompt
+
+Worth stating because `STATUS completed` cannot distinguish the two, and an
+endpoint that took an image and ignored it would look identical.
+
+`openai/gpt-image-2`, an 854x480 UI screenshot in, prompt *"Change only the
+blue Upgrade plan button to green. Leave every other pixel, all text and the
+layout exactly as they are."* Every string in the source survived verbatim —
+"Billing Settings", "$29.00", "Seats included 3" — which a text-to-image
+generation from that prompt could not have produced. Against the rescaled
+source, mean absolute difference was **5.27/255 overall but 84.27 inside the
+button**, a region that is 1.1% of the frame and carried **58% of all pixels
+differing by more than 40**. Replicated on a second input (a red square at
+320x180 → the same square, same position, same size, blue).
 
 ## Error handling
 
@@ -218,6 +407,14 @@ The real classifier is `error.type`. No `usage` field was present on this
 rejected response (consistent with, but not 100%-certain proof of, rejected
 requests going unbilled).
 
+**On `/v1/images/edits`, `error.code` is not even reliably present.** It is
+`404` for `model_not_found` and `400` for `endpoint_not_supported` — the HTTP
+status again — but literally `null` on the two validation rejections (missing
+image, unsupported mimetype), which instead carry a `param` field the
+generations endpoint has never sent. So `error.code` is neither semantic nor
+guaranteed, on either endpoint. `error.type` is the classifier; nothing in
+`ofox-image.sh` branches on `code`.
+
 `error.message` free text is not a stable contract to branch logic on — the
 exact wording can change — but for this endpoint it remains the **primary**
 source of diagnostic detail regardless of `error.type`/`error.code`.
@@ -230,7 +427,8 @@ source of diagnostic detail regardless of `error.type`/`error.code`.
 | 400 | `invalid_request_error` | `400` (number, not semantic) | The request was rejected as malformed/unsupported — observed for an unknown/unsupported `extra_body.provider.type`; likely applies to other malformed-request cases too, not yet tested individually. | **Confirmed by a real call** (2026-08-29). |
 | 400 | not recorded from the run | not recorded from the run | `openai/gpt-image-2` + `quality: standard` → `Invalid value: 'standard'. Supported values are: 'low', 'medium', 'high', and 'auto'`. Per-model, not endpoint-wide — `microsoft/mai-image-2.5-flash` takes `standard`. No image was produced and nothing was billed. See the `--quality` gotcha above. | **Confirmed by a real call** (2026-09-04). Only the HTTP status and the message were captured; `error.type`/`error.code` were not read off the body, so they are recorded as unknown rather than assumed to be the row above's. |
 | 400 | `image_generation_user_error` | not read off the body | The request was rejected by the **safety system** before any image was produced. Seen on `openai/gpt-image-2`. Upstream message: *"Your request was rejected by the safety system"*, plus an Azure request id — and it names **no category**, so it does not tell you which clause did it. Nothing billed. The one trigger isolated so far is a single wardrobe word, `cropped` (as in `cropped jacket`) — most plausibly a sexual-content read, though the API states no category; it fired inside an anime-fight character frame, and what the session says about the rest of that frame comes in three strengths. **Cleared one at a time:** the school setting and the powers, each changed alone in a step that passed. **Not the cause, not cleared:** the weapons and the covered faces — dropping them, separately and then together, left the prompt refused, and no `gpt-image-2` call that passed has carried either. (A blade did get through on `microsoft/mai-image-2.5-flash`, which is a different filter — see the model subsection below.) **Untested:** the explicit ages and the blow-landing strike wording of the original refusal, which the bisect inherited already removed. Two repair paths, and the second is the one that gets forgotten: rewrite the offending clause (see the correction and the bisect procedure below), or **re-run the same prompt on `--model microsoft/mai-image-2.5-flash`**, which produced a bladed character sheet that `openai/gpt-image-2` had refused twice. | **Confirmed by a real call** (2026-09-06); trigger isolated by a five-step bisect the same day, ~0.037 USD. This is the second `error.type` ever observed on this endpoint; until now only `invalid_request_error` had been. |
-| n/a (message-only, no distinct type/code documented) | — | — | `google/gemini-3.1-flash-image` + `/v1/images/edits` → "Image editing is not supported for model". | Doc prose only, **not** confirmed by a real call. Not reachable through this script (edits endpoint out of scope). |
+| 400 | `endpoint_not_supported` | `400` | The model exists but does not serve the endpoint. Verbatim, on `qwen/qwen-image-3.0-pro` + `/v1/images/edits`: *"Model 'qwen/qwen-image-3.0-pro' does not support the /v1/images/edits endpoint on this platform. Please use /v1/chat/completions instead."* Fires **before** any parameter is looked at. Nothing billed. Supersedes the doc-prose-only claim this row used to carry ("Image editing is not supported for model"), which no real response has ever produced. | **Confirmed by a real call** (2026-09-15). |
+| 404 | `model_not_found` | `404` | The model id does not exist. *"Model 'openai/definitely-not-a-model' not found"*. Nothing billed. | **Confirmed by a real call** (2026-09-15). |
 | n/a (message-only, no distinct type/code documented) | — | — | `google/gemini-3.1-flash-image` + `n` param → errors. | Doc prose only, **not** confirmed by a real call. Prevented client-side by this script before any network call — should never actually be observed against the real API through `ofox-image.sh`. |
 
 **Everything else is unconfirmed for this endpoint as of writing.** This is
@@ -359,7 +557,7 @@ policies.
 
 So the repair menu for a safety refusal has two entries, not one: rewrite the
 clause, or re-run unchanged with `--model microsoft/mai-image-2.5-flash`.
-Switching costs about 2.67 cents against 0.6 cents at
+Switching costs about 2.0 cents against 0.6 cents at
 `--quality low --size 1024x1024` (see the model chain in `SKILL.md`), which is
 usually cheaper than the third rewrite. It is worth trying the switch early
 when the thing being refused is something you would rather keep — a weapon, a

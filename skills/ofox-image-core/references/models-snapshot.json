@@ -1,36 +1,8 @@
 {
   "_snapshot_note": "Offline fallback only. ofox-image.sh fetches the live list from GET /v1/models (public, no API key) and only reads this file when that fetch fails. Regenerate with: references/refresh-snapshot.sh",
-  "_snapshot_date": "2026-08-30",
+  "_snapshot_date": "2026-09-15",
   "object": "list",
   "data": [
-    {
-      "id": "bailian/qwen-image-3.0",
-      "is_deprecated": false,
-      "expiration_date": null,
-      "aliases": [
-        "qwen-image-3.0"
-      ],
-      "pricing": {
-        "output_image": null
-      },
-      "supported_endpoints": [
-        "/v1/images/generations"
-      ]
-    },
-    {
-      "id": "bailian/qwen-image-3.0-pro",
-      "is_deprecated": false,
-      "expiration_date": null,
-      "aliases": [
-        "qwen-image-3.0-pro"
-      ],
-      "pricing": {
-        "output_image": null
-      },
-      "supported_endpoints": [
-        "/v1/images/generations"
-      ]
-    },
     {
       "id": "google/gemini-2.5-flash-image",
       "is_deprecated": false,
@@ -39,10 +11,13 @@
         "gemini-2.5-flash-image"
       ],
       "pricing": {
+        "prompt": "0.0000003",
+        "image": null,
         "output_image": "0.00003"
       },
       "supported_endpoints": [
         "/v1/chat/completions",
+        "/v1/images/edits",
         "/v1/images/generations"
       ]
     },
@@ -54,10 +29,13 @@
         "gemini-3-pro-image"
       ],
       "pricing": {
+        "prompt": "0.000002",
+        "image": null,
         "output_image": "0.00012"
       },
       "supported_endpoints": [
         "/v1/chat/completions",
+        "/v1/images/edits",
         "/v1/images/generations"
       ]
     },
@@ -69,10 +47,13 @@
         "gemini-3.1-flash-image"
       ],
       "pricing": {
+        "prompt": "0.0000005",
+        "image": null,
         "output_image": "0.00006"
       },
       "supported_endpoints": [
         "/v1/chat/completions",
+        "/v1/images/edits",
         "/v1/images/generations"
       ]
     },
@@ -84,10 +65,13 @@
         "gemini-3.1-flash-lite-image"
       ],
       "pricing": {
+        "prompt": "0.00000025",
+        "image": null,
         "output_image": "0.00003"
       },
       "supported_endpoints": [
         "/v1/chat/completions",
+        "/v1/images/edits",
         "/v1/images/generations"
       ]
     },
@@ -101,9 +85,12 @@
         "mai-image-2.5-20260602"
       ],
       "pricing": {
+        "prompt": "0.000005",
+        "image": "0.000008",
         "output_image": "0.000047"
       },
       "supported_endpoints": [
+        "/v1/images/edits",
         "/v1/images/generations"
       ]
     },
@@ -117,9 +104,12 @@
         "mai-image-2.5-flash-20260602"
       ],
       "pricing": {
-        "output_image": "0.000026"
+        "prompt": "0.000005",
+        "image": "0.00000175",
+        "output_image": "0.0000195"
       },
       "supported_endpoints": [
+        "/v1/images/edits",
         "/v1/images/generations"
       ]
     },
@@ -133,9 +123,12 @@
         "mai-image-2.5-pro-20260619"
       ],
       "pricing": {
+        "prompt": "0.000005",
+        "image": "0.000008",
         "output_image": "0.000106"
       },
       "supported_endpoints": [
+        "/v1/images/edits",
         "/v1/images/generations"
       ]
     },
@@ -149,9 +142,12 @@
         "gpt-image-1.5-20251216"
       ],
       "pricing": {
+        "prompt": "0.000005",
+        "image": "0.000008",
         "output_image": "0.000032"
       },
       "supported_endpoints": [
+        "/v1/images/edits",
         "/v1/images/generations"
       ]
     },
@@ -165,7 +161,78 @@
         "gpt-image-2-20260421"
       ],
       "pricing": {
+        "prompt": "0.000005",
+        "image": "0.000008",
         "output_image": "0.00003"
+      },
+      "supported_endpoints": [
+        "/v1/images/edits",
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "openai/gpt-image-2.5-flare",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "gpt-image-2.5-flare"
+      ],
+      "pricing": {
+        "prompt": "0.000005",
+        "image": "0.000008",
+        "output_image": "0.00003"
+      },
+      "supported_endpoints": [
+        "/v1/images/edits",
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "openai/gpt-image-2.5-sunburst",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "gpt-image-2.5-sunburst"
+      ],
+      "pricing": {
+        "prompt": "0.000005",
+        "image": "0.000008",
+        "output_image": "0.00003"
+      },
+      "supported_endpoints": [
+        "/v1/images/edits",
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "qwen/qwen-image-3.0",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "qwen-image-3.0",
+        "bailian/qwen-image-3.0"
+      ],
+      "pricing": {
+        "prompt": "0",
+        "image": null,
+        "output_image": null
+      },
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ]
+    },
+    {
+      "id": "qwen/qwen-image-3.0-pro",
+      "is_deprecated": false,
+      "expiration_date": null,
+      "aliases": [
+        "qwen-image-3.0-pro",
+        "bailian/qwen-image-3.0-pro"
+      ],
+      "pricing": {
+        "prompt": "0",
+        "image": null,
+        "output_image": null
       },
       "supported_endpoints": [
         "/v1/images/generations"
@@ -180,6 +247,8 @@
         "doubao-seedream-4-5-251128"
       ],
       "pricing": {
+        "prompt": "0",
+        "image": null,
         "output_image": null
       },
       "supported_endpoints": [
@@ -195,6 +264,8 @@
         "doubao-seedream-5-0-260128"
       ],
       "pricing": {
+        "prompt": "0",
+        "image": null,
         "output_image": null
       },
       "supported_endpoints": [
@@ -210,6 +281,8 @@
         "doubao-seedream-5-0-pro-260628"
       ],
       "pricing": {
+        "prompt": "0",
+        "image": null,
         "output_image": null
       },
       "supported_endpoints": [

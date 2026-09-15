@@ -1,12 +1,12 @@
 ---
 name: ofox-image-core
-description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox image generation API (api.ofox.ai) — validates parameters client-side, sends one synchronous text-to-image request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image generation request — for a plain "generate an image of..." request with no scenario skill available yet, this is the right skill to use directly.
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox image API (api.ofox.ai) — validates parameters client-side, sends one synchronous request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. Does both text-to-image (generate) and editing an existing image you supply as a local file (edit — change the background, recolour an element, alter a product photo, while leaving the rest of the picture intact). This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline, or an image-edit/product-image scenario) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image request — for a plain "generate an image of..." or "change this image so that..." request with no scenario skill available yet, this is the right skill to use directly.
 license: MIT
-version: "1.10.3"
+version: "1.11.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.10.3"
+  version: "1.11.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -69,7 +69,7 @@ available:
 | | Model | Cost per image (measured — always at the pair named) | Why it is here |
 |---|---|---|---|
 | 1 | `openai/gpt-image-2` | **~0.6 cents** at `--quality low --size 1024x1024`; **~15.4 cents** at `--quality high --size 1792x1024` | cheapest per image at the one pair measured on both it and row 2, despite the higher per-token rate below — see the warnings |
-| 2 | `microsoft/mai-image-2.5-flash` | ~2.67 cents at `--quality low --size 1024x1024` | second cheapest at that pair; was the chain's preferred model through 1.3.0 |
+| 2 | `microsoft/mai-image-2.5-flash` | ~2.0 cents at `--quality low --size 1024x1024` | second cheapest at that pair; was the chain's preferred model through 1.3.0 |
 | 3 | `google/gemini-3.1-flash-lite-image` | not measured | tied with (1) on the per-token rate, but no per-image figure recorded yet |
 | 4 | `microsoft/mai-image-2.5` | not measured | same vendor as (2), when quality matters more |
 
@@ -90,23 +90,28 @@ and sometimes impossible" below.
 per-output-token price** — the two rankings disagree here. At the one pair
 measured on both models (`low` / `1024x1024`, 2026-09-02),
 `mai-image-2.5-flash` spends 1024 output tokens against `gpt-image-2`'s 196,
-so the 15%-more-expensive-per-token model is **4.5x cheaper per image** (0.6
-cents vs 2.67 cents), and that measurement is why the chain was reordered —
-see "The 2026-09-04 reversal" below. Two limits on how far that ranking
-reaches: rows 3–4 have no per-image measurement at all, only the per-token
-rate; and **no like-for-like comparison exists at any other pair** — the 26x
-within-model spread above is larger than the 4.5x between-model one, so
-"which model is cheaper" is a narrower claim than it looks. **Do not
-re-derive the order from the rate card alone** — the comparable figure is
+so the more-expensive-per-token model is **~3.4x cheaper per image** (0.6
+cents vs 2.0 cents), and that measurement is why the chain was reordered —
+see "The 2026-09-04 reversal" below. The token counts are the measurement and
+have not moved; the cents and the ratio are the vendor's rate card multiplied
+through, and that moved on 2026-09-15 (this row read 2.67 cents and 4.5x until
+Ofox cut `mai-image-2.5-flash`'s per-token rate by 25%). Two further limits on
+how far the ranking reaches: rows 3–4 have no per-image measurement at all,
+only the per-token rate; and **no like-for-like comparison exists at any other
+pair** — the 26x within-model spread above is larger than the ~3.4x
+between-model one, so "which model is cheaper" is a narrower claim than it
+looks. **Do not re-derive the order from the rate card alone** — the
+comparable figure is
 rate x that model's own measured token count at the pair you intend to run.
 Full numbers and the caveats on them: `references/pricing.md`.
 
 **The chain is defined in exactly one place** — `MODEL_CHAIN` in
 `references/ofox-image.sh` — and every skill built on this one resolves a
 model by calling that script, never by keeping its own copy of the list. The
-rates above are the catalog's as of 2026-09-02, quoted here to explain the
-ordering; the script reads live rates, so a repricing moves the estimate
-without invalidating this table's argument.
+cents above are the catalog's rates as of 2026-09-15 applied to token counts
+measured on 2026-09-02, quoted here to explain the ordering; the script reads
+live rates, so a repricing moves the estimate without invalidating this
+table's argument. It moved once already — see the note in the warning above.
 
 It is a **priority, not a lock**. `--model <id>` still pins any image model
 Ofox serves, including far more expensive ones. The chain only decides what
@@ -183,7 +188,7 @@ back.
 
 Three models are documented in depth in `references/api-params.md` and
 `references/pricing.md` — `openai/gpt-image-2`,
-`google/gemini-3.1-flash-image`, `bailian/qwen-image-3.0-pro`. The rest work
+`google/gemini-3.1-flash-image`, `qwen/qwen-image-3.0-pro`. The rest work
 too; what isn't documented is which `--size`/`--quality` values each accepts,
 because the API doesn't publish that for image models. That gap covers the
 chain's models too: a `--quality` value a given model won't take surfaces as
@@ -339,6 +344,12 @@ themselves, before anything is spent (exit `2`).
 bash references/ofox-image.sh generate \
   --prompt "..." --quality VAL [--model MODEL] [OPTIONS]
 ```
+
+There is a second subcommand, `edit`, for changing an image you already have
+rather than drawing a new one — see "Editing an image you already have" below.
+Everything in this section describes `generate`; `edit` shares the model
+resolution, the `--dry-run` contract, the exit codes and the geometry flags,
+and differs in the three ways that section lists.
 
 `generate` resolves the model, validates every parameter client-side (model
 name, size, quality, and the documented `n` + Gemini incompatibility)
@@ -552,7 +563,7 @@ yunqi-sparkling-ad, sneaker-motion-ad}/case.json` in the `home-page` project
 
 **`openai/gpt-image-2` is the one model measured here that honours `--size`
 exactly** — and it is **one run**, so read it as one observation, not a
-guarantee. `bailian/qwen-image-3.0-pro` is untested.
+guarantee. `qwen/qwen-image-3.0-pro` is untested.
 
 **Honouring the request is not the same as producing a usable ratio**, which
 is why that run still needed a crop: `1792x1024` is 1.75, so the frame went
@@ -567,16 +578,109 @@ disagree the script says so on stderr rather than leaving it to be noticed.
 the edges — or pass `--target-aspect`/`--target-size` and let the script do
 both. Full detail: `references/api-params.md`.
 
+## Editing an image you already have (`edit`)
+
+`generate` draws a new image from text. `edit` takes a file you already have
+and changes it — `POST /v1/images/edits`, added in 1.11.0.
+
+```bash
+bash references/ofox-image.sh edit \
+  --image ./photo.png \
+  --prompt "Replace the background with a beach at sunset. Keep the person unchanged." \
+  --out-dir ./assets \
+  --dry-run
+```
+
+Drop `--dry-run` to run it. Keep `--out-dir` — without it the edited file
+lands in whatever directory you happened to be in.
+
+A local file is the primary input and needs no hosting. `--image-url` takes a
+public URL or a `data:` URI if you have one, but nothing requires you to put
+the picture on the internet first.
+
+Output is the same shape as `generate`, plus the input echoed back for
+comparison and the token line that has no `generate` equivalent:
+
+```
+STATUS completed
+IMAGE_PATH <absolute path to the edited file>
+INPUT_IMAGE <absolute path to the source>
+INPUT_SIZE_ACTUAL <WxH measured from the source>
+MODEL / MODEL_SOURCE / SIZE / SIZE_ACTUAL / QUALITY   (as generate)
+USAGE_INPUT_TOKENS <n>
+USAGE_INPUT_IMAGE_TOKENS <n>    <- the uploaded picture, billed
+USAGE_INPUT_TEXT_TOKENS <n>
+USAGE_OUTPUT_TOKENS <n>
+USAGE_TOTAL_TOKENS <n>
+EDIT_COST <dollars>
+```
+
+### Three things about `edit` that differ from `generate`
+
+**1. Not every model can edit, and the list is live.** Run
+`ofox-image.sh models --endpoint edits`. Support is read from each model's
+`supported_endpoints` in the catalog, never from a table in this repo —
+confirmed both ways: a model without the flag is refused with
+`endpoint_not_supported`, models with it ran. Omitting `--model` resolves the
+priority chain against the edits endpoint, so a chain entry that could not
+edit would be skipped with a reason rather than silently failing.
+
+**2. The image you upload is billed.** On the measured run, 576 of 608 input
+tokens were the picture. That component does not exist for a generation, and
+it scales with the file you pass: a 320x180 input cost 0.6 cents where an
+854x480 input cost 1.4. Pass a smaller source when the job allows it.
+
+**3. ⚠️ The API does **not** reject bad parameters here, so the dry run
+matters more, not less.** `generate` gets a bad `--quality` refused upstream
+for free. `edit` does not — measured 2026-09-15, an unknown `--quality` value
+was silently ignored and rendered six billable images. The client-side checks
+in this script are the only guard. Run `--dry-run` first and read the
+`FORM_FIELDS` line to confirm what will actually be sent.
+
+### Verify the artifact, not the exit code
+
+`STATUS completed` cannot tell you whether the endpoint edited your image or
+quietly redrew the prompt from scratch. **Open the result next to
+`INPUT_IMAGE` and check that what you did not ask to change is unchanged.**
+The script prints both paths side by side so this is one command, and prints a
+reminder on every successful edit.
+
+For the record, on the runs this skill is built from it genuinely edits: a UI
+screenshot asked for one button colour change came back with every string
+intact ("Billing Settings", "$29.00", "Seats included 3") and 58% of all
+changed pixels inside the button, which is 1.1% of the frame. That is evidence
+about two runs on one model, not a guarantee about yours — which is why the
+check is in the instructions rather than assumed.
+
+### What is not established
+
+- **Whether `--size` is honoured.** All three measured runs omitted it and got
+  a size derived from the input's aspect ratio at a near-constant pixel budget
+  — 854x480 and 320x180 (both 16:9) returned 1672x941, and 256x256 returned
+  1254x1254, which is 0.05% the same pixel count. Note the useful side: 1.777
+  is the 16:9 the `generate` size enum cannot express at all.
+- **Whether `--prompt` is required by the API.** This script requires it.
+- **Whether a `mask` works.** See "Out of scope" below.
+- **The other four models** that advertise the endpoint but have not been run.
+
+Each of those costs a billed edit to answer, which is why they are written
+down as open rather than guessed at.
+
 ## Out of scope for this script
 
 - **`input_images` / image-to-image** (Qwen-only field on this same
   `/v1/images/generations` endpoint) — this script only does text-to-image.
   Passing `input_images` via `--extra-json` is rejected client-side with a
   clear message.
-- **`POST /v1/images/edits`** — a different, multipart-form endpoint
-  (OpenAI models only). Not implemented here; add a separate script/flag if
-  a scenario actually needs "edit this existing image" rather than
-  "generate a fresh image from a text description."
+- **Masked / inpainting edits.** Whether `POST /v1/images/edits` accepts a
+  `mask` is not established. Finding out costs a billed edit per attempt, so
+  it was left alone rather than guessed at. Pass one via `edit --extra-form`
+  if you want to try, and record what happens in `references/api-params.md`.
+
+  (`POST /v1/images/edits` itself is **no longer out of scope** — it is the
+  `edit` subcommand as of 1.11.0. It is also not "OpenAI models only", as
+  this list used to claim without evidence: eleven models advertise it and
+  seven have been confirmed running an edit, across three vendors.)
 - **Streaming responses** (`stream: true`) — this script only parses a
   plain JSON response body. Rejected client-side if set via `--extra-json`.
 

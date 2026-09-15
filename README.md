@@ -175,7 +175,7 @@ each `SKILL.md` carries the full contract, the flags, and the measured costs.
 
 | Skill | What it does |
 |-------|--------------|
-| [ofox-image-core](skills/ofox-image-core/SKILL.md) | **Library.** Every image model Ofox serves, `--model` defaulting to a cheapest-first chain that falls back and says so. Prices a job with `--dry-run`, then reports real token usage and dollar cost. |
+| [ofox-image-core](skills/ofox-image-core/SKILL.md) | **Library.** Every image model Ofox serves, `--model` defaulting to a cheapest-first chain that falls back and says so. Generates from text, or **edits an image you already have** (change the background, recolour an element) from a local file. Prices a job with `--dry-run`, then reports real token usage and dollar cost. |
 
 ### Free to run — no Ofox API, no per-call cost
 
