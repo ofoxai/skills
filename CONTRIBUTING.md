@@ -178,6 +178,31 @@ A skill name is lowercase kebab-case and matches its directory name, the
      read the stored report first, grep the whole skill directory for the
      literal's text before bumping, and describe a removed secret-shaped
      string without reproducing it.
+
+   Two more, measured against CLI v0.23.3 during the 2026-09-15 round:
+
+   - **Publishing a new version of an existing skill does not move the
+     `latest` tag.** A brand-new slug's first version becomes `latest`
+     automatically; an update does not, and `skill publish` reports
+     `ok: true, publicationStatus: pending` either way. The round that found
+     this published ten skills and then read the registry back: the six new
+     ones were live, and all four updates still served their previous
+     version — a split clean enough to be a mechanism rather than a timing
+     lag, which is what pointed at the tag. Finish every update with
+
+     ```
+     npx clawhub skill tag ofoxai/<name> <version> --tag latest --yes
+     ```
+
+     and then read the version back; a publish that returned `ok` is not
+     evidence anyone can install it.
+   - **The rate limiter extends its own window when you retry into it.**
+     Observed resets of 35s, then 45s, then 55s across three consecutive
+     attempts — so a retry loop walks the limit away from itself and never
+     catches up. Stop calling entirely for a few minutes, then retry one
+     command at a time with a wide gap. The failure surfaces as a
+     `convex-helpers` stack trace with `(reset in Ns)` on the end, which
+     reads like a crash and is not one.
 7. Open a PR. Releasing is merging to `main` + a tag if the change is
    user-visible.
 
