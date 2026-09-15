@@ -2,6 +2,19 @@
 
 All notable changes to the **ugc-ads** skill. Versioning follows SemVer.
 
+## 1.0.1 — the frontmatter did not parse, and the installer said nothing
+
+The `description` carried a `: ` (colon then space) inside an unquoted YAML
+value. YAML reads that as a nested mapping and rejects the whole block, so
+`skills add` **skipped this file entirely** — and reported the count of skills
+it found, never the ones it dropped. This skill was uninstallable from
+skills.sh while appearing published everywhere else.
+
+Replaced with an em dash, matching the rest of these descriptions. Nothing
+else changed. A parse check over every SKILL.md is now a publish gate in
+CONTRIBUTING.md, because nothing in this repo had ever parsed its own
+frontmatter — which is why this survived.
+
 ## 1.0.0 — first release
 
 The live-fire findings of 2026-09-15 — the paid run, and the template change

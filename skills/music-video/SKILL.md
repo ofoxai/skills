@@ -1,12 +1,12 @@
 ---
 name: music-video
-description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus the music file the finished video must carry. Your audio never reaches the API (measured): the visuals are written to the track's tempo, mood and sections, then your own file is laid on locally at zero cost. One job caps at 30 seconds, so a three-minute song is six jobs minimum and the cost table says that before anything is spent. Use when a user has a specific piece of music and wants visuals for it, e.g. "make a music video for this track", "visuals for my song", "an MV for this instrumental", "generate footage cut to this beat". Do not use for cheap vertical social drafts (shorts-reels), a brand film that happens to have a music bed (seedance-ad-creative), or when there is no particular audio file the finished video has to carry.
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus the music file the finished video must carry. Your audio never reaches the API (measured) — the visuals are written to the track's tempo, mood and sections, then your own file is laid on locally at zero cost. One job caps at 30 seconds, so a three-minute song is six jobs minimum and the cost table says that before anything is spent. Use when a user has a specific piece of music and wants visuals for it, e.g. "make a music video for this track", "visuals for my song", "an MV for this instrumental", "generate footage cut to this beat". Do not use for cheap vertical social drafts (shorts-reels), a brand film that happens to have a music bed (seedance-ad-creative), or when there is no particular audio file the finished video has to carry.
 license: MIT
-version: "1.0.1"
+version: "1.0.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/music-video
 metadata:
   author: ofoxai
-  version: "1.0.1"
+  version: "1.0.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]

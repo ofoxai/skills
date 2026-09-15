@@ -1,12 +1,12 @@
 ---
 name: ofox-image-core
-description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox image API (api.ofox.ai) — validates parameters client-side, sends one synchronous request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. Does both text-to-image (generate) and editing an existing image you supply as a local file (edit — change the background, recolour an element, alter a product photo, while leaving the rest of the picture intact). This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls: image-edit owns "change this image so that...", product-image owns a set of product images to choose between, and seedance-anime-drama owns character images for a video pipeline. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, asks to debug a failed Ofox image request, or wants a plain "generate an image of..." from text — which is the one common case no scenario skill covers.
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox image API (api.ofox.ai) — validates parameters client-side, sends one synchronous request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. Does both text-to-image (generate) and editing an existing image you supply as a local file (edit — change the background, recolour an element, alter a product photo, while leaving the rest of the picture intact). This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls — image-edit owns "change this image so that...", product-image owns a set of product images to choose between, and seedance-anime-drama owns character images for a video pipeline. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, asks to debug a failed Ofox image request, or wants a plain "generate an image of..." from text — which is the one common case no scenario skill covers.
 license: MIT
-version: "1.11.1"
+version: "1.11.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.11.1"
+  version: "1.11.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]

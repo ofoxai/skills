@@ -4,6 +4,19 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.11.2 — the frontmatter did not parse, and the installer said nothing
+
+The `description` carried a `: ` (colon then space) inside an unquoted YAML
+value. YAML reads that as a nested mapping and rejects the whole block, so
+`skills add` **skipped this file entirely** — and reported the count of skills
+it found, never the ones it dropped. This skill was uninstallable from
+skills.sh while appearing published everywhere else.
+
+Replaced with an em dash, matching the rest of these descriptions. Nothing
+else changed. A parse check over every SKILL.md is now a publish gate in
+CONTRIBUTING.md, because nothing in this repo had ever parsed its own
+frontmatter — which is why this survived.
+
 ## 1.11.1 — routing, and a "common case" that stopped being one
 
 No behaviour change, no script change. Two documentation corrections, both of
