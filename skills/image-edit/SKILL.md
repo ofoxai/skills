@@ -1,12 +1,12 @@
 ---
 name: image-edit
-description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Change one thing in an image you already have and leave the rest of the picture alone — swap the background, recolour a part, remove or add an object, clean up a photo — from a local jpeg/png/webp file. Delegates to ofox-image-core's `edit` subcommand (POST /v1/images/edits, one synchronous request), prices the job with --dry-run before spending, and reports the real token cost including the uploaded picture, which is billed. Use when a user hands over an image and asks for a change to it, e.g. "change the background of this photo to a beach and keep the person unchanged", "make this button green", "remove the car in the background", or "put this product on a plain white background". Do not use to draw a new image from a text description with no input picture (that is ofox-image-core's `generate`), to produce a set of several images to choose between (see product-image), or to turn a photo into video (see seedance-product-video or seedance-ad-creative).
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Change one thing in an image you already have and leave the rest of the picture alone — swap the background, recolour a part, remove or add an object, clean up a photo — from a local jpeg/png/webp file. Delegates to ofox-image-core's `edit` subcommand (POST /v1/images/edits, one synchronous request), prices the job with --dry-run before spending, and reports the real token cost including the uploaded picture, which is billed. Use when a user hands over an image and asks for a change to it, e.g. "change the background of this photo to a beach and keep the person unchanged", "make this button green", "remove the car in the background", or "put this product on a plain white background". Do not use to draw a new image from a text description with no input picture (that is ofox-image-core's `generate`), to produce a set of several images to choose between (see product-image), or to turn a photo into video (see seedance-product-video or seedance-ad-creative). Editing the content of an existing video — "change the background of my clip, keep the product" — has no path in this repo at all; this skill edits a single still, and routing such a request to a video skill generates brand-new footage instead of changing theirs.
 license: MIT
-version: "1.0.0"
+version: "1.0.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/image-edit
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "1.0.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -199,6 +199,7 @@ On top of the generic rows in `creative-brief.md`:
 | "for my listing", "main image", "thumbnail" | Shape | 1:1 — and say the source will be cropped |
 | "for a video", "as the first frame" | Shape | 16:9 or 9:16 — and see "When NOT to use", because a video first frame belongs to the video scenario skill that will consume it |
 | "make it look like a painting / a 3D render / a different style" | — | that is a whole-image change, which this endpoint can do, but it has no "leave the rest alone" half. Say so before spending |
+| "my video", "this clip", "the footage" — the thing to be changed is a **video** | — | no skill in this repo edits the content of existing footage. Do not route it to a video skill, which generates a new clip instead. See "When NOT to use" for what to offer |
 
 ### From answers to the command
 
@@ -601,6 +602,26 @@ untouched bytes are kept beside it as `<name>-uncropped.<ext>`, reported as
   [`product-image`](../product-image/SKILL.md), which owns how a set is
   produced and quotes the set's total rather than one image's price. This
   skill is one in, one out.
+- **The thing to be edited is a video, not a still.** "Change the background
+  of my 10-second clip to a beach and keep the product exactly as it is" has
+  **no path in this repo**, and this is the skill such a request lands on, so
+  it is said here. Nothing in this repo edits the content of existing footage.
+  What is honestly available: a **still** can be edited (that is this skill),
+  and a still can then be turned into video — but that **generates new
+  footage** rather than editing theirs, and whatever real motion, lighting,
+  timing and performance their clip had does not carry over. Say that before
+  anyone spends.
+  ⚠️ The specific wrong turn to avoid:
+  [`seedance-product-video`](../seedance-product-video/SKILL.md)'s worked
+  example contains *"image1 provides the product exactly as it is; take
+  nothing from its background"*, which is a near-verbatim match for what this
+  user asked for. It is not the same job — it keeps a **product** identical
+  while generating a brand-new clip, and routing there spends money on
+  footage that is not the footage they wanted changed.
+  [`video-extend-edit`](../video-extend-edit/SKILL.md) continues an existing
+  clip from one of its own frames and also does not edit what is inside the
+  picture. For a real edit of real footage, the answer is a video editor or a
+  rotoscoping tool, not this repo.
 - **The deliverable is a video.** A product photo becoming catalog footage is
   [`seedance-product-video`](../seedance-product-video/SKILL.md); a photo
   becoming a cinematic ad is

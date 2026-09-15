@@ -14,13 +14,14 @@ npx ofox-skills          # install every skill into every agent on this machine
 npx ofox-skills doctor    # check which agents can actually see them
 ```
 
-No account needed to price a job — see below. Read that part first: twelve of
+No account needed to price a job — see below. Read that part first: most of
 these skills spend real money.
 
 ## The video and image skills cost real money — here's how to check before you commit
 
-The ten video skills — the four `seedance-*` ones plus `keyframe-animation`,
-`product-demo`, `ugc-ads`, `shorts-reels`, `talking-head` and `explainer` —
+The video scenario skills — the four `seedance-*` ones plus
+`keyframe-animation`, `product-demo`, `video-extend-edit`, `ugc-ads`,
+`shorts-reels`, `talking-head`, `explainer` and `music-video` —
 call Ofox's video API, which runs
 [Seedance 2.5](https://ofox.ai/models/bytedance/seedance-2.5?utm_source=github&utm_medium=readme&utm_campaign=skills)
 and bills per second of generated video. A 15-second 720p clip runs about
@@ -174,8 +175,9 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 ## Skills
 
-Seventeen skills in three groups. The one-liners below are deliberately short —
-each `SKILL.md` carries the full contract, the flags, and the measured costs.
+Every skill in this repo, in three groups. The one-liners below are
+deliberately short — each `SKILL.md` carries the full contract, the flags, and
+the measured costs.
 
 ### Video — Ofox video API (Seedance 2.5), bills per second
 
@@ -187,11 +189,13 @@ each `SKILL.md` carries the full contract, the flags, and the measured costs.
 | [seedance-anime-drama](skills/seedance-anime-drama/SKILL.md) | Anime/manga storyboard shots. Generates the character image first, then animates it, so the same character survives across shots. |
 | [keyframe-animation](skills/keyframe-animation/SKILL.md) | Two stills you already have: image A as the first frame, image B as the last, in one job — the model fills the middle. Both ends come back honoured to the pixel, and the motion arrives early and then holds. |
 | [product-demo](skills/product-demo/SKILL.md) | Two screenshots of your interface, before and after a state change, animated as one clip. The model cross-fades only the values that differ; the strings stay legible, so this one carries no anti-text rule. |
+| [video-extend-edit](skills/video-extend-edit/SKILL.md) | Footage you already have, made longer — or given a different ending. A frame comes out of your clip locally for nothing and becomes the first frame of a new segment, which is joined onto the original. The new segment's pixel size comes from the tier you paid for and never from your clip, so the join has to rescale: concatenating without it produces a variable-resolution file that ffmpeg reports no error about. |
 | [ugc-ads](skills/ugc-ads/SKILL.md) | Handheld, phone-shot creator clips — unboxing, first impression, honest review. Deliberately inverts the polish the other scenarios default to: one practical light, imperfect framing, no grading, no beauty filter. |
 | [shorts-reels](skills/shorts-reels/SKILL.md) | Several cheap vertical 9:16 drafts in one priced batch, a contact sheet to pick from, then one proper re-render of the winner. Brings the format and the economics; the prompt comes from whichever scenario skill fits. |
 | [talking-head](skills/talking-head/SKILL.md) | A portrait plus a short script, as one person saying those words to camera. You supply the text and the model generates the voice — audio can't be uploaded. The only skill here that doesn't default to Seedance 2.5: it refuses a real person's photo, so this one runs on `wan-3.0-prime`. |
 | [explainer](skills/explainer/SKILL.md) | An article, doc or release note as a short spoken clip. A 30-second clip holds about ninety words — under a tenth of a 1,200-word post — so it doesn't summarise the piece. It picks the one idea worth saying, and helps you choose which. |
-| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **Library.** The execution layer the ten above call: submit, poll, download, report the real cost. Install it, don't invoke it — unless you're driving the API directly. |
+| [music-video](skills/music-video/SKILL.md) | Picture for a track you already have. The model never hears your audio — measured — so the visuals are written to the song's own sections, tempo and energy, generated as chained segments, and your file is laid on locally at the end for free. One job caps at 30 seconds, so a three-minute song is six jobs, and the cost table says so before anything is spent. |
+| [ofox-video-core](skills/ofox-video-core/SKILL.md) | **Library.** The execution layer every video skill above calls: submit, poll, download, report the real cost. Install it, don't invoke it — unless you're driving the API directly. |
 
 ### Image — Ofox image API, bills per output token
 

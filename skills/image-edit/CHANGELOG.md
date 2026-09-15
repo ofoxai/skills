@@ -2,6 +2,29 @@
 
 All notable changes to the **image-edit** skill. Versioning follows SemVer.
 
+## 1.0.1 — routing only: video content editing has no path in this repo
+
+A blind routing tester was given "change my 10-second video's background to a
+beach, keep the product exactly as it is". It reached the right conclusion —
+no skill fits — but only because it happened to open `video-extend-edit`, the
+one file in the repo carrying the sentence "there is no video content-editing
+path here". An agent handling a background swap has no reason to open that
+file. **This skill is where such a request actually lands**, so it now says it
+too: a bullet in "When NOT to use", a skip row for "my video / this clip / the
+footage", and a clause in the frontmatter description, which is the surface an
+agent routes from before it opens anything.
+
+The row states the honest alternative rather than only the refusal: a still
+can be edited, and a still can be turned into video — but that **generates new
+footage** instead of editing theirs, and whatever real motion, lighting and
+timing their clip had does not carry over. It also names the specific wrong
+turn, because the tester named it: `seedance-product-video`'s worked example
+contains *"image1 provides the product exactly as it is; take nothing from its
+background"*, a near-verbatim match for what this user asks for, and routing
+there spends money on a brand-new clip.
+
+No behaviour, defaults, pricing or instruction craft changed.
+
 ## 1.0.0 — first release
 
 The first of two **image** scenario skills in this repo. Every scenario skill
