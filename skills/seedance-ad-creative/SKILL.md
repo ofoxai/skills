@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.13.2"
+version: "1.13.3"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.13.2"
+  version: "1.13.3"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -464,7 +464,7 @@ skeleton as Template A; these slots change:
 | Slot | Template A (cinematic) | UGC variant | Cases |
 |---|---|---|---|
 | STYLE | commercial + studio anchor | `realistic UGC-style … filmed on a smartphone`, `handheld`, `authentic, imperfect, no polished commercial look` | 24, 25, 27 |
-| Device line (new) | — | where the phone is (`selfie mode` · `propped on a gym bench, slightly low angle` · `handheld`) plus its flaws: `autofocus hunting, exposure shifts, compression artifacts, mild sharpening` | 25, 27 |
+| Capture line (new) | — | the **viewpoint**, written as a property of the shot (`selfie viewpoint` · `handheld` · `a fixed viewpoint at bench height, slightly low`) plus its flaws: `autofocus hunting, exposure shifts, compression artifacts, mild sharpening`. ⚠️ never where the phone *is* — see below | 25, 27 |
 | Anchors | product image | a person image **and** each product piece, locked item by item — real-person frames are refused on Seedance 2.5 image-to-video, so on Ofox this is a text-described person | 24 |
 | HOOK | macro + a hard cut on the motion | the person enters the scene, or the first line to camera | 24, 27 |
 | CLIMAX | physical event in slow motion | none — a flat action chain (unbox → turn → try on → catch the light) | 24 |
@@ -473,6 +473,23 @@ skeleton as Template A; these slots change:
 | CLOSE | hero freeze + slogan | `holds them beside her face` + push in + fade · walks out of frame while `the camera continues recording for a moment` · `not promotional` | 24, 25, 26 |
 | AVOID | text, jitter, drift | adds `cinematic color grading, beauty filters, artificial skin smoothing, dramatic slow motion, music, perfect lighting` — the opposite of this skill's default look | 25 |
 | Aspect | 16:9 | 9:16 appears (case 27); 16:9 also (cases 24–26) | 27 |
+
+⚠️ **Two cells in that table are gallery quotes that render the camera into
+the scene.** Case 25/27's `propped on a gym bench, slightly low angle` and
+case 25's `the camera continues recording for a moment` both give the filming
+device a position or a presence, and measured 2026-09-15 on job `2ecbedec`
+(88 cents, `ugc-ads`' first paid run), that construction delivered **a phone
+sitting in the scene, visible in every frame, with a lit screen**. The model
+has no concept of an off-screen camera: a noun with a position in the room is
+set dressing. Write the viewpoint instead (`a fixed viewpoint at bench height,
+slightly low`, `the shot keeps running for a moment`), and add `a phone, a
+camera, a tripod or a lit screen visible anywhere in the shot` to AVOID as
+objects. The full note, the safe-versus-renders split and the mechanical
+conversion are in
+[`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md)
+→ `Camera language` → `Camera movement`, under the `Phone POV` row. Nothing in
+the tooling catches this: it passed `--dry-run` and `--print-payload`, and
+only the extracted frames showed it.
 
 ## Writing a good ad-creative prompt
 

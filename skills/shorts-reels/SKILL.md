@@ -229,18 +229,33 @@ exist.** There is no such id in the catalog; the cheap tier is a different
 model family. `models` is the authoritative list, and it takes one second to
 read.
 
-### The one measured cost anchor, with its parameters
+### The two measured cost anchors, with their parameters
 
-`ofox-video-core`'s batch path was verified with a real run: **3 takes on
-`bytedance/seedance-2.0-mini` at 480p and 4 seconds, billed 24 cents in
-total — 8 cents a take — exactly matching the estimate**, with the contact
-sheet rendered.
+Both on `bytedance/seedance-2.0-mini` at 480p and 4 seconds, and both billed
+**8 cents a take, exactly matching the estimate**, with the contact sheet
+rendered:
 
-That is a measurement of the *mechanism* — the estimate matches the bill, and
-a batch's total is the total. It is **not** a quote for any other model,
-resolution, duration or take count, and this scenario has no paid run of its
-own beyond it. Every number you show a user comes from a dry run made with
-the parameters you are actually about to send.
+| Run | Takes | Billed | What it establishes |
+|---|---|---|---|
+| `ofox-video-core`'s batch verification | 3 | 24 cents total | the *mechanism* — the estimate matches the bill, and a batch's total is the total |
+| this scenario's own run (2026-09-15) | 5 | 40 cents total, `BATCH_COST_TOTAL 0.40` | the same thing at a second take count, through this skill's own flow, plus the two checks below |
+
+The scenario run was driven by an agent working from this file, so what it
+tested was the skill rather than the API. Two things were checked on the
+artifacts rather than on the job statuses:
+
+- **all 5 takes completed, each carrying its own distinct `seed`** —
+  `432922460`, `264334079`, `809870386`, `465992541`, `213135543` — and the
+  contact sheet was produced;
+- **the five takes are visibly different variations of one idea**, which is
+  the only thing that makes a batch a selection artifact rather than five
+  bills for one clip. That is what the spend buys, and it was confirmed by
+  looking at the sheet.
+
+Neither anchor is a quote for any other model, resolution, duration or take
+count, and 8 cents a take is a per-second rate multiplied by 4, not a fixed
+price. Every number you show a user still comes from a dry run made with the
+parameters you are actually about to send.
 
 ## Before drafting: the brief
 

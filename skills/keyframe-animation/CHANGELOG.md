@@ -2,13 +2,16 @@
 
 All notable changes to the **keyframe-animation** skill. Versioning follows SemVer.
 
-## 1.0.0 — first release
+## 1.0.0 — first release (not yet published)
+
+1.0.0 has never shipped, so the live-fire run of 2026-09-15 is folded into
+this entry rather than given a version of its own.
 
 A scenario skill for the case where the user already has both ends: image A is
 attached as the first frame, image B as the last frame, in one
 `ofox-video-core` job, and the model generates the motion between them.
 
-**Built on one measured run, and the skill says so throughout.** Job
+**Built on two measured runs, and the skill says so throughout.** Job
 `259c3ce2`, `bytedance/seedance-2.5`, 4 seconds, 480p, both frames attached,
 44 cents billed. Two things came out of it, both read off the delivered
 video's own frames rather than off `STATUS completed`:
@@ -22,12 +25,23 @@ video's own frames rather than off `STATUS completed`:
   beat of an A→B clip is a hold, not travel**, and the duration advice is
   written around that.
 
-What the skill deliberately does **not** claim, because one job cannot
-support it: that the easing fraction scales to other durations; that
-first+last works on any other model (the catalog's `i2v` flag does not
-distinguish one locked end from two); that a pair of mismatched pixel
-dimensions works; or anything about how a widely-differing pair is
-interpolated — that section is labelled as reasoning.
+**The second run tested this file's prompt template, and the endpoint result
+replicated.** Job `2514540e` (2026-09-15), same model, duration, tier and
+input pair, 44 cents, with the prompt filled in from this skill's own template
+by an agent working from this file and nothing else — so what it exercised was
+the skill, not the API. The delivered clip's own first and last frames measure
+x=120–239 and x=614–733: the same figures, to the pixel, as the first run.
+"Both ends are honoured" is now the only claim here with more than one job
+behind it.
+
+What the skill deliberately does **not** claim, because two jobs on one pair
+cannot support it: that the second run widened anything about the **inputs**
+— it is a replication, not a broadening, and a different subject, canvas or a
+pair carrying lettering is still untested; that the easing fraction scales to
+other durations; that first+last works on any other model (the catalog's
+`i2v` flag does not distinguish one locked end from two); that a pair of
+mismatched pixel dimensions works; or anything about how a widely-differing
+pair is interpolated — that section is labelled as reasoning.
 
 Also in this release:
 

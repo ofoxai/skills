@@ -2,7 +2,10 @@
 
 All notable changes to the **product-demo** skill. Versioning follows SemVer.
 
-## 1.0.0 — first release
+## 1.0.0 — first release (not yet published)
+
+1.0.0 has never shipped, so the live-fire run of 2026-09-15 is folded into
+this entry rather than given a version of its own.
 
 A scenario skill for turning two screenshots of one interface into a short
 demo clip: the before state is attached as the first frame, the after state as
@@ -28,13 +31,25 @@ list instead forbids text-shaped things that are in **neither** capture
 (tooltip, toast, badge, cursor) and text that stops being text (blurred,
 doubled, malformed glyphs) — the real failure modes.
 
-What the skill deliberately does **not** claim, because one job cannot support
-it: anything about a pair differing in many places or in layout rather than in
-values; anything about a model other than `bytedance/seedance-2.5` (the
-catalog's `i2v` flag says nothing about locking both ends, and nothing at all
-about lettering); anything about a pointer or cursor, which would be an
-element in neither endpoint. Each of those is marked untested where it comes
-up.
+**It then happened a second time, through this file's own template.** Job
+`427278b4` (2026-09-15), same model, duration, tier and input pair, again 44
+cents, with the prompt filled in from this skill's template by an agent
+working from this file and nothing else — so what that run exercised was the
+skill rather than the API. The delivered clip's final frame renders all four
+changed values correctly and legibly (`Business`, `$99.00`, `25`,
+`Manage seats`), the layout is identical to the input capture, nothing drifted
+and nothing was invented. That matters more here than a replication usually
+would: a seed does not reproduce a take on this API, so the second run is a
+genuinely independent sample rather than a re-roll of the first.
+
+What the skill deliberately does **not** claim, because two jobs on one pair
+cannot support it: that the second run widened anything about the inputs — it
+is a replication, not a broadening; anything about a pair differing in many
+places or in layout rather than in values; anything about a model other than
+`bytedance/seedance-2.5` (the catalog's `i2v` flag says nothing about locking
+both ends, and nothing at all about lettering); anything about a pointer or
+cursor, which would be an element in neither endpoint. Each of those is marked
+untested where it comes up.
 
 Also in this release:
 

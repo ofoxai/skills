@@ -4,6 +4,54 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.24.0 — naming where the camera is puts the camera in the shot
+
+One measurement, documentation only — no script change, no flag change.
+
+`references/prompt-structure.md`'s `Camera language` → `Camera movement`
+section now carries a ⚠️ under the `Phone POV` row: **a filming device given
+a position in the room is rendered as an object in the room.** Measured
+2026-09-15 on job `2ecbedec` (`bytedance/seedance-2.5`, 8s, 480p, 88 cents),
+whose capture line read *"the phone is propped against a biscuit tin at the
+back of the desk, slightly too low and a little off-square"*. The delivered
+clip has a phone sitting in the box, visible in every frame, with a small
+glowing screen — which also broke that same prompt's own `no legible text`
+clause. The model has no concept of an off-screen camera; a noun with a
+position is set dressing, and set dressing is rendered.
+
+What the entry adds beyond the finding:
+
+- **The gallery quotes in that row and in `Static / locked` are flagged as
+  evidence of practice, not as safe wording.** `sometimes propped on gym
+  equipment`, `as if a friend casually left a phone recording on a nearby
+  bench` and `static phone propped on bathroom sink` are all the failing
+  construction. They stay — they are what authors really wrote — but a reader
+  is now told to take the viewpoint from them and drop the prop.
+- **A split that makes it decidable**: a phone named as *how the image was
+  made* (`real phone capture texture`, `selfie viewpoint`) is a format anchor
+  and is safe; a phone named as *a thing at a place* (`propped against a mug`,
+  `on a tripod`, `wedged on a shelf`) is scene content and renders.
+- **A mechanical conversion** rather than a deletion, because the construction
+  is doing real work — it is how imperfect framing, autofocus hunting and
+  exposure shifts get conveyed: `the phone is propped against a mug at the
+  back of the table, slightly too low` becomes `a fixed viewpoint from the
+  back of the table, at mug height and a little too low`.
+- **Back it in the negative list as objects** — `a phone, a camera, a tripod
+  or a lit screen visible anywhere in the shot` — the form already measured to
+  hold in `Unwanted text is designed out of the set, not forbidden in the
+  list`.
+- **The note that nothing catches this before delivery.** That prompt passed
+  `--dry-run` and `--print-payload`; neither can see a rendered object. Only
+  the extracted frames could.
+- A second, shorter pointer under `Camera position / angle`, because two more
+  quoted cells are the same construction and sit in a different table:
+  `locked on a tripod at eye level` (case 41) and `propped camera` in the
+  shot-numbering row (case 36). Both name equipment standing in the room.
+
+**Blast radius**: `ugc-ads` owned the failing template (its `DEVICE:` slot is
+now `CAPTURE:`) and `seedance-ad-creative`'s UGC-variant table carried the
+same construction in a row of its own. Both are updated in the same change.
+
 ## 1.23.0 — the seed does not reproduce a take, and an audio reference is not a voice input
 
 Two measurements, both paid, both correcting something this skill shipped as

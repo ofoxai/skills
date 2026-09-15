@@ -136,10 +136,27 @@ profile. Copying that AVOID line into this skill would be cargo-culting a rule
 whose premise does not hold here, so **this skill does not carry one**; see
 "The prompt" below.
 
-### What that job does not establish
+### It happened twice
 
-- One pair, one app, one panel, one seed, four changed values, at 480p and 4
-  seconds. It is one clip, not a guarantee. Read the draft's frames before
+Job `427278b4` (2026-09-15), same model, duration, tier and input pair, again
+**44 cents**, with the prompt filled in from this file's own template by an
+agent working from this skill and nothing else — so what that run tested was
+the skill rather than the API. Read off the delivered clip's final frame: all
+four changed values render **correctly and legibly** — `Business`, `$99.00`,
+`25`, `Manage seats` — the layout is identical to the input capture, nothing
+drifted, and no text was invented.
+
+Same pair, so it widens nothing about the inputs. What it adds is that the
+template in this file, not a hand-written prompt, produces the result, and
+that the result replicated rather than being one lucky roll — which matters
+more here than in most scenarios, because a seed does not reproduce a take on
+this API, so a second run really is a second sample.
+
+### What those jobs do not establish
+
+- One pair, one app, one panel, four changed values, at 480p and 4 seconds,
+  twice. It is two clips on the same input, not a guarantee, and the second is
+  a replication rather than a broadening. Read the draft's frames before
   anyone ships the output.
 - Nothing about a pair that differs in **many** places, or in layout rather
   than in values. Every difference has to be resolved in the middle, and this
@@ -336,7 +353,7 @@ introduce a discrepancy into a job that otherwise has none.
 ### Checking the draft
 
 Read the artifact, not the status. `STATUS completed` says nothing about
-legibility. The check that produced the evidence above, and the one to repeat:
+legibility. The check that produced the evidence above — run on both jobs — and the one to repeat:
 
 ```bash
 # the delivered clip's own first and last frames, against the two inputs
@@ -380,10 +397,10 @@ so.
 
 | Parameter | Default | Why |
 |---|---|---|
-| `--frame-first-image` / `--frame-last-image` | both, in one `generate` call | the mechanism this skill is built on; the measured job honoured both ends |
-| `--model` | not passed — the script's own default applies, **unless the user named a model**, which always wins | the measured job ran on `bytedance/seedance-2.5`; whether both ends can be locked on another model is untested here. `models` lists the models but does **not** mark which one the script defaults to — the `MODEL` line a `generate --dry-run` prints is what names the id that will really be sent, which is also the id the cost table has to carry |
+| `--frame-first-image` / `--frame-last-image` | both, in one `generate` call | the mechanism this skill is built on; both measured jobs honoured both ends |
+| `--model` | not passed — the script's own default applies, **unless the user named a model**, which always wins | both measured jobs ran on `bytedance/seedance-2.5`; whether both ends can be locked on another model is untested here. `models` lists the models but does **not** mark which one the script defaults to — the `MODEL` line a `generate --dry-run` prints is what names the id that will really be sent, which is also the id the cost table has to carry |
 | `--duration` | the model's minimum for a single bounded state change | the measured clip was crisp and settled by t=2.0s of 4 seconds; extra seconds buy hold and bill per second. `ofox-video.sh models` prints each model's range |
-| `--resolution` | the cheapest tier for the draft, then re-render the chosen seed higher. **When the user named neither** — the common case — draft at the model's cheapest tier and put the next tier up as a *second row* of the same cost table, so the upgrade is priced rather than asked about | the measured job ran at 480p, the cheapest tier its model lists, and its text stayed legible **at that resolution, on that pair** — fine lettering at a small tier is the first thing to check on a draft, and the second row is what the user reaches for when it fails that check. `models` prints the tiers; dry-running both rows costs nothing |
+| `--resolution` | the cheapest tier for the draft, then re-render the chosen seed higher. **When the user named neither** — the common case — draft at the model's cheapest tier and put the next tier up as a *second row* of the same cost table, so the upgrade is priced rather than asked about | both measured jobs ran at 480p, the cheapest tier their model lists, and the text stayed legible both times **at that resolution, on that pair** — fine lettering at a small tier is the first thing to check on a draft, and the second row is what the user reaches for when it fails that check. `models` prints the tiers; dry-running both rows costs nothing |
 | `--aspect-ratio` | not passed | the attached screenshots decide it — see "The frames decide the shape" |
 | `--generate-audio` | `false` | a docs clip has nothing to sync to, and the server's default is `true`. Omit the flag only when the clip genuinely wants a track |
 | `--seed` | let the script roll one, and keep it | it prints `SEED` and writes it to the clip's `.json` sidecar, which is what lets "that take, at a higher resolution" be re-submitted at all. It does **not** reproduce it: measured, an identical request on a fixed seed came back a visibly different clip. A byte-identical prompt is necessary and not sufficient — tell the user a re-render is another roll aimed at the same shot before they pay for it |
@@ -437,12 +454,13 @@ out, too late to relay.
 The brief recap goes in the **same message** as the prompt and the table,
 above them.
 
-**The one cost anchor this skill has**, with the parameters it was measured
-at attached, because a figure without them is not a measurement:
+**The cost anchor this skill has**, with the parameters it was measured at
+attached, because a figure without them is not a measurement:
 `bytedance/seedance-2.5`, 4 seconds, 480p, first+last frames, **44 cents
-billed**. It is not a quote for any other combination — an image-to-video job
-bills at the text-to-video tier, so a longer or higher clip scales from the
-dry run, never from this number.
+billed** — twice, on jobs `5e59baa2` and `427278b4`, at the same figure. It is
+not a quote for any other combination — an image-to-video job bills at the
+text-to-video tier, so a longer or higher clip scales from the dry run, never
+from this number.
 
 Afterwards the **actual** bill is `VIDEO_COST` from the finished job. Report
 it as money, not as the raw ten-decimal string.
@@ -636,8 +654,8 @@ here.
 | Exit `3`, `insufficient_credits` | Ofox balance too low | No charge was made; add credits at https://app.ofox.ai and retry |
 | Exit `3`, job ends `failed` with `output_moderation_failed` | The generated output failed a post-generation check — after the job ran, not at submission. Not billed | Retry as a **brand-new** `generate` with a different prompt or captures. A new request, not a resubmission |
 | The clip runs backwards | The two paths were passed on the wrong flags | Swap `--frame-first-image` and `--frame-last-image`. New job, new cost table — which is why `Order` is a must-ask when the input is ambiguous |
-| Text that should not have changed goes soft or doubles mid-clip | The measured run kept unchanged labels solid on **one** pair at 480p. Fine lettering, a denser layout or a lower tier are all outside that run | Re-render at the next resolution tier and compare the same mid-frame; if it persists, reduce how much differs between the two captures. New job, new cost table |
-| A changed value is spelled wrong mid-fade | Outside what was measured — on the evidence job the mid-fade values were already correct | Check the prompt's CHANGE line quotes both values **verbatim** first; a typo there is the cheapest possible cause. Then re-roll, or cut the number of simultaneous changes |
+| Text that should not have changed goes soft or doubles mid-clip | The measured runs kept unchanged labels solid on **one** pair at 480p, twice. Fine lettering, a denser layout or a lower tier are all outside that run | Re-render at the next resolution tier and compare the same mid-frame; if it persists, reduce how much differs between the two captures. New job, new cost table |
+| A changed value is spelled wrong mid-fade | Outside what was measured — on job `5e59baa2` the mid-fade values were already correct, and on `427278b4` the final-frame values were | Check the prompt's CHANGE line quotes both values **verbatim** first; a typo there is the cheapest possible cause. Then re-roll, or cut the number of simultaneous changes |
 | The layout drifts, reflows or scrolls | The two captures were not taken at the same window size, zoom or scroll position | Re-capture both without touching the window between them. The pair, not the prompt, is what holds the layout |
 | A tooltip, toast, badge or cursor appears that is in neither capture | The model filled the middle with something plausible | Keep those items in the AVOID list (they are in the template), and re-roll. Elements that exist in neither endpoint are the one thing this mechanism is not doing for you |
 | The output is the captures' shape, not the shape you wanted | Expected: with frames attached the clip follows the frames | Crop both captures to the target shape and generate again — a new job, billed again, which is why the crop happens before the first submission |

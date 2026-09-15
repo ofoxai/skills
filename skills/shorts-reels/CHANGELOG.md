@@ -2,7 +2,10 @@
 
 All notable changes to the **shorts-reels** skill. Versioning follows SemVer.
 
-## 1.0.0 — first release
+## 1.0.0 — first release (not yet published)
+
+1.0.0 has never shipped, so the live-fire findings of 2026-09-15 are folded
+into this entry rather than given a version of their own.
 
 A scenario skill for short-form social raw material: several cheap vertical
 9:16 drafts in one priced batch, a contact sheet to pick from, then a single
@@ -41,12 +44,21 @@ ritual**: two dry runs — the draft set on the cheap model and one flagship
 clip — shown side by side as they print. That argument stays true when the
 catalog changes.
 
-**The one measured anchor is quoted with its parameters**: `ofox-video-core`'s
-batch path verified at 3 takes of `bytedance/seedance-2.0-mini`, 480p, 4
-seconds, 24 cents total, exactly matching its estimate, contact sheet
-rendered. That is a measurement of the mechanism — estimate matches bill —
-and the skill states that it is not a quote for any other combination and that
-this scenario has no paid run of its own beyond it.
+**Both measured anchors are quoted with their parameters**, and there are now
+two. `ofox-video-core`'s batch path was verified at 3 takes of
+`bytedance/seedance-2.0-mini`, 480p, 4 seconds, 24 cents total, exactly
+matching its estimate, contact sheet rendered — a measurement of the mechanism,
+estimate matches bill. This scenario then got a paid run of its own
+(2026-09-15), driven by an agent working from this file, so what it exercised
+was the skill rather than the API: **5 takes at the same model, tier and
+duration, `BATCH_COST_TOTAL 0.40` — 40 cents, 8 cents a take, reconciling
+exactly with the estimate**, contact sheet produced, each take carrying its
+own distinct seed (`432922460`, `264334079`, `809870386`, `465992541`,
+`213135543`), and the five takes visibly different variations of one idea
+rather than five near-identical clips — which is the property that makes a
+batch a selection artifact and the only one worth paying five times for. The
+skill still states that neither anchor is a quote for any other combination
+and that 8 cents a take is a per-second rate times 4, not a fixed price.
 
 ⚠️ **There is no "Seedance 2.5 Fast".** Planning notes that name it are wrong;
 no such id exists in the catalog. The skill says so where a model gets chosen

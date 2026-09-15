@@ -4,6 +4,36 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.13.3 — the UGC-variant table told you to say where the phone is
+
+**Documentation only. No flag, default, price or behaviour changed.**
+
+The UGC-variant slot table's `Device line (new)` row said to write *where the
+phone is*, quoting cases 25 and 27 (`propped on a gym bench, slightly low
+angle`). Measured 2026-09-15 on job `2ecbedec` — `ugc-ads`' first paid run,
+88 cents — that construction puts **a phone in the shot**, visible in every
+frame, with a lit screen. The model has no concept of an off-screen camera: a
+noun given a position in the room is set dressing, and set dressing is
+rendered.
+
+- The row is now `Capture line (new)` and asks for the **viewpoint** as a
+  property of the shot (`selfie viewpoint`, `handheld`, `a fixed viewpoint at
+  bench height, slightly low`), keeping the flaws the row exists for —
+  autofocus hunting, exposure shifts, compression artifacts.
+- A ⚠️ under the table names **both** affected cells: that row, and the CLOSE
+  row's case-25 quote `the camera continues recording for a moment`, which
+  has the same shape. It gives the replacement wording, the AVOID item to add
+  as an object (`a phone, a camera, a tripod or a lit screen visible anywhere
+  in the shot`), and links the full note in `ofox-video-core` 1.24.0's
+  `prompt-structure.md`.
+- It records that nothing caught this before delivery: the prompt passed
+  `--dry-run` and `--print-payload`, and only the extracted frames showed it.
+
+The gallery quotes stay in the table — they are accurate records of what those
+authors wrote, and this skill's UGC table is explicitly a description of
+gallery practice. What changed is that a reader is now told which parts of
+them are safe to copy.
+
 ## 1.13.2 — a seed does not reproduce a take, and this skill said it did
 
 **Documentation only. No flag, default, price or behaviour changed.**

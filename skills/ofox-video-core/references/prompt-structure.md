@@ -1172,6 +1172,12 @@ pan. Same slot, opposite vocabulary.
 | Eye level | `camera behind the male lead's shoulder, near the female lead's eye height` · `locked on a tripod at eye level` | 3, 41 |
 | Dutch angle | `slightly tilted Dutch angle` | 1 |
 
+⚠️ `locked on a tripod at eye level` (case 41) names a piece of equipment
+standing in the room, and so does `propped camera` in the shot-numbering row
+above (case 36). Both are the construction measured to render — see the
+warning under `Phone POV` below. `at eye level, fixed` and `a fixed viewpoint`
+say the same thing without handing the model a prop.
+
 ### Camera movement
 
 | Term | As written | Cases |
@@ -1185,6 +1191,35 @@ pan. Same slot, opposite vocabulary.
 | Static / locked | `fixed camera, essentially no movement` · `fixed close, shallow depth of field` · `Camera is locked on a tripod at eye level` · `static phone propped on bathroom sink` · `Macro on her heel leaving the lip, static` | 20, 3, 41, 40, 34, 31, 14, 36 |
 | FPV / Steadicam / gimbal | `stable FPV movement` · `Steadicam pushes slowly through golden sunset and sea mist` · `one-take handheld gimbal follow` | 8, 57, 58 |
 | Phone POV | `POV alternates between CHASE and PARTNER, sometimes propped on gym equipment` · `as if a friend casually left a phone recording on a nearby bench` · `POV shot from inside a shopping cart` | 31, 25, 27, 36 |
+
+⚠️ **Naming where the phone *is* puts a phone in the shot.** Measured
+2026-09-15, job `2ecbedec` (8s, 480p, 88 cents): a prompt whose capture line
+read *"the phone is propped against a biscuit tin at the back of the desk,
+slightly too low and a little off-square"* delivered a clip with **a phone
+sitting in the box, visible in every frame, with a small glowing screen** —
+which also broke that prompt's own `no legible text` clause. The model has no
+concept of an off-screen camera: a noun given a position in the room is set
+dressing, and set dressing is rendered.
+
+The `Phone POV` row above, and `static phone propped on bathroom sink` in
+`Static / locked`, are **gallery quotes kept as evidence of what authors
+write** — they are not safe wording to copy. What they are useful for is the
+viewpoint; take that and drop the prop. The split:
+
+| Safe — the phone as *how the image was made* | Renders — the phone as *a thing at a place* |
+|---|---|
+| `real phone capture texture` · `shot on a phone` · `selfie viewpoint` · `natural 35 mm equivalent smartphone lens` | `propped against a mug` · `on a tripod` · `wedged on a shelf` · `left recording on a bench` |
+
+Convert rather than delete: `the phone is propped against a mug at the back of
+the table, slightly too low` becomes `a fixed viewpoint from the back of the
+table, at mug height and a little too low`. Identical framing, no object. Back
+it with `a phone, a camera, a tripod or a lit screen visible anywhere in the
+shot` in the negative list, as objects — the form measured to hold in
+`Unwanted text is designed out of the set, not forbidden in the list`.
+
+**Nothing catches this before delivery.** That prompt passed `--dry-run` and
+`--print-payload`; neither can see a rendered object. Only the extracted
+frames could.
 
 ### Focus
 

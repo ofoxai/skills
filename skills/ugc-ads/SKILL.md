@@ -98,7 +98,7 @@ old wording. In
 | The `AVOID` list itself | `Consistency locks and the negative list` → `Negative list — the frequent items` → the **UGC anti-polish** row (cases 25, 40). It covers colour grading, beauty filters and skin smoothing, dramatic slow motion, music, perfect lighting, and the CG look — quote that row, don't paraphrase it |
 | Phone-capture style anchors | `Style anchor — the texture layer` → the **Consumer capture** row (cases 20, 25, 40) |
 | Handheld camera phrasing | `Camera language` → `Camera movement` → the **Handheld / breathing** row |
-| Where the phone is | `Camera language` → `Camera position / angle`, and the **Phone POV** row under `Camera movement` |
+| The viewpoint — never the phone's location | `Camera language` → `Camera position / angle`, and the **Phone POV** row under `Camera movement`. ⚠️ Read "The capture is part of the fiction" below **first**: those rows quote gallery prompts that place a phone somewhere in the room (`static phone propped on bathroom sink`), and measured here, that phrasing renders a phone in the shot. Take the viewpoint from them, not the prop |
 | Autofocus and exposure misbehaviour | `Camera language` → `Focus` → the **Autofocus hunting (UGC texture)** row |
 | The beat shape | `Pacing` → the closing note: UGC clips are a flat action chain with no climax |
 | Why a prohibition alone is not enough | `The plastic look is designed out, not forbidden` — the four faults that produce the AI-render look and the positive sentence that crowds each one out |
@@ -111,12 +111,28 @@ positive form is below, under "What actually reads as UGC".
 
 ## What has been tested, and what has not
 
-**This scenario has no paid run of its own.** Nothing in this file is backed
-by a UGC clip generated through Ofox, because none has been generated. Be
-plain about that with the user rather than letting the confident tone imply
-otherwise.
+**This scenario has exactly one paid run, and one run is one run.** Job
+`2ecbedec`, `bytedance/seedance-2.5`, 8 seconds, 480p, 9:16, text-to-video,
+hands only, no attached photo — **billed 88 cents**. The prompt was this
+skill's own template, filled in by an agent working from this file and
+nothing else, so what the run tested was the whole chain — skill → agent →
+command → artifact — rather than the API. It was judged on frames extracted
+from the delivered clip against criteria fixed before it ran, not on
+`STATUS completed`.
 
-What it *is* built on, all of it real and none of it a UGC measurement:
+| What was checked | Result |
+|---|---|
+| **Does the anti-polish steering actually hold?** The criterion, written before the run: the clip must *not* look like the ad `seedance-ad-creative` would produce — no centred hero framing, no dramatic lighting, no shallow-focus beauty shot | **It held.** Off-centre, loosely composed framing; a single practical window light with real falloff; no grade |
+| Hands only, no invented face | held — hands throughout, no face anywhere in the clip |
+| The product | rendered as described, no drift |
+| **The capture line** | **failed** — the line said where the phone was, and the model put a phone in the room. See the ⚠️ under "The capture is part of the fiction". The template has been corrected; **the corrected wording has not itself been run** |
+
+Read that as one clip, not a guarantee. One model, one duration, one tier,
+one product, one room, hands only, no dialogue, no attached photo. The
+inversion is the claim it genuinely supports, because the inversion is the
+claim it was designed to falsify and did not.
+
+What it is built on besides that run:
 
 - **Gallery practice.** The collected creator-style prompts (cases 23–27, plus
   30–33 for texture phrasing) are prompts somebody kept, with a finished video
@@ -130,10 +146,11 @@ What it *is* built on, all of it real and none of it a UGC measurement:
   than one on a *tempo*; a camera move written only as a verb tends not to
   happen. Each is cited where it is used below.
 
-Practical consequence: **the first clip bought through this skill is an
-experiment**, and it should be priced and described as one. Draft it small
-before anyone pays for a deliverable — see "Several takes, and the cheap
-vertical route".
+Practical consequence: **one clip is thin evidence.** Anything outside that
+run's parameters — a photo attached, a person on camera, a spoken line, a
+longer clip, a different model, a higher tier — is still an experiment and
+should be priced and described as one. Draft it small before anyone pays for
+a deliverable — see "Several takes, and the cheap vertical route".
 
 ## Where the core skill lives
 
@@ -209,7 +226,7 @@ named in the recap.
 | # | Tier | `header` | Question | Options (1 = recommended, last = delegation) | Ask when |
 |---|---|---|---|---|---|
 | 1 | must-ask | `Photo` | Do you have a photo of the actual product? | **Yes — a local path (recommended)**: the real label and shape are locked into the opening frame, and everything the gallery collected that had to match a real SKU used one. **The photo must have no person in it** — not a hand, not a foot — or the job is refused at submission. / **No — describe it in text**: fine for a generic item; on a real product the label may drift. **No AI option** — a photo is a fact, not a taste. | No image attached and the user did not say there isn't one. |
-| 2 | ask-if-open | `On camera` | Who is in frame? | **Hands only (recommended)**: the most common real unboxing shape, and it keeps faces out of a generated clip entirely — fewer anatomy risks, no identity to hold. / **A creator, filming themselves**: arm's length or a propped phone; they are generated fresh from text, so they cannot be the same person in a second clip. / **A creator, filmed by someone else**: a friend holding the phone; allows a wider frame. / **Let the AI decide** — which means hands only. | The request doesn't say. |
+| 2 | ask-if-open | `On camera` | Who is in frame? | **Hands only (recommended)**: the most common real unboxing shape, and it keeps faces out of a generated clip entirely — fewer anatomy risks, no identity to hold. / **A creator, filming themselves**: an arm's-length or a fixed low viewpoint — written as a viewpoint, never as a phone standing somewhere in the room (see "The capture is part of the fiction"); they are generated fresh from text, so they cannot be the same person in a second clip. / **A creator, filmed by someone else**: a friend holding the phone; allows a wider frame. / **Let the AI decide** — which means hands only. | The request doesn't say. |
 | 3 | ask-if-open | `Beat` | What happens, in order? | **Unboxing (recommended)**: parcel → cut/open → lift the item out → turn it over → first use. / **First impression**: already unpacked, one use, one reaction. / **Before / after**: the state that motivated the purchase, then the result. / **Haul**: several items shown in one sitting. / **Let the AI decide**. | The request names a product but not an action. |
 | 4 | ask-if-open | `Talk` | Does anyone speak? | **No — ambient sound only (recommended)**: room tone and the sounds the actions make; captions get added in an editor afterwards. / **One line at the end**: a single spontaneous-sounding sentence. / **Talking through it**: continuous commentary — budget the words per second, see "If the creator speaks". / **Let the AI decide**. | The request doesn't say, and the duration is long enough for a line. |
 
@@ -236,7 +253,7 @@ On top of the generic rows in `creative-brief.md`:
 |---|---|
 | Photo: yes, path | `--frame-first-image PATH` (product alone), plus the anchor sentence at the top of the prompt; no `--aspect-ratio` flag |
 | Photo: no | a text PRODUCT line, and `--aspect-ratio 9:16` becomes effective |
-| On camera | the DEVICE line and what each beat says is in frame |
+| On camera | the CAPTURE line and what each beat says is in frame |
 | Beat | the timeline's action chain |
 | Talk | the AUDIO line, and a quoted line with a delivery note |
 | Duration | `--duration` and the timestamps |
@@ -250,7 +267,8 @@ Brief:
 - Beat: unboxing — parcel, open, lift out, turn, first pour (AI's pick)
 - Talk: no dialogue, ambient sound only (AI's pick)
 - Vertical 9:16, 10s, 480p draft — with a 720p row below
-- Note: this scenario has no measured run behind it; the draft is the experiment
+- Note: the one measured run behind this scenario was text-only at 8s/480p; an
+  attached photo is outside it, so the draft is the experiment
 ```
 
 Then the full prompt, then the cost table, all in one message — the order and
@@ -262,24 +280,55 @@ the rule for a change made at the gate are in `creative-brief.md`'s
 Four positive levers. They are the substance of the clip; the AVOID list is
 what stops the model reaching for its defaults underneath them.
 
-### 1. The device is part of the fiction
+### 1. The capture is part of the fiction — the phone is not
 
-No other scenario in this repo has a DEVICE line, and it is the single most
-load-bearing sentence here. Say **what the phone is doing**: propped against a
-mug on the table, held in one hand while the other works, at arm's length in
-front of a face, wedged on a shelf. Then give it the flaws a phone has —
-autofocus hunting, exposure shifting when a bright surface enters the frame,
-compression artefacts, a slight lens wobble. The phrasing for all of that is
-in the shared file's `Consumer capture` and `Autofocus hunting (UGC texture)`
-rows; use it as written.
+No other scenario in this repo has a CAPTURE line, and it is the single most
+load-bearing sentence here. It carries three things nothing else supplies:
+**where the frame sits**, **how imperfectly it is composed**, and **how the
+lens misbehaves** — which together are most of what makes a clip read as
+phone-shot. Write all three as properties of the shot: `a fixed viewpoint at
+table height, a little low and a few degrees off level, so the near table
+edge cuts across the bottom of the frame`; `the focus hunts once when the
+hands move in`; `the exposure lifts when the white box fills the frame`. The
+phrasing for the flaws is in the shared file's `Consumer capture` and
+`Autofocus hunting (UGC texture)` rows; use it as written.
 
-⚠️ A phone that never re-frames is a tripod. Put one small correction in the
-timeline — the hand tilts the phone up, the arm shifts to keep the product in
-shot — as its own beat with its own stamp. **A camera behaviour written only
-as an adjective in a style line does not reliably render**; the shared file's
-`A camera move needs its waypoint frames, not just a verb` is the measured
-version of that, and it applies to sloppiness exactly as it applies to an
-orbit.
+⚠️ **Never say where the phone is. It will be in the shot.** Measured on this
+skill's one paid run, job `2ecbedec` (8s, 480p, 88 cents): the capture line
+read *"the phone is propped against a biscuit tin at the back of the desk,
+slightly too low and a little off-square"* — and the delivered clip has **a
+phone sitting in the box, visible in every frame, with a small glowing
+screen**, which also broke the same prompt's own `no legible text` clause.
+The model has no concept of an off-screen camera. A noun given a position in
+the room is set dressing, and set dressing is rendered. `propped against a
+mug`, `on a tripod`, `wedged on a shelf`, `left recording on a bench` are all
+the same trap, and the gallery's own UGC cases are written exactly that way
+(`static phone propped on bathroom sink`), so the phrasing reads as
+completely natural right up until you watch the clip.
+
+**The split that works.** A phone named as *how the image was made* is a
+format anchor and stays: `real phone capture texture`, `shot on a phone`,
+`selfie viewpoint`. A phone named as *a thing at a place* is scene content
+and has to go. Converting one is mechanical — `the phone is propped against a
+mug at the back of the table, slightly too low` becomes `a fixed viewpoint
+from the back of the table, at mug height and a little too low`. Identical
+framing, no object. Then put **`a phone, a camera, a tripod or a lit screen
+visible anywhere in the shot`** in AVOID as a backstop, phrased as objects,
+which is the form this repo has measured holding (lever 4).
+
+**Nothing catches this before delivery**, which is why it is worth this much
+space. That prompt passed `--dry-run`, passed `--print-payload`, and passed
+this skill's own re-read-your-prompt-for-polish-words check. None of them can
+see a rendered object. Only the extracted frames could.
+
+⚠️ A frame that never re-frames is a tripod. Put one small correction in the
+timeline — the view tilts up to catch the product, the framing drifts and
+re-settles — as its own beat with its own stamp, and write it as something
+**the frame** does, not as something a hand does to a phone. **A camera
+behaviour written only as an adjective in a style line does not reliably
+render**; the shared file's `A camera move needs its waypoint frames, not just
+a verb` is the measured version of that, and it applies to sloppiness exactly
+as it applies to an orbit.
 
 ### 2. One practical light, and let it be uneven
 
@@ -379,23 +428,28 @@ Slots in `<angle brackets>`; optional lines in `[square brackets]`.
 
 ```
 STYLE: <consumer-capture anchor, from the shared file's Consumer capture row — real phone capture texture, sensor noise, compression artefacts, autofocus hunting, exposure shifts>. Vertical. Nothing is graded, lit or staged.
-DEVICE: <where the phone is: propped against a mug on the table, slightly too low | held in one hand, the other doing the work | at arm's length>. <Its flaws for this clip: the focus hunts once when the hand moves; the exposure lifts when the white box fills the frame.>
+CAPTURE: <the viewpoint, as a property of the shot and never as a phone standing somewhere: a fixed viewpoint from the back of the table, at mug height and a little too low, so the near table edge cuts across the bottom of the frame | a close handheld viewpoint that drifts and re-settles | an arm's-length frontal viewpoint>. <Its flaws for this clip: the focus hunts once when the hands move in; the exposure lifts when the white box fills the frame.>
 SCENE: <a real room, named: a kitchen counter at the end of the day | a desk with the day's things still on it>. <The one light source, and where it is.> <What it does badly: the near side bright, the far side in shadow.>
 PRODUCT: <shape, material, colour, and any text on it verbatim in quotes>.
          [image1 is the product exactly — <shape, label, colour>; ignore its background.]
 [PERSON: <only what is in frame — two hands, adult, no jewellery | a person in their 20s in a grey hoodie, seen from the chest up>. <No name, no wardrobe manifest: this is not a character that has to survive anything.>]
 
-0–<N>s    <one ordinary action>. <Where the phone is and what it does about it.> <the sound this action makes>
+0–<N>s    <one ordinary action>. <What the frame does about it: it sits a touch low, the focus hunts, the view tilts up.> <the sound this action makes>
 <N>–<M>s  <the next action in the chain — no transition word; these are beats in one continuous shot unless the clip genuinely cuts>
 …
-<…>–<T>s  <the last action just finishes>. <The phone keeps recording for a moment.>
+<…>–<T>s  <the last action just finishes>. <The shot keeps running for a moment after it.>
 
 AUDIO: <room tone of the actual room>, <two or three sounds the actions make: cardboard tearing, tape, a lid, a cup on a counter>. [<Speaker>: "<one line, in the language to be spoken>" — spontaneous, slightly breathless, not scripted.] No music.
-AVOID: <the UGC anti-polish row from prompt-structure.md's Negative list — the frequent items, quoted as written>; plus: tripod stability, gimbal smoothness, a studio or seamless backdrop, a professional model or presenter, an advertising voiceover, a slogan, a logo card, an end card; <the lettered objects in this room you do not want: book spine, cereal box, magazine, laptop screen, poster>; music, score, soundtrack, instrumental, percussion, humming, singing.
+AVOID: <the UGC anti-polish row from prompt-structure.md's Negative list — the frequent items, quoted as written>; plus: a phone, a camera, a tripod or a lit screen visible anywhere in the shot; tripod stability, gimbal smoothness, a studio or seamless backdrop, a professional model or presenter, an advertising voiceover, a slogan, a logo card, an end card; <the lettered objects in this room you do not want: book spine, cereal box, magazine, laptop screen, poster>; music, score, soundtrack, instrumental, percussion, humming, singing.
 ```
 
-Five things about that shape:
+Six things about that shape:
 
+- **`CAPTURE:` describes the shot, never the phone**, and the AVOID list names
+  the device as an object anyway. That slot was `DEVICE:` and read "where the
+  phone is", which put a phone in the delivered clip on this skill's one paid
+  run — the ⚠️ under "The capture is part of the fiction" has the measurement.
+  It is the one line in this template with a known failure behind it.
 - **No header FORMAT line and no shot manifest.** UGC clips are short and
   single-shot; the shared file's `Short prompts (10 seconds or less)` says to
   skip the manifest, and a manifest is itself a tell.
@@ -405,8 +459,11 @@ Five things about that shape:
   list. A real phone video does sometimes cut (they stopped and restarted);
   if you want that, say `hard cut` explicitly, because an unnamed boundary
   becomes one anyway.
-- **No climax and no hero frame.** The chain just ends. `the phone keeps
-  recording for a moment` (case 25's ending) is the UGC close.
+- **No climax and no hero frame.** The chain just ends. Case 25's ending is
+  the UGC close — but write it as `the shot keeps running for a moment`, not
+  as case 25's own `the camera continues recording for a moment`, for the
+  reason in the bullet above: the close is the last place you want to hand the
+  model a device to render.
 - **No music, ever.** Not a taste rule: a prompt asking this model for music
   came back `output_moderation_failed` on audio copyright in this repo
   (unbilled). Ambient and action sounds only; a track goes on in an editor.
@@ -420,23 +477,26 @@ Five things about that shape:
 
 ### Worked example — a 10-second vertical unboxing, hands only
 
-Text-to-video, no photo. **This example has not been generated** — it is the
-template filled in, not a clip anyone has paid for.
+Text-to-video, no photo. **This example has not been generated as written** —
+it is the template filled in, not a clip anyone has paid for. Its `CAPTURE`
+line and its last two beats are the *corrected* form of the construction that
+put a phone in the shot on job `2ecbedec`; the correction itself is reasoning
+from that run, not a second measurement.
 
 ```
 STYLE: real phone capture texture, slight sensor noise and compression artefacts, mild autofocus hunting, exposure shifting when a bright surface enters the frame. Vertical, one continuous shot. Nothing is graded, lit or staged.
-DEVICE: the phone is propped against a mug at the back of the table, slightly too low, so the table edge cuts across the bottom of the frame. The focus hunts once when the hands move in, and the exposure lifts when the white box fills the frame.
+CAPTURE: a fixed viewpoint from the back of the table, at mug height and a little too low, so the near table edge cuts across the bottom of the frame and the box sits right of centre. The focus hunts once when the hands move in, and the exposure lifts when the white box fills the frame.
 SCENE: a kitchen table at the end of the day, a used cup and a set of keys pushed to one side. The only light is a window to the left with the curtain half drawn, so the near side of everything is bright and the far side falls into shadow; a cool cast on the white wall behind.
 PRODUCT: a matte black cylindrical hand grinder with a walnut knob and a folding steel crank, in a plain white cardboard box with no printing on it.
 PERSON: two adult hands, no jewellery, sleeves pushed up. Nothing above the wrists is ever in frame.
 
 0-3s    a hand slides the white box into the middle of the table; it arrives off-centre and the far corner is cropped, and the hand nudges it straight. The focus hunts briefly on the tabletop before settling. Sound: cardboard on wood, a chair creaking off-screen.
 3-6s    both hands work the tape at the seam, pull it off in one go and drop it beside the box; the flaps come up. Sound: tape tearing, the flaps.
-6-8.5s  one hand lifts the grinder out. It comes up slightly out of frame at the top and the other hand tips the phone back a touch to catch it. The exposure drops as the dark body fills the frame.
-8.5-10s the hands turn it over once, the crank folds out, and they set it down on the table. The phone keeps recording for a moment.
+6-8.5s  one hand lifts the grinder out. It comes up slightly out of frame at the top and the view tilts up a few degrees to catch it, then settles. The exposure drops as the dark body fills the frame.
+8.5-10s the hands turn it over once, the crank folds out, and they set it down on the table. The shot keeps running for a moment after the hands stop.
 
 AUDIO: kitchen room tone, a fridge hum, cardboard, tape, the crank clicking out, the grinder set down on wood. No dialogue. No music.
-AVOID: cinematic color grading, beauty filters, artificial skin smoothing, dramatic slow motion, music, perfect lighting; no beauty filter, grading, cinematic/CG look, fisheye, vignette, or legible text; tripod stability, gimbal smoothness, a studio or seamless backdrop, a professional model or presenter, an advertising voiceover, a slogan, a logo card, an end card; book spine, magazine, cereal box, laptop screen, poster, printed packaging other than the plain white box; music, score, soundtrack, instrumental, percussion, humming, singing; warped or extra fingers.
+AVOID: cinematic color grading, beauty filters, artificial skin smoothing, dramatic slow motion, music, perfect lighting; no beauty filter, grading, cinematic/CG look, fisheye, vignette, or legible text; a phone, a camera, a tripod or a lit screen visible anywhere in the shot; tripod stability, gimbal smoothness, a studio or seamless backdrop, a professional model or presenter, an advertising voiceover, a slogan, a logo card, an end card; book spine, magazine, cereal box, laptop screen, poster, printed packaging other than the plain white box; music, score, soundtrack, instrumental, percussion, humming, singing; warped or extra fingers.
 ```
 
 The AVOID list's first two clauses are the shared file's UGC anti-polish row
@@ -557,11 +617,14 @@ and enters it, so a bad path fails as exit `6` with nothing submitted.
 The brief recap goes in the **same message** as the prompt and the table,
 above them.
 
-**This skill has no measured cost anchor of its own**, because it has no paid
-run. Do not borrow one from another scenario and present it as this one's —
-the dry run is the only honest number, and it is available for free before
-anyone commits. Say alongside it that the genre is untested here, so the first
-clip is an experiment.
+**The one cost anchor this skill has**, with the parameters it was measured
+at attached, because a figure without its parameters is not a measurement:
+`bytedance/seedance-2.5`, 8 seconds, 480p, 9:16, text-to-video, audio on —
+**88 cents billed** (job `2ecbedec`). It is not a quote for another duration,
+tier, model or for an image-to-video job, and it must never be scaled by hand
+into one. The dry run at the parameters you are actually about to send is the
+only number to show a user; this anchor is there to sanity-check that the dry
+run is in the right neighbourhood, never to replace it.
 
 Afterwards the **actual** bill is `VIDEO_COST` from the finished job. Report
 it as money, not as the raw ten-decimal string.
@@ -697,7 +760,8 @@ here.
 | Symptom | Cause | Fix |
 |---|---|---|
 | The clip is beautiful and reads as an ad | Polish leaked in — style words carried from another scenario, a climax beat, or a camera that behaves | Re-read the prompt for `cinematic`, `studio`, `professional`, `film grain`, `rim light`, `shallow depth of field`, `slow motion`; flatten the beat chain; put the phone's misbehaviour in the timeline as stamped beats rather than in a style line. See "The inversion". New prompt, new cost table |
-| The camera is smooth despite "handheld" | A camera texture written once as an adjective. The shared file's measured rule is that a move written only as a verb tends not to happen; the same applies to instability | Write the re-frame as a beat with its own timestamp — "the hand tips the phone up to catch it" |
+| A phone, camera or tripod is visible in the shot, sometimes with a lit screen | The prompt gave the filming device a position in the room, so the model treated it as set dressing. Measured on job `2ecbedec`, from the phrasing `the phone is propped against a biscuit tin at the back of the desk` | Rewrite the `CAPTURE` line as a viewpoint (`a fixed viewpoint at desk height, a little low and off-square`), convert any beat that has a hand touching the phone into something the frame does, and add `a phone, a camera, a tripod or a lit screen visible anywhere in the shot` to AVOID as objects. New prompt, new cost table — nothing in the tooling can catch this before delivery |
+| The camera is smooth despite "handheld" | A camera texture written once as an adjective. The shared file's measured rule is that a move written only as a verb tends not to happen; the same applies to instability | Write the re-frame as a beat with its own timestamp, as something the frame does — "the view tilts up a few degrees to catch it, then settles" — never as a hand adjusting a phone |
 | The lighting is flattering and even | The prompt named a light but not what it does badly | Name the source, its position, and the shadow or cast it leaves. Positive sentences, per the shared file's `The plastic look is designed out, not forbidden` |
 | Invented signage or garbled lettering on the shelf behind | A real room is full of lettered surfaces, and the negative list is only partly obeyed on such a set (measured, four jobs) | Move the carriers out of frame or out of focus and forbid them **as objects** — book spine, box, magazine, laptop — not as "text". See lever 4 |
 | Exit `3`, `input_moderation_failed` on an image job | The attached photo contains a person — a hand or a foot is enough | Attach a photo of the product alone and write the person in text. Nothing was billed |

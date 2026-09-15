@@ -101,13 +101,27 @@ the pair of frames read, the prompt written and the job priced, and only needs
 the key at the moment they say yes to the cost table. Do that work first
 rather than opening with a signup link; see "Pricing a job with no API key".
 
-## What this skill rests on: one measured job
+## What this skill rests on: two measured jobs on one pair
 
-Everything below traces to a single real run, or it says it doesn't. The run:
-job `259c3ce2`, `bytedance/seedance-2.5`, 4 seconds, 480p, a first frame and
-a last frame attached in one job, **billed 44 cents**. The inputs were a red
-square on a flat background with no text, drawn at x=120–240 in the first
-frame and at x=614–734 in the last.
+Everything below traces to real runs, or it says it doesn't. Both ran
+`bytedance/seedance-2.5`, 4 seconds, 480p, a first frame and a last frame
+attached in one job, **44 cents each**, on the same inputs: a red square on a
+flat background with no text, drawn at x=120–240 in the first frame and at
+x=614–734 in the last.
+
+| Job | What it tested |
+|---|---|
+| `259c3ce2` | the **mechanism** — can both ends be locked in one job at all, and how does the middle behave |
+| `2514540e` (2026-09-15) | the **prompt template in this file**, filled in by an agent working from this skill and nothing else. Same pair, so it widens nothing about the inputs; what it adds is that the template — not a hand-written prompt — produces the same result, and that the result replicated |
+
+The measurements below are from `259c3ce2` unless noted. The endpoint result
+is the one that has now happened twice:
+
+**Endpoint replication, job `2514540e`.** Scanning the delivered video's own
+first and last frames for red gives x=120–239 and x=614–733 — the same
+figures, to the pixel, as the first run. Two runs is not a guarantee, but
+"both ends are honoured" is the only claim here with more than one job behind
+it.
 
 | What was measured | The measurement |
 |---|---|
@@ -115,11 +129,14 @@ frame and at x=614–734 in the last.
 | **The motion is front-loaded, not linear** | the same scan at t=1/2/3s gives x≈384, 564, 614. Against a total travel of 494 px that is roughly **53% of the distance covered in the first quarter of the clip, 90% by halfway, and arrival at 3 seconds of 4** |
 | **The last beat is a hold, not travel** | having arrived at ~3s, it stays. The final second of that clip delivers no movement |
 
-What that job does **not** establish, and this skill does not claim:
+What those jobs do **not** establish, and this skill does not claim:
 
 - whether the front-loaded easing scales with duration — whether a 10-second
   clip holds for two and a half seconds or for one. One duration was measured;
   4 seconds;
+- anything wider about the **inputs**. Both runs used the same pair, so the
+  second one is a replication, not a broadening. A different subject, a
+  different canvas or a pair with lettering in it is still untested here;
 - whether first+last in one job works on any model other than
   `bytedance/seedance-2.5`. The catalog lists `i2v` for the current video
   models, but `i2v` says nothing about locking *both* ends at once — that
@@ -324,10 +341,12 @@ ENDING: the mug comes to rest in the position of the last frame and stays there.
 AVOID: a cut, a fade to black, a dissolve, a wipe; camera shake, zoom, pan or reframing; the mug changing shape, colour or size; a second mug appearing; motion blur smearing the mug; subtitles, captions, on-screen text, watermarks.
 ```
 
-Check the draft the same way the evidence job was checked: read the delivered
-clip's own first and last frames against the two inputs, and sample the middle
-— never take `STATUS completed` as proof the interpolation is the one you
-asked for.
+Check the draft the same way the evidence jobs were checked: read the
+delivered clip's own first and last frames against the two inputs, and sample
+the middle — never take `STATUS completed` as proof the interpolation is the
+one you asked for. **This template has been run**: job `2514540e` filled this
+shape in for a red square and came back with both ends pixel-exact, which is
+what the check above is looking for.
 
 ## The frame decides the shape
 
@@ -356,10 +375,10 @@ so.
 
 | Parameter | Default | Why |
 |---|---|---|
-| `--frame-first-image` / `--frame-last-image` | both, in one `generate` call | the whole point of this skill; both ends were honoured to the pixel on the measured job |
-| `--model` | not passed — the script's own default applies, **unless the user named a model**, which always wins | the measured job ran on `bytedance/seedance-2.5`; whether both ends can be locked on another model is untested here, so say so before switching rather than after. `models` lists the models but does **not** mark which one the script defaults to — the `MODEL` line a `generate --dry-run` prints is what names the id that will really be sent, which is also the id the cost table has to carry |
+| `--frame-first-image` / `--frame-last-image` | both, in one `generate` call | the whole point of this skill; both ends were honoured to the pixel on both measured jobs |
+| `--model` | not passed — the script's own default applies, **unless the user named a model**, which always wins | both measured jobs ran on `bytedance/seedance-2.5`; whether both ends can be locked on another model is untested here, so say so before switching rather than after. `models` lists the models but does **not** mark which one the script defaults to — the `MODEL` line a `generate --dry-run` prints is what names the id that will really be sent, which is also the id the cost table has to carry |
 | `--duration` | the model's minimum for a plain A→B move | the motion arrives at about three quarters of the clip and holds; extra seconds buy hold and bill per second. `ofox-video.sh models` prints each model's range — don't quote a range from memory |
-| `--resolution` | the cheapest tier for the draft, the deliverable's tier for the final. **When the user named neither** — the common case — draft at the model's cheapest tier and put the next tier up as a *second row* of the same cost table, so the upgrade is priced rather than asked about | the measured job ran at 480p, the cheapest tier its model lists. Which tiers a model has is a catalog fact; `models` prints them, and dry-running both rows costs nothing |
+| `--resolution` | the cheapest tier for the draft, the deliverable's tier for the final. **When the user named neither** — the common case — draft at the model's cheapest tier and put the next tier up as a *second row* of the same cost table, so the upgrade is priced rather than asked about | both measured jobs ran at 480p, the cheapest tier their model lists. Which tiers a model has is a catalog fact; `models` prints them, and dry-running both rows costs nothing |
 | `--aspect-ratio` | not passed | the attached frames decide it — see "The frame decides the shape" |
 | `--generate-audio` | `false` | a tween of two stills has nothing to sync to, and the server's default is `true`. Omit the flag only when the clip genuinely wants a track |
 | `--seed` | let the script roll one, and keep it | it prints `SEED` and writes it to the clip's `.json` sidecar, which is what lets "that take, at a higher resolution" be re-submitted at all. It does **not** reproduce it: measured, an identical request on a fixed seed came back a visibly different clip. A byte-identical prompt is necessary and not sufficient — tell the user a re-render is another roll aimed at the same shot before they pay for it |
@@ -416,12 +435,13 @@ out, too late to relay; that is what `--dry-run` is for.
 The brief recap goes in the **same message** as the prompt and the table,
 above them.
 
-**The one cost anchor this skill has**, with the parameters it was measured
-at attached, because a figure without them is not a measurement:
+**The cost anchor this skill has**, with the parameters it was measured at
+attached, because a figure without them is not a measurement:
 `bytedance/seedance-2.5`, 4 seconds, 480p, first+last frames, **44 cents
-billed**. It is not a quote for any other combination — an image-to-video job
-bills at the text-to-video tier, so a longer or higher clip scales from the
-dry run, never from this number.
+billed** — twice, on jobs `259c3ce2` and `2514540e`, at the same figure. It is
+not a quote for any other combination — an image-to-video job bills at the
+text-to-video tier, so a longer or higher clip scales from the dry run, never
+from this number.
 
 Afterwards the **actual** bill is `VIDEO_COST` from the finished job. Report
 it as money, not as the raw ten-decimal string. An estimate is never a bill.
