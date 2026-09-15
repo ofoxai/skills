@@ -39,15 +39,16 @@ when an agent is driving — installs only to the agent it detects. Both leave
 the other agents on your machine without these skills, and the failure is
 silent until something asks for a skill that isn't there.
 
-Why every skill by default: each scenario skill reaches its execution layer
-(ofox-video-core, and for seedance-anime-drama also ofox-image-core) by
-relative path, which only resolves when they are installed side by side.
+Why every skill by default: each scenario skill reaches its execution layer by
+relative path, which only resolves when they are installed side by side — the
+video scenarios need ofox-video-core, image-edit and product-image need
+ofox-image-core, and seedance-anime-drama needs both.
 
 Skills in this repo:
   Video    ofox-video-core, seedance-short-drama, seedance-ad-creative,
            seedance-product-video, seedance-anime-drama, keyframe-animation,
            product-demo, ugc-ads, shorts-reels
-  Image    ofox-image-core
+  Image    ofox-image-core, image-edit, product-image
   Secrets  hal-vault
   Media    hal-image
   Deploy   cloudflare-drop
@@ -90,6 +91,7 @@ if (argv[0] === "doctor") {
     "seedance-product-video", "seedance-anime-drama",
     "keyframe-animation", "product-demo",
     "ugc-ads", "shorts-reels",
+    "image-edit", "product-image",
     "hal-vault", "hal-image", "cloudflare-drop",
   ];
 

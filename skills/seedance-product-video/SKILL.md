@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.15.1"
+version: "1.15.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.15.1"
+  version: "1.15.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -148,7 +148,7 @@ On top of the generic rows in `creative-brief.md`:
 | "grey", "studio", "neutral" | Background | light grey studio |
 | "keep the background", "as shot", "in place" | Background | the photo's own background |
 | "orbit", "circle around", "camera moves around" | Motion | camera orbits, product still |
-| "spin", "turntable", "rotate", "360 on its axis" | Motion | product turntable, camera fixed |
+| "spin", "turntable", "rotate", "360 on its axis" | Motion | product turntable, camera fixed — ⚠️ **but say what that costs before spending.** This is the one skip row that maps onto the untested option: the fixed-camera turntable phrasing has no gallery source and has never been run here, while the camera orbit is the measured default. Take the user's word — they named it — and tell them in the same breath that the orbit is the one with evidence behind it, so they can choose. The rows above and below map onto measured options and need no such warning |
 | "close-up", "zoom in on the detail", "push in" | Motion | slow push-in on a detail |
 
 ### From answers to prompt — traceability
@@ -1690,6 +1690,18 @@ plus the product-video-specific ones:
 
 ## When NOT to use
 
+- **The deliverable is a still, not a clip.** "Four main images in different
+  styles", "some listing photos", "put this product on a white background" are
+  [`product-image`](../product-image/SKILL.md) — a set of stills, each an edit
+  of the same product photo, priced as a set — and a single change to a single
+  picture is [`image-edit`](../image-edit/SKILL.md). Both cost cents where this
+  skill costs dollars, so reaching for a video generation because the request
+  merely *mentioned* a product photo is an expensive misread. **The two are
+  complementary, not exclusive**: producing the listing stills first and the
+  clip here is a normal sequence — just two jobs with two cost tables. If a
+  still is being made as this skill's own first frame, that stays here, because
+  an attached image forces the clip's ratio to follow it and that decision
+  belongs where the video is priced.
 - Cinematic brand/mood advertising — dramatic lighting, camera language like
   dolly-ins or rim light, a brand-tone background — use `seedance-ad-creative`
   instead. This skill's prompts are deliberately plain (plain background,

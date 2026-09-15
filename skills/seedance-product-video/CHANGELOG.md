@@ -4,6 +4,39 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.15.2 — routing: stills now have skills of their own, and one skip row admits it is untested
+
+No prompt change, no defaults change, no new measurement, no mapping changed.
+One bullet added to "When NOT to use", because two image scenario skills
+shipped on 2026-09-15 and this file's routing pre-dates them.
+
+`product-image` owns a set of product stills to choose between — each one an
+edit of the same product photo, priced as a set total — and `image-edit` owns
+a single change to a single picture. Both are cents where this skill is
+dollars, so an agent that reaches for a video generation because a request
+merely mentioned a product photo has made an expensive misread, and nothing in
+this file previously said so.
+
+The bullet is deliberately two-sided. The two kinds of job are complementary:
+stills first and a clip afterwards is a normal sequence, just two jobs with two
+cost tables. And a still generated as **this skill's own first frame** stays
+here, because an attached image forces the clip's ratio to follow it and that
+decision belongs where the video is priced.
+
+**Also: one skip row now carries a caveat it always should have.** Surfaced
+while checking the routing above, and pre-dating it. The row mapping "spin",
+"turntable", "rotate", "360 on its axis" to **product turntable, camera
+fixed** is the only skip row that lands on the *untested* motion option — this
+file has said since 1.6.0 that the fixed-camera phrasing has no gallery source
+and has never been run here, and that the measured default is the camera
+orbit. The caveat lived 200 lines away from the mapping, so an agent following
+the skip table picked the untested route without ever being told.
+
+**The mapping is unchanged** — a user who says "turntable" gets a turntable,
+because they named it. What changed is that the row now says to tell them, in
+the same breath, that the orbit is the option with evidence behind it. No
+prompt, default or price moved.
+
 ## 1.15.1 — a seed does not reproduce a take, and this skill said it did
 
 **Documentation only. No flag, default, price or behaviour changed.**

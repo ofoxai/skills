@@ -14,10 +14,10 @@ npx ofox-skills          # install every skill into every agent on this machine
 npx ofox-skills doctor    # check which agents can actually see them
 ```
 
-No account needed to price a job — see below. Read that part first: eight of
+No account needed to price a job — see below. Read that part first: ten of
 these skills spend real money.
 
-## The video skills cost real money — here's how to check before you commit
+## The video and image skills cost real money — here's how to check before you commit
 
 The eight video skills — the four `seedance-*` ones plus `keyframe-animation`,
 `product-demo`, `ugc-ads` and `shorts-reels` — call Ofox's video API, which runs
@@ -26,6 +26,15 @@ and bills per second of generated video. A 15-second 720p clip runs about
 **$3.60**; a 4-second 480p draft is about **$0.44**, and there are cheaper
 models. Generation is a slot machine — you often want several takes and keep
 one — so the per-clip figure is not the whole cost.
+
+The two image skills — `image-edit` and `product-image` — call the image API
+instead, which bills per **output token**, so there is no such thing as one
+price per picture: the same model has been measured 26x apart across two
+flags. Cents rather than dollars, but quote it rather than assume it. Two
+things make that worth doing properly. An *edit* also bills the picture you
+upload, so a large source costs more than a small one; and a set of four is
+four bills, which is why `product-image` quotes the set's total and never the
+per-image figure.
 
 **You can price any of this with no account and no API key.** Install, then:
 
@@ -43,9 +52,18 @@ exposes the same skill at `~/.claude/skills/ofox-video-core/`, but that path
 only exists if Claude Code is installed, so the line above is the one that
 works everywhere.
 
+The image side has the same escape hatch, including for an edit of a file you
+already have:
+
+```
+bash ~/.agents/skills/ofox-image-core/references/ofox-image.sh \
+  edit --dry-run --image ./photo.jpg --prompt "replace the background with a beach"
+# DRY RUN — nothing was submitted and nothing was billed.
+```
+
 `--dry-run` validates everything and quotes the price without sending a
-request. `ofox-video.sh models` and `ofox-video.sh providers` likewise need no
-key. Decide whether it's worth it, *then* sign up.
+request. `ofox-video.sh models` / `providers` and `ofox-image.sh models`
+likewise need no key. Decide whether it's worth it, *then* sign up.
 
 When you are ready: get a key at [app.ofox.ai](https://app.ofox.ai/?utm_source=github&utm_medium=badge&utm_campaign=skills)
 (Settings → API Keys → Create New Key, shown once), then
@@ -102,9 +120,10 @@ is the default because the other combinations break quietly:
   question and installs only to the agent it detects. Either way the agents you
   didn't pick get nothing, and you don't find out until one of them can't see a
   skill you know you installed.
-- **Every skill**, because each scenario skill reaches its execution layer
-  (`ofox-video-core`, and for `seedance-anime-drama` also `ofox-image-core`) by
-  relative path, which only resolves when they sit side by side. The skills.sh
+- **Every skill**, because each scenario skill reaches its execution layer by
+  relative path, which only resolves when they sit side by side — the video
+  scenarios need `ofox-video-core`, `image-edit` and `product-image` need
+  `ofox-image-core`, and `seedance-anime-drama` needs both. The skills.sh
   manifest format has no dependency field to declare that with, so installing
   one alone can leave you with:
 
@@ -154,7 +173,7 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 ## Skills
 
-Thirteen skills in three groups. The one-liners below are deliberately short —
+Fifteen skills in three groups. The one-liners below are deliberately short —
 each `SKILL.md` carries the full contract, the flags, and the measured costs.
 
 ### Video — Ofox video API (Seedance 2.5), bills per second
@@ -171,10 +190,12 @@ each `SKILL.md` carries the full contract, the flags, and the measured costs.
 | [shorts-reels](skills/shorts-reels/SKILL.md) | Several cheap vertical 9:16 drafts in one priced batch, a contact sheet to pick from, then one proper re-render of the winner. Brings the format and the economics; the prompt comes from whichever scenario skill fits. |
 | [ofox-video-core](skills/ofox-video-core/SKILL.md) | **Library.** The execution layer the eight above call: submit, poll, download, report the real cost. Install it, don't invoke it — unless you're driving the API directly. |
 
-### Image
+### Image — Ofox image API, bills per output token
 
 | Skill | What it does |
 |-------|--------------|
+| [image-edit](skills/image-edit/SKILL.md) | One change to a picture you already have — swap the background, recolour a part, remove an object — written as two sentences so what must *not* change is stated and checkable. One image in, one out. |
+| [product-image](skills/product-image/SKILL.md) | A set of product images to choose between: several styles or backgrounds of one product, each an edit of the same photo so the item stays itself, priced as the set's total rather than per image. |
 | [ofox-image-core](skills/ofox-image-core/SKILL.md) | **Library.** Every image model Ofox serves, `--model` defaulting to a cheapest-first chain that falls back and says so. Generates from text, or **edits an image you already have** (change the background, recolour an element) from a local file. Prices a job with `--dry-run`, then reports real token usage and dollar cost. |
 
 ### Free to run — no Ofox API, no per-call cost

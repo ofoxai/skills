@@ -1,12 +1,12 @@
 ---
 name: ofox-image-core
-description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox image API (api.ofox.ai) — validates parameters client-side, sends one synchronous request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. Does both text-to-image (generate) and editing an existing image you supply as a local file (edit — change the background, recolour an element, alter a product photo, while leaving the rest of the picture intact). This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills (e.g. a character-reference-sheet generator for a video pipeline, or an image-edit/product-image scenario) that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, or asks to debug a failed Ofox image request — for a plain "generate an image of..." or "change this image so that..." request with no scenario skill available yet, this is the right skill to use directly.
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox image API (api.ofox.ai) — validates parameters client-side, sends one synchronous request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. Does both text-to-image (generate) and editing an existing image you supply as a local file (edit — change the background, recolour an element, alter a product photo, while leaving the rest of the picture intact). This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls: image-edit owns "change this image so that...", product-image owns a set of product images to choose between, and seedance-anime-drama owns character images for a video pipeline. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, asks to debug a failed Ofox image request, or wants a plain "generate an image of..." from text — which is the one common case no scenario skill covers.
 license: MIT
-version: "1.11.0"
+version: "1.11.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.11.0"
+  version: "1.11.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -380,13 +380,32 @@ different reasons:
 
 - `response` — the API echoed it. Normal.
 - `request` — the response carried no `model` field, so the id is the one that
-  was **requested**, not one the API confirmed. `openai/gpt-image-2` does this
-  on every call — and since it became the chain's preferred model on
-  2026-09-04, **`MODEL_SOURCE request` is now the common case for a default
-  `generate` call, not an edge case that only shows up when someone pins
-  `gpt-image-2` explicitly.** The cost is still computed, at that model's
-  published rates. Relay it as "the API didn't echo a model name; priced as
-  the model we asked for" rather than presenting it as confirmed.
+  was **requested**, not one the API confirmed. The cost is still computed, at
+  that model's published rates. Relay it as "the API didn't echo a model name;
+  priced as the model we asked for" rather than presenting it as confirmed.
+
+⚠️ **Which of the two you get from `openai/gpt-image-2` has changed under us,
+so read the line rather than predicting it.** On 2026-09-04 that model omitted
+the `model` field on every call observed — first-hand, and costly enough to
+be certain about: it defaulted to the literal `"unknown"`, found no rate for
+it, and printed no `IMAGE_COST` at all on two paid calls, which is what
+1.3.0's fallback was built to fix. This file then generalised that into
+"`MODEL_SOURCE request` is now the common case for a default `generate` call".
+
+**That generalisation no longer holds.** Re-checked 2026-09-15 on three real
+paid calls against the same model — two probes run while `image-edit` and
+`product-image` were written (one `generate`, one `edit`) and one further
+minimal `generate --quality low --size 1024x1024` (196 output tokens, 0.59
+cents, `IMAGE_COST 0.00593` against a 0.59-cent estimate) — **all three
+printed `MODEL_SOURCE response`.** The field is being echoed now.
+
+Three days of observation eleven days apart is not a schedule, and nothing
+here says which way it will read tomorrow. What it does establish is the rule
+worth keeping: **an upstream response shape is not a stable fact to write a
+"common case" sentence about.** Both branches are handled, both are correct,
+and the script prints the line unconditionally precisely so a caller never has
+to guess. Relay what it printed on *this* run; do not tell a user which one to
+expect.
 
 `MODEL_REQUESTED` appears only when upstream ran a **different** model from the
 one asked for (routing, aliasing, a silent downgrade). When it appears, `MODEL`

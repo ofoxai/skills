@@ -4,6 +4,59 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.11.1 — routing, and a "common case" that stopped being one
+
+No behaviour change, no script change. Two documentation corrections, both of
+claims that were true when written and went false without anything in this
+repo moving.
+
+### The `MODEL_SOURCE` guidance was predicting an upstream response shape
+
+`SKILL.md` said `openai/gpt-image-2` "never echoes a `model` field", and that
+since it became the chain's head on 2026-09-04, **`MODEL_SOURCE request` is
+now the common case for a default `generate` call**.
+
+That was first-hand and expensive to learn: the missing field defaulted to the
+literal `"unknown"`, matched no rate, and printed no `IMAGE_COST` at all on two
+paid calls — the defect 1.3.0's fallback was written to fix.
+
+**Re-checked 2026-09-15 on three real paid calls against the same model — two
+probes run while `image-edit` and `product-image` were written (one
+`generate`, one `edit`), plus one further minimal `generate --quality low
+--size 1024x1024` (196 output tokens, `IMAGE_COST 0.00593` against a
+0.59-cent estimate). All three printed `MODEL_SOURCE response`.** The field is
+being echoed now.
+
+**Nothing in the script changed and nothing needed to** — both branches were
+always handled, and `MODEL_SOURCE` is printed unconditionally so a caller never
+has to guess. What changed is the advice: the section no longer tells anyone
+which branch to expect, because an upstream response shape is not a stable
+fact to anchor a "common case" sentence to. **If you relayed `MODEL_SOURCE`
+faithfully you were already right on both days**; if you wrote a prediction of
+it into your own skill, that is the thing to go and delete.
+
+### The description pointed plain edit requests here
+
+One clause of the `description` was stale the moment `image-edit` and
+`product-image` shipped on the same day.
+
+It read: *"for a plain 'generate an image of...' or 'change this image so
+that...' request with no scenario skill available yet, this is the right skill
+to use directly."* The conditional was true when it was written and is not any
+more — `image-edit` owns "change this image so that…", and `product-image`
+owns a set of product images to choose between. An agent picking a skill from
+descriptions alone would have been told to come here for a request a scenario
+skill now covers properly.
+
+The clause now names the three scenario skills that call into this one
+(`image-edit`, `product-image`, `seedance-anime-drama`) and keeps exactly one
+direct-use case for a request with no scenario behind it: a plain
+text-to-image "generate an image of…".
+
+**What this leaves unchanged:** everything about `edit` itself, and the
+direct-use cases that were never in question — naming the Ofox image API,
+driving it with specific low-level parameters, or debugging a failed request.
+
 ## 1.11.0 — image editing (`POST /v1/images/edits`), and an endpoint that bills you for your typos
 
 New `edit` subcommand. It takes an image you already have and changes it,

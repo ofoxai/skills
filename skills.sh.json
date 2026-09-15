@@ -23,8 +23,8 @@
     },
     {
       "title": "Image",
-      "description": "Generate and edit images with the Ofox image API (every image model Ofox serves; the model defaults to a cheapest-first priority chain that falls back and says so). ofox-image-core is the shared execution layer for this synchronous, no-job-id API: validates parameters, prices a job with --dry-run before spending, sends one request, decodes and saves the result, and reports real token usage. 'generate' draws from text; 'edit' takes a local image file and changes it (background swap, recolour, product-photo retouch) while leaving the rest intact. A library skill other scenario skills (e.g. a video pipeline's character-reference-image step, or an image-edit/product-image scenario) build on.",
-      "skills": ["ofox-image-core"]
+      "description": "Generate and edit images with the Ofox image API (every image model Ofox serves; the model defaults to a cheapest-first priority chain that falls back and says so). ofox-image-core is the shared execution layer for this synchronous, no-job-id API: validates parameters, prices a job with --dry-run before spending, sends one request, decodes and saves the result, and reports real token usage. 'generate' draws from text; 'edit' takes a local image file and changes it (background swap, recolour, product-photo retouch) while leaving the rest intact. image-edit (one change to one picture, written so you can check what survived) and product-image (a set of product images to choose between, priced as a set total) are the scenario skills built on it.",
+      "skills": ["ofox-image-core", "image-edit", "product-image"]
     }
   ]
 }

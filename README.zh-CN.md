@@ -13,15 +13,21 @@ npx ofox-skills           # 把全部 skill 装进本机每一个 agent
 npx ofox-skills doctor    # 查哪些 agent 现在真的能看到它们
 ```
 
-报价不需要账号 —— 见下文。**请先读那一节：这里有八个 skill 会真实花钱。**
+报价不需要账号 —— 见下文。**请先读那一节：这里有十个 skill 会真实花钱。**
 
-## 视频类 skill 会真实花钱 —— 先用这招查清再决定
+## 视频类和图像类 skill 会真实花钱 —— 先用这招查清再决定
 
 八个视频 skill（四个 `seedance-*` 再加 `keyframe-animation`、`product-demo`、
 `ugc-ads`、`shorts-reels`）调用 Ofox 视频 API，跑的是
 [Seedance 2.5](https://ofox.ai/models/bytedance/seedance-2.5?utm_source=github&utm_medium=readme&utm_campaign=skills)，
 **按生成秒数计费**。15 秒 720p 约 **$3.60**，4 秒 480p 草稿约 **$0.44**，还有更便宜的模型。
 生成本身是老虎机 —— 你往往要出好几条、留一条 —— 所以单条价格不等于总成本。
+
+两个图像 skill（`image-edit`、`product-image`）走的是图像 API，**按输出 token 计费**，
+所以"一张图多少钱"这个说法本身就不成立：同一个模型换两个参数，实测差过 26 倍。
+量级上是几分钱而不是几美元，但仍然要报价、不要拍脑袋。有两点值得认真对待：
+**编辑操作会把你上传的那张图一起计费**，所以源图越大越贵；以及**一组 4 张就是 4 笔账**，
+这正是 `product-image` 只报整组总价、从不报单张价的原因。
 
 **不用账号、不用 API key，就能给任何一个任务报价。** 装完之后：
 
@@ -38,8 +44,16 @@ bash ~/.agents/skills/ofox-video-core/references/ofox-video.sh \
 暴露同一个 skill，但那个路径只在装了 Claude Code 时才存在，所以上面这条命令是
 到处都成立的写法。
 
+图像这边有同一个出口，包括给你手里已有的图做一次编辑的报价：
+
+```
+bash ~/.agents/skills/ofox-image-core/references/ofox-image.sh \
+  edit --dry-run --image ./photo.jpg --prompt "replace the background with a beach"
+# DRY RUN — nothing was submitted and nothing was billed.
+```
+
 `--dry-run` 会完整校验参数并报出价格，**不发送任何请求**。`ofox-video.sh models`
-和 `ofox-video.sh providers` 同样不需要 key。先判断值不值，**再**去注册。
+/ `providers` 和 `ofox-image.sh models` 同样不需要 key。先判断值不值，**再**去注册。
 
 决定要用时：在 [app.ofox.ai](https://app.ofox.ai/?utm_source=github&utm_medium=badge&utm_campaign=skills)
 拿 key（Settings → API Keys → Create New Key，只显示一次），然后
@@ -88,7 +102,8 @@ npx ofox-skills
   而当**由 agent 代跑**时它会跳过提问、只装它检测到的那一个。两条路都会让你没选中的
   agent 什么也拿不到，而且不报错 —— 直到某个 agent 说看不见一个你明明装过的 skill。
 - **每一个 skill** —— 因为每个场景 skill 都用相对路径去找它的执行层
-  （`ofox-video-core`，`seedance-anime-drama` 还要 `ofox-image-core`），
+  （视频场景要 `ofox-video-core`，`image-edit` 和 `product-image` 要
+  `ofox-image-core`，`seedance-anime-drama` 两个都要），
   只有并排安装时这个路径才解析得出来。skills.sh 的清单格式没有依赖声明字段，
   所以单独装一个可能让你拿到：
 
@@ -136,7 +151,7 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 ## Skills 一览
 
-十三个 skill，分三组。下面的一句话说明是刻意精简的 ——
+十五个 skill，分三组。下面的一句话说明是刻意精简的 ——
 每个 `SKILL.md` 里有完整契约、全部参数和实测成本。
 
 ### 视频 —— Ofox 视频 API（Seedance 2.5），按秒计费
@@ -153,10 +168,12 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 | [shorts-reels](skills/shorts-reels/SKILL.md) | 一次批量出好几条便宜的竖屏 9:16 草稿，先报价，再用联系表挑一条，最后只把选中的那条重渲好。它管格式和成本账；prompt 交给对应的场景 skill 写。 |
 | [ofox-video-core](skills/ofox-video-core/SKILL.md) | **库。** 上面八个调用的执行层：提交、轮询、下载、报出真实成本。装上但别直接调 —— 除非你要自己驱动 API。 |
 
-### 图像
+### 图像 —— Ofox 图像 API，按输出 token 计费
 
 | Skill | 做什么 |
 |-------|--------|
+| [image-edit](skills/image-edit/SKILL.md) | 对你手上已有的图做一处改动 —— 换背景、改某个部件的颜色、去掉某个物体 —— 指令写成两句话，把"哪些地方必须不变"也说出来，结果因此才可验。一进一出。 |
+| [product-image](skills/product-image/SKILL.md) | 一组供挑选的商品图：同一个产品的多种风格或背景，每张都是对同一张照片的编辑，所以产品本身不会变来变去；报价按整组总价而不是单张。 |
 | [ofox-image-core](skills/ofox-image-core/SKILL.md) | **库。** Ofox 提供的每一个图像模型，`--model` 默认走一条最便宜优先的降级链、降级时会明说。先用 `--dry-run` 报价，再报出真实 token 用量和美元成本。 |
 
 ### 免费运行 —— 不碰 Ofox API，无按次费用
