@@ -2,6 +2,79 @@
 
 All notable changes to the **talking-head** skill. Versioning follows SemVer.
 
+## 1.1.0 — the three unmeasured claims are measured; ten hedges become one paragraph
+
+1.0.0 shipped with an unusual amount of hedging, because it had to: this was
+the only skill here whose default model had never generated a spoken word in
+this repo, and every number it planned against came from
+`bytedance/seedance-2.5` — the one model its own route could not use. That
+caveat was repeated in about ten places.
+
+**It now has a paid run of its own.** Job
+`855833b4-0819-4bd5-bc8c-397db009069a`, 2026-09-16,
+`alibaba/wan-3.0-prime`, 10 seconds at 480p, seed `368003184`, 64 cents, 29
+words of scripted dialogue built from this file's own template — and read
+afterwards rather than declared done at `STATUS completed`.
+
+| Question | Result |
+|---|---|
+| **Speech rate** | **3.16 words a second** — 29 words across a 9.17s speech span (`silencedetect` -30dB/0.35s: speech 0.46s→9.63s, two internal pauses totalling 0.76s, voiced-only rate 3.45 w/s) |
+| **Truncation** | none — a `whisper tiny.en` transcription returns all 29 words in order with nothing added; only punctuation differs |
+| **Lip-sync, gross** | confirmed — mouth open mid-word at 2.5s with the audio voiced; lips closed at 9.8s in the trailing silence, which is the closing beat the template asks for |
+| **Lip-sync, per phoneme** | **still unmeasured**, and frames cannot measure it. Left open |
+| **Face lock** | held for the full 10s — face structure, eyes, earring, hair parting, black top, gold necklace, grey background all match the input portrait |
+
+So the **3 words a second budget holds on the model this skill actually
+uses**, and is slightly conservative. The ten disclaimers that said the figure
+came from seedance are gone; in their place is one paragraph in "A
+thirty-second clip holds about ninety words" stating the measured rate, and
+one bounded list in "What is measured, and what is not". A measurement does
+not get argued with ten times.
+
+**The bounds are stated once and properly, because one run is one run:** one
+prompt, English only, 480p, 10 seconds — and ⚠️ **the upstream is unknown.**
+`alibaba/wan-3.0-prime` is not upstream-pinned, Ofox routes by weight across
+`alicloud` and `aliyun`, and the sidecar does not record a provider (checked:
+its top-level keys are `created_at`, `job_id`, `model`, `name`, `prompt`,
+`request`, `status`, `updated_at`, `video_cost`, `video_file`,
+`video_seconds`). This is one observation on wan-3.0-prime, not a statement
+about both upstreams, and the gap in what the script records is named rather
+than glossed — a job's upstream cannot be recovered after the fact.
+
+Bounded rather than deleted, too: identity held **within** one clip, so
+whether two jobs from the same portrait match **each other** is still untested
+and "Splitting a long script" still says so.
+
+**`--real-person true` is no longer described as untested — and it is
+deliberately not described as a workaround.** It lifts seedance-2.5's
+real-person refusal (measured 2026-09-16; the shared write-up lives in
+`ofox-video-core`'s `api-params.md` and is linked rather than restated here).
+Ofox's own words are "privacy-preserving preprocessing for **authorized**
+real-person references", so every mention in this file frames it as **an
+assertion that the user holds the rights to the likeness** — offered only
+after consent is settled, never as a retry after `input_moderation_failed`,
+never set on a user's behalf, never for a public figure. The failure-mode row
+that used to read "do not reach for it, it is untested" now reads "do not
+reach for it as the fix", which is the durable version of that instruction.
+
+**The default model stays `alibaba/wan-3.0-prime`, and the question is
+recorded as open.** seedance-2.5 plus the flag is now a genuine alternative
+route where before it was closed — but the A/B behind it was 4 seconds at
+480p with no dialogue, and it says nothing about which model speaks a script
+better, holds a face better, or costs less per usable clip. A new section, "An
+open question this file does not settle: the default model", names what would
+close it: the same portrait and the same script as job `855833b4`, run on
+seedance-2.5 with the flag, read the same way. Switching a shipped default on
+one blink test would have been the easy call and the wrong one.
+
+**The approval-gate line changed shape rather than disappearing.** The
+message used to require one line saying the scenario had no paid run behind
+it. It now requires one line saying what the evidence actually is — one 10s
+English run at 480p — because "thin evidence, described accurately" is what a
+user needs to hear, and the draft is still there to be watched. The skill has
+one billed job behind it, 64 cents, quoted as a sense of scale; the `--dry-run`
+figure remains the only number put in front of anyone.
+
 ## 1.0.0 — first release
 
 A scenario skill for one person, framed chest-up, speaking a short script to

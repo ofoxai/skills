@@ -2,6 +2,35 @@
 
 All notable changes to the **product-demo** skill. Versioning follows SemVer.
 
+## 1.1.0 — a face in a capture is no longer a flat dead end, and cropping is still the answer
+
+Three places in `SKILL.md` said `--real-person true` was untested on
+`bytedance/seedance-2.5`. It was measured on 2026-09-16 and it lifts the
+refusal, so those three lines were wrong and are fixed. Minor rather than
+patch, because the guidance around a flag changed.
+
+**The measurement lives in `ofox-video-core`, not here.** This file links to
+[`api-params.md`](../ofox-video-core/references/api-params.md) → the
+real-person section rather than restating a single-variable A/B in a third
+place, which is the same convention this skill already follows for the prompt
+craft, the brief and the spend rule.
+
+**The wording is fixed and is the point of the release.** `--real-person true`
+is Ofox's privacy-preserving preprocessing path for real-person references the
+user is **authorised** to use — an authorisation route, never a way past the
+check. Nothing in this skill describes it as a flag that gets a rejected
+capture accepted.
+
+**The edit is deliberately small, because this scenario barely has the
+problem.** The input here is captures of a user interface: a photoreal face
+shows up as a profile picture, a testimonial block or a customer photo, and
+**cropping it out costs nothing and is almost always right**, because the face
+is essentially never the subject of a UI demo. So the flag is recorded as a
+measured alternative and explicitly as the heavier one, in the capture
+checklist, the `--real-person` default row, and the `input_moderation_failed`
+failure row. It has not been promoted into a feature, a question in the brief,
+or a recommended default, and it should not be.
+
 ## 1.0.1 — it happened a second time, through this file's own template
 
 1.0.0 shipped saying this skill rested on **one** measured job. It rests on

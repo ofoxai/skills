@@ -2,11 +2,11 @@
 name: keyframe-animation
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus two images you already have, a start frame and an end frame. Animates the motion between them as one video — both frames go into a single Ofox video job, the clip opens on A, closes on B, and the model fills the middle. Use when a user has two stills and wants the in-between animated, e.g. "here is the before and the after, animate the transition", "make a video that starts on this image and ends on that one", "tween these two frames", or "move the object from where it sits in the first picture to where it sits in the second". Do not use when only one image exists (animating a single frame is seedance-ad-creative or seedance-product-video), or when the pair is two states of a user interface (see product-demo).
 license: MIT
-version: "1.0.1"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/keyframe-animation
 metadata:
   author: ofoxai
-  version: "1.0.1"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -240,11 +240,21 @@ more weight here than a reference photo does anywhere else in this repo.
   publicly reachable URL has been rejected upstream at least once in this repo
   (likely host-side hotlink protection). A URL works, it is just the
   less-reliable of the two.
-- **No photoreal person in either frame.** `bytedance/seedance-2.5` refuses a
-  photoreal-person reference at submission (`input_moderation_failed`, nothing
-  billed) — a documented `ofox-video-core` behaviour, and the refusal happens
-  before any money moves. `--real-person true` exists for authorised
-  references but is untested on 2.5 in this repo.
+- **A photoreal person in either frame stops the job by default — and the one
+  exception is an authorisation, not a trick.** `bytedance/seedance-2.5`
+  refuses a photoreal-person reference at submission
+  (`input_moderation_failed`, nothing billed) — a documented `ofox-video-core`
+  behaviour, and the refusal happens before any money moves. `--real-person
+  true` routes such a reference through Ofox's privacy-preserving preprocessing
+  for real-person material the user is **authorised** to use, and as of
+  2026-09-16 it is measured lifting that refusal on 2.5. **It is an
+  authorisation route, never a way past the check**: reach for it only when the
+  user holds the right to use that likeness and has said so, and never as a fix
+  for a rejection. What was measured is a synthetic portrait on a single first
+  frame at one tier — a two-ended pair with the flag set is outside it, and so
+  is a real photograph of a real person. Evidence and limits:
+  [`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+  → "`--real-person true` lifts that refusal on 2.5".
 
 ## Duration: the motion arrives early and then holds
 
@@ -382,7 +392,7 @@ so.
 | `--aspect-ratio` | not passed | the attached frames decide it — see "The frame decides the shape" |
 | `--generate-audio` | `false` | a tween of two stills has nothing to sync to, and the server's default is `true`. Omit the flag only when the clip genuinely wants a track |
 | `--seed` | let the script roll one, and keep it | it prints `SEED` and writes it to the clip's `.json` sidecar, which is what lets "that take, at a higher resolution" be re-submitted at all. It does **not** reproduce it: measured, an identical request on a fixed seed came back a visibly different clip. A byte-identical prompt is necessary and not sufficient — tell the user a re-render is another roll aimed at the same shot before they pay for it |
-| `--real-person` | leave unset | photoreal people in a reference frame are refused at submission on `bytedance/seedance-2.5`; `true` is untested there |
+| `--real-person` | leave unset — **unless the user holds the right to use the likeness in the pair and has said so** | a photoreal person in a frame is refused at submission on `bytedance/seedance-2.5`, nothing billed. `true` is Ofox's privacy-preserving preprocessing path for **authorised** real-person references, and it was measured lifting that refusal on 2.5 (2026-09-16) — an authorisation route, never a way past the check. Measured on a synthetic portrait as a single first frame; a two-ended pair with the flag, and a real photograph of a real person, are both outside it. See [`api-params.md`](../ofox-video-core/references/api-params.md) → "`--real-person true` lifts that refusal on 2.5" |
 
 ## Choosing a model
 
@@ -628,7 +638,7 @@ here.
 |---|---|---|
 | Exit `1`, no network call made | A flag the model doesn't accept — a duration outside its range, a resolution it doesn't have | Read the error, which names the model's real values, and re-run. Nothing was submitted, so retrying is free |
 | Exit `1`, `references_conflict` | `--frame-first-image`/`--frame-last-image` together with an `input_references` array in `--extra-json` | Pick one meaning — locked frames, or identity references — and drop the other. They cannot be combined in one job |
-| Exit `3`, `input_moderation_failed` | One of the two frames contains a photoreal person. Refused at submission on `bytedance/seedance-2.5`; nothing billed | Use frames without a photoreal person, or crop them out. `--real-person true` is untested on that model here |
+| Exit `3`, `input_moderation_failed` | One of the two frames contains a photoreal person. Refused at submission on `bytedance/seedance-2.5`; nothing billed | Use frames without a photoreal person, or crop them out. If the user is **authorised** to use that likeness, `--real-person true` is the route Ofox provides for it and is measured lifting this refusal on 2.5 — ask first, price it as an experiment (it was measured on a single first frame, not on a two-ended pair), and do not offer it as a way past the check |
 | Exit `3`, `insufficient_credits` | Ofox balance too low | No charge was made; add credits at https://app.ofox.ai and retry |
 | Exit `3`, job ends `failed` with `output_moderation_failed` | The generated output failed a post-generation check — after the job ran, not at submission. Not billed | Retry as a **brand-new** `generate` with a different prompt or frames. A new request, not a resubmission |
 | The clip runs backwards | The two paths were passed on the wrong flags | Swap `--frame-first-image` and `--frame-last-image`. New job, new cost table — which is why `Order` is a must-ask when the input is ambiguous |

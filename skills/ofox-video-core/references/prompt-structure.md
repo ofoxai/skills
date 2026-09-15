@@ -1852,8 +1852,11 @@ semantics you can use.
   reference images are refused by seedance-2.5 image-to-video" in
   `api-params.md`. Gallery cases with a real person in an i2v prompt (20, 24,
   40) came from other platforms and say nothing about Ofox behaviour.
-  `--real-person true` exists for authorised references; whether it lifts the
-  refusal on 2.5 is **untested here**.
+  `--real-person true` does lift the refusal on 2.5 (measured 2026-09-16), and
+  it is **an authorisation route, not a way past the check** — it asserts that
+  the caller holds the rights to that likeness, so it belongs only in work
+  where that is true, never as a retry on a refused job. Same section of
+  `api-params.md`.
 - **`frame_images` and `input_references` are mutually exclusive.** One job
   either locks a frame or borrows appearance, not both.
 - **`input_references` limits**: ≤9 images, ≤3 audio, ≤1 video; a video must

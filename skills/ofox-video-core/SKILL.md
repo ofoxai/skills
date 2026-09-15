@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.26.0"
+version: "1.27.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.26.0"
+  version: "1.27.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -174,19 +174,31 @@ What it does:
 `chain` needs `ffmpeg`, and checks for it **before** submitting anything, so
 a missing dependency never costs a paid shot.
 
-### The one hard limit: no real people
+### The one hard limit: real people, unless they are yours to use
 
 **Seedance 2.5 image-to-video rejects reference frames containing a real
 person** — `HTTP 400 / input_moderation_failed`, "may contain real person".
 Nothing is generated and nothing is billed, but the chain stops there.
 
-So chaining works for products, landscapes, illustration and anime, and
-**does not work for live-action human sequences** on this model. That is why
-`seedance-anime-drama` can open each of its shots on a generated frame of
-the character while a short-drama sequence cannot. `--real-person true` exists
-for authorized real-person references and Ofox documents it for
-`bytedance/seedance-2.0`; whether it lifts the restriction on 2.5 is untested
-here — don't promise it.
+So by default chaining works for products, landscapes, illustration and
+anime, and **does not work for live-action human sequences** on this model.
+That is why `seedance-anime-drama` can open each of its shots on a generated
+frame of the character while a short-drama sequence cannot.
+
+**`--real-person true` lifts that refusal on 2.5 — measured 2026-09-16 — and
+it is an authorization mechanism, not a way past the check.** Ofox's own words
+for it are "privacy-preserving preprocessing for AUTHORIZED real-person
+references": setting it asserts that the user has the right to use that
+likeness. So it opens a real-person chain **only for footage the user may
+actually use**, and only after they have said so. Never set it to make a
+refused job go through, never offer it as a retry for
+`input_moderation_failed`, and never for an identifiable public figure — the
+flag asserts authorization, it cannot create it. The A/B behind this, and the
+five things it does not establish (one upstream, one tier and mode, a
+synthetic portrait rather than a real photograph, likeness fidelity, one
+model), are in
+[`references/api-params.md`](references/api-params.md) →
+"`--real-person true` lifts that refusal on 2.5".
 
 ### Extracting a frame on its own
 
@@ -656,11 +668,13 @@ derived name usually describes the room rather than the scene. **A scenario
 skill always knows the better name — pass it.**
 
 The 8-hex suffix keeps two runs of the same prompt from overwriting each
-other. It is not a way back to the job: the API has no list endpoint, so a
-short id cannot be expanded. The sidecar carries the full `job_id`, the
-prompt, the real cost, and the `request` as submitted — the only place
-`resolution`, `aspect_ratio` and `seed` are recorded, since the poll response
-echoes none of them. Full field table in
+other. It is not a way back to the job: nothing expands a prefix into a full
+id. A recent job can often be recovered anyway by listing `GET /v1/videos`
+and matching the prefix — see "The recovery step" — but only while it is
+still on the list, so that is a rescue, not the record. The sidecar carries
+the full `job_id`, the prompt, the real cost, and the `request` as submitted —
+the only place `resolution`, `aspect_ratio` and `seed` are recorded, since the
+poll response echoes none of them. Full field table in
 [`references/api-params.md`](references/api-params.md).
 
 ## Re-attempting a shot
@@ -706,6 +720,20 @@ Measured on that model, at that duration and tier. Nothing here says a
 different model is better behaved — but nothing in this repo ever measured one
 that was, either, and the claim this passage used to make had never been
 tested on any model.
+
+#### The content is irreproducible. The frame size is not — keep them apart
+
+Everything above is about what the clip **shows**. Its **dimensions** behave
+the opposite way, and the two must not be allowed to erode each other. The
+same 720x480 (3:2) frame, fed to `bytedance/seedance-2.5` at 480p in two
+independent jobs — `35b6aed1` and `69bc799d` — came back **794x530 both
+times**. Output size is decided by the resolution tier and the frame's ratio,
+not by the input file's pixel count and not by the seed.
+
+So an editor planning a join can rely on the geometry while relying on nothing
+else about the take, and "you cannot get the same clip twice" is a statement
+about the picture only. Do not stretch it into "the size might change", and do
+not read the stable size as evidence that anything else is reproducible.
 
 **A byte-identical prompt is still necessary; it is just not sufficient.**
 Measured on 2026-09-05: two jobs ran the same seed `642303335` at the same
@@ -753,8 +781,10 @@ the file is on disk.
 Key flags: `--model` (default `bytedance/seedance-2.5`), `--duration`,
 `--resolution`, `--aspect-ratio` (includes `adaptive` — see below), `--size`,
 `--generate-audio true|false`, `--seed`, `--frame-first-image URL|PATH`,
-`--frame-last-image URL|PATH`, `--real-person true|false`, `--callback-url`,
-`--extra-json '<json>'` (advanced fields not covered by a flag, e.g.
+`--frame-last-image URL|PATH`, `--real-person true|false` (**an authorization
+assertion about the attached likeness, not a moderation switch** — read the
+real-person section of `references/api-params.md` before you pass it),
+`--callback-url`, `--extra-json '<json>'` (advanced fields not covered by a flag, e.g.
 `input_references`, `provider`), `--max-wait SECONDS` (default 540),
 `--poll-interval SECONDS` (default 6). Full parameter reference:
 `references/api-params.md`. Pricing and the cost-estimate formula:
@@ -844,9 +874,9 @@ bash references/ofox-video.sh poll JOB_ID
 If a Claude Code tool call itself times out while `generate` is still
 running (the script hasn't printed a result yet), the job may still be
 mid-flight upstream — you won't have the job id from stdout in that case.
-Don't guess or re-submit; tell the user the request may still be
-processing and that checking `https://app.ofox.ai` for recent jobs is the
-safe way to find its id and resume with `poll`.
+Don't guess or re-submit; **list the recent jobs and look** (below), or tell
+the user to check `https://app.ofox.ai`, and resume the id you find with
+`poll`.
 
 **`batch` prints its own resume command the moment its takes are submitted**,
 before the waiting starts — a single `poll` over every take's job id, with the
@@ -856,8 +886,45 @@ for. Use it; never re-run `batch`.
 
 If the create call itself gets an ambiguous network failure (curl exits
 nonzero with **no HTTP response at all** — exit code `5`), the script
-explicitly refuses to guess whether a job was created. Don't auto-retry;
-tell the user to check `https://app.ofox.ai` first.
+explicitly refuses to guess whether a job was created. Don't auto-retry —
+find out, with the step below.
+
+### The recovery step: list the jobs, compare, then decide
+
+**`GET /v1/videos` returns HTTP 200 and a list of your jobs** — measured
+2026-09-16, and it replaces a claim this skill used to make that the only way
+to check was the web dashboard. Each entry carries `created_at`, `id`,
+`model`, `prompt`, `status` and `usage`, which is everything needed to answer
+"did my create actually land":
+
+```bash
+curl -s -H "Authorization: Bearer $OFOX_API_KEY" \
+  "https://api.ofox.ai/v1/videos?limit=5" | jq '.'
+```
+
+Read the newest entry's `created_at`, `status` and `id` off that — the exact
+envelope is not restated here, since printing it and looking is both free and
+more reliable than a filter written against a remembered shape. (`/v1/jobs` is
+404; `/v1/videos` is the one.) The endpoint needs the key, unlike `models` and
+`providers`, so the safety contract applies — reference the environment
+variable as above and never echo its value.
+
+**Use it like this after a transport fault:** list, compare the newest entry's
+`created_at` against the moment your create died, and only then decide. If
+nothing newer than your own earlier work is on the list, no job was created
+and a retry is safe. If something is there, you have its id — `poll` it, never
+`generate` again.
+
+That is exactly how the 2026-09-16 case was settled: a create lost its
+connection with no HTTP response, the script exited `5` and refused to guess
+(correctly), the list's newest entry was still hours old, and the retry went
+ahead knowing rather than hoping.
+
+**This does not weaken the no-resubmit rule; it is what the rule was
+missing.** The reason never to blind-retry was that nobody could tell whether
+a job existed. Now somebody can — so "don't guess" stops being a dead end and
+becomes "go and find out, then act on what you found". Blind retries are still
+never acceptable.
 
 ### The rule has now survived a real transport fault
 
@@ -884,6 +951,16 @@ second billable job and doubled a 2.88 USD spend, on a fault that cleared by
 itself in six seconds. A dropped connection while polling is **never**
 evidence about the job's state — three for three now, on separate days.
 
+**2026-09-16 added three more `curl (35)` events in a single session** — one
+on a create, two on polls — and both halves of the script behaved correctly
+each time: the polls retried the poll and their jobs completed; the create
+refused to guess and exited `5`, which is what sent someone looking for the
+job list in the first place. Six events on four days is enough to say plainly
+that **this API's transport layer is flaky**, and that neither the
+no-resubmit rule nor the recovery step above is over-engineering. Budget for
+a dropped connection in any session that spends real money; it is normal
+here, and it says nothing about the job.
+
 ## Error handling
 
 The script maps every documented `error.code` to a fixed, actionable
@@ -901,7 +978,7 @@ when `error.code` itself is absent or unrecognized.
 | `2` | Environment error — `curl`/`jq`/`OFOX_API_KEY` missing. Fix the environment, no job was attempted. |
 | `3` | The API rejected the request, or the job ended `failed`/`cancelled`/`expired`. The mapped message explains why (see `references/api-params.md` for the full error-code table). Includes `output_moderation_failed` — a **post-generation** failure (the job ran, its output failed a content check afterward), **not billed** (no `usage` field on the response), safe to fix by submitting a new `generate` call with a different prompt/reference — that's a new request, not a resubmission of the failed one. |
 | `4` | Timed out waiting for a terminal state. The job is still running — `poll JOB_ID`, do not `generate` again. |
-| `5` | Ambiguous network failure on create — no HTTP response received. Do not auto-retry; check the dashboard first. |
+| `5` | Ambiguous network failure on create — no HTTP response received. Do not auto-retry; list `GET /v1/videos` (see "The recovery step") or check the dashboard, and retry only once you know nothing was created. |
 | `6` | `--out-dir` could not be created or entered (bad path, permissions) — a local filesystem problem, not an API problem. If this happened during `generate`, the job itself is unaffected (already created or still running server-side); do not re-run `generate`. Fix `--out-dir` and re-run `poll JOB_ID --out-dir <a writable directory>`. |
 
 (That `6` row used to sit *below* a paragraph about `batch`, which broke the

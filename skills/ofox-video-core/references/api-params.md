@@ -23,7 +23,7 @@ Seedance 2.5) before it ever calls the API.
 | `seed` | integer | no | `--seed` | Ofox documents this as "deterministic generation". **Measured otherwise** — an identical request on a fixed seed returned visibly different clips, and one of three submissions failed outright. See the Seed section below before telling a user a take can be reproduced. |
 | `frame_images` | array | no | `--frame-first-image URL\|PATH`, `--frame-last-image URL\|PATH` | Image-to-video via first/last frame. Accepts a remote URL (used as-is) or a local readable file path (auto base64-encoded into a `data:image/<ext>;base64,...` URI). The script builds the `{type, image_url, frame_type}` objects for you — pass either or both flags. |
 | `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Element types are `image_url`, `audio_url`, `video_url` — see below. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. **An accepted `audio_url` does not become the clip's audio** — see the audio section below before building anything on it. |
-| `real_person` | boolean | no | `--real-person true\|false` | Default `false`. Routes an **authorized** real-person reference image through Ofox's privacy-preserving preprocessing, which is otherwise refused by the upstream. Ofox documents this for `bytedance/seedance-2.0`; **not confirmed for 2.5** — see the real-person section below. |
+| `real_person` | boolean | no | `--real-person true\|false` | Default `false`. Routes an **authorized** real-person reference image through Ofox's privacy-preserving preprocessing, which is otherwise refused by the upstream. Ofox documents this for `bytedance/seedance-2.0`, and a single-variable A/B on 2026-09-16 confirmed it lifts the refusal on `bytedance/seedance-2.5` too (byteplus, 480p, 4s, i2v). It is an **authorization mechanism for footage the user has the right to use, not a way past moderation** — see the real-person section below before offering it to anyone. |
 | `callback_url` | string | no | `--callback-url` | Must be `https://` and must not point to a private network. |
 | `provider` | object | no | `--provider SLUG` | Pins the upstream that serves the job. **Defaults to `byteplus` for `bytedance/seedance-*`** — see below. `--provider auto` sends no pin. `provider.options.<slug>` passthrough is not exposed as a flag; use `--extra-json`. |
 
@@ -341,6 +341,43 @@ On `completed`:
 | `usage.video_seconds` | Billed duration. **Measured**: for a v2v job with a 4s input and a 4s output this was `4`, not `8` — the input video's duration is *not* added on top. (An earlier version of this table claimed it was; that claim was never measured and is wrong for this case.) The v2v *rate* still applies, which is where the extra cost comes from. |
 | `usage.video_cost` | Actual cost, a string with 10 decimal places. The script prints this exactly — never estimate or invent a number here. |
 
+## Listing recent jobs (`GET /v1/videos`)
+
+**Measured 2026-09-16, and it corrects a claim this repo had been repeating:
+there *is* a job list.**
+
+```
+GET https://api.ofox.ai/v1/videos          -> HTTP 200
+GET https://api.ofox.ai/v1/videos?limit=5  -> HTTP 200
+GET https://api.ofox.ai/v1/jobs            -> HTTP 404
+```
+
+Each entry carries `created_at`, `id`, `model`, `prompt`, `status`,
+`unsigned_urls`, `updated_at` and `usage` — enough to tell whether a job
+exists, what it is, and what it billed. It needs the API key, unlike
+`/v1/models`.
+
+The claim it corrects came from an earlier probe of `/v1/credits`,
+`/v1/account` and `/v1/usage` — all 404 — from which this repo concluded there
+was no programmatic way to check for a job at all. Those three really are 404;
+`/v1/videos` had simply never been tried.
+
+Two things this changes, and one it doesn't:
+
+- **A transport fault on create is now diagnosable from the terminal.** See
+  the no-resubmit rule below — this is the recovery step, and it is what the
+  rule was missing.
+- **A short filename id can sometimes be resolved after all.** The 8-hex stem
+  on a downloaded file is a prefix of a real `id`, so listing and matching it
+  works *for a job recent enough to still be on the list*. That is a
+  convenience, not a guarantee, and the sidecar's full `job_id` is still the
+  reliable record — do not stop writing one down because a list exists.
+- **It is not a billing endpoint.** `/v1/usage`, `/v1/billing`, `/v1/credits`,
+  `/v1/account` and `/v1/balance` all still answer 404
+  (`ofox-image-core/references/pricing.md` records that, and it stands). Per-job
+  `usage` on a list entry is not an account balance and must not be presented
+  as one.
+
 ## Output filenames and the metadata sidecar
 
 A completed download is written as `<slug>-<short job id>.<ext>`, plus a
@@ -361,9 +398,12 @@ capped at 40 codepoints — sliced in `jq`, which cuts by codepoint, so CJK text
 is never split mid-character regardless of locale.
 
 The short id is 8 hex characters. It exists to keep two runs of the same
-prompt from overwriting each other, **not** as a way back to the job: there is
-no list endpoint to expand a prefix against, so a truncated id cannot be
-resolved. That is what the sidecar is for.
+prompt from overwriting each other, **not** as a way back to the job: nothing
+expands a prefix into a full id. `GET /v1/videos` (above) makes that *nearly*
+recoverable — the stem is a prefix of a real `id`, so matching it against a
+recent list usually works — but only while the job is still on the list, and
+this file said flatly there was no list at all until 2026-09-16. Treat the
+list as a rescue, and the sidecar as the record.
 
 | Sidecar field | Source |
 |---|---|
@@ -425,6 +465,16 @@ the converse, which the 2026-09-15 runs above tested directly and disproved.
 The sidecar stores the prompt as submitted so a re-attempt does not depend on
 anyone retyping it. `SKILL.md`'s "Re-attempting a shot" has the full
 statement.
+
+**Irreproducible content, reproducible dimensions — do not collapse the two.**
+Everything above is about what the clip *shows*. The frame size it arrives at
+behaves the other way: the same 720x480 (3:2) frame, fed to
+`bytedance/seedance-2.5` at 480p in two independent jobs — `35b6aed1` and
+`69bc799d` — delivered **794x530 both times**. So "you cannot get the same
+clip twice" is true of the picture and false of its geometry, and an editor
+planning a join can rely on the size while relying on nothing else. Output
+dimensions come from the resolution tier and the frame's ratio; the input's
+own pixel dimensions do not carry through.
 
 `frame_images` is replaced by a `frame_images_count` — a resolved
 `--frame-first-image` is a base64 data URI that can exceed a megabyte, and
@@ -514,13 +564,87 @@ The rest of what this means in practice:
   shots, landscapes. That is why `seedance-anime-drama`, which reuses a
   generated anime frame, works; the measurement is the second row above.
 - `real_person: true` exists precisely for authorized real-person references
-  and routes them through Ofox's privacy-preserving preprocessing. Ofox
-  documents that path for `bytedance/seedance-2.0`. **Whether it lifts this
-  restriction on 2.5 has not been tested here** — nothing in the table above
-  exercises it, and it must not be described as a known workaround.
+  and routes them through Ofox's privacy-preserving preprocessing. **On
+  `bytedance/seedance-2.5` it does lift this refusal — measured 2026-09-16,
+  the next section.** What it is *for* has not changed, and that is the part
+  that matters: it is how a caller asserts a right to use a likeness, not a
+  way past the check.
 
 The script maps `input_moderation_failed` to this explanation and names both
 options rather than leaving a bare error code.
+
+### `--real-person true` lifts that refusal on 2.5 — for references you are authorized to use
+
+**This is the section other skills should link rather than restate.**
+
+**Measured 2026-09-16 as a single-variable A/B.** The same synthetic
+portrait, the same prompt, the same parameters (4s, 480p, image-to-video via
+`--frame-first-image`), the same upstream (`byteplus`), submitted twice and
+differing only in the flag:
+
+| Request | Result | Billed |
+|---|---|---|
+| **with** `--real-person true` | job `28eee177-1eab-4852-a72f-d6a2de695672` completed, seed `311954977`, and the delivered clip is the person in the portrait | 44 cents |
+| **without it** | `HTTP 400`, `error.code: input_moderation_failed`, upstream message "The request failed because the input image 'content[1]' may contain real person." | nothing |
+
+The control run is the whole point. With only the accepting run there are two
+explanations that produce identical evidence — the flag worked, or that
+particular portrait never tripped the classifier in the first place. The
+control was refused, so the flag is the only variable that moved. And a
+refused create bills nothing, so the control cost nothing to run. (This repo
+has been burned by the other shape before: see the Seed section, where a
+tested proposition was written up as its untested converse.)
+
+#### What the flag is, and what it is not
+
+Ofox's own characterisation, quoted from the error text the API returns:
+
+> `--real-person true`, which routes through Ofox's privacy-preserving
+> preprocessing for **AUTHORIZED** real-person references.
+
+It is an **authorization mechanism, not a moderation bypass.** The refusal
+asks, in effect, whether the caller has the right to use this person's
+likeness; the flag is how a caller asserts that they do, and the upstream
+then handles the reference through a preprocessing path built for that case.
+Setting it on material the user has no right to use does not make the use
+legitimate — it makes a false assertion and then generates the clip, which is
+a worse outcome than being refused.
+
+Practically, for any skill that surfaces this:
+
+- **Offer it only when the user has confirmed they may use that likeness**,
+  and say what it means while offering it. "You have the rights to this
+  person's image" is the precondition, not a formality to skip past.
+- **Never write it as "the flag that gets a portrait past the check"**, and
+  never reach for it as a reflex retry after `input_moderation_failed`. A
+  refusal is not an error to route around.
+- **Never set it on the user's behalf** to make a job go through.
+- **An identifiable public figure is out regardless.** The flag asserts
+  authorization; it cannot create it.
+
+#### What that run does not establish
+
+One A/B is one A/B. All of the following are untested here, and none of them
+may be implied:
+
+- **One upstream.** `byteplus` only. `volcengine` was not tried, and the two
+  are documented above as moderating differently — so this is byteplus's
+  verdict, not the platform's.
+- **One tier, one mode, one length.** 480p, 4 seconds, image-to-video with a
+  single first frame. Nothing here covers 720p or 1080p, longer durations, a
+  last frame, or a real-person image sent through `input_references`.
+- **One content class — a *synthetic* portrait.** It was generated for the
+  test (the same method as the 2026-09-14 comparison) precisely so that no
+  real person's likeness was involved. It trips the same classifier, which is
+  what makes it a valid control; it is **not** evidence about how an actual
+  photograph of an actual person is handled.
+- **Fidelity under preprocessing is unmeasured.** The delivered 480p clip is
+  recognisably the same person, and that is all that was checked. Whether the
+  privacy-preserving preprocessing softens a likeness at a tier where it would
+  show, nobody has looked.
+- **One model.** `bytedance/seedance-2.5`. Ofox documents the flag for
+  `bytedance/seedance-2.0`; every other model is untested here, including the
+  ones scenario skills currently route portraits to.
 
 ## The no-resubmit rule
 
@@ -530,8 +654,9 @@ for the same invocation:
 
 - **Create call times out / connection error with no HTTP response at all**
   → the script exits `5` and refuses to guess. It genuinely cannot tell
-  whether the job was created server-side. Check `https://app.ofox.ai`
-  before manually retrying.
+  whether the job was created server-side. **List the recent jobs and look**
+  — `GET /v1/videos`, below — then retry manually only if nothing new is
+  there. `https://app.ofox.ai` shows the same thing in a browser.
 - **Create call gets an HTTP error response** (4xx/5xx with a real body) →
   no job was created (the request was rejected), so fixing the parameters
   and retrying `generate` is safe.
@@ -553,3 +678,19 @@ live transport fault at all, and a resubmit at any of those three moments
 would have doubled a 2.88 USD spend on a fault that cleared by itself in six
 seconds. `SKILL.md`'s "The rule has now survived a real transport fault"
 carries the same record.
+
+**First bullet, exercised 2026-09-16 — and this is where the job list earns
+its place.** A `create` lost its connection with no HTTP response at all
+(`curl (35)` again), so the script exited `5` and refused to guess, correctly.
+Previously that was the end of the line from the terminal: the only next step
+on offer was "open the dashboard". Instead, `GET /v1/videos` was listed, the
+newest entry was still a job from hours earlier, and that settled it — nothing
+had been created, so retrying was safe rather than a coin flip. **List,
+compare, then decide** is now the documented step, and it strengthens the rule
+rather than loosening it: the reason never to blind-retry was that nobody
+could tell, and now somebody can.
+
+Three `curl (35)` events happened in that one session — one on a create, two
+on polls. The transport layer of this API is genuinely flaky, which is the
+best argument that neither the no-resubmit rule nor its recovery step is
+over-engineering.

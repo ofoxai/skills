@@ -4,6 +4,100 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.27.0 — `--real-person true` works on 2.5, and "no way to check for a phantom job" was false
+
+Three measurements from 2026-09-16 land here, and two of them correct claims
+this skill had been repeating.
+
+**`--real-person true` lifts the real-person refusal on `bytedance/seedance-2.5`.**
+Every skill in this repo said this was untested on 2.5. It was tested as a
+single-variable A/B — the same synthetic portrait, prompt, parameters (4s,
+480p, i2v) and upstream (`byteplus`), differing only in the flag. With it, job
+`28eee177-1eab-4852-a72f-d6a2de695672` completed, seed `311954977`, billed 44
+cents, and delivered the person in the portrait. Without it, `HTTP 400
+input_moderation_failed`, "may contain real person", unbilled. The control is
+what makes it evidence: an accepting run on its own is equally well explained
+by "that portrait never tripped the classifier", and those two explanations
+look identical. This repo has already shipped one claim whose measurement
+tested the other proposition (see the Seed entries), which is why the control
+was run and why it is written up first.
+
+**The wording is load-bearing and is now fixed in one place.**
+`references/api-params.md` gains
+"`--real-person true` lifts that refusal on 2.5 — for references you are
+authorized to use", and that section is what scenario skills link instead of
+paraphrasing. Ofox's own error text calls the flag "privacy-preserving
+preprocessing for **AUTHORIZED** real-person references" — so it is an
+**authorization mechanism, not a moderation bypass**, and the section says
+outright never to offer it as a way past the check, never to use it as a
+reflex retry after `input_moderation_failed`, never to set it on a user's
+behalf, and never for a public figure. Setting it on material nobody has the
+rights to does not make the use legitimate; it makes a false assertion and
+generates the clip anyway, which is worse than a refusal.
+
+What the run does **not** establish is listed as prominently: one upstream
+(`byteplus`; `volcengine` untested), one tier and mode (480p, 4s, i2v with a
+single first frame), one content class (a *synthetic* portrait — an actual
+photograph of an actual person is untested), likeness fidelity under the
+preprocessing (unmeasured above 480p), and one model.
+
+The same framing is applied everywhere the old wording lived: the
+`real_person` row of the parameter table, the `chain` section's "one hard
+limit", the key-flags list, `prompt-structure.md`'s frame-semantics bullet,
+and — most importantly — **the script's own `input_moderation_failed`
+message**, which is what an agent reads at the exact moment it is tempted to
+retry. That message now opens option 2 with "ONLY if the user holds the rights
+to this person's likeness and has said so", and closes it with "a declaration
+of authorization, NOT a retry flag — do not set it to clear this error".
+
+**`GET /v1/videos` returns HTTP 200 and a job list — so a phantom job is now
+diagnosable from the terminal.** This skill's answer to an ambiguous create
+failure was "check the dashboard", because a probe had found `/v1/credits`,
+`/v1/account` and `/v1/usage` all 404 and the conclusion drawn was that
+nothing could be queried. `/v1/videos` had not been tried. It works, with the
+key, and each entry carries `created_at`, `id`, `model`, `prompt`, `status`,
+`unsigned_urls`, `updated_at` and `usage`. (`/v1/jobs` is still 404.)
+
+`SKILL.md` gains "The recovery step: list the jobs, compare, then decide",
+`api-params.md` gains a `GET /v1/videos` section, and the exit-`5` row and the
+script's own exit-`5` message now print the listing command instead of only
+pointing at the browser. **The no-resubmit rule itself is unchanged and is not
+weakened by this** — the reason never to blind-retry was that nobody could
+tell whether a job existed; now somebody can, so "don't guess" becomes "go and
+find out, then act on what you found". That is exactly how the 2026-09-16 case
+was settled: a create died on `curl (35)` with no HTTP response, the script
+exited `5` and refused to guess, the list's newest entry was still hours old,
+and the retry went ahead knowing rather than hoping.
+
+Two smaller corrections follow from the same endpoint. "The API has no list
+endpoint, so a short id cannot be expanded" was stated in both `SKILL.md` and
+`api-params.md`; a downloaded file's 8-hex stem is a prefix of a real `id`, so
+a recent job can often be recovered by listing and matching. That is a rescue,
+not a record — the sidecar's full `job_id` is still the thing to rely on. And
+the list is **not** a billing endpoint: per-job `usage` is not an account
+balance, and `ofox-image-core`'s "no billing endpoint" finding stands.
+
+**Content is irreproducible; dimensions are not. The two are now kept apart.**
+The same 720x480 (3:2) frame delivered **794x530** in two independent
+`bytedance/seedance-2.5` 480p jobs (`35b6aed1`, `69bc799d`). The standing
+finding that a fixed seed does not reproduce a clip is about the **picture**
+and is untouched; output size comes from the resolution tier and the frame's
+ratio, and an editor planning a join can rely on it. Stated under both "A
+fixed seed does not make this API reproducible" and the Seed section of
+`api-params.md`, in each case so that neither sentence can be read as
+undermining the other.
+
+**Transport flakiness is now stated as a property of this API.** Three more
+`curl (35)` events in the 2026-09-16 session — one on a create, two on polls —
+bringing it to six across four days. Both halves of the script behaved
+correctly every time: polls retried the poll and completed, the create refused
+to guess. Six events is enough to say that neither the no-resubmit rule nor
+its new recovery step is over-engineering.
+
+Documentation and two stderr messages (the exit-`5` create failure and
+`input_moderation_failed`); no change to request building, polling, validation
+or pricing. All 13 test suites pass unchanged.
+
 ## 1.26.0 — a templated prompt in a shots file was five jobs, and the estimate looked fine
 
 `--shots-file` is one prompt per **line**. `references/prompt-structure.md`

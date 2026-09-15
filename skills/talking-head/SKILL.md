@@ -2,11 +2,11 @@
 name: talking-head
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a portrait plus a short script into a clip of one person speaking those words to camera. You supply the text and the model generates the voice — audio cannot be uploaded, measured. Defaults to alibaba/wan-3.0-prime rather than this repo's usual seedance-2.5, because seedance-2.5 refuses a real person's photo at submission. Use when a user has a face and some words and wants the face to say them, e.g. "make this headshot read my intro", "a spokesperson clip from this portrait", "have her say this line to camera", "use this avatar to read the announcement". Do not use for a scene between two or more people (see seedance-short-drama), a polished brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the words still have to be pulled out of an article and no particular face is required (see explainer).
 license: MIT
-version: "1.0.0"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/talking-head
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -100,13 +100,21 @@ unhurried register and a silent close in the same prompt. The asymmetry
 settles which way to round: under-filling costs a pause at the end, and
 overrunning comes back rushed, garbled or cut off, which costs the whole clip.
 
-**What kind of evidence this is.** Both tiers are counts of *gallery prompt
-text* against clip length. The prompts are real and the clips they produced
-were published, but the platform and parameters behind most of them are
-unrecorded, and none of it is a measurement of what this API delivers. On this
-skill's default model it is weaker still — see "Wan's speech is unmeasured"
-below — which is a reason to read the first clip's delivery rather than a
-reason to plan at the other tier.
+**What kind of evidence this is — and one number is now this model's own.**
+Both tiers started as counts of *gallery prompt text* against clip length:
+real prompts and published clips, but unrecorded platforms and parameters,
+and no measurement of what this API delivers. That is still what the *tiers*
+are. The **3 words a second this file budgets at** is no longer one of them:
+measured 2026-09-16 on this skill's own first paid run, `alibaba/wan-3.0-prime`
+delivered **3.16 words a second** — 29 scripted words across a 9.17-second
+speech span, every word spoken, nothing dropped. The budget holds on the
+model this skill actually uses, and it is slightly conservative, which is the
+direction the table above was rounded in anyway.
+
+One run, one prompt, English, 480p, 10 seconds, and the upstream is unknown —
+the bounds are in "What is measured, and what is not" below and they matter.
+Reading a first clip's delivery is still worth the minute it takes; planning
+at the other tier still is not.
 
 **If the user's script is longer than its clip**, say so before quoting
 anything, and offer the two real options — cut it to one idea, or split it
@@ -128,15 +136,64 @@ may contain real person.
 
 Nothing is billed — but nothing is delivered either, and a portrait is this
 scenario's defining input. `alibaba/wan-3.0-prime` accepted the same portrait
-and completed. So that is the default. The full comparison, and everything it
-does *not* establish, is the next section.
+and completed, so that is the default, and the run in the next section shows
+the route it picked works end to end.
+
+**There is now a second way onto seedance-2.5, and it is not a shortcut.**
+`--real-person true` lifts that refusal — measured 2026-09-16 — by asserting
+that the caller holds the rights to the likeness, which is a claim about
+permission rather than a setting that makes moderation lenient. It does not
+change this skill's default, and whether it *should* is an open question
+written out under "An open question this file does not settle" below rather
+than quietly answered here.
 
 ## What is measured, and what is not
 
-**This skill has no paid run of its own.** Nothing here has been generated
-from this file's template; no clip has been read frame by frame against it.
-What it stands on is a set of measurements made elsewhere in this repo, and
-they answer narrower questions than this scenario asks.
+**This skill has one paid run of its own, and it answered the three questions
+this file used to hedge.** Job `855833b4-0819-4bd5-bc8c-397db009069a`,
+2026-09-16, `alibaba/wan-3.0-prime`, 10 seconds at 480p, seed `368003184`,
+64 cents, 29 words of scripted dialogue built from this file's template — and
+read afterwards, frame by frame and with the audio, rather than being called
+done at `STATUS completed`.
+
+One run settles what one run can. Everything below is stated with the
+parameters it was measured at, and nothing is carried past them.
+
+### The first run — 2026-09-16
+
+| Question | Measured | How |
+|---|---|---|
+| **Speech rate** | **3.16 words a second** | 29 words across a 9.17s speech span (`silencedetect` at -30dB/0.35s puts speech from 0.46s to 9.63s, with two internal pauses totalling 0.76s; the voiced-only rate is 3.45 w/s). The clip opens with 0.46s before the first word and closes with 0.4s of hold |
+| **Truncation** | **None** | A `whisper tiny.en` transcription returns all 29 words, in order, with nothing added. Only punctuation differs from the script |
+| **Lip-sync, gross** | **Confirmed** | At 2.5s the audio is voiced and the mouth is open mid-word; at 9.8s, after speech ends at 9.63s, the lips are closed and the expression holds — which is the closing beat this file's template asks for |
+| **Lip-sync, per phoneme** | **Not measured, and frames cannot measure it** | Whether each phoneme's mouth shape is right is not a thing reading frames can answer. It stays open |
+| **Face lock** | **Held for the full 10 seconds** | Compared against the input portrait item by item: face structure, eyes, earring, hair parting, black top, gold necklace, grey background — all match |
+
+So the route this skill is built on works: the portrait goes in, the person
+comes out, the words all get said at about the rate this file budgets for, and
+the mouth moves with the speech at the resolution a viewer notices.
+
+**What that run does not establish:**
+
+- ⚠️ **Which upstream served it is unknown.** `alibaba/wan-3.0-prime` is not
+  upstream-pinned — the script pins `byteplus` for Seedance only — and Ofox
+  routes by weight across `alicloud` and `aliyun`. The sidecar does not record
+  a provider either (checked: its top-level keys are `created_at`, `job_id`,
+  `model`, `name`, `prompt`, `request`, `status`, `updated_at`, `video_cost`,
+  `video_file`, `video_seconds`). So this is **one observation on
+  wan-3.0-prime**, not a statement about both upstreams, and nothing here says
+  the two behave alike. It is also a gap in what the script records: a job's
+  upstream cannot be recovered after the fact.
+- **One prompt, one script, one take.** A second run of the same request would
+  come back a different clip — that is this API's documented behaviour, not a
+  caveat unique to here.
+- **English only.** The Chinese and Japanese character rates in the table above
+  are still gallery-derived. Nothing has been measured on this model in any
+  other language.
+- **480p, 10 seconds.** Nothing about longer clips, higher tiers, or whether
+  lip detail improves a tier up — which is precisely where a face's detail
+  goes first.
+- **Phoneme-level sync.** See the table. Gross sync is not accuracy.
 
 ### The portrait comparison — 2026-09-15
 
@@ -156,40 +213,49 @@ the same model. The two acceptances are first-run results. The spec entry is
 `.trellis/spec/skills/external-api-integration.md` → "moderation policy is
 per-model, not a platform-wide constant".
 
-**What that table establishes**: seedance-2.5 will not take this input, and
-two other models will. That is enough to settle the default.
+**What that table establishes**: without `--real-person true`, seedance-2.5
+will not take this input and two other models will. That settled the default,
+and the 2026-09-16 run above then showed the route it picked actually works.
 
-**What it does not establish, and must not be implied**:
+**What it still does not establish:**
 
-- **Nobody read the frames.** "Completed" is a job status. Whether the
-  delivered clip looks like the person in the portrait, whether the mouth
-  moves with the words, whether a 2-second clip at 480p resembles anything
-  usable — none of it was checked. This repo's own standing rule is that
-  `STATUS completed` proves nothing about an artifact.
-- **The portrait was synthetic.** One generated face is one content class. A
-  real photograph of a real person may moderate differently on any of the
-  three.
-- **Wan's speech is unmeasured.** Every word-rate number this skill plans
-  against was measured on gallery clips, and every *Ofox* run in this repo
-  that produced spoken dialogue was `bytedance/seedance-2.5` — the one model
-  this route cannot use. Whether `wan-3.0-prime` speaks at a similar rate, or
-  lip-syncs convincingly, or at all, has not been measured here.
-- **Wan's frame lock is unmeasured.** "What a frame lock actually holds" in
-  the shared file — the first frame reproduced exactly, identity held for
-  twenty seconds, survives cuts — is three `bytedance/seedance-2.5` jobs.
-  None of it has been re-run on wan. Treat "the clip opens on your portrait
-  and stays that person" as the hypothesis this route is built on, not as a
-  finding.
-- **Wan is not upstream-pinned.** The script pins `byteplus` for Seedance
-  only; `alibaba/wan-3.0-prime` runs on two upstreams and Ofox routes between
-  them by weight. Upstreams moderate differently, so one accepting run is one
-  upstream's verdict at best. A refusal on a later run of the same portrait
-  is not a contradiction — it is the routing.
+- **The portraits were synthetic.** One generated face is one content class,
+  in both the comparison and the first run. A real photograph of a real person
+  may moderate differently on any of these models.
+- **Nobody has read a `minimax/hailuo-3` clip.** The fallback's acceptance is
+  still `STATUS completed` and nothing more — no frames, no audio. Everything
+  measured above is wan's.
+- **Moderation on wan is one upstream's verdict at best**, for the routing
+  reason in the previous section. A refusal on a later run of the same
+  portrait is not a contradiction; it is the weighting.
 
-Practical consequence: **the first clip on this skill is an experiment.**
-Price it as one, run it short and cheap, and read the frames — does it look
-like the person, does the mouth match the words — before anyone pays for a
-deliverable.
+Practical consequence, unchanged by having a measurement: **run the first clip
+of any new job short and cheap and look at it.** One run on one face is not a
+promise about the next face, and identity and lip-sync are still the two
+things worth a draft's price to check before a deliverable is paid for.
+
+### An open question this file does not settle: the default model
+
+`bytedance/seedance-2.5` plus `--real-person true` now completes an
+image-to-video job on a real-person portrait — measured 2026-09-16, the shared
+write-up is
+[`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+→ "`--real-person true` lifts that refusal on 2.5". That makes seedance-2.5 a
+**genuine alternative route** for this scenario, where before it was closed.
+
+**The default stays `alibaba/wan-3.0-prime`, and that is a deferral rather
+than a verdict.** What the flag's A/B ran was 4 seconds at 480p with no
+dialogue — it establishes that the refusal lifts, and nothing about whether
+seedance-2.5 speaks a script better, locks a face better, or costs less per
+usable clip than the model measured above. Switching a shipped skill's default
+needs that comparison and a product call; one blink test is not it.
+
+So: **the question is open, and it is written here so nobody re-derives it
+from scratch.** What would close it is a run on seedance-2.5 with
+`--real-person true`, the same portrait and the same script as job
+`855833b4`, read the same way. Until then, name the alternative to a user who
+asks — with its precondition, which is the point of the next section and not
+an optional part of the offer.
 
 ## Before you attach someone's face
 
@@ -202,10 +268,18 @@ appear to say something it never said.
 - **Do not build a clip of an identifiable public figure**, whatever the
   script says. Moderation aside, this is the category where a generated clip
   does real damage.
-- The API's `--real-person true` flag exists for authorised references on
-  `bytedance/seedance-2.0`. Whether it lifts the 2.5 refusal is **untested in
-  this repo**, and it must not be offered as a workaround. It is not the
-  route this skill takes.
+- **`--real-person true` is how the first point above is stated to the API —
+  not a way round it.** The flag does lift seedance-2.5's refusal (measured 2026-09-16;
+  the shared write-up, with everything it does not establish, is
+  [`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+  → "`--real-person true` lifts that refusal on 2.5"). Ofox's own words for
+  what it does are "privacy-preserving preprocessing for **authorized**
+  real-person references": passing it asserts that the user holds the rights
+  to that likeness. Which means it is only ever offered **after** the two
+  points above are settled, never as a retry when a job was refused, and never
+  set on a user's behalf to make something go through. A false assertion that
+  generates the clip anyway is a worse outcome than the refusal was. This
+  skill's own route does not need it — wan takes the portrait without it.
 
 ## Where the core skill lives
 
@@ -265,11 +339,11 @@ job.
 | | **Portrait route** (the default) | **Described-presenter route** |
 |---|---|---|
 | Input | a photo of the person, as the first frame | no photo; the presenter is written in text |
-| Model | `alibaba/wan-3.0-prime` — the measured default, because seedance-2.5 refuses the photo | the script's own default, `bytedance/seedance-2.5`, which is where this repo's spoken-dialogue evidence lives |
-| Identity | should follow the attached frame — **unmeasured on this model**, see above | generated fresh; a second job is a different person, and no flag changes that |
-| Across jobs | re-attach the same portrait to each job | nothing carries a photoreal person between jobs; only the words route, and it does not hold a face |
+| Model | `alibaba/wan-3.0-prime` — the measured default, because seedance-2.5 refuses the photo unless `--real-person true` asserts the rights to it | the script's own default, `bytedance/seedance-2.5` |
+| Identity | follows the attached frame — **measured, once**: held for 10s on job `855833b4` | generated fresh; a second job is a different person, and no flag changes that |
+| Across jobs | re-attach the same portrait to each job — **untested**; what was measured is one 10s clip, not two clips matching | nothing carries a photoreal person between jobs; only the words route, and it does not hold a face |
 | Aspect ratio | follows the attached image — **crop the portrait first**, see below | `--aspect-ratio` is yours |
-| Evidence | one accepting job, frames unread | five Ofox text-to-video jobs of 20–30s built around photoreal people, all completed |
+| Evidence | one paid run read end to end: rate, no truncation, gross lip-sync, face lock (2026-09-16) | five Ofox text-to-video jobs of 20–30s built around photoreal people, all completed — but none of them read for lip-sync |
 
 **The default is wan because the defining input is a photograph. Drop the
 photograph and the reason for the default drops with it** — a
@@ -344,13 +418,14 @@ Brief
 - Script: "We shipped the new dashboard this morning. It is faster, it is quieter,
   and it finally remembers where you were. If you had it pinned to a workaround,
   you can drop that now." — 33 words, your words, unchanged
-- Duration: 12s (33 words at about 3 words/s, the talking-head tier)
+- Duration: 12s (33 words at about 3 words/s — measured at 3.16 w/s on this model)
 - Delivery: warm and conversational (AI's pick)
 - Model: alibaba/wan-3.0-prime — not this repo's usual seedance-2.5, which refuses
-  a real person's photo at submission (measured)
+  a real person's photo at submission unless the rights to it are asserted (measured)
 - 9:16, 480p draft, audio on
-- Note: this scenario has no paid run behind it, and wan's speech rate and lip-sync
-  are unmeasured here. Treat this first clip as the experiment and read its frames.
+- Note: one 10s English clip has been measured on this model — the words all landed,
+  the mouth moved with them and the face held. Yours is a different face and a
+  different script, so the draft still gets watched before anything is delivered.
 ```
 
 Then the full prompt, then the cost table `approval-gate.md` specifies, all in
@@ -411,8 +486,11 @@ Seven notes on that shape:
   because it looks fine until the clip plays. Put the full script inside the
   prompt shown at the approval gate so the user can read it.
 - **`mouth shape matched to <language>`** is gallery practice (case 20 writes
-  it explicitly). It is a request, not a guarantee, and on this model it is
-  one of the unmeasured things.
+  it explicitly). It is a request, not a guarantee. On this model a prompt
+  carrying it produced a mouth that opens on voiced audio and closes in the
+  trailing silence — gross sync, measured once, in English. Whether each
+  phoneme's shape is right is not something frames can show, so keep the line
+  in and keep the claim modest.
 - **One gesture per beat, at most.** The shared file's short-drama evidence
   caps visible signals at one to three per beat; a talking head sitting still
   and blinking reads far better than one conducting.
@@ -466,10 +544,12 @@ is the remaining option. Say what it costs before they choose it:
   them end to end is an editing step outside it.
 - **Continuity is only as good as the portrait.** Re-attach the *same* photo,
   cropped the same way, to every part, and repeat the `SCENE`, `FRAMING` and
-  `CONSISTENCY` lines word for word. That is the best instrument available —
-  and on this model it is untested, so a two-part clip may come back as two
-  slightly different people in two slightly different rooms. Draft part 1 and
-  part 2 cheaply and look at them side by side before paying for the finals.
+  `CONSISTENCY` lines word for word. That is the best instrument available.
+  What has been measured is that the face holds **within** one 10-second clip;
+  whether two separate jobs from the same portrait match **each other** has
+  not, so a two-part clip may still come back as two slightly different people
+  in two slightly different rooms. Draft part 1 and part 2 cheaply and look at
+  them side by side before paying for the finals.
 - **Sentence boundaries, never mid-sentence.** A line split across a job
   boundary is the one thing this API has no mechanism for.
 - **The cost table gets a row per part plus a total**, per
@@ -482,15 +562,15 @@ so plainly rather than quoting a five-part job with a straight face.
 
 | Parameter | Default | Why |
 |---|---|---|
-| `--model` | `alibaba/wan-3.0-prime` on the portrait route; the script's own default on the described-presenter route; **whatever the user named**, always | seedance-2.5 refuses a real person's photo at submission (measured, nothing billed); wan accepted the same portrait. See "Two routes" |
+| `--model` | `alibaba/wan-3.0-prime` on the portrait route; the script's own default on the described-presenter route; **whatever the user named**, always | seedance-2.5 refuses a real person's photo at submission unless `--real-person true` asserts the rights to it (measured, nothing billed on the refusal); wan takes the portrait with no such assertion needed, and is the one model this scenario has a read-through-the-frames run on. See "Two routes" and "An open question this file does not settle" |
 | `--frame-first-image` | the portrait, cropped to the delivery ratio, as a **local path** | it is the scenario's defining input; local files beat URLs on this field |
-| `--duration` | derived from the word count at about 3 words a second (4 characters a second in Chinese or Japanese), then clamped to the model's range — which `ofox-video.sh models` prints | the script decides the length; a default that ignores it produces rushed speech |
+| `--duration` | derived from the word count at about 3 words a second (4 characters a second in Chinese or Japanese), then clamped to the model's range — which `ofox-video.sh models` prints | the script decides the length; a default that ignores it produces rushed speech. The English figure is measured on this model at 3.16 w/s (one 10s run), so 3 leaves a little room; the CJK one is still gallery-derived |
 | `--resolution` | draft at the model's cheapest tier, deliver one tier up | a face at the cheapest tier is where lip and eye detail goes first, so read the draft's frames rather than shipping it |
 | `--aspect-ratio` | **not passed** when a portrait is attached — the crop decides it, and the script prints a `NOTE:` about `adaptive`; `9:16` on the text-only route unless the user said otherwise | one face is a vertical composition by default |
 | `--generate-audio` | leave at the server default (`true`) | the speech *is* the deliverable |
-| `--provider` | leave unset | the script pins an upstream for Seedance only; wan routes by weight across two, which is worth relaying rather than hiding |
+| `--provider` | leave unset | the script pins an upstream for Seedance only; wan routes by weight across two, which is worth relaying rather than hiding. Nothing records which one served a job — not the sidecar either — so pin it yourself if a run is meant to be comparable to another |
 | `--seed` | let the script roll one and keep it | printed as `SEED` and written to the `.json` sidecar. It does **not** reproduce a take — measured, an identical request on a fixed seed came back a visibly different clip — so a re-render is another roll aimed at the same shot. Say that before the user pays for one |
-| `--real-person` | leave unset | untested on 2.5 in this repo, and irrelevant on the route this skill takes |
+| `--real-person` | leave unset | this route does not need it — wan takes the portrait as it is. It matters only on seedance-2.5, where it asserts that the user holds the rights to the likeness (measured 2026-09-16). It is a statement about authorization, never a switch to flip when a job is refused: see "Before you attach someone's face" |
 
 **Model ids, prices, resolutions, durations and aspect ratios are deliberately
 not tabulated in this file.** They are catalog facts, they change, and this
@@ -534,13 +614,16 @@ Two things belong in that message beyond the table:
 
 - **the script, quoted in full**, so the user can see their own words
   unaltered;
-- **one line saying this scenario has no paid run behind it**, and that the
-  model it uses has no speech measurement in this repo. A user approving an
-  experiment should know it is one.
+- **one line on what this scenario's evidence actually is** — one paid run on
+  this model, 10 seconds of English at 480p, in which the words all landed at
+  3.16 a second, the mouth moved with them and the face held. A user paying
+  for a different face and a different script should know how thin that is,
+  and that the draft is still there to be watched.
 
-This skill has **no cost anchor**, because it has never been billed. The
-`--dry-run` figure at the parameters you are about to send is the only number
-to put in front of anyone.
+This skill has exactly **one billed job behind it** — 64 cents for 10s at
+480p — which is a sense of scale, not a quote. The `--dry-run` figure at the
+parameters you are about to send is still the only number to put in front of
+anyone.
 
 Afterwards the **actual** bill is `VIDEO_COST` from the finished job. Report
 it as money, not as the raw ten-decimal string.
@@ -676,13 +759,18 @@ Three things, in this order, before calling it done. None of them is
 `STATUS completed`.
 
 1. **Is it the right person?** Open the first frame and compare it against the
-   portrait. On this model that comparison has never been made in this repo,
-   so it is the check that carries the most new information.
+   portrait, item by item — face structure, eyes, hair parting, what they are
+   wearing, the background. That comparison has been made once on this model
+   and it held for 10 seconds; it has been made once, on one face.
 2. **Do the mouth and the words agree?** Watch it once with sound. A contact
-   sheet cannot answer this.
-3. **Were all the words said?** Count them against the script. Rushed,
-   clipped or dropped endings mean the clip was over budget, and the fix is a
-   longer clip or fewer words — never a faster delivery.
+   sheet cannot answer this. Gross sync is what a viewer notices and what has
+   been measured; per-phoneme accuracy is neither measured nor watchable at
+   this level, so judge it the way a viewer would.
+3. **Were all the words said?** Count them against the script. One measured
+   run delivered all 29 of its words in order, which is the expected case
+   rather than a guarantee — rushed, clipped or dropped endings mean the clip
+   was over budget, and the fix is a longer clip or fewer words, never a
+   faster delivery.
 
 Report what you checked, not just that it finished.
 
@@ -690,13 +778,13 @@ Report what you checked, not just that it finished.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Exit `3`, `input_moderation_failed` on create | A real person's photo was sent to a model that refuses it — `bytedance/seedance-2.5` does, measured | Re-run on `alibaba/wan-3.0-prime`. Nothing was billed. Do not reach for `--real-person true`; it is untested on 2.5 here |
+| Exit `3`, `input_moderation_failed` on create | A real person's photo was sent to a model that refuses it — `bytedance/seedance-2.5` does, measured | Re-run on `alibaba/wan-3.0-prime`, this skill's default. Nothing was billed. **Do not reach for `--real-person true` as the fix**: it does lift that refusal, but it is an assertion that the user holds the rights to the likeness, not a retry flag — never set it to clear an error |
 | `input_moderation_failed` on `wan-3.0-prime`, after an earlier portrait went through | Wan is not upstream-pinned and Ofox routes by weight across two upstreams that moderate differently | Re-run; if it repeats, try `minimax/hailuo-3`, which also accepted a portrait in the same comparison. Nothing was billed either way |
 | The speech is rushed, garbled, or the last words are missing | More words than the clip holds | Longer clip (inside the model's range) or fewer words. Never compress the delivery. New prompt, new cost table |
 | The clip ends mid-sentence | Same cause, and a missing ending beat | Re-budget at about 3 words a second **and** write the final beat explicitly — "after `<last word>` the lips close and the shot holds" |
 | The voice speaks the wrong language | The quoted line was translated on the way into the prompt | Put the user's own words in, untouched. The line's language decides the voice's language |
-| The person in the clip is not the person in the photo | The frame lock is unmeasured on this model — this is the known-weak point of the route, not a bug you can flag-fix | Re-roll cheaply; try a tighter, better-lit, more frontal portrait; try `minimax/hailuo-3`. If it will not hold, say so rather than spending again — and tell the user what was tried |
-| The mouth moves without matching the words | Unmeasured on this model | Same as above, plus keep `mouth shape matched to <language>` in the prompt. Judge it on a cheap draft, not on the deliverable |
+| The person in the clip is not the person in the photo | The frame lock held for 10s on one measured run, on one face — a different face, a longer clip or a different upstream is not covered by it, and no flag fixes a miss | Re-roll cheaply; try a tighter, better-lit, more frontal portrait; try `minimax/hailuo-3`. If it will not hold, say so rather than spending again — and tell the user what was tried |
+| The mouth moves without matching the words | Gross sync was measured once, in English; anything finer, and any other language, is not | Same as above, plus keep `mouth shape matched to <language>` in the prompt. Judge it on a cheap draft, not on the deliverable |
 | Garbled lettering, a name card nobody asked for | The model invents text | Keep the text items in `AVOID`, and compose lettered surfaces out of the background. Real captions go on in an editor |
 | A music bed nobody asked for | `--generate-audio true` and a prompt that didn't exclude music | Keep `no music` in `SOUND` *and* the music words in `AVOID` |
 | Exit `3`, `output_moderation_failed` mentioning audio copyright | The prompt asked for music | Rewrite `SOUND` as room tone only and re-run — a new request, safe immediately, nothing was billed |

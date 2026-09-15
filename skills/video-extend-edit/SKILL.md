@@ -2,11 +2,11 @@
 name: video-extend-edit
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus a video you already have. Makes an existing clip longer, or replaces its ending. Use when a user wants more of footage they already have, e.g. "extend this 5-second clip to 15", "keep going from where this one ends", "re-shoot the ending from 4 seconds on", or "add another shot onto this". A frame is pulled out of the clip at zero cost and becomes the first frame of a newly generated segment, which is then joined onto the original. Do not use to change what is inside the picture — there is no video content-editing path here; for two stills you already have see keyframe-animation, and for a clip from nothing see the seedance-* scenarios.
 license: MIT
-version: "1.0.1"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/video-extend-edit
 metadata:
   author: ofoxai
-  version: "1.0.1"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -126,9 +126,10 @@ with no API key".
 
 ## What this skill rests on
 
-One paid run, plus two zero-cost readings of clips that already existed, plus
-a local reproduction of the join hazard. Where something was not measured,
-this file says so rather than reasoning past it.
+One paid run of the single-segment route, a two-shot `chain` run seeded from a
+frame (2026-09-16 — see "Several segments" below), two zero-cost readings of
+clips that already existed, and a local reproduction of the join hazard. Where
+something was not measured, this file says so rather than reasoning past it.
 
 **Job `35b6aed1` (2026-09-15)**, `bytedance/seedance-2.5` via `byteplus`, 4
 seconds, 480p, `adaptive` (forced by the API for image-to-video on this
@@ -151,33 +152,49 @@ the shape of the frame was not what stopped anything here.
 
 ### 2. The new segment's pixel dimensions never come from your clip
 
-Three observations, one paid and two read for free off clips this repo already
-had:
+Five observations: three paid, two read for free off clips this repo already
+had.
 
 | Frame fed in | Its ratio | Tier paid for | Delivered segment | Its ratio |
 |---|---|---|---|---|
 | 1792x1008 | 16:9, in the catalog | 720p | **1280x720** | 16:9 |
 | 1792x1008 | 16:9, in the catalog | 720p | **1280x720** | 16:9 |
 | 720x480 | 3:2, **not** in the catalog | 480p | **794x530** | 1.4981 |
+| 720x480 — *the same file, a later job* | 3:2, **not** in the catalog | 480p | **794x530** | 1.4981 |
+| 794x530 — shot 1's closing frame | 1.4981 | 480p | **794x530** | 1.4981 |
 
 (The first two are `jacket-haul-on-camera-e378f058` and
-`kelvin-flask-luxury-ad-cb6b7870`; the third is the paid run above.)
+`kelvin-flask-luxury-ad-cb6b7870`; the third is the paid run above; the last
+two are the chain run in "Several segments" below, jobs `69bc799d` and
+`2a3ebe06`.)
 
-**All three keep the ratio and none keeps the pixel size.** A catalog ratio
-lands on that tier's standard size. A non-catalog ratio lands on a
-non-standard one, close to the frame's ratio but not exactly it — 1.4981
+**All five keep the ratio, and none takes its pixel size from a source clip.**
+A catalog ratio lands on that tier's standard size. A non-catalog ratio lands
+on a non-standard one, close to the frame's ratio but not exactly it — 1.4981
 against 3:2's 1.5, and both figures even, which looks like rounding to even
-numbers.
+numbers. The last row only *looks* like the size came from the frame: that
+frame was itself a delivered segment, so it already carried the size this
+ratio lands on at this tier.
 
-The rule worth carrying, and the only one three observations support:
+⚠️ **The size mapping is reproducible even though the picture is not.** The
+same 720x480 frame went in twice, in two independent jobs, and came back
+794x530 both times — while this repo's standing finding is that a fixed seed
+does **not** reproduce a clip. Both are true and neither weakens the other:
+what is unpredictable is the **content**; what is stable is the
+**dimensions**. Don't let a reader of either sentence take it as licence to
+doubt the other.
+
+The rule worth carrying, and the only one these five observations support:
 
 > **The delivered segment's dimensions come from the resolution tier you paid
 > for and the frame's aspect ratio. They never come from your source clip.**
 
-⚠️ **There is deliberately no formula here for a non-catalog ratio.** One data
-point cannot support one — an arithmetic story can be told about 794x530 that
-fits it and has nothing else behind it. Measure the delivered file rather than
-predicting it:
+⚠️ **There is deliberately no formula here for a non-catalog ratio.** Two
+observations of the *same* ratio still cannot support one — an arithmetic story
+can be told about 794x530 that fits both and has nothing else behind it. What
+repeating it establishes is that the mapping is stable for that ratio, not that
+it is derivable for another. Measure the delivered file rather than predicting
+it:
 
 ```bash
 ffprobe -v error -select_streams v:0 -show_entries stream=width,height \
@@ -269,10 +286,12 @@ Three notes on that recipe, all of which came out of running it:
 
 ⚠️ **`chain`'s own concat does not cover this.** It tries a stream copy and
 re-encodes only when the shots' **codecs** differ — it never rescales. That is
-fine for a chain, whose shots all come back the same size, and it is not
-enough for "their clip plus a new segment", which is this skill's whole case.
-A joined file from `chain` still has to be joined to the user's original by
-the recipe above.
+fine for a chain, whose shots all come back the same size as each other —
+measured on 2026-09-16, where both shots of a two-shot chain were 794x530 and
+the join needed no rescaling at all — and it is **not** enough for "their clip
+plus a new segment", which is this skill's whole case and the one place the
+sizes genuinely differ. A joined file from `chain` still has to be joined to
+the user's original by the recipe above.
 
 ### 4. The result continues the scene — it does not merely reproduce the frame
 
@@ -443,7 +462,11 @@ bash ../ofox-video-core/references/ofox-video.sh chain \
   --out-dir /absolute/path/to/out
 ```
 
-**What is verified about that, exactly.** The routing is readable in
+**What is verified about that, exactly.** Two things, worth keeping apart:
+how the flags route, read out of the script, and what a paid run of the whole
+command actually delivered.
+
+The routing is readable in
 `ofox-video-core`'s own script and was checked there rather than inferred:
 `cmd_chain` collects every flag it does not handle itself into a `passthrough`
 array and hands that array to `cmd_generate` for **every** shot, so shot 1
@@ -457,17 +480,30 @@ running a dry run with two different frames passed and reading which one
 reached the payload — no network call, no cost. The script relies on the same
 behaviour for `--name`, and says so in a comment beside the carry-forward.)
 
-So the routing is not in doubt; what has not happened is the run. The two
-halves are each measured separately — a user-footage frame into a paid
-image-to-video job is job `35b6aed1` above, and `chain`'s carry-forward
-between its own shots is measured in `ofox-video-core` — but **the composed
-command has not been run end to end here.** If you want only measured ground,
-run one `generate` per segment and hand each segment's `last-frame` to the
-next yourself — that is the same mechanism with the same bill, in more
-commands.
+**And the composed command has now been run end to end.** 2026-09-16, two
+shots of 4 seconds at 480p seeded from a frame pulled out of an existing clip:
+`STATUS chain_completed`, both shots delivered, **88 cents billed across the
+two**, matching the estimate the dry run printed for the sequence.
 
-Either way: `chain`'s own `JOINED` output still has to be joined to the
-user's original by the recipe in finding 3.
+- **Shot 1 really did open on the supplied frame** (job `69bc799d`) — bottle
+  position and scale, the gold cap, the shape of the water and the background
+  all match the PNG that was fed in. That is the runtime confirmation of what
+  the argument handling above had only predicted.
+- **Shot 2 opened on shot 1's closing frame** (job `2a3ebe06`) — the
+  concentric ripples shot 1 generated, the dark slab edge at the lower left,
+  the position and the light direction all carried across, with the slight
+  brightness difference at the seam that `ofox-video-core` already records.
+
+So both halves of the routing are measured rather than read off the script.
+Running one `generate` per segment and handing each segment's `last-frame` to
+the next yourself is still the same mechanism with the same bill — it is now a
+matter of preference, not of staying on measured ground.
+
+⚠️ **What that run does not hand you is a finished join.** The two shots came
+back the same size *as each other*, which is why `chain`'s own concat managed
+without rescaling anything. The user's source clip is not in that set. So
+`chain`'s own `JOINED` output still has to be joined to the original by the
+recipe in finding 3, and that is where the sizes really do differ.
 
 ## Before you spend: look at the frame
 
@@ -477,11 +513,35 @@ This is a step, not a formality, and it is the cheapest one in the flow.
 **Is there a real person in it?** `bytedance/seedance-2.5` refuses a reference
 frame containing a photoreal person at submission —
 `HTTP 400 / input_moderation_failed`, "may contain real person". Nothing is
-generated and **nothing is billed**, but the route stops there. So for
-live-action footage of people, this skill has no measured path, and saying so
-before the cost table is better than saying it after a rejection.
+generated and **nothing is billed**, but the default route stops there.
 
-Be exact about the fallbacks, because the gap here is easy to overstate:
+Since 2026-09-16 that is **half-answered rather than a dead end**, and the two
+halves have to be kept apart, because only one of them is measured:
+
+- **Measured: `--real-person true` lifts the refusal on
+  `bytedance/seedance-2.5`.** Same portrait, same prompt, same parameters, same
+  upstream, with and without the flag — with it the job completed, without it
+  the identical submission was refused. The flag is Ofox's privacy-preserving
+  preprocessing path for real-person references the user is **authorised** to
+  use: **an authorisation route, not a way past the check.** Offer it only when
+  the user holds the right to use that person's likeness, say so in the same
+  breath, and never describe it as a retry for a rejection. The evidence and
+  every limit on it are in
+  [`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+  → "`--real-person true` lifts that refusal on 2.5".
+- **Not measured — and it is this skill's own case.** The portrait in that run
+  was a **synthetic still generated for the test**. A frame lifted out of
+  footage is a real person's likeness in a picture nobody posed for, and no
+  such frame has been sent, with or without the flag. Whether the preprocessing
+  leaves the person recognisable enough for the segment to match the footage it
+  joins is unmeasured too.
+
+So **do not tell a user they can now extend footage of people.** What they can
+be told is that there is a route worth pricing as an experiment when the
+footage is theirs to use, and that its one measurement is a posed synthetic
+face rather than anything out of a clip.
+
+The rest of the fallbacks, because the gap here is easy to overstate:
 
 - `alibaba/wan-3.0-prime` and `minimax/hailuo-3` were measured accepting a
   real person's **portrait image**. That is a posed still, not a frame lifted
@@ -489,9 +549,6 @@ Be exact about the fallbacks, because the gap here is easy to overstate:
 - **Neither model's image-to-video behaviour has been measured in this repo at
   all**, and neither has `chain` on them. Offering one is offering an
   experiment; price it as one and say which part is untested.
-- `--real-person true` exists for authorised references and Ofox documents it
-  for `bytedance/seedance-2.0`. Whether it lifts the restriction on 2.5 is
-  untested here — do not present it as a workaround.
 - The measured run behind this skill used a product clip with **no people in
   it**, on purpose, to isolate the frame-shape question. It therefore says
   nothing about real-person footage, in either direction.
@@ -672,10 +729,16 @@ adds a route to this file; none of it overturns what is above.
   was motionless. None of that says continuation is impossible there — it says
   nobody has shown it. If it is ever shown, it becomes a second route in this
   file, sitting beside the frame route rather than replacing it.
-- **Real-person footage.** Only the existing `input_moderation_failed`
-  evidence applies: a photoreal person in the attached frame is refused at
-  submission on `bytedance/seedance-2.5`, unbilled. Nothing here has tested
-  what a frame from live-action footage of a person does on any other model.
+- **Real-person footage.** Half-answered, and the unanswered half is the one
+  this skill needs. `--real-person true` is measured lifting the
+  `input_moderation_failed` refusal on `bytedance/seedance-2.5` — for
+  references the user is **authorised** to use, which is what that flag is for
+  and the only thing it is for. What has never been sent is a frame lifted out
+  of **live-action footage of a real person**: the measured input was a
+  synthetic portrait posed for the test. Whether the preprocessing leaves that
+  person recognisable enough to match the footage the segment joins is
+  unmeasured, and so is a frame from footage on any other model. See "Before
+  you spend: look at the frame".
 - **`alibaba/wan-3.0-prime` and `minimax/hailuo-3` image-to-video.** Both were
   measured accepting a real person's portrait image as an input; **neither has
   had its image-to-video behaviour measured in this repo**, so neither is a
@@ -689,8 +752,11 @@ adds a route to this file; none of it overturns what is above.
   frame-rate change and mixed audio presence. Variable-frame-rate phone
   footage, rotation metadata, HDR and 10-bit sources were not in that test;
   the verification loop is what tells you, and it is free.
-- **Any composed command this file has not run**, named where it appears —
-  above all `chain --frame-first-image` end to end.
+- **Any composed command this file has not run**, named where it appears.
+  `chain --frame-first-image` used to head this list and has come off it — it
+  was run end to end on 2026-09-16, two shots, and what it leaves unmeasured is
+  narrower: a chain of more than two shots from a user's frame, and any chain
+  on a model other than the script's default.
 
 ## When NOT to use
 
@@ -701,7 +767,7 @@ adds a route to this file; none of it overturns what is above.
 | To **change what is in the picture** — remove an object, swap a background, replace a face, fix a frame | nothing here | there is no video content-editing path in this repo. [`image-edit`](../image-edit/SKILL.md) edits a **single still**, not footage. Say that plainly rather than re-shooting the tail and hoping |
 | A clip **from nothing** — no footage yet | the `seedance-*` scenarios, [`ugc-ads`](../ugc-ads/SKILL.md), [`shorts-reels`](../shorts-reels/SKILL.md) | this skill's entire input is a clip that already exists |
 | A **multi-shot sequence generated from scratch**, no existing footage to continue | `ofox-video-core`'s `chain` directly | that is the core capability. This skill is the wrapper for the case where shot 1 is somebody's existing file |
-| A **dialogue scene** continuing a drama clip | [`seedance-short-drama`](../seedance-short-drama/SKILL.md) for the prompt craft, then this skill for the mechanism | the two compose. Write the scene there, extend it here — and note the real-person check almost certainly stops it if the footage has actors in it |
+| A **dialogue scene** continuing a drama clip | [`seedance-short-drama`](../seedance-short-drama/SKILL.md) for the prompt craft, then this skill for the mechanism | the two compose. Write the scene there, extend it here — and if the footage has actors in it the default route stops at the real-person check. "Before you spend: look at the frame" has the authorised route and exactly what it does not cover |
 | Their clip **trimmed, sped up, re-cropped or re-encoded** | ffmpeg directly | no generation needed, so no money should move |
 | A **longer single job** rather than a join | `generate` with a longer `--duration` | if what they want fits inside one job's ceiling and they have no footage to preserve, one job is cheaper and has no seam |
 
@@ -806,7 +872,7 @@ and enters it, so a bad path exits `6` with nothing submitted.
 |---|---|---|
 | The joined file plays at one size and then jumps, or a player letterboxes half of it | The parts were concatenated without normalising — the silent variable-resolution case | Re-join with the recipe in finding 3, then run the verification loop. Free to fix; no new job needed |
 | The joined file looks fine to `ffprobe` but wrong in a player | `ffprobe` on the container reads the **first** part's header only. That is exactly the trap | Probe extracted frames either side of the seam, not the container |
-| Exit `3`, `input_moderation_failed` | A photoreal person is in the extracted frame. Refused at submission, nothing billed | This is what the pre-flight look is for. There is no measured route for real-person footage here — say so rather than reaching for an untested model |
+| Exit `3`, `input_moderation_failed` | A photoreal person is in the extracted frame. Refused at submission, nothing billed | This is what the pre-flight look is for. If the footage is the user's to use and they have said so, `--real-person true` is Ofox's route for **authorised** real-person references and is measured lifting this refusal — on a synthetic portrait, not on a frame out of footage, so price it as an experiment. It is an authorisation route, not a way past the check: do not reach for it as a retry |
 | Exit `1`, `--at is past the end` | The timestamp is at or past the clip's duration; the error names the real duration | Pick an earlier second, or use `last-frame` if what you wanted was the ending |
 | Exit `1`, `references_conflict` | A frame flag and an `input_references` array in `--extra-json` were passed together | Pick one. This skill's route is the frame; `input_references` is not used here at all |
 | The finished file is suddenly as short as the original clip and the generated tail has vanished | The source clip's own audio was muxed on unpadded, and `mux-audio` runs to the **shorter** of its two inputs. Reproduced: a 14s picture and a 5s track gave a 5s file | Pad the track out to the joined file's duration first — "The audio hand-off", step 2. Free to fix: re-mux from `joined.mp4`, no new job. The script's `NOTE:` said this at the time |

@@ -2,6 +2,78 @@
 
 All notable changes to the **video-extend-edit** skill. Versioning follows SemVer.
 
+## 1.1.0 — the chain command was run, and the real-person wall is now half a wall
+
+Two of this file's own "not measured here" statements were closed on
+2026-09-16. Both were load-bearing: one was the largest stated gap in the
+skill, the other was the only composed command it recommended without having
+run.
+
+### `chain --frame-first-image` has been run end to end
+
+1.0.0 and 1.0.1 said the routing was readable in the script but that "the
+composed command has not been run end to end here", and listed it under
+**Unmeasured edges** as the thing most wanted. It ran: `STATUS
+chain_completed`, two shots of 4 seconds at 480p seeded from a frame pulled out
+of an existing clip, **88 cents across the two**, matching the sequence
+estimate.
+
+- Shot 1 opened on the supplied frame (job `69bc799d`) — the bottle's position
+  and scale, the gold cap, the water and the background all match the PNG fed
+  in. That is the runtime confirmation of what reading `cmd_chain`'s argument
+  handling had only predicted.
+- Shot 2 opened on shot 1's closing frame (job `2a3ebe06`) — ripples, slab
+  edge, position and light direction carried across, with the slight seam
+  brightness shift `ofox-video-core` already records.
+
+The caveat is gone from the "Several segments" section and the Unmeasured edges
+entry is narrowed rather than deleted: a chain of more than two shots from a
+user's frame, and any chain on a non-default model, are still unrun.
+
+**One thing that run does not do is finish the join**, and the file now says so
+where it could otherwise be misread: the two shots came back the same size *as
+each other*, which is exactly why `chain`'s own concat succeeded without
+rescaling. The user's source clip is not in that set, so the rescale recipe in
+finding 3 is unchanged and still mandatory — it is the case where the sizes
+genuinely differ.
+
+**Two new data points for finding 2, and a distinction worth protecting.** The
+size table is now five rows. The same 720x480 3:2 frame produced 794x530 in two
+independent jobs on two different days — so **the size mapping is reproducible
+even though the picture is not.** This repo's "a fixed seed does not reproduce
+a clip" finding is about *content* and stays exactly as true; the file states
+both and says outright that neither weakens the other. The refusal to write a
+formula for a non-catalog ratio stands: two observations of one ratio establish
+that the mapping is stable for that ratio, not that it is derivable for
+another.
+
+### The real-person gap is half-answered — and only half
+
+`--real-person true` was measured lifting the `input_moderation_failed` refusal
+on `bytedance/seedance-2.5`. The measurement belongs to `ofox-video-core` and
+this file links to
+[`api-params.md`](../ofox-video-core/references/api-params.md) → the
+real-person section for it rather than restating it.
+
+**The wording is a hard constraint and is the risk in this release.** The flag
+is Ofox's privacy-preserving preprocessing path for real-person references the
+user is **authorised** to use: an authorisation route, **never** a way past the
+check. It appears nowhere in this skill as a workaround for a rejection.
+
+**And the half that is still open is this skill's own case**, which is why
+"Before you spend: look at the frame" now splits the two explicitly instead of
+rounding up. The measured input was a **synthetic portrait posed for the
+test**. A frame lifted out of live-action footage of a real person has never
+been sent, with or without the flag; neither has anything been measured about
+whether the preprocessing leaves that person recognisable enough for the
+segment to match the footage it joins. The file says in as many words: **do not
+tell a user they can now extend footage of people.** What can honestly be
+offered is a route to price as an experiment when the footage is theirs to use.
+
+Same treatment in the `input_moderation_failed` failure row, the Unmeasured
+edges entry for real-person footage, and the short-drama row of "When NOT to
+use".
+
 ## 1.0.1 — two holes found by blind routing testers, both on the money path
 
 Routing itself was correct in every blind test. These are defects in the file,

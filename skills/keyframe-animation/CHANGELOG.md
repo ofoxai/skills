@@ -2,6 +2,47 @@
 
 All notable changes to the **keyframe-animation** skill. Versioning follows SemVer.
 
+## 1.1.0 — the real-person refusal has an authorised route, and this file said it didn't
+
+Three places in `SKILL.md` told the reader `--real-person true` was untested on
+`bytedance/seedance-2.5` and not to reach for it. That is no longer true, and a
+file that leaves a known-wrong instruction in place is worse than one that
+never tested the question. Minor rather than patch, because a default changed
+shape: the flag moves from "don't" to "only under a condition".
+
+**The measurement belongs to `ofox-video-core` and is not restated here.** It
+was a single-variable A/B on 2026-09-16 — one synthetic portrait, the same
+prompt and parameters, with and without the flag — and this skill links to
+[`api-params.md`](../ofox-video-core/references/api-params.md) → the
+real-person section for the evidence, exactly as it links that file for
+everything else the core owns.
+
+**The wording is the whole of the risk in this release, so it is fixed
+wording.** `--real-person true` is Ofox's privacy-preserving preprocessing path
+for real-person references the user is **authorised** to use — an authorisation
+route, never a way past the check. It is not written anywhere in this skill as
+a flag that gets a rejected frame accepted, and it must not be edited into one.
+
+What changed, in three places:
+
+- **"What makes a good A/B pair"** — the bullet no longer reads as a flat
+  prohibition. A photoreal person still stops the job by default; the exception
+  is stated as an authorisation the user has to hold, with the scenario limit
+  attached (the measurement was one *first* frame, and this skill attaches
+  two).
+- **The `--real-person` row in the defaults table** — "leave unset" becomes
+  "leave unset unless the user holds the right to use the likeness and has said
+  so", with the same limits.
+- **The `input_moderation_failed` row in the failure table** — cropping the
+  person out is still the first answer; the flag is named as something to ask
+  about, price as an experiment, and never offer as a retry.
+
+What this release deliberately does **not** claim: that a two-ended pair works
+with the flag (untested — the run attached one frame), that a real photograph
+of a real person behaves like the synthetic portrait (untested), or anything
+about an upstream or a tier other than the one measured. All three limits are
+in the file rather than in this changelog alone.
+
 ## 1.0.1 — the prompt template in this file has now been run
 
 1.0.0 shipped saying this skill rested on **one** measured job. It rests on

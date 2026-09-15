@@ -679,9 +679,9 @@ print_error_message() {
       echo "  invalid_request: a required field is missing or a parameter value is invalid. Re-check model, prompt, duration, resolution, aspect_ratio." >&2 ;;
     input_moderation_failed)
       echo "  input_moderation_failed: the INPUT image or video was rejected before generation, most often because it contains a real person's face." >&2
-      echo "    bytedance/seedance-2.5 image-to-video rejects real-person reference images outright. Options:" >&2
+      echo "    bytedance/seedance-2.5 image-to-video rejects real-person reference images unless the caller declares the rights to them. Options:" >&2
       echo "    1. Use a non-photoreal reference (illustration, anime, product, landscape) — those pass." >&2
-      echo "    2. Use --real-person true, which routes through Ofox's privacy-preserving preprocessing for AUTHORIZED real-person references. Ofox documents this for bytedance/seedance-2.0; it is not confirmed for 2.5." >&2
+      echo "    2. ONLY if the user holds the rights to this person's likeness and has said so: --real-person true routes AUTHORIZED real-person references through Ofox's privacy-preserving preprocessing (measured lifting this refusal on 2.5, 2026-09-16). It is a declaration of authorization, NOT a retry flag — do not set it to clear this error." >&2
       echo "    Nothing was generated, so this call was not billed." >&2 ;;
     invalid_provider_type)
       echo "  invalid_provider_type: the provider slug sent is not one Ofox recognises. Run 'ofox-video.sh providers MODEL' for the valid ones, or pass --provider auto to let Ofox choose." >&2 ;;
@@ -1242,8 +1242,10 @@ cmd_generate() {
   if [ "$curl_rc" -ne 0 ]; then
     echo "ERROR: could not reach the Ofox API to create the job (curl exit $curl_rc)." >&2
     echo "We cannot tell whether a job was created server-side — no HTTP response was received." >&2
-    echo "Do NOT blindly retry. Check ${GET_KEY_URL} for a new job or a balance change first," >&2
-    echo "then retry manually only if nothing was created." >&2
+    echo "Do NOT blindly retry. Find out first — list your recent jobs and look for a new one:" >&2
+    echo "  curl -s -H \"Authorization: Bearer \$OFOX_API_KEY\" \"${API_BASE}/videos?limit=5\" | jq ." >&2
+    echo "(or open ${GET_KEY_URL}). If the newest entry predates this attempt, nothing was created" >&2
+    echo "and retrying is safe. If a new job is there, poll it by id — never create it again." >&2
     return 5
   fi
 

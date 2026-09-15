@@ -2,11 +2,11 @@
 name: product-demo
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus two real screenshots of one interface in two states. Animates the transition between them as one video — both go into a single Ofox video job, and the model cross-fades the values that changed while the rest of the layout holds. Use when a user wants a short software demo animation out of captures they already have, e.g. "turn these two screenshots into a demo clip", "show the dashboard going from the free plan to the paid one", "animate this settings change for the docs", or "make a clip of the counter going from 3 to 25". Do not use for a pair that is not a user interface (see keyframe-animation), for a screen recording (record it instead), or when only one screenshot exists.
 license: MIT
-version: "1.0.1"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/product-demo
 metadata:
   author: ofoxai
-  version: "1.0.1"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -282,11 +282,21 @@ here.
   names, real email addresses, a live token in a URL bar. The clip is a
   shareable artifact and the middle frames are generated, so anything private
   in the capture is private in the output too.
-- **Crop out a real person's face** if the UI happens to show one.
+- **Crop out a real person's face** if the UI happens to show one — a profile
+  picture, a customer photo, a testimonial block.
   `bytedance/seedance-2.5` refuses a photoreal-person reference at submission
   (`input_moderation_failed`, nothing billed) — a documented `ofox-video-core`
-  behaviour. An avatar illustration is a different case and has not been
-  tested here either way.
+  behaviour. Cropping is the right answer nearly every time here, because a
+  face is almost never the subject of a UI demo. There is now a measured
+  alternative: `--real-person true`, Ofox's privacy-preserving preprocessing
+  path for real-person references the user is **authorised** to use, lifted
+  that refusal on 2.5 on 2026-09-16. It is an authorisation route for a
+  likeness someone holds the right to use, **never a way past the check**, and
+  for a headshot sitting in the corner of a screenshot it is a heavier answer
+  than a crop. Evidence and limits:
+  [`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+  → "`--real-person true` lifts that refusal on 2.5". An avatar illustration is a different case and has
+  not been tested here either way.
 - **A local file beats a remote URL** when one is available.
   `ofox-video-core` base64-encodes a local readable file into the request; a
   publicly reachable URL has been rejected upstream at least once in this repo.
@@ -404,7 +414,7 @@ so.
 | `--aspect-ratio` | not passed | the attached screenshots decide it — see "The frames decide the shape" |
 | `--generate-audio` | `false` | a docs clip has nothing to sync to, and the server's default is `true`. Omit the flag only when the clip genuinely wants a track |
 | `--seed` | let the script roll one, and keep it | it prints `SEED` and writes it to the clip's `.json` sidecar, which is what lets "that take, at a higher resolution" be re-submitted at all. It does **not** reproduce it: measured, an identical request on a fixed seed came back a visibly different clip. A byte-identical prompt is necessary and not sufficient — tell the user a re-render is another roll aimed at the same shot before they pay for it |
-| `--real-person` | leave unset | a photoreal face in a capture is refused at submission on `bytedance/seedance-2.5`; `true` is untested there |
+| `--real-person` | leave unset — crop the face out instead | a photoreal face in a capture is refused at submission on `bytedance/seedance-2.5`, nothing billed. `true` is Ofox's privacy-preserving preprocessing path for **authorised** real-person references and was measured lifting that refusal on 2.5 (2026-09-16), but it is an authorisation route rather than a way past the check, and in a UI capture the face is almost never the point. See [`api-params.md`](../ofox-video-core/references/api-params.md) → "`--real-person true` lifts that refusal on 2.5" |
 
 ## Choosing a model
 
@@ -650,7 +660,7 @@ here.
 |---|---|---|
 | Exit `1`, no network call made | A flag the model doesn't accept — a duration outside its range, a resolution it doesn't have | Read the error, which names the model's real values, and re-run. Nothing was submitted, so retrying is free |
 | Exit `1`, `references_conflict` | `--frame-first-image`/`--frame-last-image` together with an `input_references` array in `--extra-json` | Pick one meaning — locked frames, or identity references — and drop the other. They cannot be combined in one job |
-| Exit `3`, `input_moderation_failed` | A capture contains a photoreal face. Refused at submission on `bytedance/seedance-2.5`; nothing billed | Crop or blur the face and retry. `--real-person true` is untested on that model here |
+| Exit `3`, `input_moderation_failed` | A capture contains a photoreal face. Refused at submission on `bytedance/seedance-2.5`; nothing billed | Crop or blur the face and retry — free, and almost always the right answer for a UI demo. `--real-person true` is Ofox's measured route for a likeness the user is **authorised** to use; ask before reaching for it, and don't offer it as a way past the check |
 | Exit `3`, `insufficient_credits` | Ofox balance too low | No charge was made; add credits at https://app.ofox.ai and retry |
 | Exit `3`, job ends `failed` with `output_moderation_failed` | The generated output failed a post-generation check — after the job ran, not at submission. Not billed | Retry as a **brand-new** `generate` with a different prompt or captures. A new request, not a resubmission |
 | The clip runs backwards | The two paths were passed on the wrong flags | Swap `--frame-first-image` and `--frame-last-image`. New job, new cost table — which is why `Order` is a must-ask when the input is ambiguous |
