@@ -17,6 +17,8 @@
 // fallback that would silently install nothing.
 
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { checkAll } from "./check-frontmatter.mjs";
 
 const REPO = "ofoxai/skills";
 const argv = process.argv.slice(2);
@@ -126,10 +128,31 @@ if (argv[0] === "doctor") {
     return found ? found.split("Agents:")[1].split("Source:")[0].trim() : "";
   };
 
+  // A skill whose frontmatter does not parse is SKIPPED by the installer
+  // without an error, so it shows up here as plain MISSING and reinstalling
+  // does nothing — which is exactly how `ugc-ads` stayed uninstallable for two
+  // release rounds. Separate the two, so "run the installer again" is never
+  // the advice for a skill the installer is refusing to read.
+  const unparseable = new Map();
+  try {
+    for (const { name, problems } of checkAll(
+      fileURLToPath(new URL("../skills", import.meta.url)),
+    )) {
+      if (problems.length) unparseable.set(name, problems[0]);
+    }
+  } catch {
+    // Reading our own copy is a nicety; never let it break the real check.
+  }
+
   let missing = 0;
+  let broken = 0;
   for (const skill of OURS) {
     const agents = agentsOf(skill);
-    if (agents === null) {
+    const bad = unparseable.get(skill);
+    if (bad) {
+      console.log(`  BROKEN   ${skill}  →  frontmatter does not parse (${bad.message})`);
+      broken++;
+    } else if (agents === null) {
       console.log(`  MISSING  ${skill}`);
       missing++;
     } else {
@@ -139,12 +162,19 @@ if (argv[0] === "doctor") {
   }
 
   console.log("");
+  if (broken) {
+    console.log(`${broken} of ${OURS.length} skills have frontmatter that will not parse.`);
+    console.log("The installer skips those silently, so reinstalling will not help —");
+    console.log("they have to be fixed at the source. For the file and column:");
+    console.log("  node bin/check-frontmatter.mjs");
+    console.log("");
+  }
   if (missing) {
     console.log(`${missing} of ${OURS.length} skills are missing from ${scopeName}, or are`);
     console.log("installed there without being linked into any agent. Install them all:");
     console.log(`  npx ofox-skills${wantsProject ? " --project" : ""}`);
-    process.exit(1);
   }
+  if (missing || broken) process.exit(1);
   console.log(`All ${OURS.length} skills are installed and linked in ${scopeName}. If an`);
   console.log("agent still cannot see one, restart it — most read their skills at startup.");
   process.exit(0);

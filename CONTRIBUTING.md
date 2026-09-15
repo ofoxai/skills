@@ -36,19 +36,16 @@ A skill name is lowercase kebab-case and matches its directory name, the
    noticed, because nothing in the repo ever parsed the frontmatter. Use an em
    dash instead, as the rest of these descriptions do.
 
-   Run this before publishing — it is the only check that catches the class
-   rather than the instance:
+   Run this before publishing. It exits non-zero and names the file, line and
+   column:
 
    ```bash
-   uv run --with pyyaml python -c '
-   import pathlib, yaml, sys
-   bad = []
-   for p in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
-       try: yaml.safe_load(p.read_text().split("---", 2)[1])
-       except Exception as e: bad.append((p.parent.name, str(e).split(chr(10))[0]))
-   for n, e in bad: print("BROKEN", n, e)
-   sys.exit(1 if bad else 0)'
+   node bin/check-frontmatter.mjs
    ```
+
+   `npx ofox-skills doctor` runs the same check and reports such a skill as
+   **BROKEN** rather than MISSING — the distinction matters, because
+   reinstalling fixes MISSING and does nothing at all for BROKEN.
 
    ```yaml
    ---
