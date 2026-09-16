@@ -19,6 +19,7 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { checkAll } from "./check-frontmatter.mjs";
+import { checkSkills } from "./check-skills.mjs";
 
 const REPO = "ofoxai/skills";
 const argv = process.argv.slice(2);
@@ -133,15 +134,34 @@ if (argv[0] === "doctor") {
   // does nothing — which is exactly how `ugc-ads` stayed uninstallable for two
   // release rounds. Separate the two, so "run the installer again" is never
   // the advice for a skill the installer is refusing to read.
+  const skillsDir = fileURLToPath(new URL("../skills", import.meta.url));
   const unparseable = new Map();
   try {
-    for (const { name, problems } of checkAll(
-      fileURLToPath(new URL("../skills", import.meta.url)),
-    )) {
+    for (const { name, problems } of checkAll(skillsDir)) {
       if (problems.length) unparseable.set(name, problems[0]);
     }
   } catch {
     // Reading our own copy is a nicety; never let it break the real check.
+  }
+
+  // Of everything check-skills.mjs looks at, only one class can be felt by
+  // someone who merely *uses* these skills: documentation quoting a flag the
+  // execution layer does not have. The agent builds its command from that
+  // text, and the command fails on a machine where nothing is misconfigured —
+  // so it is worth saying here, where they are already looking. The rest
+  // (version sync, homepage duplication, declared bins) are publishing
+  // concerns and belong in `npm run check`, not in a user's install report.
+  //
+  // It never changes doctor's exit code: this command answers "can my agents
+  // see these skills", and a shipped-docs defect is not an answer to that.
+  const docDrift = new Map();
+  try {
+    for (const { name, problems } of checkSkills(skillsDir)) {
+      const flags = problems.filter((p) => p.rule === "flags");
+      if (flags.length) docDrift.set(name, flags);
+    }
+  } catch {
+    // Same: a nicety, never a reason to fail the real check.
   }
 
   let missing = 0;
@@ -156,7 +176,11 @@ if (argv[0] === "doctor") {
       console.log(`  MISSING  ${skill}`);
       missing++;
     } else {
-      console.log(`  ok       ${skill}  →  ${agents || "(no agent linked)"}`);
+      const drift = docDrift.get(skill);
+      const note = drift
+        ? `  (warn: ${drift.length} documented flag${drift.length === 1 ? "" : "s"} this skill's execution layer does not accept)`
+        : "";
+      console.log(`  ok       ${skill}  →  ${agents || "(no agent linked)"}${note}`);
       if (!agents) missing++;
     }
   }
@@ -167,6 +191,17 @@ if (argv[0] === "doctor") {
     console.log("The installer skips those silently, so reinstalling will not help —");
     console.log("they have to be fixed at the source. For the file and column:");
     console.log("  node bin/check-frontmatter.mjs");
+    console.log("");
+  }
+  if (docDrift.size) {
+    console.log(
+      docDrift.size === 1
+        ? "1 skill documents a flag its execution layer does not accept. That is a"
+        : `${docDrift.size} skills document a flag their execution layer does not accept. That is a`,
+    );
+    console.log("defect in those skills, not in your install — a command built from those");
+    console.log("lines will be rejected before anything is submitted. For file and line:");
+    console.log("  node bin/check-skills.mjs");
     console.log("");
   }
   if (missing) {

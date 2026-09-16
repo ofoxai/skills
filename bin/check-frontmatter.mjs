@@ -60,6 +60,18 @@ const FATAL = [
 // checker deliberately has no opinion about anything it has not seen break.
 const opensFlowCollection = (v) => v.startsWith("[") || v.startsWith("{");
 
+// The two facts about a frontmatter block that more than one reader needs:
+// where the block ends, and what counts as a `key:` line inside it.
+// check-skills.mjs reads the same block for a different purpose (it wants the
+// values; this file only wants to know the block parses), and two files
+// disagreeing about where the block stops or what a key looks like is the
+// failure where both report themselves correct about a different set of lines.
+// So there is one definition, here, and the other reader imports it.
+export const frontmatterEnd = (lines) =>
+  lines[0] === "---" ? lines.indexOf("---", 1) : -1;
+
+export const KEY_LINE = /^(\s*)([A-Za-z_][\w.-]*):(.*)$/;
+
 export function checkFrontmatter(skillMdPath) {
   const problems = [];
   const text = readFileSync(skillMdPath, "utf8");
@@ -69,7 +81,7 @@ export function checkFrontmatter(skillMdPath) {
     problems.push({ line: 1, message: "no frontmatter: the file must open with `---`" });
     return problems;
   }
-  const end = lines.indexOf("---", 1);
+  const end = frontmatterEnd(lines);
   if (end === -1) {
     problems.push({ line: 1, message: "frontmatter is never closed with `---`" });
     return problems;
@@ -79,7 +91,7 @@ export function checkFrontmatter(skillMdPath) {
     const line = lines[i];
     if (line.trim() === "" || line.trimStart().startsWith("#")) continue;
 
-    const m = /^(\s*)([A-Za-z_][\w.-]*):(.*)$/.exec(line);
+    const m = KEY_LINE.exec(line);
     if (!m) continue; // list items and continuations: not this checker's shape
     const [, indent, key, rest] = m;
 

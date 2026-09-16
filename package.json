@@ -39,6 +39,12 @@
     "README.md",
     "LICENSE"
   ],
+  "scripts": {
+    "check": "node bin/check-frontmatter.mjs && node bin/check-skills.mjs",
+    "test": "npm run test:shell && npm run test:node",
+    "test:shell": "files=$(find skills -name '*.test.sh' | sort); test -n \"$files\" || { echo 'test:shell matched no files — the suites moved and this would have passed'; exit 1; }; for f in $files; do printf '\\n=== %s\\n' \"$f\"; bash \"$f\" || exit 1; done",
+    "test:node": "files=$(find bin skills test -name '*.test.mjs' 2>/dev/null | sort); test -n \"$files\" || { echo 'test:node matched no files — the suites moved and this would have passed'; exit 1; }; node --test $files"
+  },
   "engines": {
     "node": ">=18"
   }

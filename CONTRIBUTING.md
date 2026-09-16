@@ -47,6 +47,17 @@ A skill name is lowercase kebab-case and matches its directory name, the
    **BROKEN** rather than MISSING — the distinction matters, because
    reinstalling fixes MISSING and does nothing at all for BROKEN.
 
+   `npm run check` runs that parse gate **and** `node bin/check-skills.mjs`,
+   which is the rest of this section enforced rather than remembered: every
+   core-script flag the documentation quotes really exists in that script, the
+   version is the same in all three places it is written (both frontmatter
+   fields and the newest `CHANGELOG.md` heading), both `homepage` fields agree
+   and point at this skill's own directory, and every name in `requires.bins`
+   is reached by something. It also reports where each `description` is cut by
+   the ~300-character window Codex reads — a report, never a failure: these
+   descriptions are all longer than that on purpose, and what matters is that
+   the "use when" triggers land inside the window rather than after it.
+
    ```yaml
    ---
    name: <kebab-case, == directory name>
@@ -142,7 +153,27 @@ A skill name is lowercase kebab-case and matches its directory name, the
    Tests for a skill that calls a paid API must be free by construction: point
    the API base somewhere unroutable so a case that passes validation dies on
    connect rather than spending someone's credits.
-6. Dry-run the ClawHub publish:
+6. Run the local gates, both of which are free and offline:
+
+   ```bash
+   npm run check   # frontmatter parses; the five rules in item 2 above
+   npm test        # every skill's suite, plus the checkers' own, ~2.5 minutes
+   ```
+
+   A scenario skill ships no code, so `npm run check` is the only automated
+   thing standing between its 1800 lines of documentation and the execution
+   layer it quotes. There is no CI — these have to be run.
+
+   Both gates are themselves tested, under `test/`, and those tests are
+   falsification tests: each one plants an input that should be rejected and
+   asserts that it is. A gate that cannot fail reports "ok" in exactly the
+   voice of one that works — this repo has shipped that twice — and reading
+   the code does not tell the two apart. So when you add a rule, add the
+   input it is supposed to catch, and watch it catch it. `npm test` discovers
+   suites by searching for `*.test.sh` / `*.test.mjs` rather than from a list
+   of paths, for the same reason: a list drifts, and the symptom of a drifted
+   list is a run that passes without running anything.
+7. Dry-run the ClawHub publish:
 
    ```
    npx clawhub skill publish ./skills/<name> --owner ofoxai \
@@ -203,7 +234,7 @@ A skill name is lowercase kebab-case and matches its directory name, the
      command at a time with a wide gap. The failure surfaces as a
      `convex-helpers` stack trace with `(reset in Ns)` on the end, which
      reads like a crash and is not one.
-7. Open a PR. Releasing is merging to `main` + a tag if the change is
+8. Open a PR. Releasing is merging to `main` + a tag if the change is
    user-visible.
 
 ## Versioning
