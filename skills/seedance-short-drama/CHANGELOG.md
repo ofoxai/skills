@@ -4,6 +4,30 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.13.4 — 1.13.3 moved the default it said it had not moved
+
+**Documentation only. No price, prompt template or behaviour changed — and
+this time the defaults table is back where 1.13.3 claimed to have left it.**
+
+1.13.3 rewrote the `--real-person` row's *Default* column from `leave unset
+(false)` to `leave unset (false) — unless the user holds the right to the
+likeness in an attached photo and has said so`. That is a different
+instruction, not a corrected piece of evidence: it invites the photo route in
+the one skill whose own body says the opposite two sections earlier ("the
+default stands") and whose "When NOT to use" hands a supplied portrait to
+`talking-head`. The carve-out belongs in `keyframe-animation`, where a
+user-supplied pair of frames *is* the input; here the input is a script. The
+default is unconditional again, and the *Why* column keeps every word of the
+corrected evidence.
+
+**A fourth stale absolute, in the worked example.** Case 1's walkthrough still
+read "on Ofox a photoreal person cannot be attached, so both are carried in
+text" — the same claim 1.13.3 softened in two other places and missed here
+because the sentence wraps and carries no hedging word to grep for. It now
+says the attached frame is refused *unless the caller asserts the rights to
+that likeness*. The example's own choice — both characters in text — is
+unchanged.
+
 ## 1.13.3 — this file was still calling a measured flag untested
 
 **Documentation only. No default, price, prompt template or behaviour

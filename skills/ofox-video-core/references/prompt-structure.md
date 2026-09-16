@@ -1763,8 +1763,10 @@ that a long chained series stalls partway.
 the prompt — case 44's continuity block, which restates PART 1's closing image
 and then forbids re-staging it: `no re-positioning, no re-facing off, no slow
 preparation`.
-This is the only route open when the subject is a photoreal person, since
-image-to-video refuses those frames outright.
+This is the route to reach for when the subject is a photoreal person: an
+attached frame holding one is refused unless the caller asserts the rights to
+that likeness with `--real-person true`, which is an authorisation nobody can
+give on a user's behalf — see "API constraints that decide the route" below.
 
 Measured on `c2eb32e1-3b54-4a56-8d78-86e63bc355c7`, an 8-second continuation
 written from a paragraph describing `c192dbe6`'s final frame, with no image

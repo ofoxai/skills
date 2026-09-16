@@ -2,11 +2,11 @@
 name: explainer
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn an article, doc or release note into a short explainer clip — one person to camera, or a voiceover over illustrative footage. The user supplies the source text and the model generates the speech; audio cannot be uploaded, measured. A 30-second clip holds about ninety spoken words — under a tenth of a 1,200-word post — so this skill does not summarise an article, it picks the single idea worth saying and helps choose which one. Use when a user asks to turn writing into a short spoken video, e.g. "make a 30-second explainer from this blog post", "explain this feature in a short video", "turn our changelog into a clip", "a quick video explaining what this paper found". Do not use for a scene between people (see seedance-short-drama), a brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the user already has both a portrait and the finished words (see talking-head).
 license: MIT
-version: "1.1.1"
+version: "1.1.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/explainer
 metadata:
   author: ofoxai
-  version: "1.1.1"
+  version: "1.1.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -746,7 +746,7 @@ Report what you checked, not just that it finished.
 | A music bed nobody asked for | `--generate-audio true` and a prompt that didn't exclude music | Keep `no music` in `SOUND` *and* the music words in `AVOID` |
 | Exit `3`, `output_moderation_failed` mentioning audio copyright | The prompt asked for music | Rewrite `SOUND` as room tone only and re-run — a new request, safe immediately, nothing was billed |
 | Exit `3`, `input_moderation_failed` on create | An attached frame contains a photoreal person — refused at submission on this model, nothing billed | Attach a card, a screenshot or an object instead and write the person in text; or move to `talking-head`, which runs a different model for exactly this reason |
-| Part 2's presenter is a different person from part 1's | Every job generates the presenter fresh, and a photoreal face cannot be carried by a frame | See "Continuity across clips". Choose one of the four available shapes rather than re-rolling |
+| Part 2's presenter is a different person from part 1's | Every job generates the presenter fresh, and nothing in this skill's route carries a face between jobs — the words route brings back staging, not a face | See "Continuity across clips". Choose one of the four available shapes rather than re-rolling |
 | The presenter gestures like a newsreader | No delivery note, or too many gestures written | One gesture per beat at most, and a plain register in the `DELIVERY` note. New prompt, new cost table |
 | The voiceover clip has a person in it anyway | A subject description that implies a user | `No person on screen at any point` in the first sentence, and a face and hands in `AVOID`. Untested shape — draft it cheaply |
 | Exit `4`, timed out waiting | Still running upstream, not failed | `poll JOB_ID` with the id printed before the timeout; never re-run `generate` |

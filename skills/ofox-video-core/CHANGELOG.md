@@ -4,6 +4,26 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.27.1 — one sentence in the shared file still said the frame route was closed
+
+**Documentation only. No default, price, script or behaviour changed.**
+
+1.27.0 corrected `references/prompt-structure.md` where it lists the API
+constraints, but missed the words route's own introduction eighty lines
+earlier: "This is the only route open when the subject is a photoreal person,
+since image-to-video refuses those frames outright." The same file now says,
+correctly, that `--real-person true` lifts that refusal — so the file
+contradicted itself, and the sentence a scenario skill is most likely to read
+was the stale one. It now says the frame is refused *unless the caller
+asserts the rights to that likeness*, which is an authorisation nobody can
+give on a user's behalf, and points at the constraints section for the rest.
+The words route is still the route to reach for; what changed is the reason
+given for it.
+
+Found by a sweep for **absolutes** rather than for the word "untested" — this
+sentence contained no hedging word at all, which is why two previous searches
+walked past it.
+
 ## 1.27.0 — `--real-person true` works on 2.5, and "no way to check for a phantom job" was false
 
 Three measurements from 2026-09-16 land here, and two of them correct claims

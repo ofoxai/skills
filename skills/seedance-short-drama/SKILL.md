@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), for one person addressing the viewer rather than another character — a script read from a supplied portrait is talking-head, an idea pulled out of an article is explainer — or for anything not involving people/dialogue.
 license: MIT
-version: "1.13.3"
+version: "1.13.4"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.13.3"
+  version: "1.13.4"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -562,10 +562,11 @@ labels` style this skill's template uses (case 1's own is bracketed section
 headings), moves the beat into a space the camera can travel through, and
 varies the transition instead of cutting eight times — occlusion once,
 pass-through once, a no-cut drift once, hard cuts for the rest. The original
-attached one appearance image per character; on Ofox a photoreal person cannot
-be attached, so both are carried in text. Eleven spoken words in twenty-four
-seconds is 0.46 words/s, the quiet end of the drama tier — density here is in
-the shots, not the lines.
+attached one appearance image per character; on Ofox an attached photoreal
+person is refused unless the caller asserts the rights to that likeness (see
+"Reference images and real people"), so both are carried in text. Eleven
+spoken words in twenty-four seconds is 0.46 words/s, the quiet end of the
+drama tier — density here is in the shots, not the lines.
 
 **Nine shots in one job is three times the count verified on Ofox** (three
 shots in eight seconds). Price a first run at this density as an experiment
@@ -718,7 +719,7 @@ one.
 | `--resolution` | `720p` — a `seedance-2.5`/`wan-3.0-prime` value. On `minimax/hailuo-3` use `768p`: that model has no `720p` tier | realistic detail on faces and lip movement at a reasonable cost; `1080p` only for a hero shot the user will publish |
 | `--aspect-ratio` | whatever the brief's `Aspect` answer was; `9:16` when that question was skipped, delegated or never asked | short drama is consumed vertically on mobile feeds. Note the gallery's own short-drama sample skews landscape — 5 of the 6 cases that state a ratio are 16:9 (1, 2, 3, 7, 8) — so the default is about the audience, not about what the gallery did |
 | `--generate-audio` | `true` (server default, no flag needed) | dialogue needs an audio track — never set this `false` for a scene with spoken lines |
-| `--real-person` | leave unset (`false`) — **unless the user holds the right to the likeness in an attached photo and has said so** | see "Reference images and real people". A text-described character never needs it. `true` is Ofox's privacy-preserving preprocessing path for **authorised** real-person references, measured lifting 2.5's refusal on 2026-09-16 — an authorisation route, never a way past the check, and never set on a user's behalf. What was measured is one 4s 480p first-frame job on a synthetic portrait; a multi-shot drama carrying a real face is outside it. See [`api-params.md`](../ofox-video-core/references/api-params.md) → "`--real-person true` lifts that refusal on 2.5" |
+| `--real-person` | leave unset (`false`) | see "Reference images and real people". A text-described character never needs it, and this skill's answer to a user who brings a photograph is `talking-head`, not this flag. `true` is Ofox's privacy-preserving preprocessing path for **authorised** real-person references, measured lifting 2.5's refusal on 2026-09-16 — an authorisation route, never a way past the check, and never set on a user's behalf. What was measured is one 4s 480p first-frame job on a synthetic portrait; a multi-shot drama carrying a real face is outside it. See [`api-params.md`](../ofox-video-core/references/api-params.md) → "`--real-person true` lifts that refusal on 2.5" |
 
 Always confirm the actual duration/aspect ratio with the user's request first
 (e.g. "15 seconds" in the trigger example overrides the 10s default).

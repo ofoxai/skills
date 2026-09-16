@@ -2,6 +2,21 @@
 
 All notable changes to the **explainer** skill. Versioning follows SemVer.
 
+## 1.1.2 — the troubleshooting table still stated the old absolute
+
+**Documentation only. No default, price, prompt template or behaviour
+changed.**
+
+1.1.1 corrected the defaults row and left the failure table saying "a
+photoreal face cannot be carried by a frame". That was the general mechanism
+claim the 2026-09-16 measurement narrowed — a frame can carry one, for a
+likeness the caller is authorised to use — and it also disagreed with this
+file's own continuity table, which already points at `talking-head` as the
+route that re-attaches a portrait. The row now says what is actually true
+here: nothing in **this skill's** route carries a face between jobs, because
+the words route brings back staging and not a face. The advice in the fix
+column is untouched.
+
 ## 1.1.1 — the defaults table called a measured flag untested
 
 **Documentation only. No default, price, prompt template or behaviour
