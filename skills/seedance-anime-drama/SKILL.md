@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.13.1"
+version: "1.14.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.13.1"
+  version: "1.14.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -632,8 +632,8 @@ comparison; the part that matters here:
 | The image is … | the literal first frame; the shot animates away from it | a source of appearance; no frame is locked, the shot composes itself |
 | Flag | `--frame-first-image PATH` (local file, auto base64) | none — `--extra-json '{"input_references":[…]}'` |
 | Prompt | opens on the frame; short character block | a role sentence per image: `image1 provides <tag>'s identity only: face, hair, accessory, outfit. Ignore its background and pose.` (cases 34, 40, 11, 44) |
-| Ratio | `adaptive`, follows the image | not tested here |
-| Status in this repo | exercised on real runs: a generated image fed as a first frame produced a clip that opens on it — that is how the sheet-as-frame mistake was caught — and `ofox-video-core` records a `chain` continuity run | the element shape is documented in `../ofox-video-core/references/api-params.md`, and a `video_url` reference has gone through in a real video-to-video run; an `image_url` identity reference has **not been exercised end-to-end from this skill**. Whether the `image1` token maps to the attachment by position is unverified too |
+| Ratio | `adaptive`, follows the image | ⚠️ **pass `--aspect-ratio` explicitly.** The one measured identity-reference job passed none and came back **portrait from two landscape references** — following neither the default nor the images. One observation, no explanation (`api-params.md`) |
+| Status in this repo | exercised on real runs: a generated image fed as a first frame produced a clip that opens on it — that is how the sheet-as-frame mistake was caught — and `ofox-video-core` records a `chain` continuity run | **measured 2026-09-16** in `ofox-video-core` (job `0f5c8b4e`, two `image_url` references, 44 cents, plain t2v rate): both references' named features came through, and the **`image1` / `image2` tokens do map to the attachments by position**, in array order. Still not exercised **from this skill** on an anime character, and two images is the most that has been sent |
 
 **They are mutually exclusive in one job** — the script rejects the
 combination client-side (`references_conflict`). A shot either starts on a
@@ -645,20 +645,91 @@ Neither route is affected by the real-person refusal for an anime character;
 the identity route's behaviour with a real person is untested in this repo
 and irrelevant here.
 
-If you take the identity route, `--dry-run` it first like anything else. Only
-the URL element shape is documented for `input_references` — there is no
-documented local-file encoding for it, unlike `--frame-first-image`, so a
-user's local image has to be hosted somewhere reachable first:
+If you take the identity route, `--dry-run` it first like anything else.
+
+✅ **A local image does not have to be hosted — if you shrink it first.** This
+file used to say hosting was required, on the grounds that only the URL
+element shape was documented. The API's own rejection message names `data:`
+URIs as acceptable and the measured run sent two local files that way, so the
+requirement was never real. But there is a size limit, and it is local rather
+than the API's:
+
+🚨 **An oversized reference does not fail the command — it is silently
+dropped and you pay for the wrong job.** This is the single most expensive
+thing to get wrong on this route, and it does not announce itself.
+
+`--extra-json` takes its value as a command-line argument, so a `data:` URI
+built into it is bounded by `ARG_MAX` (1,048,576 bytes on this machine).
+Over the limit, `jq` **never executes**: the shell writes one line to stderr,
+the command substitution yields an **empty string**, and `ofox-video.sh`
+treats an empty `--extra-json` as *not passed* — skipping validation and
+merging nothing. Measured 2026-09-17 with a 1.9 MB PNG:
+
+```
+(eval):10: argument list too long: jq
+PAYLOAD {"model":"bytedance/seedance-2.5","prompt":"x","duration":8,
+         "resolution":"720p","aspect_ratio":"16:9", ... }
+STATUS dry_run
+EXIT=0
+```
+
+**No `input_references` in the payload. Exit 0.** Without `--dry-run` that is
+a submitted, fully billed **plain text-to-video** job that you believe is an
+identity-reference job — and the clip that comes back just looks like the
+model ignored your character sheet. There is no error to catch. The one
+stderr line comes from the shell, not from the script, so it carries no
+prefix and scrolls past above the normal output.
+
+⚠️ **Do not generalise from `--frame-first-image`, which is safe.** There the
+script does the encoding itself through a temp file and `jq --rawfile`, and
+a 1.9 MB PNG goes through intact (verified the same day). The two paths
+behave in **opposite** directions at the same file size.
+
+**So do both of these, every time:**
+
+1. **Downscale the reference first.** The measured r2v run used JPEGs at a
+   768 px long edge — 33 KB and 43 KB. A character reference supplies
+   appearance, not pixels. If the image genuinely must stay large, a hosted
+   https URL is the alternative, and now a choice rather than a requirement.
+2. **Build the JSON into a variable, check it, and confirm it reached the
+   payload with your own eyes.** The check below is the only thing that
+   catches this.
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+# 1. Shrink and re-encode first — the limit is local, not the API's.
+sips -Z 768 -s format jpeg /path/to/character.png --out /tmp/ref.jpg
+
+# 2. Build the JSON into a VARIABLE, never straight into the flag.
+REF="data:image/jpeg;base64,$(base64 < /tmp/ref.jpg | tr -d '\n')"
+EXTRA="$(jq -n --arg u "$REF" '{input_references:[{type:"image_url",image_url:{url:$u}}]}')"
+
+# 3. Refuse to continue if it did not build. Empty here = reference dropped.
+[ -n "$EXTRA" ] && printf '%s' "$EXTRA" | jq -e . >/dev/null \
+  || { echo "extra-json did not build (ARG_MAX?) — the reference would be dropped silently"; exit 1; }
+
+# 4. Dry-run WITH --print-payload, then read the payload yourself.
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run --print-payload \
   --prompt "image1 provides the girl's identity only: face, chestnut bunches with pale-yellow ribbons, cream sundress, blue sash. Ignore its background and pose. <the rest of the shot prompt from the template>" \
-  --extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"<a publicly reachable https URL>"}}]}' \
+  --extra-json "$EXTRA" \
+  --aspect-ratio 16:9 \
   --duration 8 --resolution 720p --out-dir ./out
 ```
 
-Say in the approval message that this route is documented but not yet run
-end-to-end here, so the user is pricing an experiment.
+**Then confirm `input_references` is actually in the printed payload before
+spending.** `--print-payload` writes to stderr, so:
+
+```bash
+... --dry-run --print-payload ... 2>&1 | grep '^PAYLOAD' | grep -c input_references
+# 1 = the reference is really in the request. 0 = it was dropped; do NOT spend.
+```
+
+`--dry-run` is free and makes no network call. It is not, on its own, enough:
+a dropped reference dry-runs perfectly happily. **The payload check is the
+step that matters.**
+
+Say in the approval message that the **mechanism** is measured
+(`ofox-video-core`, job `0f5c8b4e`) but that **this skill has not run it on an
+anime character**, so the user is still pricing an experiment.
 
 ## Step 2: generate each shot from its opening frame
 

@@ -4,6 +4,138 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.13.0 — 1.12.0 was wrong: the anchor is complete, and the under-quote never existed
+
+**Data and documentation only. `references/ofox-image.sh` is untouched.**
+
+**This entry retracts a claim 1.12.0 made.** That version recorded the
+1792x1008 edit as *unpriceable* — "output tokens never recorded and
+unrecoverable, the cost equation has two unknowns left" — filed it in a
+purpose-built `unpriceable_observations` list, and published a
+never-under-quote disclosure across five files telling callers to read a
+`ROUGH UPPER BOUND` on a large input as a **floor**. All of that was wrong,
+and it was wrong because the run's full output had scrolled out of the
+terminal rather than because anything was actually lost.
+
+The real figures, recovered from the session transcript:
+
+```
+USAGE_INPUT_TOKENS 1571   USAGE_INPUT_IMAGE_TOKENS 1508
+USAGE_INPUT_TEXT_TOKENS 63   USAGE_OUTPUT_TOKENS 129
+USAGE_TOTAL_TOKENS 1700   EDIT_COST 0.016249
+```
+
+They self-check three ways — `1508+63=1571`, `1571+129=1700`, and
+`63*0.000005 + 1508*0.000008 + 129*0.00003 = 0.016249`, matching the reported
+cost to six decimals. The equation was **underdetermined, not unsolvable**:
+one more observed value (the text-token count) closes it.
+
+**What a caller has to do differently:**
+
+- **Stop treating a large-input edit quote as a floor.** That instruction is
+  withdrawn from `references/pricing.md`, `SKILL.md`, `image-edit` and
+  `product-image`. Verified after the fix — a 1792x1008 input now quotes
+  `Estimated cost: ROUGH ~$0.0164 (129 output + 1571 input tokens, measured
+  2026-09-16 on an input image of 1792x1008 at --quality low)`, against a real
+  bill of $0.016249. An exact-pair `ROUGH`, above the real cost, which is
+  where the never-under-quote rule wants it.
+- ⚠️ **Do not reason about an edit's cost from its output tokens.** The new
+  point is what shows why. Ordered by input pixels the counts run **129**
+  (320x180), **229** (256x256), **301** (854x480), **129** (1792x1008) — not
+  monotonic, with the largest input tying the smallest for the lowest count.
+  The **input image** tokens are what track the upload (240 / 256 / 576 /
+  1508), and on a large source they are **74%** of the bill. The lever is the
+  size of the file you upload.
+
+**What the fourth point still establishes**, unchanged from 1.12.0: the
+~1.57 MP output budget is a **budget, not an upsample floor** — 1792x1008 is
+1,806,336 px, larger than the 1672x941 it returned, and the output did not
+grow. The three earlier points were all smaller than the output and could not
+separate those two readings.
+
+**Removed: `unpriceable_observations` and its three guard assertions.** With
+its only entry promoted to a real anchor the list is empty, so the assertions
+had no input that could make them fail — which is the exact shape
+`falsifiable-gates.md` warns about. A container built for one datum, once that
+datum turns out not to belong in it, is not infrastructure worth keeping. The
+pre-existing assertion that every entry in `additional_measurements` carries
+an `input_size` **and** a numeric `output_tokens` is untouched, and it is the
+check that caught the mis-filing in the first place.
+
+🚨 **Root cause, now documented: this script writes no sidecar.**
+`ofox-video-core` saves a `.json` beside every mp4 with the job id, seed,
+prompt and real cost. `ofox-image.sh` writes the image and nothing else —
+verified: the three edits behind this anchor have no companion file, while
+every video job from the same session has one on disk. The figures
+`_how_to_add_a_row` demands are precisely the ones this path never persists,
+which is how a complete measurement came to be written up as lost. `SKILL.md`
+gains a section telling callers to `tee` every paid run to a log, and
+`_how_to_add_a_row` now says so too. **Adding a sidecar to the script is a
+separate change and is not made here** — it has to decide a filename, a
+schema, and the `--n > 1` case where one call writes several files.
+
+## 1.12.0 — a fourth edit anchor, and an under-quote that turned out not to exist (see 1.13.0)
+
+> ⚠️ **WITHDRAWN IN PART BY 1.13.0.** Everything below about the run being
+> *unpriceable* is false: the token counts were never lost, only scrolled out
+> of the terminal, and they close the pricing formula exactly. The
+> never-under-quote disclosure this entry introduced is withdrawn, and the
+> `unpriceable_observations` list it created has been removed. The ~1.57 MP
+> budget finding and the non-linear input-token finding stand. Left in place
+> rather than rewritten, because a retraction a reader can see is worth more
+> than a tidy history.
+
+**Data and documentation only. No script, flag, default or formula changed**
+— `references/ofox-image.sh` is untouched, and `edit --dry-run` was re-run
+after the change to confirm it still prints an estimate on both a matching and
+a non-matching input size.
+
+**A fourth measured edit run recorded** (`references/token-anchors.json`,
+`references/pricing.md`): `openai/gpt-image-2`, a real 1792x1008 photograph,
+three background-swap edits on 2026-09-17, **1508 input image tokens**,
+`EDIT_COST` 0.016249 / 0.016289 / 0.016304, output 1672x941. It is the largest
+input measured here, the first real photograph rather than a synthetic
+flat-colour test image, and the first where **the input was bigger than the
+output** — which is what turns "the endpoint spends ~1.57 MP on the input's
+shape" from one of two readings into the surviving one.
+
+⚠️ **What a caller has to do differently, and it is a pricing matter.** That
+run's `USAGE_OUTPUT_TOKENS` was never recorded, and it cannot be recovered —
+the cost equation has two unknowns left and several integer pairs fit. The
+file's own rule forbids a derived figure, so the run is filed under a new
+`edit_anchors[model].unpriceable_observations` list that
+`edit_anchor_measurements()` never reads — **not** as an anchor. It was first
+put in `additional_measurements`, where `references/test/edit.test.sh` failed
+on it, because every entry there must carry an `input_size` **and** a numeric
+`output_tokens`. The gate was right and the filing was wrong, so the data moved
+and the assertion was left untouched. The estimator therefore falls back to the
+dearest point it can read:
+
+```
+input 1792x1008 -> Estimated cost: ROUGH UPPER BOUND ~$0.0139
+real bill for that input size ->                     $0.016249
+```
+
+**So on this endpoint a `ROUGH UPPER BOUND` is a floor, not a ceiling, for any
+input larger than every measured point** — 17% low here. Until someone spends
+1.6 cents re-measuring the pair, quote a large edit as a floor and say so in
+the cost table. Nothing was invented to paper over it, and nothing in the
+script was changed to work around it.
+
+**Three new assertions in `references/test/edit.test.sh`**, so the new list
+cannot become the place incomplete data goes to look complete: an entry must
+name its `input_size`, must say `why_this_is_not_an_anchor`, must **not** carry
+an `output_tokens` (if it had one it would be an anchor), and must not
+duplicate an input size that already exists as a real anchor. Each was
+verified by planting the corresponding defect and watching it fail, then
+restoring — a check nobody has seen fail is not a check.
+
+Raised, not changed: `print_edit_estimate` picks its "dearest" point by
+`output_tokens` alone, while at large input sizes the **input** term is most
+of the bill. The three readable points happen to agree today. Per the
+chain-order rule in `token-anchors.json`, a change that can move a quoted
+price gets raised before it is made.
+
 ## 1.11.2 — the frontmatter did not parse, and the installer said nothing
 
 The `description` carried a `: ` (colon then space) inside an unquoted YAML

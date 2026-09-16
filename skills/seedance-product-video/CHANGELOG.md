@@ -4,6 +4,70 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.17.1 — the "no hosting needed" note needed its other half
+
+**Documentation only. No flag, default, price or prompt template changed.**
+One cell of the identity-reference row.
+
+1.17.0 added that an image reference accepts a `data:` URI so a local file
+needs no hosting. True, and dangerous on its own: a `data:` URI built into
+`--extra-json` is bounded by `ARG_MAX`, and over the limit **the reference is
+dropped silently and the job is submitted and billed as plain text-to-video**
+(measured 2026-09-17, exit `0`, no `input_references` in the payload). The row
+now carries that caveat and points at the reproduction and the guard in
+`ofox-video-core`'s `references/api-params.md`.
+
+## 1.17.0 — the headline route was finally run, and the 5-second template failed it
+
+**Documentation only. No flag, default, price or command changed** — but one
+piece of **planning guidance is new and it forbids something the template used
+to permit**, so read the first bullet before writing another short clip.
+
+Until 2026-09-17 every clip this file was built on was **pure text-to-video
+with a fictional product**, while the skill's own description leads with
+turning a **real product photo** into listing footage. Job
+`54a721ce-61a1-46cf-b5bf-6973f31b8258` (5s, 480p, 16:9, a real photograph as
+`--frame-first-image`, 55 cents) closed that gap, and the result is split.
+
+**What a caller has to do differently:**
+
+- 🚨 **At 5 seconds, never put DETAIL in the same clip as TURNTABLE or ORBIT.**
+  "Scale the segments, don't copy the stamps" told you to scale the
+  timestamps. Measured: **scaling a timestamp does not scale the camera
+  move.** A one-second DETAIL pushed all the way to a cap macro anyway, and
+  the three turntable seconds after it happened inside that macro — the clip
+  never returned to the whole product and is not deliverable as a listing
+  showcase. A short clip is **one** move. If the user wants a detail and a
+  rotation, that is a longer clip or two clips, and both go in the cost table
+  as rows. Where the boundary sits between 5s (one move) and 12s (four
+  segments, three clips) is **not measured** — quote 8 or 10 as an experiment.
+- **Do not describe the turntable as measured on the photo path.** It is not.
+  `54a721ce` never framed its rotation wide enough to read, so the only
+  turntable evidence is still the text-to-video run `dc02f604`. The clip that
+  would settle it has **no DETAIL segment in it**.
+
+**Separately, the identity-reference row is no longer "never run".** It said
+*"no image-reference job has been run end to end in this repo"* and that
+whether the `image1` tokens resolve by position was unverified. Both were
+closed on 2026-09-16 (`ofox-video-core`, job `0f5c8b4e`, two `image_url`
+references, 44 cents): the features came through and **the tokens resolve in
+array order**. It bills at the plain t2v rate and accepts a `data:` URI, so a
+local file needs no hosting — but ⚠️ pass `--aspect-ratio` explicitly, because
+the measured job passed none and came back portrait from landscape
+references.
+
+**What it confirmed, and it is worth as much as the failure:**
+
+- **The photo anchor works.** Frame 0 is the attached photograph — whole
+  product, white background, wordmark legible. Everything this file says about
+  attaching a photo for a real SKU held on its first real outing.
+- **The white-surface SCENE convention is doing more work than anyone knew.**
+  There is no cut at the top of that clip, and that is causal: measured
+  elsewhere the same day, a supplied first frame whose background **disagrees**
+  with the written SCENE yields about 0.1s of the photo and then a hard cut
+  (`ofox-video-core` 1.28.0). Writing the SCENE as the surface the photo was
+  actually shot on is what keeps this skill out of that trap. Keep doing it.
+
 ## 1.16.1 — the real-person flag is measured; two rows and a paragraph said otherwise
 
 **Documentation only. No default, price, prompt template or behaviour

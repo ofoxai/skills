@@ -2,6 +2,33 @@
 
 All notable changes to the **product-demo** skill. Versioning follows SemVer.
 
+## 1.1.1 — the borrowed timing claim is withdrawn
+
+**Documentation only. No default, price, prompt template or behaviour
+changed.** Nothing measured *in this skill* moved; what moved is a claim this
+file borrowed from its sibling.
+
+"The timing, from the sibling scenario" told callers to plan for
+`it settles early and then holds`, from `keyframe-animation`'s job `259c3ce2`
+(~53% of the distance in the first quarter, arrival at 3 of 4 seconds). A
+second run on that mechanism (`1b7a3fab`, 5s) came back near-linear, arriving
+at 4.5 of 5 seconds with about half a second of tail. Two clips, two curves,
+four variables different between them — so there is no curve to plan against,
+and the sibling has withdrawn the claim at source (`keyframe-animation`
+1.2.0).
+
+**What a caller has to do differently:** stop promising a hold at the end, and
+stop justifying a longer `--duration` as buying one. Plan for the final state
+to be **reached and legible** — which is this skill's actual deliverable and
+is measured, twice, on its own clips. If the length of the tail matters, draft
+it cheaply and look.
+
+This file's own observation is unchanged and still stands: its clips were
+crisp and settled by t=2.0s of 4 seconds. What was wrong was treating
+"compatible with an early settle" as evidence for a curve. The `--duration`
+row in the defaults table now gives the bill as the reason to stay at the
+model's minimum, rather than a hold nobody can predict.
+
 ## 1.1.0 — a face in a capture is no longer a flat dead end, and cropping is still the answer
 
 Three places in `SKILL.md` said `--real-person true` was untested on

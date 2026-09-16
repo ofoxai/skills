@@ -1,12 +1,12 @@
 ---
 name: image-edit
-description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Change one thing in an image you already have and leave the rest of the picture alone — swap the background, recolour a part, remove or add an object, clean up a photo — from a local jpeg/png/webp file. Delegates to ofox-image-core's `edit` subcommand (POST /v1/images/edits, one synchronous request), prices the job with --dry-run before spending, and reports the real token cost including the uploaded picture, which is billed. Use when a user hands over an image and asks for a change to it, e.g. "change the background of this photo to a beach and keep the person unchanged", "make this button green", "remove the car in the background", or "put this product on a plain white background". Do not use to draw a new image from a text description with no input picture (that is ofox-image-core's `generate`), to produce a set of several images to choose between (see product-image), or to turn a photo into video (see seedance-product-video or seedance-ad-creative). Editing the content of an existing video — "change the background of my clip, keep the product" — has no path in this repo at all; this skill edits a single still, and routing such a request to a video skill generates brand-new footage instead of changing theirs.
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Change one thing in an image you already have and leave the rest of the picture alone — swap the background, recolour a part, remove or add an object, clean up a photo — from a local jpeg/png/webp file. Delegates to ofox-image-core's `edit` subcommand (POST /v1/images/edits, one synchronous request), prices the job with --dry-run before spending, and reports the real token cost including the uploaded picture, which is billed. Use when a user hands over an image and asks for a change to it, e.g. "change the background of this photo to a beach and keep the person unchanged", "make this button green", "remove the car in the background", or "put this product on a plain white background". Do not use to draw a new image from a text description with no input picture (that is ofox-image-core's `generate`), to produce a set of several images to choose between (see product-image), or to turn a photo into video (see seedance-product-video or seedance-ad-creative). Editing the content of an existing video — "change the background of my clip, keep the product" — has no route here and none in the video API either (measured; the mode field an edit would use is accepted and silently ignored, so nothing errors); this skill edits a single still, and routing such a request to a video skill generates brand-new footage instead of changing theirs.
 license: MIT
-version: "1.0.1"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/image-edit
 metadata:
   author: ofoxai
-  version: "1.0.1"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -36,10 +36,17 @@ multipart request, the decode-and-save, the cost arithmetic, and reporting an
 absolute path. **Read that skill's safety contract before using this one** —
 it is not restated here.
 
-**This skill has generated nothing of its own yet.** Every measured figure
-below was produced by `ofox-image-core` when its `edit` subcommand was built,
-or by two probe calls made directly against `ofox-image.sh` — not through this
-skill's flow. Where a number appears, the run it came from is named.
+**This skill has one run of its own, and everything else here was borrowed.**
+Until 2026-09-17 every figure below came from `ofox-image-core` when its
+`edit` subcommand was built, or from two probe calls made directly against
+`ofox-image.sh` — none of it through this skill's own flow. That gap is now
+closed by one run: a real 1792x1008 photograph, the two-sentence instruction
+this file teaches, `--dry-run` first, 1.6 cents. What it settled is in "The
+input image decides two things at once" and in the ⚠️ under "Say what stays,
+every time" — including the correction that the protection this file promises
+is **feature-level, not pixel-level**. It is one edit, of one kind (a
+background swap on one product photo), on one model. Where a number appears,
+the run it came from is still named.
 
 ## Where the core skill lives
 
@@ -128,12 +135,25 @@ Replicated on a second input (a red square at 320x180 → the same square, same
 position, same size, blue), and a third time in this skill's own probe work
 below.
 
-**Read the boundary as carefully as the result.** That is three runs on
-**one model**, on inputs with hard edges and flat colour. It says the endpoint
-is doing an edit rather than a redraw; it does not say your particular change
-will be surgical, and it is not evidence about the other ten models that serve
-this endpoint. The verification step below is in the instructions rather than
-assumed for exactly that reason.
+**A fourth run, 2026-09-17, moved the boundary that used to be stated here.**
+The three above were all **synthetic inputs with hard edges and flat colour**,
+which is exactly the easy case for "did it edit or redraw". The fourth is a
+real continuous-tone photograph — a brushed-steel vacuum flask on dark slate
+under dramatic side light, 1792x1008 — asked to change its background to
+seamless white. Every named feature came through: the `KELVIN` wordmark's
+glyph shapes, letter spacing, position and engraved relief; the copper knurl's
+cross-hatch; the two polished rings and the dark seam between them; the
+brushed vertical grain; the waist taper. So the endpoint edits photographs
+too, not only flat graphics.
+
+**Read the boundary as carefully as the result.** That is four runs on **one
+model**. It says the endpoint is doing an edit rather than a redraw; it does
+not say your particular change will be surgical, and it is not evidence about
+the other ten models that serve this endpoint. ⚠️ And the fourth run is also
+where "surgical" gets its limit: the **lighting moved with the background**,
+and the subject shifted slightly in position and scale within the frame. See
+the ⚠️ under "Say what stays, every time". The verification step below is in
+the instructions rather than assumed for exactly that reason.
 
 ### The two probe calls this skill's guidance leans on
 
@@ -251,8 +271,21 @@ Five things that follow from how the endpoint behaves:
   there is no mask (see below), so the words are the selection.
 - **Say what stays, every time.** The measured run's second sentence is the
   reason its result is checkable at all: it turns "did this work?" into a
-  question about specific pixels. Without it you are comparing against your
-  memory of the source.
+  question about **named features** you can look for one by one. Without it
+  you are comparing against your memory of the source.
+  ⚠️ **What it buys is feature-level, not pixel-level, and the difference
+  shows up the moment the change is a background.** Measured 2026-09-17 on a
+  1792x1008 product photo asked for a seamless white background while keeping
+  the body, the cap, the wordmark and the proportions: every named feature
+  survived — the wordmark's glyph shapes, letter spacing and engraved relief,
+  the knurl's cross-hatch, the two polished rings and the dark seam between
+  them, the brushed vertical grain, the waist taper. **And the lighting
+  changed with the background** (dramatic side-rim to soft even studio), and
+  in the same crop the subject sat slightly lower and slightly larger.
+  That is not a defect — a new background *has* to be relit — but it means
+  the second sentence cannot be verified by diffing pixels outside the region
+  you named. Check the features you listed, at magnification. Do not promise
+  a user that everything outside the change is untouched to the pixel.
 - **One change per call, and be honest that it costs more.** Two unrelated
   changes in one instruction is one bill; doing them as two calls is two. The
   reason to pay twice is that a combined instruction has not been measured
@@ -327,21 +360,26 @@ probe is only free if the thing you expect to reject it actually does.
 
 ## The input image decides two things at once
 
-Both are measured on **one model over three runs**
-(`openai/gpt-image-2`, `ofox-image-core`, 2026-09-15), and neither should be
-stated as general.
+Both are measured on **one model over four runs**
+(`openai/gpt-image-2`, 2026-09-15 for the first three via `ofox-image-core`,
+2026-09-17 for the fourth through this skill's own documented flow), and
+neither should be stated as general.
 
-**1. The output's shape follows the input's.** Three runs, no `--size` passed:
+**1. The output's shape follows the input's.** Four runs, no `--size` passed:
 
 | Input | Output |
 |---|---|
 | 854x480 (16:9) | 1672x941 |
 | 320x180 (16:9) | 1672x941 |
 | 256x256 (1:1) | 1254x1254 |
+| **1792x1008 (16:9)** | **1672x941** |
 
 Those two output sizes are 1,573,352 and 1,572,516 pixels — 0.05% apart — so
 the endpoint appears to spend a near-constant ~1.57 MP on whatever shape it
-was handed. Note the useful corollary: 1672x941 is 1.777, the true 16:9 that
+was handed. **The fourth run is the useful one for that claim**: at 1792x1008
+the input is already larger than the output, and the output still landed on
+the same 1672x941. So the ~1.57 MP budget is a budget in both directions, not
+just an upsample floor — held on the largest input measured here. Note the useful corollary: 1672x941 is 1.777, the true 16:9 that
 the `generate` size enum **cannot express at all**. An edit reaches a ratio a
 generation cannot request.
 
@@ -361,17 +399,27 @@ is about the input rather than a flag:
 input tokens were the image**. That component does not exist for a generation
 at all. Measured points:
 
-| Input | Billed |
-|---|---|
-| 854x480 | 1.4 cents |
-| 256x256 | 0.9 cents |
-| 320x180 | 0.6 cents |
+| Input | Image tokens | Billed |
+|---|---|---|
+| 320x180 | 240 | 0.6 cents |
+| 256x256 | 256 | 0.9 cents |
+| 854x480 | 576 | 1.4 cents |
+| **1792x1008** | **1508** | **1.6 cents** |
 
 ⚠️ **It is not linear in pixels, so do not scale those figures.** 256x256
 bills 256 image tokens and 854x480, with **6.3x the pixels**, bills 576. The
-direction is reliable (a smaller source costs less); the ratio is not. Price
-the actual file with `--dry-run`, which matches the estimate on the input's
-own measured size.
+1792x1008 point is the same story at the other end: **4.4x the pixels of
+854x480 for 2.6x the tokens**. The direction is reliable (a smaller source
+costs less); the ratio is not, at either end. Price the actual file with
+`--dry-run`, which matches the estimate on the input's own measured size.
+
+⚠️ **Do not reason about the cost from output tokens.** They do not track the
+input size at all: 129 output tokens for a 320x180 input, 229 for 256x256,
+301 for 854x480, and **129 again** for 1792x1008 — the largest input ties the
+smallest for the lowest count. The uploaded picture is what moves, and on a
+large source it is most of the bill: `1508 * 0.000008 = 0.012064` is **74%**
+of that run's 0.016249. So the lever is the **size of the file you upload**,
+and `--dry-run` on the real file is the figure to relay.
 
 **What is not measured is whether a downscaled source costs you quality.** The
 output lands at ~1.57 MP either way, so the endpoint is upsampling from
@@ -583,7 +631,7 @@ untouched bytes are kept beside it as `<name>-uncropped.<ext>`, reported as
 | Exit `1`, "exists but does not serve /v1/images/edits" | A `--model` that cannot edit, caught locally against the catalog's `supported_endpoints`. Nothing submitted | `models --endpoint edits` lists the ones that can. This is why `--model` should usually be omitted. Reaching the API instead returns `endpoint_not_supported` — also free, fired before any parameter is looked at |
 | Exit `3`, `model_not_found` | The model id does not exist and the local check didn't catch it (snapshot fallback, or validation skipped) | Check the id against `models`. Nothing billed |
 | The result is a *new* picture rather than an edit of yours | Almost always the instruction: no "leave the rest alone" half, or a whole-image restyle that has no such half by nature | Rewrite as two sentences, the second naming what must survive. **The spent call is not recoverable** — this is why the instruction is approved with the price |
-| The subject changed even though the instruction said not to | One run, one roll. The endpoint edits rather than redraws on the runs measured, but that is three runs on one model and says nothing about a guarantee | Re-run with the "keep" sentence made more specific (name the features, not just the noun). A new call, so a new cost table |
+| The subject changed even though the instruction said not to | One run, one roll. The endpoint edits rather than redraws on the runs measured, but that is four runs on one model and says nothing about a guarantee | Re-run with the "keep" sentence made more specific (name the features, not just the noun). A new call, so a new cost table |
 | The edges around a swapped background look re-invented | The commonest real defect of a background change, and not something any wording here has been measured to fix | Name the boundary in the keep sentence ("and the edges where they meet the background"). Untested wording — check the result rather than trusting it |
 | A `--quality` typo rendered and billed anyway | This endpoint does not validate the value; measured on six models | Nothing to recover. Prevention only: `--dry-run` first, which rejects it locally, and omit `--quality` when you have no reason to set it |
 | The delivered file is the wrong shape | The output follows the **input's** ratio, and `--size` is untested here | Crop the source to the target ratio and re-run, and pass `--target-aspect` so the script guarantees it rather than you checking. A new call, so a new cost table |
@@ -604,8 +652,17 @@ untouched bytes are kept beside it as `<name>-uncropped.<ext>`, reported as
   skill is one in, one out.
 - **The thing to be edited is a video, not a still.** "Change the background
   of my 10-second clip to a beach and keep the product exactly as it is" has
-  **no path in this repo**, and this is the skill such a request lands on, so
-  it is said here. Nothing in this repo edits the content of existing footage.
+  **no route in this repo and none in the API behind it**, and this is the
+  skill such a request lands on, so it is said here.
+  **Measured 2026-09-16, and the shape of the answer matters**: the Ofox
+  create request does carry a `mode` field, which is how the public gallery's
+  `edit` cases were run — and it is **accepted and discarded**. Job
+  `4686f434` sent an invented mode value in an ordinary text-to-video request,
+  got `200`, and billed as an ordinary t2v clip. So there is no rejection to
+  show the user and no error to wait for; the parameter simply does nothing.
+  Detail: `ofox-video-core`'s `references/api-params.md` → "`mode` is accepted
+  and has no effect".
+  Nothing in this repo edits the content of existing footage.
   What is honestly available: a **still** can be edited (that is this skill),
   and a still can then be turned into video — but that **generates new
   footage** rather than editing theirs, and whatever real motion, lighting,

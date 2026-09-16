@@ -2,6 +2,39 @@
 
 All notable changes to the **music-video** skill. Versioning follows SemVer.
 
+## 1.2.0 — seven segments is an untested ceiling, and the segment table now says so
+
+**Documentation only. No flag, default, price, arithmetic or command changed.**
+The segment-count formula is unchanged and still correct — it falls out of the
+track's length and the model's ceiling, and there is nothing in it to verify.
+
+What changed is **where the file's own evidence limit is stated**. The limit
+was written honestly in "Before anyone pays" and nowhere else, while Step 2's
+table — the part an agent reads when quoting — presented a seven-job chain as
+routine arithmetic. A reader who priced a three-minute track never met the
+caveat.
+
+**What a caller has to do differently:**
+
+- **Keep quoting the whole track's total** (unchanged, and still the point),
+  **and say in the same message where the evidence stops.** Three segments and
+  two seams have been run. Four and up have not, and what drifts across four,
+  five or six seams — palette, brightness, whether the style anchor survives
+  being re-read that many times — is unmeasured.
+- **Lead with drafting one segment** before committing a long track's total.
+  It was already recommended; on a six- or seven-segment job it is now the
+  recommendation rather than an option.
+- **Do not describe the measured run as more than it was.** Every row of Step
+  2's table is now marked for how much evidence sits behind it, and the two
+  caveats that were buried are now attached to the recap as well: the run's
+  segments were **10 seconds**, not the 20–30s this file's arithmetic normally
+  produces, and its audio was a **synthesised tone, not music**.
+
+**Recorded so it is not reopened by accident:** buying the seven-segment
+measurement would cost about $7.70, and the repo owner decided on 2026-09-17
+to scope the documentation to the measured scale rather than pay for it. That
+is a cost decision, not evidence that seven segments fail.
+
 ## 1.1.1 — a measured flag, a wall that stands anyway, and the difference stated
 
 **Documentation only. No default, price, prompt template or behaviour

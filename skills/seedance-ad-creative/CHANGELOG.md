@@ -4,6 +4,39 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.13.6 — the "no hosting needed" note needed its other half
+
+**Documentation only. No flag, default, price or prompt template changed.**
+One cell of the identity-reference row.
+
+1.13.5 added that an image reference accepts a `data:` URI so a local file
+needs no hosting. True, and dangerous on its own: a `data:` URI built into
+`--extra-json` is bounded by `ARG_MAX`, and over the limit **the reference is
+dropped silently and the job is submitted and billed as plain text-to-video**
+(measured 2026-09-17, exit `0`, no `input_references` in the payload). The row
+now carries that caveat and points at the reproduction and the guard in
+`ofox-video-core`'s `references/api-params.md`.
+
+## 1.13.5 — the identity-reference row said it had never been run; it has
+
+**Documentation only. No flag, default, price or prompt template changed.**
+One cell of the "two ways an image can enter a shot" table.
+
+It read *"no image-reference job has been run end to end in this repo, and
+whether `@image1` tokens resolve by position is unverified"*. Both halves were
+closed by `ofox-video-core`'s measurement of 2026-09-16 (job `0f5c8b4e`, two
+`image_url` references, 44 cents): the references' named features came
+through, and **the `image1` / `image2` tokens resolve by position, in array
+order**.
+
+**What a caller can now do differently:** the route bills at the **plain t2v
+rate** (not the dearer video-to-video rate a `video_url` moves a job to), and
+an image reference accepts a **`data:` URI**, so a local file needs no
+hosting. ⚠️ Pass `--aspect-ratio` explicitly on this route — the measured job
+passed none and came back portrait from two landscape references. Two images
+is the most that has been sent; nine, and mixing an image with audio or video
+elements, are untested.
+
 ## 1.13.4 — found by a grep this file should have been in from the start
 
 **Documentation only. No default, price, prompt template or behaviour

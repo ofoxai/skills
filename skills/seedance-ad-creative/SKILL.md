@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.13.4"
+version: "1.13.6"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.13.4"
+  version: "1.13.6"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -809,7 +809,7 @@ An attached image means one of two things, and the API has a field for each
 | Meaning | Flag | What it does | Status in this repo |
 |---|---|---|---|
 | **First frame** — the clip starts on this exact picture | `--frame-first-image PATH` | locks the opening composition (case 15's `Begin with the exact composition of the reference image`); on `bytedance/seedance-2.5` forces `aspect_ratio: adaptive`, so crop or pad the photo to the target ratio first | verified with real runs; this skill's default route |
-| **Identity reference** — the model borrows the product's appearance, no frame is locked | `--extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"…"}}]}'`, up to 9 images | what nearly every gallery prompt with an image does (cases 12, 13, 24): one role line per image, `image1: the product's exact packaging; image2: the logo, last second only` | element shape documented in `api-params.md`; no image-reference job has been run end to end in this repo, and whether `@image1` tokens resolve by position is unverified — the role sentence must read correctly as plain text either way |
+| **Identity reference** — the model borrows the product's appearance, no frame is locked | `--extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"…"}}]}'`, up to 9 images | what nearly every gallery prompt with an image does (cases 12, 13, 24): one role line per image, `image1: the product's exact packaging; image2: the logo, last second only` | element shape documented in `api-params.md`, and **measured end to end on 2026-09-16** (job `0f5c8b4e`, two images, 44 cents, billed at the plain t2v rate): both references' named features came through and the **`image1` / `image2` tokens resolved by position, in array order**. A local file needs no hosting — an image reference accepts a `data:` URI. ⚠️ **A `data:` URI you build into `--extra-json` yourself is bounded by `ARG_MAX`, and over the limit the reference is dropped silently while the job is submitted and billed anyway** — downscale the image, and confirm `input_references` is in a `--dry-run --print-payload` before spending. See `api-params.md` → "An empty `--extra-json` is treated as 'not passed'". Two images is what was run; nine, and mixing image with audio or video elements, are untested. ⚠️ Pass `--aspect-ratio` explicitly here — the measured job passed none and came back portrait from two landscape references |
 
 **The two are mutually exclusive** in one job: the script rejects a request
 that carries both (`references_conflict`). Choose the first-frame route when

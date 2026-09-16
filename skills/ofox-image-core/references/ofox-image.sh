@@ -147,12 +147,15 @@
 #   --size VAL           optional, same enum as generate, validated for typos
 #                          only. Whether this endpoint honours it is UNTESTED
 #                          (see --quality: finding out costs a real edit). All
-#                          three measured runs passed no --size and got back a
+#                          four measured runs passed no --size and got back a
 #                          size in no enum, matching the INPUT's aspect ratio
-#                          at a near-constant ~1.57 MP: 1672x941 from both a
-#                          854x480 and a 320x180 input, 1254x1254 from a
-#                          256x256 one. 1672x941 is 1.777, i.e. the 16:9 that
-#                          generate's size enum cannot express at all.
+#                          at a near-constant ~1.57 MP: 1672x941 from a
+#                          854x480, a 320x180 and a 1792x1008 input, 1254x1254
+#                          from a 256x256 one. 1672x941 is 1.777, i.e. the 16:9
+#                          that generate's size enum cannot express at all. The
+#                          1792x1008 run is the one showing this is a BUDGET
+#                          and not an upsample floor: its input is larger than
+#                          the output and the output did not grow.
 #   --n N                optional, integer 1-10. Multiplies the spend; and
 #                          because this endpoint validates so little, a value
 #                          it does not like is more likely to render than to
@@ -2444,14 +2447,14 @@ cmd_edit() {
     if ! check_image_tools; then return 2; fi
     # No size is picked for the caller here, unlike generate. On generate the
     # requested --size decides the delivered pixels, so choosing it well is
-    # what makes a target reachable. On edits all three measured runs passed no
+    # what makes a target reachable. On edits all four measured runs passed no
     # --size and got back a size in no enum, matching the INPUT's ratio at a
-    # near-constant ~1.57 MP (1672x941 from two 16:9 inputs, 1254x1254 from a
+    # near-constant ~1.57 MP (1672x941 from three 16:9 inputs, 1254x1254 from a
     # 1:1 one). Whether --size is even honoured here is untested, so picking
     # one on the caller's behalf would be acting on a guess. The crop still
     # happens; it just works from whatever comes back.
     echo "NOTE: the delivered file will be measured and centre-cropped to $target_label." >&2
-    echo "  No --size is chosen for you on this endpoint: the three measured edits each returned a size matching the INPUT image's aspect ratio at a near-constant ~1.57 megapixels (854x480 and 320x180 both gave 1672x941; 256x256 gave 1254x1254), and whether --size is honoured here has not been established. So the delivered ratio follows your input, not your target — the crop works from the real file either way, and will fail loudly rather than hand back the wrong ratio if your input's shape cannot cover $target_label." >&2
+    echo "  No --size is chosen for you on this endpoint: the four measured edits each returned a size matching the INPUT image's aspect ratio at a near-constant ~1.57 megapixels (854x480, 320x180 and 1792x1008 all gave 1672x941; 256x256 gave 1254x1254), and whether --size is honoured here has not been established. So the delivered ratio follows your input, not your target — the crop works from the real file either way, and will fail loudly rather than hand back the wrong ratio if your input's shape cannot cover $target_label." >&2
   fi
 
   # --out-dir before the network call, same as generate.

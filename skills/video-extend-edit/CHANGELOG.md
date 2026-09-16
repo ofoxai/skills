@@ -2,6 +2,39 @@
 
 All notable changes to the **video-extend-edit** skill. Versioning follows SemVer.
 
+## 1.2.0 — this skill's reason for existing was an inference; it is now a measurement
+
+**Documentation only. No default, price, prompt template, command or route
+changed.** The frame-out / generate / join route is unchanged and remains the
+only way to lengthen a clip here.
+
+What changed is the evidence under it. This file argued, from inference, that
+Ofox exposes no native `extend` or `edit` mode. That was tested on 2026-09-16
+and the real behaviour is more specific than "unsupported":
+
+- **The `mode` field is accepted and discarded.** Job
+  `4686f434-16b0-451f-8941-970e5b3d4a15` sent an invented mode value inside an
+  ordinary text-to-video request and got `200`, a completed plain 4-second
+  t2v clip, and a $0.44 t2v bill. A value nothing could implement cannot have
+  been honoured, so the field is dropped somewhere in the chain.
+- **`duration: -1`** — the form the gallery's official edit case uses to lock
+  the output to the input's length — returns `502 route_error`, raised before
+  any reference URL is fetched.
+
+**What a caller has to do differently:** stop describing extend/edit as
+something the API *refuses*. Nothing refuses it. An agent that tells a user
+"the request will be rejected", or that watches for an error code before
+falling back to this skill's route, is waiting for something that never
+arrives — and a `200` on a request carrying `mode` is not evidence the mode
+ran. The description, "Read this before planning anything", "Unmeasured
+edges" and the "When NOT to use" table all now say *accepted and has no
+effect*, with the job id.
+
+Also noted, and it changes nothing here: `input_references` **images** were
+measured working the same day (job `0f5c8b4e`). That is subject/style
+guidance with an unchanged duration ceiling, not a clip to continue, so it is
+listed under "Unmeasured edges" as ruled out rather than as a new route.
+
 ## 1.1.0 — the chain command was run, and the real-person wall is now half a wall
 
 Two of this file's own "not measured here" statements were closed on

@@ -2,6 +2,69 @@
 
 All notable changes to the **image-edit** skill. Versioning follows SemVer.
 
+## 1.1.1 — the under-quote warning 1.1.0 added is withdrawn; it was never true
+
+**Documentation only. No flag, default, question set or command changed.**
+
+1.1.0 told callers to *"treat a `ROUGH UPPER BOUND` on a large input as a
+floor, not a ceiling"*, on the premise that the 1792x1008 run's output-token
+count was unrecoverable. It was not — the figures had scrolled out of the
+terminal, not vanished, and they close the pricing formula exactly
+(`63*0.000005 + 1508*0.000008 + 129*0.00003 = 0.016249`). The anchor is now
+complete and a 1792x1008 input quotes `ROUGH ~$0.0164` against a real
+$0.016249. **Ignore that warning; `--dry-run` on the real file is the figure
+to relay, as it always was.**
+
+⚠️ **What replaces it is a different and better-supported caution: do not
+reason about an edit's cost from its output tokens.** They do not track input
+size — 129 (320x180), 229 (256x256), 301 (854x480), **129** (1792x1008), with
+the largest input tying the smallest for the lowest count. The uploaded
+picture is what moves, and on a large source it is **74%** of the bill. The
+lever is the size of the file you upload.
+
+## 1.1.0 — the skill's own path was run, and "specific pixels" was the wrong promise
+
+**Documentation only. No default, flag, question set or command changed.**
+This skill had generated nothing of its own; every figure in it was borrowed
+from `ofox-image-core`'s build-time runs or from two probes made directly
+against the script. One run through this file's own documented flow
+(2026-09-17, a real 1792x1008 photograph, the two-sentence instruction,
+`--dry-run` first, 1.6 cents) closes that and corrects one claim.
+
+**What a caller has to do differently:**
+
+- **Stop verifying an edit by diffing pixels outside the region you named.**
+  "Say what stays, every time" said the second sentence turns "did this work?"
+  into *a question about specific pixels*. Measured, the protection is
+  **feature-level**: every named feature survived intact, **and** the lighting
+  changed with the background (it has to — a new background is a new light),
+  and the subject sat slightly lower and slightly larger in the same crop.
+  Check the features you listed, at magnification. Do not tell a user the rest
+  of the picture is untouched to the pixel.
+- ⚠️ **Treat a `ROUGH UPPER BOUND` on a large input as a floor, not a
+  ceiling.** The new point's `USAGE_OUTPUT_TOKENS` was never recorded, only
+  its image tokens (1508) and its bill (1.6 cents), and `token-anchors.json`
+  will not hold a derived figure — so the estimator skips it and quotes the
+  854x480 point (~1.4 cents) instead. A big source therefore **quotes under
+  what it bills**. Say so in the cost table until the pair is re-measured.
+  This is the never-under-quote rule failing in the direction that rule
+  exists to prevent, and it is written down rather than papered over.
+
+**What it confirmed rather than changed:** the ~1.57 MP output budget now has
+a fourth point, and the fourth is the first where the **input was larger than
+the output** — 1792x1008 in, 1672x941 out — so the budget holds in both
+directions rather than only as an upsample floor. Image tokens stay non-linear
+at the top end too: 4.4x the pixels of 854x480 for 2.6x the tokens. And the
+"it edits rather than redraws" evidence, previously three runs on synthetic
+flat-colour inputs, now includes a continuous-tone photograph.
+
+Also re-worded, from Stage 1's measurement: the video content-editing dead end
+in the description and in "When NOT to use" used to say "no path in this
+repo". It now says what was measured — the video API's `mode` field is
+**accepted and discarded** (job `4686f434`, `200`, billed as ordinary
+text-to-video) — because an agent told the request is "refused" will wait for
+an error that never comes.
+
 ## 1.0.1 — routing only: video content editing has no path in this repo
 
 A blind routing tester was given "change my 10-second video's background to a

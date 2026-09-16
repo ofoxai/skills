@@ -1,12 +1,12 @@
 ---
 name: explainer
-description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn an article, doc or release note into a short explainer clip — one person to camera, or a voiceover over illustrative footage. The user supplies the source text and the model generates the speech; audio cannot be uploaded, measured. A 30-second clip holds about ninety spoken words — under a tenth of a 1,200-word post — so this skill does not summarise an article, it picks the single idea worth saying and helps choose which one. Use when a user asks to turn writing into a short spoken video, e.g. "make a 30-second explainer from this blog post", "explain this feature in a short video", "turn our changelog into a clip", "a quick video explaining what this paper found". Do not use for a scene between people (see seedance-short-drama), a brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the user already has both a portrait and the finished words (see talking-head).
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn an article, doc or release note into a short explainer clip — one person to camera, or a voiceover over illustrative footage. The user supplies the source text and the model generates the speech; audio cannot be uploaded, measured. A 30-second clip holds about eighty spoken words in eight sentences — measured, and well under a tenth of a 1,200-word post — so this skill does not summarise an article, it picks the single idea worth saying and helps choose which one. Use when a user asks to turn writing into a short spoken video, e.g. "make a 30-second explainer from this blog post", "explain this feature in a short video", "turn our changelog into a clip", "a quick video explaining what this paper found". Do not use for a scene between people (see seedance-short-drama), a brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the user already has both a portrait and the finished words (see talking-head). Budget sentences as well as words — each sentence boundary costs about 0.7 seconds of silence, so a script with more sentences runs longer at the same word count.
 license: MIT
-version: "1.1.2"
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/explainer
 metadata:
   author: ofoxai
-  version: "1.1.2"
+  version: "1.2.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -50,48 +50,81 @@ People ask for "a 30-second video of this article". The arithmetic says no,
 and it says no by a wide enough margin that the honest move is to say it in
 the first reply rather than after the bill.
 
-### A thirty-second clip holds about ninety spoken words
+### Sentences cost seconds too — the budget is not words per second alone
+
+🚨 **This section used to be headed "a thirty-second clip holds about ninety
+spoken words". A 30-second run disproved it.** The old number came from
+multiplying a 20-second clip's rate by 30, and the thing that multiplication
+misses is that **every sentence boundary costs about 0.7 seconds of silence**.
+A script with more sentences takes longer at the same word count.
 
 The two word-rate tiers and the gallery cases behind them live in the shared
 file —
 [`prompt-structure.md`](../ofox-video-core/references/prompt-structure.md) →
 "Dialogue and sound" → "Density — two tiers, not one" — and are not restated
 here; what this skill has measured on this API is below. **The tier that
-applies to an explainer is monologue / talking head** —
-one person speaking continuously — at 3.5 words a second in English and 5
-characters a second in Chinese. The other tier, dialogue drama at 0.4–1.7
-words/s, measures a different shape: two people, with silence between their
-lines. It is a *floor* here rather than a budget.
+applies to an explainer is monologue / talking head** — one person speaking
+continuously. The other tier, dialogue drama at 0.4–1.7 words/s, measures a
+different shape: two people, with silence between their lines. It is a *floor*
+here rather than a budget.
 
-Plan a little under the tier, at **3 words a second** (4 characters a second
-for Chinese or Japanese), and treat 3.5 / 5 as the ceiling:
+**The budget formula, from the 30-second run:**
 
-| Clip | Plan for about | Which is | Share of a 1,200-word article |
+```
+speech span (seconds) ≈ words / 3.56 + 0.7 x (sentences − 1)
+```
+
+3.56 words a second is the measured rate **while actually speaking**; the
+second term is the pauses between sentences. Checked against its own run: 80
+words in 8 sentences predicts 27.4s, and the delivered speech span was
+**28.13s**. Then leave room at both ends — that clip started speaking at
+0.567s and finished 1.39s before the last frame.
+
+| Clip | A safe script | Which is | Share of a 1,200-word article |
 |---|---|---|---|
-| 10s | 30 words | one or two sentences | 2.5% |
-| 15s | 45 words | a short paragraph | 4% |
-| 20s | 60 words | a paragraph | 5% |
-| 30s | 90 words | a claim, its reason, and what to do about it | 7.5% |
+| 10s | ~25 words, 2–3 sentences | one thought | 2% |
+| 15s | ~40 words, 3–4 sentences | a short paragraph | 3.3% |
+| 20s | ~55 words, 5 sentences | a paragraph | 4.6% |
+| 30s | **~80 words, 8 sentences** — **measured, fits with 1.39s to spare** | a claim, its reason, and what to do about it | 6.7% |
 
-**Why under the ceiling rather than at it.** 3.5 words/s is the densest
-practice the gallery shows, and these templates spend clip time on things that
-are not words — an opening beat, a written ending where the lips close and the
-shot holds — while asking for an unhurried delivery. A script budgeted at the
-ceiling asks for maximum density, an unhurried register and a silent close in
-the same prompt. The asymmetry settles which way to round: under-filling costs
-a pause at the end, and overrunning comes back rushed, garbled or cut off,
-which costs the whole clip.
+Only the 30-second row is measured. The others apply the same formula with
+the same headroom and have not been run.
 
-**What kind of evidence this is — and the rate this file plans at is now its
-own model's.** Both tiers started as counts of *gallery prompt text* against
-clip length: real prompts and published clips, but unrecorded platforms and
-parameters, and no measurement of what this API delivers. That is still what
-the **3.5 / 5 ceiling** is. The **3 words a second this file budgets at** is
-no longer one of them: measured 2026-09-16 on this skill's own first paid run,
-`bytedance/seedance-2.5` delivered **3.05 words a second** — 59 scripted words
-across a 19.33-second speech span, every word spoken, nothing dropped. At 3.05
-a second a 30-second clip holds 91.5 words, which is the row the whole skill
-rests on.
+**Ninety words in thirty seconds does not fit.** By the formula, 90 words
+across 8 sentences needs `90/3.56 + 4.9 = 30.2s` of speech span — longer than
+the clip, before any opening or closing beat. The failure mode is the
+expensive one: overrunning comes back rushed, garbled or cut off, which costs
+the whole clip, while under-filling costs a pause at the end. Round down.
+
+**Count the sentences, not just the words.** Two 80-word scripts can differ by
+several seconds — short punchy sentences are *slower* on this model than the
+same words in fewer, longer ones. That is the opposite of how most people
+estimate, and it is the practical half of this section: a script that fails
+the budget can often be fixed by **joining sentences** rather than cutting
+words.
+
+**What kind of evidence this is.** Both tiers started as counts of *gallery
+prompt text* against clip length: real prompts and published clips, but
+unrecorded platforms and parameters, and no measurement of what this API
+delivers. That is still what the **3.5 / 5 ceiling** is, and the CJK figures
+are still exactly that and nothing more. The English budget is now this
+model's own, measured twice:
+
+| Run | Script | Speech span | Overall rate | Rate while speaking |
+|---|---|---|---|---|
+| `edef379e` (20s) | 59 words | 19.33s | **3.05 w/s** | not separated |
+| `42d8b5c3` (30s) | 80 words, 8 sentences | 28.13s | **2.84 w/s** | **3.56 w/s** |
+
+**The two overall rates differ, and the second run explains why.** Splitting
+speech from silence showed 22.49 seconds of actual speaking and 5.64 seconds
+of internal silence — **7 pauses, matching the script's 7 sentence boundaries
+exactly**, about 0.7s each. So the overall rate is not a property of the
+model; it falls out of how many sentences the script has. A denser-sentence
+script scores a lower "words per second" while speaking at the same speed.
+
+That is why the budget above is a formula rather than a rate, and why the old
+90-word row could not survive: it multiplied a 20-second observation by 1.5
+and carried no term for the pauses.
 
 **Until that run this was an extrapolation across tiers, and that is a mistake
 this repo has already made once.** Every word rate measured here before today
@@ -102,35 +135,36 @@ clip where most seconds have nobody speaking at all. `talking-head` shipped
 that error and had to correct it. The monologue tier now has measurements of
 its own instead.
 
-**Two models, two rates, and that is two observations rather than a law.**
-`talking-head`'s first paid run measured **3.16 words a second** on
-`alibaba/wan-3.0-prime` (2026-09-16); this skill's measured **3.05** on
-`bytedance/seedance-2.5` the same day. They are close to each other and both
-sit just above the 3 a second both files plan at, which is the reassuring
-direction. But neither has been repeated, they are different scripts at
-different lengths on different models, and nothing has been measured in
-another language or at another resolution. Read them as two reasons to keep
-planning at 3 — not as a rate this API is known to hold to.
+**A third observation, on another model, and that is still not a law.**
+`talking-head`'s first paid run measured **3.16 words a second** overall on
+`alibaba/wan-3.0-prime` (2026-09-16). It is close to this skill's two, which
+is the reassuring direction — but its speech and silence were never separated,
+so it cannot be compared against the 3.56 figure, and the sentence-boundary
+term has been measured on **one** run only. Nothing has been measured in
+another language or at another resolution. Two data points on one model,
+agreeing about *why* they differ, is exactly as much as this file claims.
 
-⚠️ **Thirty seconds itself has not been run.** The measurement above is a
-**20-second** clip, and the 90-word row is that observation extended linearly.
-That is a reasonable assumption and it is still an assumption; the bounds are
-in "Before anyone pays" below.
+⚠️ **Thirty seconds is now measured; the rest of the table is not.** The
+30-second row comes from a real 30-second clip. The 10, 15 and 20-second rows
+apply the same formula with the same headroom and have not been run at those
+lengths — the closest evidence is the 20-second clip, whose script was written
+against the older, looser budget and still fitted.
 
 ### So the product is one idea, said once
 
-Ninety words is not a summary of a 1,200-word article — it is under a tenth of
-it. It is a claim, its consequence, and one concrete detail. That is not a
-degraded explainer — it is what a short explainer has always been — but it has
-to be said out loud before a user pays for something they thought was a
+Eighty words is not a summary of a 1,200-word article — it is well under a
+tenth of it. It is a claim, its consequence, and one concrete detail. That is
+not a degraded explainer — it is what a short explainer has always been — but
+it has to be said out loud before a user pays for something they thought was a
 summary:
 
-> A 30-second clip holds about ninety spoken words, which is roughly one
-> paragraph and under a tenth of your article. It will not summarise the
-> piece. What it can do well is land **one** idea from it — so the useful
-> question is which idea, and the next section is how to pick.
+> A 30-second clip holds about **eighty spoken words** — roughly one paragraph
+> and under a tenth of your article, and that is measured rather than
+> estimated. It will not summarise the piece. What it can do well is land
+> **one** idea from it — so the useful question is which idea, and the next
+> section is how to pick.
 
-**Never quietly compress the article into ninety words instead.** A summary
+**Never quietly compress the article into eighty words instead.** A summary
 squeezed to that length becomes a string of abstractions that means nothing to
 someone who has not read the source — the worst of both products. One concrete
 idea, fully said, beats five ideas gestured at.
@@ -196,23 +230,26 @@ the clip carries that one and not the post.
 
 ## Before anyone pays: what is measured here, and what is not
 
-**This skill has one paid run of its own, and it settled the number the whole
-file is built on.** Job `edef379e-9ac0-41c9-ab59-6378d030239e`, 2026-09-16,
-`bytedance/seedance-2.5` on `byteplus`, **20 seconds at 480p**, seed
-`623333235`, text-to-video with nothing attached, `--generate-audio` left at
-the server default so the speech came back on the track, 2 dollars 20. The
-script was a 59-word presenter-to-camera monologue written from this file's
-own template, and the delivered clip was read afterwards — the audio measured
-and transcribed — rather than called done at `STATUS completed`.
+**This skill has two paid runs of its own, and the second one overturned the
+number the whole file used to be built on.** Both `bytedance/seedance-2.5` on
+`byteplus`, 480p, text-to-video with nothing attached, `--generate-audio` left
+at the server default so the speech came back on the track, and both read
+afterwards — audio measured and transcribed, frames extracted — rather than
+called done at `STATUS completed`.
+
+| Run | Shape | Cost |
+|---|---|---|
+| `edef379e-9ac0-41c9-ab59-6378d030239e` (2026-09-16), seed `623333235` | **20s**, presenter-to-camera, 59 words | $2.20 |
+| `42d8b5c3-31f4-41d2-90eb-b07a3181b465` (2026-09-17), seed `1021654967` | **30s**, 16:9, the **Voiceover** template, 80 words in 8 sentences | $3.30 |
 
 ### The first run — 2026-09-16
 
 | Question | Measured | How |
 |---|---|---|
-| **Speech rate** | **3.05 words a second** | 59 words across a 19.33s speech span. `silencedetect` at -30dB puts the first word at 0.399s and the last at 19.729s, with 7 internal pauses. 3.05 x 30 = 91.5, so "about ninety words in thirty seconds" holds |
+| **Speech rate** | **3.05 words a second** overall | 59 words across a 19.33s speech span. `silencedetect` at -30dB puts the first word at 0.399s and the last at 19.729s, with 7 internal pauses |
 | **Truncation** | **None** | A `whisper tiny.en` transcription returns all 59 words, in order, with nothing added or dropped |
-| **The closing beat** | **It fitted** | 0.335s of silence between the last word and the last frame, on a script budgeted at almost exactly 3 words a second. The template asks for that beat and the clip had room for it — under-filling by a hair is what bought it |
-| **Whether a 30-second clip behaves the same** | **Not measured** | The run is 20 seconds. The 90-word row is that observation extended linearly |
+| **The closing beat** | **It fitted** | 0.335s of silence between the last word and the last frame. The template asks for that beat and the clip had room for it — under-filling by a hair is what bought it |
+| **Whether a 30-second clip behaves the same** | ❌ **It does not** | This row used to say "not measured" and carried the 90-word extrapolation. See the second run |
 
 ⚠️ **One measurement here was nearly reported backwards, which is worth
 knowing before repeating it.** A first pass with `silencedetect` at a 0.35s
@@ -224,26 +261,48 @@ something is not the thing not happening. Check that the threshold can see the
 size of the thing you are asking about before concluding from its silence.
 
 **What that run does not establish:** one run, one script, English, 480p, 20
-seconds, presenter-to-camera. A faster or slower script, another language,
-another resolution, the voiceover shape and any duration past 20 seconds are
-all still unmeasured here.
+seconds, presenter-to-camera. A faster or slower script, another language and
+another resolution are all still unmeasured here.
+
+### The second run — 2026-09-17, and it cost this file its headline number
+
+Job `42d8b5c3`, **30 seconds**, the **Voiceover** template (no visible
+speaker), 80 words in 8 sentences, $3.30. It closed this skill's two largest
+gaps at once: the duration it is named for, and the shape it had never
+generated.
+
+| Question | Measured | How |
+|---|---|---|
+| 🚨 **Does "about ninety words" hold at 30 seconds?** | ❌ **No** | Speech span 0.567s → 28.695s = **28.13s** for 80 words. Split into speech and silence: **22.49s speaking, 5.64s of internal silence in 7 pauses — exactly the script's 7 sentence boundaries**, about 0.7s each. Speaking rate **3.56 w/s**; overall **2.84 w/s**. By that model 90 words in 8 sentences needs 30.2s of span, which does not fit in a 30s clip |
+| **The budget formula** | `span ≈ words/3.56 + 0.7 x (sentences − 1)` | Predicts 27.4s for this script; delivered 28.13s |
+| **Truncation** | **None** | 1.39s of tail left over. The script fitted with room |
+| **The voiceover shape itself** | ✅ **It works** | No person anywhere in 30 seconds; a slow continuous push with no cut; **no on-screen text at all**; and the ending holds — the frames at 22s and 29.5s are nearly identical, on a recessed button, exactly as the template asks |
+| **Whether the 20s and 30s rates conflict** | **They don't** | 3.05 and 2.84 are the *overall* rates of scripts with different sentence densities. The underlying speaking rate is the thing that is stable, and only the 30s run separated it |
+
+**What this run does not establish:** one run, one script, English, 480p, 30
+seconds, voiceover. The 0.7s sentence-boundary cost is measured **once**, on
+one script's 7 boundaries — it is the most load-bearing number in this file
+and the least replicated. A faster or slower script, another language, another
+resolution, and any duration past 30 seconds remain unmeasured.
 
 The rest of what this file rests on:
 
 | Claim | Strength |
 |---|---|
-| The monologue word rate this skill budgets against — **3 words a second** in English | **Measured** on this model, once, at 20 seconds: 3.05 w/s (above). `talking-head` measured 3.16 w/s on `alibaba/wan-3.0-prime` the same day, so there are two observations on two models rather than one — close together, both a little above the budget, and neither repeated |
+| The English budget formula — **3.56 words a second while speaking, plus ~0.7s per sentence boundary** | **Measured** on this model, once, at 30 seconds (`42d8b5c3`). The 20-second run agrees on the overall figure it can supply (3.05 w/s across a script with 7 pauses of its own) but never separated speech from silence, so it corroborates rather than replicates. `talking-head`'s 3.16 w/s on `alibaba/wan-3.0-prime` is a third overall rate on a different model, also unseparated |
 | A supplied audio track does not become the clip's audio | **Measured**, job `d8561509-dcc6-4f2c-8864-a193cd239b14`, 55 cents, 2026-09-15 — the input was near-continuous speech, the delivered track was sparse, correlation 0.41. The model generates its own voice |
 | The model renders a photoreal person speaking, from text alone | **Measured**, six `bytedance/seedance-2.5` text-to-video jobs of 20–30 seconds built entirely around photoreal people, all completed, five of them carrying spoken lines. On five of the six only the picture and the timing were checked; the sixth is this file's own run above, where the audio was transcribed against the script |
 | A photoreal person in an *attached* image is refused at submission on `bytedance/seedance-2.5` | **Measured** 2026-08-30, `input_moderation_failed`, nothing billed. It decides the continuity limits below |
 | Asking this model for music can fail output moderation on copyright | **Measured** once, unbilled |
 | Text rendered from a description comes back invented or garbled; text approved on a still and attached as a frame is preserved | **Measured**, several jobs. It decides the on-screen-text section below |
 | The **ceiling** the budget sits under — the monologue tier at 3.5 words/s English and 5 characters/s Chinese — and the CJK budget of 4 characters/s | **Gallery practice** — prompt text counted against clip length across a public corpus, not Ofox runs. It is a Seedance 2.5 collection and this skill's default is Seedance 2.5, so the model at least matches; but for the community entries the platform that produced the clip is unrecorded. **Nothing here has been run in Chinese or Japanese**, so the character-per-second rows are exactly as strong as they were |
-| A voiceover with no visible speaker | **Gallery practice only** (one collected prompt cuts "to the voice only … as a voiceover"). Never run here. Price a first one as an experiment |
+| A voiceover with no visible speaker | **Measured**, job `42d8b5c3` (2026-09-17, 30s, $3.30): no person in any frame, a slow continuous push with no cut, no on-screen text, and the ending held on its final subject. One run, English, 480p, 16:9. It was "gallery practice only, never run here" until then |
 
-Practical consequence: the word budget is no longer the risky part of a first
-clip — the *shape* is. A presenter to camera in English at 480p has been run;
-a voiceover, a non-English script and any duration past 20 seconds have not.
+Practical consequence: **both shapes this skill offers have now been run**, and
+both at the durations the file leads with. What is risky about a first clip
+now is the **script**, not the format — specifically its sentence count, which
+the old budget ignored entirely and which costs about 0.7 seconds a boundary.
+A non-English script and any duration past 30 seconds are still unmeasured.
 Draft short and cheap, read the frames, listen once, then price the
 deliverable.
 
@@ -299,9 +358,9 @@ selection, the script and the price can all be settled without a key — see
 | | **Presenter to camera** (recommended) | **Voiceover over footage** |
 |---|---|---|
 | What is on screen | one person, chest-up, speaking | the thing being explained; the speaker is never seen |
-| Evidence | six completed Ofox jobs built around photoreal people, text-to-video — one of them this skill's own run, whose speech was transcribed against the script | gallery practice only, never run here |
+| Evidence | six completed Ofox jobs built around photoreal people, text-to-video — one of them this skill's own 20s run, whose speech was transcribed against the script | **one paid run**, job `42d8b5c3` (2026-09-17, 30s, $3.30): no person in any frame, a slow continuous push with no cut, no invented lettering, and the ending held on its final subject |
 | Best for | an opinion, an announcement, anything whose credibility comes from a person saying it | a product, an interface, a process, a physical object |
-| Watch out for | the presenter is generated fresh every job and cannot be reused | a voice with nothing on screen to anchor it reads as stock footage with narration — and whether this model reliably produces a disembodied narrator at all is untested |
+| Watch out for | the presenter is generated fresh every job and cannot be reused | a voice with nothing on screen to anchor it reads as stock footage with narration. Whether the model produces a disembodied narrator **is no longer the open question** — it did, for 30 seconds, once. Whether it does so reliably is |
 | A real presenter's photo | **not this skill** — that is `talking-head`, and it needs a different model | — |
 
 Default to presenter-to-camera unless the subject is visual. When the subject
@@ -326,7 +385,7 @@ This section adds only this scenario's question set.
 
 | # | Tier | `header` | Question | Options — first is recommended; "Let the AI decide" comes last where it appears, and never on a must-ask row | Ask when |
 |---|---|---|---|---|---|
-| 1 | must-ask | `Idea` | A clip this long holds about `<N>` spoken words, so it carries one idea rather than the article. Which one? | The two or three survivors of "Picking the idea", each shown **as the sentence that would be spoken**, with its word count; recommended = the most concrete. **No "Let the AI decide"** — it is their article. If they answer "you pick" in free text, take the most concrete, name it in the recap, and let the gate be the check | Always, unless the user already gave one sentence and asked for exactly that |
+| 1 | must-ask | `Idea` | A clip this long holds about `<N>` spoken words in about `<S>` sentences, so it carries one idea rather than the article. Which one? (get `<N>` and `<S>` from the budget formula, not from memory — sentences cost about 0.7s each) | The two or three survivors of "Picking the idea", each shown **as the sentence that would be spoken**, with its word count; recommended = the most concrete. **No "Let the AI decide"** — it is their article. If they answer "you pick" in free text, take the most concrete, name it in the recap, and let the gate be the check | Always, unless the user already gave one sentence and asked for exactly that |
 | 2 | ask-if-open | `Shape` | Who is on screen? | `A presenter, to camera (recommended)` — the shape this repo has actually run / `Voiceover over footage of the thing` — no speaker visible; better for an interface or an object, and untested here / `Let the AI decide` | The subject could go either way and the request doesn't say |
 | 3 | ask-if-open | `Aspect` | Where will it be watched? | `9:16 vertical (recommended)` — feeds / `16:9 landscape` — docs, a site, YouTube / `1:1` / `Let the AI decide` | No platform word and no ratio in the input |
 | 4 | ask-if-open | `Register` | How should it sound? | `Plain and direct (recommended)` — a colleague telling you something useful / `Warm and enthusiastic` — a launch / `Careful and precise` — research, security, anything where overclaiming is the failure / `Let the AI decide` | The source's own register is ambiguous and the user gave no direction |
@@ -346,7 +405,7 @@ On top of the generic rows in `creative-brief.md`:
 | "explain the new export feature" on a doc covering six features | Idea | narrow to that feature, then still pick one idea *within* it |
 | "for LinkedIn", "for the docs site", "for the README" | Aspect | 16:9 |
 | "for TikTok", "Reels", "Shorts" | Aspect | 9:16 |
-| "show the app while I explain" | Shape | voiceover over footage — and say it is the untested shape |
+| "show the app while I explain" | Shape | voiceover over footage — **measured 2026-09-17** at 30s (job `42d8b5c3`): no person, no cut, no invented lettering, and the ending held. One run, so still price a first one as a draft |
 | "use my photo", "have me say it" | — | that is `talking-head` |
 | "put the bullet points on screen" | — | not available from a description; see "On-screen text" |
 
@@ -366,14 +425,17 @@ Brief
 - Source: the v4 release post you pasted (1,100 words)
 - Idea: "Version 4 stops dropping queries when the connection blips. If you wrapped
   every query in a retry, you can delete that now." — 22 words (you chose it from two)
-- What this clip is NOT: a summary of the post. 9 seconds holds about 27 words,
-  so it carries this one idea and nothing else
+- What this clip is NOT: a summary of the post. 9 seconds holds roughly 22 words
+  in 2 sentences, so it carries this one idea and nothing else
 - Shape: a presenter to camera (AI's pick)
-- Duration: 9s (22 words at about 3 words/s, the talking-head tier, plus a closing beat)
+- Duration: 9s — 22 words in 2 sentences is 22/3.56 + 0.7 = about 6.9s of speech,
+  leaving room to open and to close
 - Register: plain and direct (AI's pick)
 - 9:16, 480p draft, audio on
-- Note: the word budget is measured on this model (3.05 w/s on one 20s run) — the
-  delivery is still a roll, so treat the draft as the take you listen to
+- Note: the budget is measured on this model at 30 seconds (job `42d8b5c3`) — each
+  sentence boundary costs about 0.7s, so a script with more sentences runs longer
+  at the same word count. The delivery is still a roll, so treat the draft as the
+  take you listen to
 ```
 
 Then the full prompt, then the cost table `approval-gate.md` specifies, all in
@@ -513,20 +575,24 @@ CONSISTENCY: face, short dark hair, charcoal crew-neck sweater, the pale wall an
 AVOID: subtitles, captions, on-screen text, watermarks, logos, diagrams, charts; a second person, a cutaway, an interview setup; music, score, soundtrack, instrumental, humming, singing; presenter cadence, theatrical over-acting, wild gesturing; skin smoothing, beauty filter, plastic skin, CGI look; camera movement, zooms, cuts.
 ```
 
-The duration was derived from the word count rather than the other way round:
-22 words at three a second is a bit over seven seconds of speech, plus a
-second for the closing beat, rounded up to 9. That leaves 2.4 words a second
-overall and under three across the eight seconds carrying speech — a little
-room rather than a squeeze. It is also why a 22-word idea gets a 9-second clip
-and not a 15-second one with six seconds of nothing in it: on a per-second
-bill, the words decide what you pay for.
+The duration was derived from the script rather than the other way round:
+22 words at 3.56 a second is 6.2 seconds of speaking, plus one sentence
+boundary at 0.7s, giving a 6.9-second span — then room to open and to close,
+rounded up to 9. **Note that the sentence count is in that arithmetic.** Break
+the same 22 words into four short sentences and the span grows by about 1.4
+seconds, which is most of the headroom. If a script is running long, joining
+sentences buys back time that cutting words does not.
+
+It is also why a 22-word idea gets a 9-second clip and not a 15-second one
+with six seconds of nothing in it: on a per-second bill, the script decides
+what you pay for.
 
 ## Recommended defaults
 
 | Parameter | Default | Why |
 |---|---|---|
 | `--model` | the script's own default, `bytedance/seedance-2.5` — **unless the user named one**, which always wins | no portrait is attached here, so nothing forces a different model, and this repo's spoken-dialogue runs are all on it. See "Choosing a model" |
-| `--duration` | derived from the chosen idea's word count at about 3 words a second (4 characters a second in Chinese or Japanese), then clamped to the model's range — which `ofox-video.sh models` prints | the idea decides the length; a default that ignores it produces rushed speech. The English figure is **measured on this model** at 3.05 w/s (one 20s run, job `edef379e`), so 3 leaves a little room and the closing beat still fitted; the CJK one is still gallery-derived and untested |
+| `--duration` | derived from the chosen idea with `words/3.56 + 0.7 x (sentences − 1)`, plus room to open and close, then clamped to the model's range — which `ofox-video.sh models` prints. For Chinese or Japanese the only figure available is still 4 characters a second | the script decides the length; a default that ignores it produces rushed speech. The English formula is **measured on this model** at 30 seconds (job `42d8b5c3`): 3.56 w/s while speaking and ~0.7s at each of the script's 7 sentence boundaries, predicting 27.4s against a delivered 28.13s. ⚠️ **Count sentences as well as words** — that term is what the old "3 words a second" flat rate left out, and it is why "about ninety words in thirty seconds" did not fit. The CJK figure is still gallery-derived and untested |
 | `--resolution` | draft at the model's cheapest tier, deliver one tier up | a face at the cheapest tier is where lip and eye detail goes first, so read the draft's frames rather than shipping it |
 | `--aspect-ratio` | `9:16` unless the brief or the platform said otherwise; **not passed** if a title card is attached as a frame | short explainers are watched in feeds |
 | `--generate-audio` | leave at the server default (`true`) | the speech is the deliverable |
@@ -739,8 +805,8 @@ Report what you checked, not just that it finished.
 | Symptom | Cause | Fix |
 |---|---|---|
 | The user expected the article summarised and got one idea | The expectation was never corrected | Correct it **before** the cost table, in the recap's "What this clip is NOT" line. After the fact, the only remedy is another job |
-| The speech is rushed, garbled, or the last words are missing | More words than the clip holds — usually a summary squeezed to fit | Fewer words, or a longer clip inside the model's range. Never compress the delivery. New prompt, new cost table |
-| The clip ends mid-sentence | Same cause, plus no written ending beat | Re-budget at about 3 words a second **and** write the final beat explicitly |
+| The speech is rushed, garbled, or the last words are missing | More script than the clip holds — usually a summary squeezed to fit. ⚠️ Check the **sentence count** as well as the word count: each boundary costs about 0.7s, so a script that passed a words-only check can still overrun | Fewer words, **or the same words in fewer sentences**, or a longer clip inside the model's range. Never compress the delivery. New prompt, new cost table |
+| The clip ends mid-sentence | Same cause, plus no written ending beat | Re-budget with `words/3.56 + 0.7 x (sentences − 1)` **and** write the final beat explicitly. If the word count already looked safe, count the sentences — each boundary costs about 0.7s, and joining two short sentences buys that back without losing content |
 | The voice speaks the wrong language | The line was translated on the way into the prompt | Put the source's own words in, untouched. The line's language decides the voice's language |
 | Invented captions, a garbled title, a logo nobody asked for | Text rendered from a description is the classic failure, and a negative list alone does not hold on a lettered set | Keep the text items in `AVOID` **and** compose lettered surfaces out of the frame. Real captions go on in an editor; a title card has to be a prepared image attached as the first frame |
 | A music bed nobody asked for | `--generate-audio true` and a prompt that didn't exclude music | Keep `no music` in `SOUND` *and* the music words in `AVOID` |

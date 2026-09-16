@@ -1,12 +1,12 @@
 ---
 name: video-extend-edit
-description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus a video you already have. Makes an existing clip longer, or replaces its ending. Use when a user wants more of footage they already have, e.g. "extend this 5-second clip to 15", "keep going from where this one ends", "re-shoot the ending from 4 seconds on", or "add another shot onto this". A frame is pulled out of the clip at zero cost and becomes the first frame of a newly generated segment, which is then joined onto the original. Do not use to change what is inside the picture — there is no video content-editing path here; for two stills you already have see keyframe-animation, and for a clip from nothing see the seedance-* scenarios.
+description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus a video you already have. Makes an existing clip longer, or replaces its ending. Use when a user wants more of footage they already have, e.g. "extend this 5-second clip to 15", "keep going from where this one ends", "re-shoot the ending from 4 seconds on", or "add another shot onto this". A frame is pulled out of the clip at zero cost and becomes the first frame of a newly generated segment, which is then joined onto the original. Do not use to change what is inside the picture — measured, the API accepts an edit mode field and silently ignores it, so no content-editing route exists here and none returns an error either; for two stills you already have see keyframe-animation, and for a clip from nothing see the seedance-* scenarios.
 license: MIT
-version: "1.1.0"
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/video-extend-edit
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.2.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -66,6 +66,37 @@ is that this route re-shoots the tail, and the old tail is gone.
 frame and a prompt. Removing an object from footage, swapping a background, or
 changing what a clip shows are not things this skill does — see "When NOT to
 use".
+
+**Why this skill takes the long way round, and why that is now measured.**
+The public Seedance gallery contains prompts run in an `extend` mode and an
+`edit` mode, set with a `mode` field on the create request. Until 2026-09-16
+this file's position — the frame route is the only way to lengthen a clip —
+rested on the **inference** that Ofox does not expose them. It now rests on a
+run, and the run says something sharper than "unsupported":
+
+> `mode` is **accepted and discarded**. Job
+> `4686f434-16b0-451f-8941-970e5b3d4a15` sent an invented value
+> (`this_is_not_a_real_mode_xyz`) inside an otherwise ordinary text-to-video
+> request. It returned `200`, completed as a plain 4-second t2v clip, and
+> billed $0.44 at the ordinary t2v rate. A value that cannot be implemented
+> anywhere cannot have been honoured, so the field was dropped.
+
+Two consequences for how you talk about it:
+
+- **There is no error to catch and none to show the user.** Anyone who
+  believes extend is "rejected" will go looking for a 400 that never arrives,
+  and a `200` on a `mode` request means nothing at all. Say "the field has no
+  effect", not "the API refuses it".
+- **The route in this file does not change.** Frame out, generate, join is
+  still the only way to make a clip longer here. What changed is that the
+  reason is a measurement instead of a guess. `duration: -1` — the form the
+  gallery's official edit case uses to lock the output to the input's length —
+  returns `502 route_error`, which is the one place something does fail
+  loudly, and it fails at routing rather than validation.
+
+Evidence and the free probes that could *not* settle this on their own:
+[`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+→ "`mode` is accepted and has no effect".
 
 ## Where the core skill lives
 
@@ -127,9 +158,11 @@ with no API key".
 ## What this skill rests on
 
 One paid run of the single-segment route, a two-shot `chain` run seeded from a
-frame (2026-09-16 — see "Several segments" below), two zero-cost readings of
-clips that already existed, and a local reproduction of the join hazard. Where
-something was not measured, this file says so rather than reasoning past it.
+frame (2026-09-16 — see "Several segments" below), the `mode` probe that
+settled why the frame route is the only route (2026-09-16 — "Read this before
+planning anything"), two zero-cost readings of clips that already existed, and
+a local reproduction of the join hazard. Where something was not measured,
+this file says so rather than reasoning past it.
 
 **Job `35b6aed1` (2026-09-15)**, `bytedance/seedance-2.5` via `byteplus`, 4
 seconds, 480p, `adaptive` (forced by the API for image-to-video on this
@@ -718,6 +751,12 @@ Two edges worth knowing rather than guessing at:
 Everything here is **no evidence yet**, not "impossible". A later measurement
 adds a route to this file; none of it overturns what is above.
 
+**One entry has left this list by being measured.** "Whether Ofox exposes a
+native `extend` / `edit` mode" used to sit here. It was run on 2026-09-16 and
+the answer is that the `mode` field is accepted and has no effect — see "Read
+this before planning anything". That is a closed question, not an open edge,
+and it is the reason the frame route is the route.
+
 - **Video-to-video / `input_references` as a way to extend.** The API does
   take a video reference, and it is not this skill's route, for reasons that
   are measured rather than assumed: a single job's duration ceiling is
@@ -729,6 +768,10 @@ adds a route to this file; none of it overturns what is above.
   was motionless. None of that says continuation is impossible there — it says
   nobody has shown it. If it is ever shown, it becomes a second route in this
   file, sitting beside the frame route rather than replacing it.
+  **The `image` element of the same field was measured on 2026-09-16** (job
+  `0f5c8b4e`, two images, 44 cents) and it works — but it is subject and style
+  guidance, not a clip to continue, and the duration ceiling is unchanged by
+  it. It adds nothing to this skill's problem.
 - **Real-person footage.** Half-answered, and the unanswered half is the one
   this skill needs. `--real-person true` is measured lifting the
   `input_moderation_failed` refusal on `bytedance/seedance-2.5` — for
@@ -764,7 +807,7 @@ adds a route to this file; none of it overturns what is above.
 |---|---|---|
 | Motion between **two stills they already have** — "here is the before and the after" | [`keyframe-animation`](../keyframe-animation/SKILL.md) | it locks both ends in one job. Here the ending is unknown by construction — you have a starting frame and a description, not a destination picture |
 | **Two screenshots of one interface**, before and after a state change | [`product-demo`](../product-demo/SKILL.md) | same two-ended mechanism, different measured behaviour and prompt advice |
-| To **change what is in the picture** — remove an object, swap a background, replace a face, fix a frame | nothing here | there is no video content-editing path in this repo. [`image-edit`](../image-edit/SKILL.md) edits a **single still**, not footage. Say that plainly rather than re-shooting the tail and hoping |
+| To **change what is in the picture** — remove an object, swap a background, replace a face, fix a frame | nothing here | no video content-editing route exists in this repo, and **measured 2026-09-16, none exists in the API either** — the `mode` field an edit would be requested through is accepted and has no effect (job `4686f434`, `200`, billed as ordinary t2v), so nothing fails loudly to tell you. [`image-edit`](../image-edit/SKILL.md) edits a **single still**, not footage. Say that plainly rather than re-shooting the tail and hoping |
 | A clip **from nothing** — no footage yet | the `seedance-*` scenarios, [`ugc-ads`](../ugc-ads/SKILL.md), [`shorts-reels`](../shorts-reels/SKILL.md) | this skill's entire input is a clip that already exists |
 | A **multi-shot sequence generated from scratch**, no existing footage to continue | `ofox-video-core`'s `chain` directly | that is the core capability. This skill is the wrapper for the case where shot 1 is somebody's existing file |
 | A **dialogue scene** continuing a drama clip | [`seedance-short-drama`](../seedance-short-drama/SKILL.md) for the prompt craft, then this skill for the mechanism | the two compose. Write the scene there, extend it here — and if the footage has actors in it the default route stops at the real-person check. "Before you spend: look at the frame" has the authorised route and exactly what it does not cover |

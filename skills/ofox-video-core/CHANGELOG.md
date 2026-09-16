@@ -4,6 +4,104 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.29.0 — an oversized `--extra-json` drops your references and bills you anyway
+
+**Documentation only. No script, flag, default or guard changed** — and the
+`ofox-video.sh` empty-`--extra-json` behaviour is deliberately left alone; see
+the last paragraph.
+
+1.28.0 documented `input_references` as working and noted that an image
+reference accepts a `data:` URI, so no hosting is needed. True, and
+incomplete in a way that costs real money. Measured 2026-09-17:
+
+> Building that `data:` URI into `--extra-json` yourself passes it to `jq` as
+> a **command-line argument**, so it is bounded by `ARG_MAX` (1,048,576 bytes
+> here). Over the limit `jq` never executes — the shell writes one line to
+> stderr, the command substitution yields an **empty string**, and
+> `ofox-video.sh`'s `if [ -n "$extra_json" ]` guard treats an empty value as
+> *not passed*: no JSON validation, no `references_conflict` check, and
+> **nothing merged into the body**.
+
+Reproduced with a 1.9 MB PNG (2,515,046-byte URI): **no `input_references` in
+the printed payload, `STATUS dry_run`, exit `0`.** Without `--dry-run` that is
+a submitted, fully billed **plain text-to-video** job that the caller believes
+is reference-to-video — and the clip looks exactly like a model ignoring the
+references.
+
+**What a caller has to do differently:**
+
+- **Stop treating "no error" as "the reference arrived."** There is no error.
+  The single stderr line comes from the shell, not this script, so it carries
+  no prefix and scrolls past above the normal output.
+- **Downscale the image before encoding.** The measured r2v job's two
+  references were 33 KB and 43 KB at a 768 px long edge.
+- **Build the JSON into a variable, assert it is non-empty and parses**, then
+  **`--dry-run --print-payload` and confirm `input_references` is really in
+  the payload.** That last check is the only one that detects this. The guard
+  to copy is in `references/api-params.md`.
+- ⚠️ **Do not generalise from `--frame-first-image`, which is safe.** There
+  the script encodes through a temp file and `jq --rawfile`; re-verified the
+  same day on the same 1.9 MB PNG, whose full 2,515,046-byte URI really does
+  reach the payload. **The two paths behave in opposite directions at the same
+  file size.**
+
+**A correction to this skill's own history, in `SKILL.md`.** The 2026-08-29
+ARG_MAX write-up says the old `jq --arg` code failed "before any network call
+was made". What was actually recorded is a **stderr line**, not an exit
+status — nobody wrote down whether that run aborted or carried on, and the
+new measurement shows a visible `Argument list too long` is entirely
+compatible with the command continuing and succeeding. The sentence now says
+what was observed and flags that "ARG_MAX fails loudly and stops you" is not
+a safe general reading.
+
+**Not done on purpose:** hardening `ofox-video.sh` so an empty
+`--extra-json` is rejected rather than ignored. Treating empty as "not
+passed" is long-standing behaviour something else may depend on, so it is a
+separate decision rather than a fix smuggled into a documentation change.
+
+## 1.28.0 — `r2v` works and the catalog omits it; `mode` is accepted and discarded
+
+**Documentation only. No default, price, script or behaviour changed.** Three
+measurements from 2026-09-16/17, one of which upgrades an inference this repo
+had been repeating as if it were a finding.
+
+**Callers who need to change something:**
+
+- **If you told a user "Ofox does not support extend / edit", re-word it.** It
+  is not a rejection they can catch. Job `4686f434-16b0-451f-8941-970e5b3d4a15`
+  sent an invented `mode` value inside an ordinary text-to-video request and
+  got `200`, a completed 4-second t2v clip, and a normal $0.44 t2v bill. The
+  field is **accepted and discarded**. There is no error code, so anyone
+  debugging against one will search forever. `references/api-params.md` has
+  the wording to use and the three free probes that could not settle it alone.
+  `duration: -1` — the gallery's input-locking form — returns `502
+  route_error` instead, before any URL is fetched.
+- **If you assumed `input_references` images were untested, they are not.**
+  Job `0f5c8b4e-8813-40d2-a6bd-9e2d030b6d1e`, two images as `data:` URIs, 44
+  cents: both references' features came through and the `image1` / `image2`
+  position tokens resolved **in array order**, which had been this repo's one
+  unverified point about that shape. It bills at the **plain t2v rate**, not
+  the dearer video-to-video rate a `video_url` moves a job to. And an image
+  reference accepts a `data:` URI, so nothing needs hosting first.
+- **Do not read the catalog's `modes` column as a capability list.** It says
+  `t2v i2v v2v` on every model and reference-to-video demonstrably works. Only
+  `modes` is affected — the duration, resolution and aspect-ratio columns the
+  script enforces against have held up. `models-snapshot.json` is **not**
+  hand-edited for this; it is regenerated from the live catalog, so the
+  correction lives in the docs.
+- ⚠️ **Pass `--aspect-ratio` explicitly when you send image references.** That
+  one job, with no flag and two 16:9 **landscape** references, delivered
+  **480x854 portrait** — following neither the default nor the references.
+  `frame_images` does not behave this way. One observation, no explanation
+  offered, recorded as an anomaly rather than a rule.
+- **New in `references/prompt-structure.md`: an attached first frame whose
+  background disagrees with the written SCENE produces about 0.1s of the
+  supplied picture and then a hard cut** (job `ede33e6d`, background
+  brightness 250 through 0.08s, 33 from 0.12s). Three runs make a controlled
+  set: two where the frame and the SCENE agreed showed no cut, the one where
+  they disagreed did. Any scenario skill using `--frame-first-image` should
+  either write the SCENE the photo is in or trim the opening 0.15s.
+
 ## 1.27.1 — one sentence in the shared file still said the frame route was closed
 
 **Documentation only. No default, price, script or behaviour changed.**

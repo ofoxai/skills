@@ -1731,6 +1731,50 @@ tier: `16023efe` and `ac927785` each billed 4.80 dollars for 20s at 720p,
 which is the t2v rate of 24 cents/s, not v2v's 30 cents/s. Only a *video*
 input does that (`pricing.md`).
 
+#### If the attached frame's background disagrees with your SCENE, you buy a hard cut
+
+**Measured 2026-09-17**, and it affects every skill that attaches a first
+frame. The frame is locked as frame 0 whatever else the prompt says. When the
+prompt's SCENE describes a *different place* from the one in that picture,
+the model does not blend them and does not ignore the picture — it plays the
+supplied frame for about a tenth of a second and then **cuts** to the scene
+that was written.
+
+Measured on job `ede33e6d-be71-4051-8be3-ee69f5c52efc` (8s / 480p, a product
+photo shot on a white studio sweep, SCENE written as a desk at night). Mean
+brightness of a fixed top-left background patch:
+
+| Time | Brightness |
+|---|---|
+| 0.00 / 0.04 / 0.08s | **250** — the white sweep, i.e. the supplied photo |
+| 0.12s to the end | **33** — the night desk, i.e. the prompt's scene |
+
+So roughly **0.1 second (2–3 frames at 24fps), then a hard cut**, and no
+return.
+
+Three runs line up as a controlled set, which is why this is written as a
+rule rather than an anecdote:
+
+| Run | Frame vs SCENE | Cut at the open? |
+|---|---|---|
+| `54a721ce` (product video) | SCENE written as the white surface the photo was shot on — **they agree** | **no** |
+| `1b7a3fab` (keyframe pair) | both ends are supplied pictures — nothing to disagree with | **no** |
+| `ede33e6d` (UGC) | white studio photo, night-desk SCENE — **they disagree** | **yes** |
+
+**What to do**, in order of preference:
+
+1. **Write the SCENE the photo is actually in.** The cheapest fix and the one
+   that leaves the clip whole.
+2. **Supply a photo already taken in the target setting**, if the clip needs
+   that setting.
+3. **Trim the first 0.15s in an editor** before delivery. Free, and it costs
+   nothing but the opening frames — but it is a repair, not a plan.
+
+It matters most where an unbroken single take is the whole product (a
+handheld creator clip, a continuous demo); it matters least where a cut near
+the top is unremarkable anyway. One measurement of the 0.1s figure, on one
+model — treat the duration as approximate and the behaviour as the finding.
+
 ### Continuing a previous clip: the frame route and the words route
 
 A sequel — PART 2 of a fight, the next beat of a scene, anything that has to
@@ -1862,10 +1906,13 @@ semantics you can use.
 - **`frame_images` and `input_references` are mutually exclusive.** One job
   either locks a frame or borrows appearance, not both.
 - **`input_references` limits**: ≤9 images, ≤3 audio, ≤1 video; a video must
-  be a URL, audio may be a `data:` URI. Case 59's 18 images and case 12's six
-  reference clips exceed those limits — page-level capabilities, not
-  reproducible through this API. ⚠️ **The audio allowance is not a voice
-  input.** A real speech clip was accepted and fetched, and the delivered
+  be a URL, **images and audio may be `data:` URIs**. Case 59's 18 images and
+  case 12's six reference clips exceed those limits — page-level capabilities,
+  not reproducible through this API. **The image allowance is real and
+  measured** (2026-09-16, job `0f5c8b4e`, two images, 44 cents): this is the
+  `r2v` mode, it bills at the plain t2v rate, and the catalog's `modes` list
+  omits it rather than the API lacking it. ⚠️ **The audio allowance is not a
+  voice input.** A real speech clip was accepted and fetched, and the delivered
   track was the model's own audio, not the clip
   (`d8561509-dcc6-4f2c-8864-a193cd239b14`, 2026-09-15). Nothing here can be
   made to speak a supplied line — see `api-params.md`.
@@ -1896,10 +1943,41 @@ bash references/ofox-video.sh generate --dry-run \
 ```
 
 Role sentences adapted from cases 34, 40 and 11; the subject from case 9.
-Drop `--dry-run` only after the approval gate (`approval-gate.md`). Whether
-the `image1` / `image2` tokens are resolved to the attachments by position on
-this path is the unverified point noted above; the sentences read as plain
-role descriptions either way.
+Drop `--dry-run` only after the approval gate (`approval-gate.md`).
+
+**The shape above has now been run, and the position tokens resolve.** Job
+`0f5c8b4e-8813-40d2-a6bd-9e2d030b6d1e` (2026-09-16, `bytedance/seedance-2.5`
+on `byteplus`, 4s / 480p, **44 cents**) sent two images as `data:` URIs and
+cast them by position exactly as this example does — image1 an object, image2
+a garment. Both references' named features came through, and **image1
+rendered as the object and image2 as the garment, in array order, not
+swapped**. Whether the tokens resolve by position used to be the one
+unverified point in this section; it is a measurement now, on two
+attachments, once. Three attachments and up are still untested, and so is
+mixing an image with an audio or video element.
+
+It also removes the hosting step this example implies: **an image reference
+accepts a `data:` URI**, so a local file does not have to be published
+anywhere first. (A *video* reference still must be a URL.) The command above
+keeps its `https://` placeholders because they are shorter to read, not
+because a URL is required.
+
+🚨 **But a `data:` URI you build into `--extra-json` is bounded by `ARG_MAX`,
+and going over it costs money rather than raising an error.** `jq` never
+runs, the command substitution is empty, `--extra-json ""` is treated as *not
+passed*, and the job is submitted and billed **with no references in it** —
+exit `0`, one stray stderr line. Downscale the reference (the measured job's
+two images were 33 KB and 43 KB), build the JSON into a variable and check it
+is non-empty, and confirm `input_references` really appears in a
+`--dry-run --print-payload` before spending. Full reproduction and the guard
+to copy: `api-params.md` → "An empty `--extra-json` is treated as 'not
+passed'". This does **not** affect `--frame-first-image`, where the script
+does the encoding itself.
+
+⚠️ **Pass `--aspect-ratio` when you send image references.** That job did not,
+and came back portrait from two landscape references — the opposite of what
+`frame_images` does. One observation, no explanation; `api-params.md` →
+"An `image_url` reference works" has it.
 
 ## Endings
 

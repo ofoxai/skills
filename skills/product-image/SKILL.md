@@ -2,11 +2,11 @@
 name: product-image
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Produce a set of product images to choose between — several styles, backgrounds or treatments of one product, for a listing, a store page or an ad — and quote the whole set's cost before any of it is spent. From a real product photo it edits that photo once per style, so the item stays identical across the set; for a fictional or prototype product with no photo it generates from text instead, and says what that costs in accuracy. Delegates to ofox-image-core. Use when a user asks for several product images at once, e.g. "give me 4 main images in different styles for this product", "a few background options for this photo", "some listing images for my shop", or "show this product on white, on wood, and in a lifestyle scene". Do not use for a single change to a single image (see image-edit), for video from a product photo (see seedance-product-video), or for one plain text-to-image render (that is ofox-image-core's `generate`).
 license: MIT
-version: "1.0.0"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/product-image
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -35,11 +35,19 @@ correctly and safely — the `OFOX_API_KEY` handling, model resolution,
 requests, decoding, cost arithmetic and absolute paths. **Read that skill's
 safety contract before using this one** — it is not restated here.
 
-**This skill has produced no set of its own yet.** The measured figures below
-come from `ofox-image-core`'s own work building the `edit` subcommand, and
-from two probe calls made directly against `ofox-image.sh` while this file was
-being written. Every one of them names the run it came from. No product set
-has been generated through this skill's flow.
+**This skill has produced one set of its own.** 2026-09-17: three background
+variants of a single real product photograph, on the `edit` route this file
+recommends, one axis varied, one image plainly on white, about 1.6 cents each.
+It settled the claim the whole skill turns on — **the product is the same
+product in all three** — and it exposed one this file had not said: **the
+product's size within the frame is not held**. Both are in "Why the 'keep'
+sentence is worth its length". Three images is not four and one product is not
+a catalogue; the **generate** route still has no set of its own.
+
+The other measured figures below come from `ofox-image-core`'s work building
+the `edit` subcommand, and from two probe calls made directly against
+`ofox-image.sh` while this file was being written. Every one of them names the
+run it came from.
 
 ## Where the core skill lives
 
@@ -312,6 +320,32 @@ inputs with hard edges and flat colour. That is what makes "leave the product
 alone" a reasonable thing to ask for. It is not a promise that your product
 survives, which is why the set gets checked below rather than trusted.
 
+**And the set claim itself has now been run — this skill's core sentence
+held.** 2026-09-17, one real 1792x1008 product photograph, three edits
+differing only in the first sentence (pure white; warm oak; grey sweep), the
+"keep" sentence byte-identical across all three, about 1.6 cents each. Put
+side by side, the wordmark's glyph shapes, letter spacing, position and
+relative size; the copper knurl and the two polished rings; the brushed
+vertical grain; and the waist taper are **the same in all three**. That is
+the thing this file promises — every image is an edit of one photograph, not
+three independent re-inventions of it — and it is a measurement now rather
+than an inference from a UI screenshot.
+
+⚠️ **What the same three images exposed, which this file had not said: the
+framing is not locked.** The "keep" sentence protects the product's identity;
+it does **not** hold the product's size within the frame. The oak image came
+back visibly larger in frame than the white one, and the grey-sweep image
+slightly narrower. Nothing was cropped or distorted — the subject simply sits
+at a different scale. `--target-aspect` governs the **frame's shape** and has
+nothing to say about this.
+
+So for a marketplace set that has to line up — a grid where the product must
+appear the same size in every tile — treat scale consistency as **unsolved
+here**, tell the user before they pay, and plan to normalise it in an image
+editor afterwards. Adding "do not move or re-frame it" to the prompt (this
+file already does) did not deliver it. One run of three images, one model,
+one product.
+
 ⚠️ **Printed text is the part to check hardest.** What is measured is that
 existing strings *survive* an edit aimed elsewhere. Nothing measures the
 endpoint preserving a label through a change to the whole scene around it, and
@@ -344,10 +378,11 @@ Three notes, all borrowed rather than measured here:
 ## The shape of the set, and where it comes from
 
 **On the edit route the output's shape follows the input's**, measured on one
-model over three runs by `ofox-image-core`: 854x480 and 320x180 both returned
-1672x941, and 256x256 returned 1254x1254 — a near-constant ~1.57 MP spent on
-whatever shape it was handed. Whether `--size` is honoured on this endpoint is
-**untested**.
+model over four runs: 854x480, 320x180 and 1792x1008 all returned 1672x941,
+and 256x256 returned 1254x1254 — a near-constant ~1.57 MP spent on whatever
+shape it was handed, and **spent in both directions**, since the 1792x1008
+input is larger than the output it came back as. Whether `--size` is honoured
+on this endpoint is **untested**.
 
 So for a marketplace set that has to be square:
 
@@ -473,6 +508,16 @@ copied out of this file. The line carries the conditions it was matched on and
 how rough it is; a number lifted out of it loses both. Alongside the total,
 the table needs the resolved `MODEL`, the input's measured size, and all four
 prompts in full.
+
+⚠️ **On the edit route the source photo's size is the set's cost lever, and a
+set multiplies it by N.** The uploaded picture is billed per image, and on a
+large source it is most of the bill: a 1792x1008 input bills 1508 image
+tokens, `1508 * 0.000008 = 0.012064`, which is **74%** of that edit's
+0.016249. Four images at that size is ~6.5 cents against ~2.4 for four
+854x480 ones. Cropping the source to the target ratio before the first call —
+which this file already tells you to do — cuts every image in the set, not
+just the first. `ofox-image-core`'s `references/pricing.md` → "Measured edits"
+has the four measured points.
 
 Afterwards the **actual** bill is the sum of the `EDIT_COST` (or `IMAGE_COST`)
 lines the real runs print, computed from each response's own token counts.
@@ -611,6 +656,11 @@ Check, in this order:
 4. **The shape, on every file.** `SIZE_ACTUAL` on each, not the one you
    happened to open. With `--target-aspect` the script has already guaranteed
    it; without it, this is the check that was skipped.
+5. **How big the product sits in each frame** — and expect this one to fail.
+   Measured (see "Why the 'keep' sentence is worth its length"): identity held
+   across three edits and **scale did not**. Nothing in the prompt or the
+   flags controls it, so this is a check that ends in an editor rather than a
+   re-roll. Say it at the gate, not at hand-over.
 
 **A wrong image is a spent call.** There is no job id and no poll on this API,
 so the repair is a new call with a better prompt, priced again as its own row.
@@ -695,7 +745,7 @@ The ones that come up:
 | Symptom | Cause | Fix |
 |---|---|---|
 | The four images are four different-looking products | The generate route was used for a real item. Measured: two renders of one mug prompt came back with different proportions, scale and light | Switch to the edit route with a photo of the real product. For a genuinely fictional product this is expected — say so before spending, not after |
-| The product changed inside one image of an edited set | One roll. The endpoint edits rather than redraws on the runs measured, but that is three runs on one model and is not a guarantee | Re-run that one image with the keep sentence made more specific (name the features, not just "the product"). A new call, so a new row on a new table |
+| The product changed inside one image of an edited set | One roll. The endpoint edits rather than redraws on the runs measured, but that is four runs on one model and is not a guarantee | Re-run that one image with the keep sentence made more specific (name the features, not just "the product"). A new call, so a new row on a new table |
 | A label or logo went soft or wrong | Text is what degrades first, and nothing here measures a label surviving a whole-scene change | Check every image at magnification before delivering. If the label has to read exactly right, composite it back in an editor — [`hal-image`](../hal-image/SKILL.md) does that locally and free |
 | The images are not all the same shape | `--target-aspect` was passed on some calls and not others, or the source was not cropped and `--size` was relied on | Pass `--target-aspect` on every call in the set. `--size` is untested on the edits endpoint; the output's shape otherwise follows the input's |
 | Exit `1` on `--n` | The chosen model refuses `n` outright — `google/gemini-3.1-flash-image` does, even at `n: 1` | Omit `--n`. This skill's default route doesn't use it; nothing was submitted, so it is free to fix |

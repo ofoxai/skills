@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.27.1"
+version: "1.29.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.27.1"
+  version: "1.29.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -55,9 +55,20 @@ report the exact cost. Scenario skills (`seedance-short-drama`,
 ## Which model, and what it costs
 
 `bash references/ofox-video.sh models` lists every video model Ofox serves with
-its real duration range, resolutions, modes and base per-second price. It needs
+its duration range, resolutions, modes and base per-second price. It needs
 **no API key** — `GET /v1/models` is public — so it is safe to run before the
 user has signed up, and it costs nothing.
+
+⚠️ **The `modes` column under-reports, so do not read it as a capability
+list.** Every model's entry says `t2v i2v v2v` and nothing else, and
+reference-to-video through `input_references` was measured working on
+`bytedance/seedance-2.5` on 2026-09-16 (job `0f5c8b4e`, two image references,
+44 cents, billed at the plain t2v rate). The duration, resolution and
+aspect-ratio columns are a different matter — those are what the script
+enforces against and they have held up. Detail, and what the same session
+measured about the `mode` request field — accepted, discarded, and therefore
+no route to extend or edit — is in
+[`references/api-params.md`](references/api-params.md).
 
 The rate `models` prints is the one at each model's **own default
 resolution**, and that default is not the same tier for every model. It ranks
@@ -817,10 +828,31 @@ and posted to the API via `curl --data-binary @file`, never via a `jq
 --arg`/`--argjson` or `curl -d` **command-line** value. An earlier version
 of this script did the latter and broke on any real photo whose base64
 encoding exceeded the OS's `ARG_MAX` (roughly any real photo over ~750KB) —
-verified with a real 885KB PNG (1,179,996-byte base64 encoding) failing
-with `jq: Argument list too long` before any network call was made. Fixed
-2026-08-29; see `.trellis/spec/skills/external-api-integration.md` for the
-general lesson.
+seen with a real 885KB PNG (1,179,996-byte base64 encoding) producing
+`jq: Argument list too long`. Fixed 2026-08-29, and re-verified 2026-09-17
+on a 1.9 MB PNG: the payload really carries the full 2,515,046-byte data
+URI. See `.trellis/spec/skills/external-api-integration.md` for the general
+lesson.
+
+🚨 **Do not read that as "ARG_MAX fails loudly and stops you."** The
+2026-08-29 write-up says the old code failed "before any network call was
+made", and what was actually recorded is a **stderr line**, not an exit
+status — nobody wrote down whether that run aborted or carried on. The
+distinction turned out to matter, because the same wall on the **caller's**
+side of the fence does *not* stop anything:
+
+> Building a `data:` URI into `--extra-json` yourself — the documented route
+> for `input_references` — passes that URI to `jq` as a command-line
+> argument. Over `ARG_MAX`, `jq` never runs, the command substitution yields
+> an empty string, `--extra-json ""` is treated as **not passed**, and the
+> job is submitted and billed with **no references in it at all**. One line
+> on stderr, exit `0`. Measured 2026-09-17.
+
+So the two paths behave in opposite directions at the same file size: the
+flag path (this script's own encoding) is safe, and the escape-hatch path
+fails open. Full reproduction, and the three-step guard that catches it, are
+under "An empty `--extra-json` is treated as 'not passed'" in
+[`references/api-params.md`](references/api-params.md).
 
 **An attached frame changes what happens to `aspect_ratio`, and it is not
 the same on every model.** `bytedance/seedance-2.5` (the default model)

@@ -2,11 +2,11 @@
 name: ofox-image-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox image API (api.ofox.ai) — validates parameters client-side, sends one synchronous request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. Does both text-to-image (generate) and editing an existing image you supply as a local file (edit — change the background, recolour an element, alter a product photo, while leaving the rest of the picture intact). This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls — image-edit owns "change this image so that...", product-image owns a set of product images to choose between, and seedance-anime-drama owns character images for a video pipeline. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, asks to debug a failed Ofox image request, or wants a plain "generate an image of..." from text — which is the one common case no scenario skill covers.
 license: MIT
-version: "1.11.2"
+version: "1.13.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.11.2"
+  version: "1.13.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -646,8 +646,18 @@ edit would be skipped with a reason rather than silently failing.
 
 **2. The image you upload is billed.** On the measured run, 576 of 608 input
 tokens were the picture. That component does not exist for a generation, and
-it scales with the file you pass: a 320x180 input cost 0.6 cents where an
-854x480 input cost 1.4. Pass a smaller source when the job allows it.
+it scales with the file you pass: a 320x180 input cost 0.6 cents, an 854x480
+input 1.4, and a 1792x1008 input 1.6 (1508 image tokens). Pass a smaller
+source when the job allows it — at the top end the uploaded picture is
+**74%** of the bill (`1508*0.000008 = 0.012064` of 0.016249), so it is the
+only lever that matters there.
+
+⚠️ **Do not reason about an edit's cost from its output tokens.** They do not
+track the input: 129 (320x180), 229 (256x256), 301 (854x480), **129**
+(1792x1008) — the largest input ties the smallest for the lowest count. The
+input **image** tokens are what move with the file (240 / 256 / 576 / 1508),
+and they are the bigger half of the bill on anything large. See
+`references/pricing.md` → "Measured edits".
 
 **3. ⚠️ The API does **not** reject bad parameters here, so the dry run
 matters more, not less.** `generate` gets a bad `--quality` refused upstream
@@ -673,11 +683,14 @@ check is in the instructions rather than assumed.
 
 ### What is not established
 
-- **Whether `--size` is honoured.** All three measured runs omitted it and got
+- **Whether `--size` is honoured.** All four measured runs omitted it and got
   a size derived from the input's aspect ratio at a near-constant pixel budget
-  — 854x480 and 320x180 (both 16:9) returned 1672x941, and 256x256 returned
-  1254x1254, which is 0.05% the same pixel count. Note the useful side: 1.777
-  is the 16:9 the `generate` size enum cannot express at all.
+  — 854x480, 320x180 and 1792x1008 (all 16:9) returned 1672x941, and 256x256
+  returned 1254x1254, which is 0.05% the same pixel count. The 1792x1008 run
+  is the one that shows this is a **budget** rather than an upsample floor:
+  its input is larger than the output and the output did not grow. Note the
+  useful side: 1.777 is the 16:9 the `generate` size enum cannot express at
+  all.
 - **Whether `--prompt` is required by the API.** This script requires it.
 - **Whether a `mask` works.** See "Out of scope" below.
 - **The other four models** that advertise the endpoint but have not been run.
@@ -702,6 +715,47 @@ down as open rather than guessed at.
   seven have been confirmed running an edit, across three vendors.)
 - **Streaming responses** (`stream: true`) — this script only parses a
   plain JSON response body. Rejected client-side if set via `--extra-json`.
+
+## 🚨 This script writes NO sidecar — a paid run's numbers exist only on your terminal
+
+**Save the full output of every paid `generate` or `edit` before you close the
+shell.** Redirect it to a file, or copy the figures into
+`references/token-anchors.json` immediately. Nothing does it for you.
+
+`ofox-video-core` writes a `.json` sidecar next to every delivered mp4,
+carrying the job id, seed, prompt, request and real cost. **This script writes
+nothing of the kind** — an image lands as a `.png` and that is all. Verified:
+the three edits behind this file's 1792x1008 anchor produced
+`flask-white-bg.png`, `flask-set-warm-wood.png` and `flask-set-grey-sweep.png`
+with no companion file, while every video job in the same session has its
+sidecar on disk.
+
+**This is not a tidiness complaint — it has already nearly cost a measurement.**
+The figures `token-anchors.json`'s `_how_to_add_a_row` demands —
+`USAGE_OUTPUT_TOKENS`, the input token split, `EDIT_COST` — are *exactly* the
+values this path never persists. The 1792x1008 anchor was written up as
+"output tokens unrecorded and unrecoverable" and a never-under-quote
+disclosure was published on that premise; the numbers had simply scrolled out
+of reach, and were recovered from a session transcript rather than from disk.
+On the video side the same mistake is impossible, because the sidecar is
+already written.
+
+So, concretely, when you make a paid image call:
+
+```bash
+bash references/ofox-image.sh edit --image IN.png --prompt "..." \
+  --out-dir /abs/out 2>&1 | tee /abs/out/edit-$(date +%Y%m%d-%H%M%S).log
+```
+
+and take the anchor figures from that log rather than from memory. A billed
+run whose token counts are gone is money spent for an artifact you cannot
+price the next one from.
+
+⚠️ **Adding a sidecar to this script is a separate change and is deliberately
+not made here.** It would need to decide the filename, the schema, and what
+happens on the `--n > 1` path where one call writes several files — so it is a
+design question, not a one-line fix. Recorded as a recommendation rather than
+smuggled into a documentation pass.
 
 ## No job id, no polling — what that means for failure handling
 

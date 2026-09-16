@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.16.1"
+version: "1.17.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.16.1"
+  version: "1.17.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -127,7 +127,7 @@ options instead; if the user answers "I don't know" in free text, fall to
 | 1 | must-ask | `Photo` | Do you have a photo of the product? A listing is compared against the real item, so the photo is what keeps the shape and label right. | **Yes — I'll give a local path (recommended)**: image-to-video from the real photo; every gallery prompt that had to match a real product or logo used an image (cases 12, 13, 24). / **No — describe it in text**: acceptable for a generic item or a fictional brand (the gallery's product prompts, cases 16–19, are all text-only and all fictional); for a real SKU the result may not match the item — I will say so. **No AI option.** | No image attached and the user did not say "no photo". |
 | 2 | must-ask | `Aspect` | Which platform is this for? It fixes the frame shape, and with a photo I have to crop or pad the photo to that shape before generating. | **1:1 marketplace grid (recommended)**: Amazon, Etsy, Shopify, eBay listings. / **9:16 TikTok Shop and mobile storefronts**. / **16:9 website product-detail page**. / **4:3 legacy catalog template**. **No AI option** — four platform options fill the slot; a free-text "don't know" falls to 1:1, marked (AI's pick). | No platform or ratio in the request. |
 | 3 | ask-if-open | `Background` | What should sit behind the product? | **Pure white (recommended)**: what most marketplace listing rules ask for; no props, no shadows on the backdrop. / **Light grey studio**: a soft neutral surface with true reflections (the gallery's cleanest product prompt, case 17, uses a bright reflective surface with softbox light). / **Keep the photo's own background**: the scene stays as shot, pinned in place (case 41 locks its background geometry rather than removing it). / **Let the AI decide**. | No background word in the request. |
-| 4 | ask-if-open | `Motion` | How should the product be shown? | **Camera orbits, product still (recommended)**: every rotation in the gallery is written as camera movement or as a hand turning the product (`360-degree orbit`, official case 42; `the camera slowly circles the build platform`, case 39). Answering this does not settle how the segment gets written — the words "the camera orbits" produced no orbit at all on a real run, and the option only delivers in the **waypoint** form of "3. Camera motion: waypoint pictures, not a camera verb" below, each waypoint carrying its own shot size, whose spacing between angles is approximate rather than scheduled and which covers about **half a turn**, not a circuit, on both clips that have been measured. / **Product turntable, camera fixed**: the classic listing spin. No gallery prompt writes it this way, and it has one run here (job `dc02f604`, t2v, 2026-09-16): the product did turn on its own vertical axis with the camera fixed, and five seconds covered only **a quarter to a third of a turn** rather than the "most of one turn" asked for — so if the user said "360", say that a full circuit does not fit in 5 seconds before quoting. Untested with a product photo attached, which is this skill's main path. / **Slow push-in on a detail**: one feature fills the frame (cases 19, 24, 39). / **Let the AI decide**. | No motion word in the request. |
+| 4 | ask-if-open | `Motion` | How should the product be shown? | **Camera orbits, product still (recommended)**: every rotation in the gallery is written as camera movement or as a hand turning the product (`360-degree orbit`, official case 42; `the camera slowly circles the build platform`, case 39). Answering this does not settle how the segment gets written — the words "the camera orbits" produced no orbit at all on a real run, and the option only delivers in the **waypoint** form of "3. Camera motion: waypoint pictures, not a camera verb" below, each waypoint carrying its own shot size, whose spacing between angles is approximate rather than scheduled and which covers about **half a turn**, not a circuit, on both clips that have been measured. / **Product turntable, camera fixed**: the classic listing spin. No gallery prompt writes it this way, and it has one run here (job `dc02f604`, t2v, 2026-09-16): the product did turn on its own vertical axis with the camera fixed, and five seconds covered only **a quarter to a third of a turn** rather than the "most of one turn" asked for — so if the user said "360", say that a full circuit does not fit in 5 seconds before quoting. 🚨 **And at 5 seconds do not combine this with the detail option in one clip** — measured on job `54a721ce`, a one-second DETAIL still pushes all the way to macro and the three turntable seconds then happen inside that macro, which is not a listing clip. Pick one move per short clip; see "Scaling the timestamps does not scale the camera move". / **Slow push-in on a detail**: one feature fills the frame (cases 19, 24, 39) — **on its own** at short durations, for the same reason. / **Let the AI decide**. | No motion word in the request. |
 
 Not asked: 720p vs 1080p (two rows in the cost table); duration (5s for a
 single orbit, 10–15s for the segmented template — a row, and the recap says
@@ -148,7 +148,7 @@ On top of the generic rows in `creative-brief.md`:
 | "grey", "studio", "neutral" | Background | light grey studio |
 | "keep the background", "as shot", "in place" | Background | the photo's own background |
 | "orbit", "circle around", "camera moves around" | Motion | camera orbits, product still |
-| "spin", "turntable", "rotate", "360 on its axis" | Motion | product turntable, camera fixed — ⚠️ **and if they said "360", correct the length before spending.** One run (job `dc02f604`, 5s, t2v) shows the motion itself works: the product turned on its own vertical axis with the camera fixed, nothing tipping or sliding. What it does **not** do is finish a circuit — five seconds covered a quarter to a third of a turn against "most of one turn" asked for. So take the user's word for the motion, and in the same breath tell them a full 360 will not fit in 5 seconds, so they can choose more seconds or accept part of the surface. Still untested with a product photo attached, which is this skill's main path |
+| "spin", "turntable", "rotate", "360 on its axis" | Motion | product turntable, camera fixed — ⚠️ **and if they said "360", correct the length before spending.** One run (job `dc02f604`, 5s, t2v) shows the motion itself works: the product turned on its own vertical axis with the camera fixed, nothing tipping or sliding. What it does **not** do is finish a circuit — five seconds covered a quarter to a third of a turn against "most of one turn" asked for. So take the user's word for the motion, and in the same breath tell them a full 360 will not fit in 5 seconds, so they can choose more seconds or accept part of the surface. 🚨 **A 5-second clip is one move**: the photo-attached attempt at this (job `54a721ce`) also carried a one-second DETAIL and spent its whole rotation segment in a cap macro, so the turntable is still unmeasured with a frame attached and the way to measure it is a clip with no DETAIL in it |
 | "close-up", "zoom in on the detail", "push in" | Motion | slow push-in on a detail |
 
 ### From answers to prompt — traceability
@@ -238,6 +238,45 @@ each, ORBIT gets the single largest share because showing the product from
 every angle is the point of a catalog clip, and ACCESSORIES — the one
 segment that isn't the product itself — stays the smallest, 2–3s, never the
 majority of the clip.
+
+### 🚨 Scaling the timestamps does not scale the camera move, and at 5s that ruins the clip
+
+**Measured 2026-09-17, and the result was unusable** — the first outright
+failure of this template rather than of one segment inside it. Job
+`54a721ce-61a1-46cf-b5bf-6973f31b8258`, seed `89984235`, 5s / 480p / 16:9,
+`--generate-audio false`, a **real product photograph** attached as
+`--frame-first-image`, timestamps scaled exactly as the paragraph above
+instructs: `0–1s` static front, `1–2s` DETAIL, `2–5s` TURNTABLE.
+
+| Time | What is on screen |
+|---|---|
+| 0.0s | the whole product, white background, wordmark legible — **the attached photo, anchored correctly** |
+| 2.0s | **a macro of the cap** |
+| 3.0 / 4.0 / 4.9s | still a macro of the cap |
+
+So three of the five seconds — the entire turntable segment — happen inside a
+macro, and the clip never returns to the whole product. As "a clean turntable
+showcase for a listing", it is **not deliverable**.
+
+**The cause is not the resolution and not the model.** A one-second DETAIL
+push still pushes all the way to macro: shortening the segment shortened the
+*time*, not the *distance travelled*. And nothing after it widens back out,
+because the segment that follows inherits the framing it was handed — the same
+inheritance already documented under "The orbit travels, but the product's
+base or top is out of frame the whole way". The existing warning covered the
+arithmetic (segments not fitting) and missed the physical consequence.
+
+**The rule that follows, and it is a planning rule, not a prompt fix:**
+
+> **At 5 seconds, do not put DETAIL in the same clip as TURNTABLE or ORBIT.**
+> Pick one. A 5-second clip is one move. If the user wants both a detail and a
+> rotation, that is either a longer clip or two clips, and both belong in the
+> cost table as rows before anything is spent.
+
+Where the boundary between "fine" and "ruined" sits is not measured — 12
+seconds carries all four segments (three clips), five carries one. Nothing in
+between has been run, so quote 8 or 10 seconds as an experiment rather than as
+a known-good middle.
 
 **Four segments do fit 12 seconds, and an uneven split is carried through.**
 All three of this scenario's own clips were written at 3/3/4/2 in 12 seconds
@@ -414,7 +453,7 @@ the two fixes clip B's defects had produced. All three are
 attached**, 12s, 720p, `--aspect-ratio 16:9`, `--generate-audio false`, billed
 2.88 USD each (8.64 USD for the three).
 
-**Two more clips sit outside that set and are written up where they belong.**
+**Three more clips sit outside that set and are written up where they belong.**
 Clip D is a 30-second presenter clip that breaks this skill's own people
 exclusion on purpose — "One clip outside this skill's own boundary" below.
 Clip E is the **turntable** run of 2026-09-16 (job
@@ -422,6 +461,18 @@ Clip E is the **turntable** run of 2026-09-16 (job
 finally puts a run behind the motion option the skip table has always pointed
 at; it lives with that option, in "The turntable alternative: it works, and
 its speed does not listen" under §3.
+
+Clip F is the one that matters most to how this file should be read: the
+**first run of this skill's headline route** — a real product photograph
+attached as the first frame (job `54a721ce-61a1-46cf-b5bf-6973f31b8258`,
+2026-09-17, 5s, 480p, 16:9, 55 cents). Until it, every clip above was **pure
+text-to-video with a fictional product**, while the skill's own description
+leads with turning a real product photo into listing footage. Its verdict is
+split and both halves are load-bearing: **the photo anchor works** (frame 0 is
+the photograph, wordmark legible) and **the delivered clip is unusable**,
+because a one-second DETAIL segment pushed to macro and the three turntable
+seconds happened inside it. Written up in 🚨 "Scaling the timestamps does not
+scale the camera move" under the template, and in the turntable section.
 
 | | Job | Outcome |
 |---|---|---|
@@ -900,7 +951,7 @@ An attached image means one of two things, and the API has a field for each
 | Meaning | Flag | What it does | Status in this repo |
 |---|---|---|---|
 | **First frame** — the clip starts on this exact picture | `--frame-first-image PATH` | locks the opening view to the photo; on `bytedance/seedance-2.5` forces `aspect_ratio: adaptive`, so the photo is cropped or padded to the target ratio **before** generating | verified with real runs; this skill's default route |
-| **Identity reference** — the model borrows the product's appearance from one or more images, no frame is locked | `--extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"…"}}, …]}'`, up to 9 images | lets front, back, top and box photos all inform the clip, with one role line per image (`image1: front view; image2: the label, verbatim`) — the pattern nearly every gallery prompt with an image uses (cases 24, 37) | element shape documented in `api-params.md`; **no image-reference job has been run end to end in this repo**, and whether the `image1` tokens resolve by position is unverified — write role sentences that read correctly as plain text either way |
+| **Identity reference** — the model borrows the product's appearance from one or more images, no frame is locked | `--extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"…"}}, …]}'`, up to 9 images | lets front, back, top and box photos all inform the clip, with one role line per image (`image1: front view; image2: the label, verbatim`) — the pattern nearly every gallery prompt with an image uses (cases 24, 37) | element shape documented in `api-params.md`, and **measured end to end on 2026-09-16** (job `0f5c8b4e`, two images, 44 cents, billed at the plain t2v rate): both references' named features came through and **the `image1` / `image2` tokens resolved by position, in array order**. A local file needs no hosting — an image reference accepts a `data:` URI. ⚠️ **A `data:` URI you build into `--extra-json` yourself is bounded by `ARG_MAX`, and over the limit the reference is dropped silently while the job is submitted and billed anyway** — downscale the image, and confirm `input_references` is in a `--dry-run --print-payload` before spending. See `api-params.md` → "An empty `--extra-json` is treated as 'not passed'". Still one job with two images; nine images, and mixing an image with an audio or video element, are untested. ⚠️ Pass `--aspect-ratio` explicitly on this route: the one measured job passed none and came back portrait from two landscape references |
 
 **The two are mutually exclusive** in one job: the script rejects a request
 carrying both (`references_conflict`). For a single photo, the first-frame
@@ -1269,13 +1320,37 @@ surface rather than all of it. **Do not quote a seconds-per-turn figure**: one
 run at one duration cannot support one, and inventing a helpful-sounding
 number here would be the same move the prompt made.
 
-**What this does not cover, and the gap matters more here than in the rest of
-this file.** One run, 5 seconds, and **text-to-video with no product photo** —
-which is not this skill's main path. A real SKU goes image-to-video, where an
-attached first frame fixes the product's appearance and the clip's shape, and
-**whether a turntable behaves the same way with a frame attached is
-untested**. No longer duration has been run either, so whether more seconds
-buy a proportionally bigger turn is unknown.
+**The photo-attached path has since been run, and it splits into good news and
+a blocking problem.** Job `54a721ce-61a1-46cf-b5bf-6973f31b8258` (2026-09-17,
+seed `89984235`, 5s / 480p / 16:9, a **real product photograph** as
+`--frame-first-image`, 55 cents) is the first time this skill's headline route
+— a real SKU, anchored on its own photo — has been generated at all.
+
+- ✅ **The anchor works.** Frame 0 *is* the photograph: whole product, white
+  background, wordmark legible. Everything this file says about attaching a
+  photo for a real SKU held.
+- ✅ **And the SCENE matching the photo bought a clean opening.** The prompt's
+  SCENE described the white surface the photo was shot on, and there is **no
+  cut at the top of the clip**. That is not luck — where a supplied frame's
+  background *disagrees* with the written SCENE, the measured result is about
+  0.1s of the photo and then a hard cut (`prompt-structure.md` → "If the
+  attached frame's background disagrees with your SCENE"). This skill's
+  white-surface convention is what keeps it out of that trap, so **keep
+  writing the SCENE as the surface the photo is actually on**.
+- ❌ **The turntable never happened as a turntable.** The clip was written
+  `0–1s` static, `1–2s` DETAIL, `2–5s` TURNTABLE and it spent the whole
+  rotation segment in a cap macro. Unusable as a listing clip. That is a
+  **timeline** failure rather than a turntable failure, and it has its own
+  section: 🚨 "Scaling the timestamps does not scale the camera move".
+
+**So the turntable itself is still only measured on the text-to-video run
+above.** `54a721ce` cannot speak to whether rotation behaves the same with a
+frame attached, because its rotation segment was never framed wide enough to
+read. That question is still open, and the way to answer it is a 5-second clip
+with **no DETAIL segment in it**.
+
+No longer duration has been run either, so whether more seconds buy a
+proportionally bigger turn is unknown.
 
 Whether the waypoint rule carries over to a rotating product — waypoints
 describing **what the frame shows** as the product turns, rather than the

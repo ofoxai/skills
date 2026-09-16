@@ -2,6 +2,58 @@
 
 All notable changes to the **ugc-ads** skill. Versioning follows SemVer.
 
+## 1.1.0 — the CAPTURE fix was run and held; the photo path brought two problems
+
+**Documentation only. No default, price, prompt template or flag changed** —
+but three things a caller says or does before spending are new, and one of
+them is a free local step that was missing.
+
+A second paid run (`ede33e6d`, 2026-09-17, 8s / 480p / 9:16, 88 cents) tested
+the two things this file most needed: the **corrected CAPTURE wording**, which
+had been shipped without ever being generated, and the **attached-photo
+route**, which the brief recommends and nothing had ever run.
+
+**✅ The correction held.** Six sampled frames contain no phone, no camera, no
+tripod and no lit screen. The failing construction (`DEVICE:`, "where the
+phone is") and its replacement (`CAPTURE:`, the device as a viewpoint) have
+now each been measured once, which makes this the best-evidenced line in the
+template rather than the one with a known defect and a hopeful fix.
+
+**What a caller has to do differently:**
+
+- ⚠️ **Crop a landscape product photo to 9:16 before attaching it.** The
+  traceability table carried an unflagged contradiction: `Photo: yes` → attach
+  the frame and pass **no** `--aspect-ratio`, while this file treats 9:16 as
+  the default nobody is asked about. With a frame attached the model forces
+  `adaptive` and the clip takes the **photo's** shape, so an ordinary
+  landscape product shot silently cancels the vertical premise — no error, no
+  warning, and it is discovered on delivery. The crop is free and local, it is
+  what the measured run did (529x941 in, 480x854 out), and it now appears in
+  the table, in a note under it, and as a line in the recap. Found by reading
+  two rows of this file against each other; it cost nothing.
+- ⚠️ **Expect a flash frame and a hard cut when the photo's background is not
+  the scene.** Measured here: background brightness 250 through 0.08s (the
+  white studio photo), 33 from 0.12s (the night desk the prompt described).
+  About a tenth of a second of the photo, then a cut. **This scenario is the
+  worst place in the repo for it**, because an unbroken un-staged take is the
+  whole product and the cut lands on frame one. Write the SCENE as the place
+  the photo was actually taken, or supply a photo from the target setting, or
+  trim the first 0.15s. The mechanism is general and is written up once in
+  `ofox-video-core` 1.28.0 (`prompt-structure.md`).
+- ⚠️ **With a photo attached, look specifically for polish creeping back in.**
+  Run 2 leans toward the look this skill exists to avoid — bottle near centre,
+  shallow-focus background, warm key with falloff, flattering steam. **But it
+  changed two variables at once** (the photo and the CAPTURE wording), so
+  nothing here attributes the drift to the photo. That reading is a
+  **hypothesis, not a finding**, and it is labelled as one in the file; the
+  single-variable run that would settle it is the same prompt with and without
+  the photo. Until then: check for polish, and treat a text-only re-roll as a
+  live option.
+
+"What has been tested, and what has not" is rewritten around two runs instead
+of one, and the anti-polish pass is now claimed for the **text-only** path
+specifically rather than for the skill as a whole.
+
 ## 1.0.2 — the real-person flag is measured, and two places here said it was not
 
 **Documentation only. No default, price, prompt template or behaviour

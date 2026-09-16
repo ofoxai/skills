@@ -2,11 +2,11 @@
 name: keyframe-animation
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus two images you already have, a start frame and an end frame. Animates the motion between them as one video — both frames go into a single Ofox video job, the clip opens on A, closes on B, and the model fills the middle. Use when a user has two stills and wants the in-between animated, e.g. "here is the before and the after, animate the transition", "make a video that starts on this image and ends on that one", "tween these two frames", or "move the object from where it sits in the first picture to where it sits in the second". Do not use when only one image exists (animating a single frame is seedance-ad-creative or seedance-product-video), or when the pair is two states of a user interface (see product-demo).
 license: MIT
-version: "1.1.0"
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/keyframe-animation
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.2.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -101,42 +101,67 @@ the pair of frames read, the prompt written and the job priced, and only needs
 the key at the moment they say yes to the cost table. Do that work first
 rather than opening with a signup link; see "Pricing a job with no API key".
 
-## What this skill rests on: two measured jobs on one pair
+## What this skill rests on: three measured jobs on two pairs
 
-Everything below traces to real runs, or it says it doesn't. Both ran
-`bytedance/seedance-2.5`, 4 seconds, 480p, a first frame and a last frame
-attached in one job, **44 cents each**, on the same inputs: a red square on a
-flat background with no text, drawn at x=120–240 in the first frame and at
+Everything below traces to real runs, or it says it doesn't. All three ran
+`bytedance/seedance-2.5` at 480p with a first frame and a last frame attached
+in one job, **44 to 55 cents each**.
+
+The first two ran 4 seconds on the same inputs: a red square on a flat
+background with no text, drawn at x=120–240 in the first frame and at
 x=614–734 in the last.
 
 | Job | What it tested |
 |---|---|
 | `259c3ce2` | the **mechanism** — can both ends be locked in one job at all, and how does the middle behave |
 | `2514540e` (2026-09-15) | the **prompt template in this file**, filled in by an agent working from this skill and nothing else. Same pair, so it widens nothing about the inputs; what it adds is that the template — not a hand-written prompt — produces the same result, and that the result replicated |
+| `1b7a3fab` (2026-09-17, 5s, 55 cents) | the **inputs** — the first pair that is not the red square. A real photograph of a product carrying a readable wordmark and a brushed-metal texture, left third to right third, cropped for free out of an image this repo already had. It overturned this file's duration claim; see "Duration: the easing curve is not a property of the tool" |
+
+**The third run is the one that changes how to read this file.** Two of the
+three clips share a pair, so until it there was **one** input class behind
+every claim here, and the file said so. What `1b7a3fab` adds:
+
+- **A real subject with lettering survives the interpolation.** The wordmark
+  is intact and legible at every sampled point — 0, 1, 2, 3 and 4.5 seconds —
+  not just at the two supplied ends. That is the question a pair of plain red
+  squares could not ask, and the answer is positive. It is also the measured
+  backing for the AVOID-list advice below, which until now was reasoning.
+- **Both ends honoured again**, on a pair the earlier runs say nothing about:
+  first frame matches A, last matches B, the camera does not move, the
+  background does not change, no second copy of the subject appears.
+- ❌ **And the duration claim this file carried did not survive it.** The
+  detail is in the duration section; the short version is that the two clips'
+  easing curves differ so much that neither can be quoted as the model's
+  behaviour.
 
 The measurements below are from `259c3ce2` unless noted. The endpoint result
-is the one that has now happened twice:
+is the one that has now happened three times:
 
 **Endpoint replication, job `2514540e`.** Scanning the delivered video's own
 first and last frames for red gives x=120–239 and x=614–733 — the same
-figures, to the pixel, as the first run. Two runs is not a guarantee, but
-"both ends are honoured" is the only claim here with more than one job behind
-it.
+figures, to the pixel, as the first run. **And again on a different pair**
+(`1b7a3fab`, a photographed product): first frame matches A, last matches B.
+Three runs across two input classes is not a guarantee, but "both ends are
+honoured" is by some distance the best-supported claim in this file — and
+note that it is the only one that survived the third run unchanged.
 
 | What was measured | The measurement |
 |---|---|
 | **Both ends are honoured, to the pixel** | scanning the *delivered video's own frames* for red: its first frame has the square at x=120–239, its last frame at x=614–733. Not "the job reported completed" — the artifact was read |
-| **The motion is front-loaded, not linear** | the same scan at t=1/2/3s gives x≈384, 564, 614. Against a total travel of 494 px that is roughly **53% of the distance covered in the first quarter of the clip, 90% by halfway, and arrival at 3 seconds of 4** |
-| **The last beat is a hold, not travel** | having arrived at ~3s, it stays. The final second of that clip delivers no movement |
+| **This clip's motion was front-loaded** ⚠️ | the same scan at t=1/2/3s gives x≈384, 564, 614. Against a total travel of 494 px that is roughly **53% of the distance in the first quarter, 90% by halfway, and arrival at 3 seconds of 4**. ⚠️ **Do not carry this over to your clip** — `1b7a3fab` measured a near-linear curve on the same mechanism. See the duration section |
+| **This clip's last beat was a hold, not travel** ⚠️ | having arrived at ~3s, it stays; the final second delivers no movement. Same caveat — `1b7a3fab`'s hold was about half a second of five |
 
 What those jobs do **not** establish, and this skill does not claim:
 
-- whether the front-loaded easing scales with duration — whether a 10-second
-  clip holds for two and a half seconds or for one. One duration was measured;
-  4 seconds;
-- anything wider about the **inputs**. Both runs used the same pair, so the
-  second one is a replication, not a broadening. A different subject, a
-  different canvas or a pair with lettering in it is still untested here;
+- **any easing curve at all.** This used to read "whether the front-loaded
+  easing scales with duration is untested", which assumed the front-loading
+  and questioned only its scaling. The second duration was measured and came
+  back a different shape, so what is untested is the curve itself, on any
+  duration;
+- anything wider about the **inputs than two pairs**. The first two runs share
+  one pair; `1b7a3fab` adds a real photographic subject with lettering. A UI,
+  a person, a scene change, or ends that differ in more than one bounded way
+  are all still untested here;
 - whether first+last in one job works on any model other than
   `bytedance/seedance-2.5`. The catalog lists `i2v` for the current video
   models, but `i2v` says nothing about locking *both* ends at once — that
@@ -256,28 +281,58 @@ more weight here than a reference photo does anywhere else in this repo.
   [`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
   → "`--real-person true` lifts that refusal on 2.5".
 
-## Duration: the motion arrives early and then holds
+## Duration: the easing curve is not a property of the tool
 
-The one measured clip covered ~53% of the distance in its first second, ~90%
-by two, and had **arrived at three seconds of four**. The last beat is a hold.
+**This section used to be headed "the motion arrives early and then holds"
+and that was overturned by the second measurement.** It is kept as a heading
+rather than quietly deleted because the old version told callers to budget for
+a hold, and anyone who read it should know why not to.
+
+Two clips, each read the same way — the subject's horizontal position sampled
+per second and expressed as a fraction of the total travel:
+
+| Fraction of the clip elapsed | `259c3ce2` (4s, red square) | `1b7a3fab` (5s, real product) |
+|---|---|---|
+| 0.25 | ~53% of the distance | — |
+| 0.20 | — | 20% |
+| 0.40 | — | 51% |
+| 0.50 | ~90% | — |
+| 0.60 | — | 80% |
+| 0.75 | **arrived** | — |
+| 0.90 | — | **arrived** |
+
+The first is strongly front-loaded with a quarter of the clip left over as a
+hold. The second is **close to linear with a slight ease-out**, and its hold
+is the last half second — about 10% of the clip, not 25%.
+
+**So there is no easing curve to plan against.** The two runs differ in
+duration (4s vs 5s), subject, travel distance and seed, and one measurement
+each cannot attribute the difference to any of them. What used to be written
+here as a property of the model is a property of *those two clips*.
 
 What to do with that:
 
-- **Budget for the hold.** If the user wants a visible half-second of stillness
-  at the end, the model already gives it. If they want the arrival to land on
-  the final frame, it won't — and no clause in the prompt is known to move it.
-- **Short is the honest default.** A longer clip buys more hold, not
-  necessarily more motion, and it bills per second. Start at the model's
+- **Do not promise a hold, and do not promise arrival on the final frame.**
+  The old text said flatly that an arrival on the last frame "won't" happen.
+  One of two clips arrives at 90% of the way through, which is close enough to
+  the end that the claim cannot stand. Tell the user the clip lands on frame B —
+  that part is measured, twice, to the pixel — and that **when** it gets there
+  is not something this skill can predict.
+- **If the timing of the arrival matters, it is a draft question.** Generate
+  the cheapest tier first and look, rather than writing a clause. There is no
+  known clause.
+- **Short is still the honest default**, for a different reason than before:
+  not "a longer clip buys more hold" (unsupported) but simply that it bills
+  per second and the arrival is unpredictable either way. Start at the model's
   minimum duration (`ofox-video.sh models` prints each model's range) and show
-  a longer option as a second row in the cost table rather than assuming it.
-- **Don't write "at an even speed" into the prompt.** The measured clip eased
-  regardless, and an instruction the tool measurably does not follow is a
-  liability rather than a rule — this repo has the scar to prove it. If even
-  pacing genuinely matters, that is a question for a real run, not for a
-  clause.
-- **Whether the hold scales with duration is untested.** At 10 seconds it
-  might hold for two and a half, or it might hold for one. One duration was
-  measured. Say so rather than extrapolating for the user.
+  a longer option as a second row in the cost table.
+- **Don't write "at an even speed" into the prompt.** Both clips eased to some
+  degree regardless, and an instruction the tool measurably does not follow is
+  a liability rather than a rule — this repo has the scar to prove it. If even
+  pacing genuinely matters, that is a question for a real run, not a clause.
+- **Two points are not a curve.** Do not read the table above as "longer clips
+  are more linear". It is two observations that disagree, which is exactly
+  enough to retire the old claim and not nearly enough to replace it.
 
 ## When the two frames differ too much
 
@@ -329,14 +384,22 @@ ENDING: it comes to rest in the position of the last frame and stays there.
 AVOID: a cut, a fade to black, a dissolve, a wipe; camera shake, zoom, pan or reframing; the <subject> changing shape, colour or size; a second <subject> appearing; motion blur smearing the <subject>; subtitles, captions, on-screen text, watermarks.
 ```
 
-**About that last AVOID item.** It is here because the measured pair carried
-no lettering, so any text in the middle would be text the model invented —
-which is the failure mode every `AVOID: on-screen text` line in this repo
-exists for. **If your own two frames contain lettering** — a label, a sign, a
-readable screen — the premise flips: the model is then interpolating between
-two supplied renderings rather than inventing glyphs, and forbidding text
-fights your own material. Drop the item and read `product-demo`, which is
-built on exactly that case and has a measured run behind it.
+**About that last AVOID item.** It is here because the *first* measured pair
+carried no lettering, so any text in the middle would be text the model
+invented — which is the failure mode every `AVOID: on-screen text` line in
+this repo exists for. **If your own two frames contain lettering** — a label,
+a sign, a readable screen — the premise flips: the model is then interpolating
+between two supplied renderings rather than inventing glyphs, and forbidding
+text fights your own material. Drop the item.
+
+**That flip is now measured here rather than only reasoned.** Job `1b7a3fab`
+(2026-09-17) ran this template on a pair whose subject carries a printed
+wordmark, with the no-text item removed for exactly this reason, and **the
+wordmark is intact and legible at every sampled point through the clip**, not
+only at the two supplied ends. One pair, one wordmark, 5 seconds — but it is
+the first direct evidence for an instruction this file had been giving on
+inference. `product-demo` is still the skill to read when the pair is two
+states of an interface.
 
 ### Worked example
 
@@ -354,9 +417,12 @@ AVOID: a cut, a fade to black, a dissolve, a wipe; camera shake, zoom, pan or re
 Check the draft the same way the evidence jobs were checked: read the
 delivered clip's own first and last frames against the two inputs, and sample
 the middle — never take `STATUS completed` as proof the interpolation is the
-one you asked for. **This template has been run**: job `2514540e` filled this
-shape in for a red square and came back with both ends pixel-exact, which is
-what the check above is looking for.
+one you asked for. **This template has been run twice, on two different
+subjects**: job `2514540e` filled this shape in for a red square, and job
+`1b7a3fab` for a real photographed product with a readable wordmark. Both came
+back with the ends honoured, which is what the check above is looking for.
+What the two disagreed on is *when* the subject arrives — see the duration
+section — so check the ends, and look at the middle rather than predicting it.
 
 ## The frame decides the shape
 
@@ -642,7 +708,7 @@ here.
 | Exit `3`, `insufficient_credits` | Ofox balance too low | No charge was made; add credits at https://app.ofox.ai and retry |
 | Exit `3`, job ends `failed` with `output_moderation_failed` | The generated output failed a post-generation check — after the job ran, not at submission. Not billed | Retry as a **brand-new** `generate` with a different prompt or frames. A new request, not a resubmission |
 | The clip runs backwards | The two paths were passed on the wrong flags | Swap `--frame-first-image` and `--frame-last-image`. New job, new cost table — which is why `Order` is a must-ask when the input is ambiguous |
-| The subject reaches its destination early and then sits there | Expected, and measured: ~53% of the distance in the first quarter of the clip, arrival at 3 of 4 seconds on job `259c3ce2` | Nothing in the prompt is known to change it. Shorten the clip, or plan for the hold. Don't write "constant speed" — the measured clip eased anyway |
+| The subject reaches its destination early and then sits there | **Possible, not expected.** Job `259c3ce2` did exactly that (~53% of the distance in the first quarter, arrival at 3 of 4 seconds); job `1b7a3fab` did not (20% at 1s of 5, arrival at 4.5s). Two clips, two different curves | Nothing in the prompt is known to change it, and **nothing predicts which you will get** — so treat the arrival time as a draft question rather than a plannable parameter. Don't write "constant speed"; both clips eased to some degree anyway |
 | The output is the frames' shape, not the shape you wanted | Expected: with frames attached the clip follows the frames | Crop both frames to the target shape and generate again — a new job, billed again, which is why the crop happens before the first submission |
 | The middle invents something that is in neither frame | The pair was too far apart, so the middle was the model's to fill | Bring the pair closer, or split it into two shorter jobs. See "When the two frames differ too much" — reasoning, not measurement |
 | Readable lettering appears mid-clip that is in neither frame | The AVOID list's text items were dropped, or the pair has lettering in only one end | Keep the text items when your frames are text-free. When both frames genuinely carry the same lettering, `product-demo` is the skill with a measured run behind that case |

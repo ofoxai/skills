@@ -2,11 +2,11 @@
 name: product-demo
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus two real screenshots of one interface in two states. Animates the transition between them as one video — both go into a single Ofox video job, and the model cross-fades the values that changed while the rest of the layout holds. Use when a user wants a short software demo animation out of captures they already have, e.g. "turn these two screenshots into a demo clip", "show the dashboard going from the free plan to the paid one", "animate this settings change for the docs", or "make a clip of the counter going from 3 to 25". Do not use for a pair that is not a user interface (see keyframe-animation), for a screen recording (record it instead), or when only one screenshot exists.
 license: MIT
-version: "1.1.0"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/product-demo
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -172,21 +172,41 @@ this API, so a second run really is a second sample.
 - Nothing about screen recording. If the user can record their real app, that
   is free, exact, and better than any of this.
 
-### The timing, from the sibling scenario
+### The timing, from the sibling scenario — and it is no longer a pattern
 
-The same two-frame mechanism was measured for *motion* in the same session
-(job `259c3ce2`, a moving object rather than a UI): the change is
-**front-loaded**, covering about 53% of the distance in the first quarter of
-the clip and arriving at three seconds of four, then holding. The UI job is
-consistent with that shape — crisp and settled by t=2.0s of a 4-second clip —
-but the UI clip was read for legibility rather than sampled for an easing
-curve, so treat "it settles early and then holds" as the pattern to plan for,
-measured directly on the motion clip and observed to be compatible here.
+⚠️ **This section used to say "it settles early and then holds" was the
+pattern to plan for. A second measurement withdrew that**, and the withdrawal
+matters more here than the original claim did, because this file borrowed it
+from a sibling rather than measuring it.
 
-Practical consequence: **the tail of the clip is a hold on the final state.**
-That is usually what a docs GIF wants anyway. Budget duration knowing the
-last beat is stillness, and don't plan for the change to land on the final
-frame.
+What the sibling scenario (`keyframe-animation`) has now measured, on the same
+two-frame mechanism, sampling the subject's position each second as a fraction
+of total travel:
+
+| Elapsed | `259c3ce2` (4s, moving object) | `1b7a3fab` (5s, moving object) |
+|---|---|---|
+| 1s | ~53% | 20% |
+| 2s | ~90% | 51% |
+| 3s | arrived | 80% |
+| 4.5s | — | arrived |
+
+One clip front-loads and holds for a quarter of its length; the other is
+near-linear and holds for about half a second. They differ in duration,
+subject, distance and seed all at once, so **neither is the mechanism's
+behaviour** — and there is no curve to plan against.
+
+**This scenario's own UI clip is still consistent with an early settle**
+(crisp and settled by t=2.0s of a 4-second clip), and that observation is
+unchanged. But it was read for legibility rather than sampled for an easing
+curve, so it was never evidence for a curve — it was compatible with one, and
+"compatible with" is what made borrowing the claim feel safe.
+
+Practical consequence, restated honestly: **plan for the final state to be
+reached and to be legible, not for a particular amount of tail.** For a docs
+GIF that is usually enough, since the thing being demonstrated is the end
+state rather than its timing. If the length of the hold actually matters to
+the deliverable, generate a cheap draft and look — there is no clause for it
+and no default to quote.
 
 ## Before writing the prompt: the brief
 
@@ -409,7 +429,7 @@ so.
 |---|---|---|
 | `--frame-first-image` / `--frame-last-image` | both, in one `generate` call | the mechanism this skill is built on; both measured jobs honoured both ends |
 | `--model` | not passed — the script's own default applies, **unless the user named a model**, which always wins | both measured jobs ran on `bytedance/seedance-2.5`; whether both ends can be locked on another model is untested here. `models` lists the models but does **not** mark which one the script defaults to — the `MODEL` line a `generate --dry-run` prints is what names the id that will really be sent, which is also the id the cost table has to carry |
-| `--duration` | the model's minimum for a single bounded state change | the measured clip was crisp and settled by t=2.0s of 4 seconds; extra seconds buy hold and bill per second. `ofox-video.sh models` prints each model's range |
+| `--duration` | the model's minimum for a single bounded state change | this scenario's own clip was crisp and settled by t=2.0s of 4 seconds, and every extra second bills. ⚠️ Do **not** justify it as "extra seconds buy hold" — measured on the sibling mechanism, how much tail you get is not predictable (see "The timing, from the sibling scenario"). The reason to stay at the minimum is the bill, not a known curve. `ofox-video.sh models` prints each model's range |
 | `--resolution` | the cheapest tier for the draft, then re-render the chosen seed higher. **When the user named neither** — the common case — draft at the model's cheapest tier and put the next tier up as a *second row* of the same cost table, so the upgrade is priced rather than asked about | both measured jobs ran at 480p, the cheapest tier their model lists, and the text stayed legible both times **at that resolution, on that pair** — fine lettering at a small tier is the first thing to check on a draft, and the second row is what the user reaches for when it fails that check. `models` prints the tiers; dry-running both rows costs nothing |
 | `--aspect-ratio` | not passed | the attached screenshots decide it — see "The frames decide the shape" |
 | `--generate-audio` | `false` | a docs clip has nothing to sync to, and the server's default is `true`. Omit the flag only when the clip genuinely wants a track |

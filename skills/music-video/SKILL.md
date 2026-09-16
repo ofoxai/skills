@@ -2,11 +2,11 @@
 name: music-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus the music file the finished video must carry. Your audio never reaches the API (measured) — the visuals are written to the track's tempo, mood and sections, then your own file is laid on locally at zero cost. One job caps at 30 seconds, so a three-minute song is six jobs minimum and the cost table says that before anything is spent. Use when a user has a specific piece of music and wants visuals for it, e.g. "make a music video for this track", "visuals for my song", "an MV for this instrumental", "generate footage cut to this beat". Do not use for cheap vertical social drafts (shorts-reels), a brand film that happens to have a music bed (seedance-ad-creative), or when there is no particular audio file the finished video has to carry.
 license: MIT
-version: "1.1.1"
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/music-video
 metadata:
   author: ofoxai
-  version: "1.1.1"
+  version: "1.2.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -249,8 +249,10 @@ Brief
 - What this is NOT: the model does not hear your track. The visuals are cut to the
   structure described above; your file goes on at the end, locally and free. Nothing
   here lands a cut on a specific beat.
-- What has been run here: a 3-segment chain with both seams clean and the mux
-  working. 7 segments has not — treat the first segment as the experiment
+- What has been run here: a 3-segment chain, both seams clean, the mux working
+  — at 10s segments, and with a synthesised tone rather than real music.
+  7 segments, 28s segments and a real track are all outside that. Treat the
+  first segment as the experiment and decide on the rest after you see it
 ```
 
 **When no section map was given, that `Sections` line changes shape and must
@@ -351,14 +353,34 @@ instead of eighteen, and a smaller bill, because the API charges by the
 second. **It is still guaranteed to be at least as long as the track**, which
 is the property that matters.
 
-| Track | Segments at a 30s ceiling | Segment length | Picture |
-|---|---|---|---|
-| 0:45 | 2 | 23s | 46s |
-| 1:30 | 3 | 30s | 90s — exact |
-| 3:00 | **6** | 30s | 180s — exact. The common case, and six separately billed jobs |
-| 3:12 | **7** | 28s | 196s for 192s of music; the 4 spare seconds are trimmed by the mux |
-| 5:00 | 10 | 30s | 300s — `chain` is capped at 10 shots per run, so this is the edge |
-| 6:00 | 12 | 30s | past one `chain` run; see "Longer than one chain run" |
+| Track | Segments at a 30s ceiling | Segment length | Picture | Evidence |
+|---|---|---|---|---|
+| 0:45 | 2 | 23s | 46s | within the measured scale |
+| 1:30 | **3** | 30s | 90s — exact | **the largest scale actually run here** (at 10s segments, not 30s) |
+| 3:00 | **6** | 30s | 180s — exact. The common case, and six separately billed jobs | ⚠️ twice the measured segment count |
+| 3:12 | **7** | 28s | 196s for 192s of music; the 4 spare seconds are trimmed by the mux | ⚠️ untested |
+| 5:00 | 10 | 30s | 300s — `chain` is capped at 10 shots per run, so this is the edge | ⚠️ the cap has never been approached |
+| 6:00 | 12 | 30s | past one `chain` run; see "Longer than one chain run" | ⚠️ untested, and needs a mechanism that is itself untested |
+
+⚠️ **The arithmetic is sound and the scale is mostly unmeasured, and those are
+different things.** The segment count falls out of the track's length and the
+model's ceiling — there is nothing to verify there. What has actually been
+generated is **three segments and two seams**, and at **10-second** segments
+rather than the 20–30s this table produces. Everything from six segments up is
+an extrapolation across four or more unverified seams.
+
+**So do not present seven jobs as a routine ask.** Lead with the scale that
+has evidence:
+
+- **Quote the whole track's total** — that rule is unchanged and is the point
+  of this section. Nobody should be shown one segment's price and then pay for
+  seven.
+- **And say, in the same message, where the evidence stops**: three segments
+  and two seams have been run; a seven-segment chain has not, and what drifts
+  across four, five or six seams — palette, brightness, whether the style
+  anchor survives being re-read that many times — is unmeasured.
+- **Draft one segment first** (see below). On a long track that is the single
+  most useful thing to do before committing the total.
 
 Check the segment length against the model's **minimum** as well — it is 4
 seconds on Seedance 2.5 and differs elsewhere, and `models` prints it. A
@@ -521,23 +543,35 @@ Joined output 854x480, just over 30 seconds of picture.
   of the picture while the song finishes. That is what happened, on a real
   chain product, with the note saying so at the time.
 
-⚠️ **What this run does not license, and it is the part a user is being asked
-to approve.** This file asks a user to say yes to **seven** jobs for a
-three-minute track. Three were run.
+🚨 **What this run does not license, and it is the part a user is being asked
+to approve.** The arithmetic in Step 2 has a three-minute track landing on
+**seven** jobs. Three were run. **Three segments is the verified scale of this
+skill; seven is an untested ceiling**, and the difference belongs in front of
+the user rather than in this section alone — Step 2's table now carries it.
 
-- **Five to seven segments are untested**, and so is everything about what
+- **Four segments and up are untested**, and so is everything about what
   drifts across four, five or six seams — palette, brightness, whether the
   style anchor survives being re-read that many times. Two seams held; that is
-  what was measured.
+  what was measured, and two is not four.
 - **The 10-shot cap was never approached.**
 - **Segments were 10 seconds, not the 20–30 this file's arithmetic normally
-  produces.** A longer segment is a longer single job, not three of these.
+  produces.** A longer segment is a longer single job, not three of these — so
+  even the three-segment result is evidence at a segment length this file
+  rarely recommends.
 - **The audio was a synthesised tone, not music.** Nothing here says how a
   real song sits against these visuals — the model never hears it either way,
-  so what is untested is the *judgement*, not the mechanism.
+  so what is untested is the *judgement*, not the mechanism. It is also why
+  the run cannot speak to the thing a user actually cares about.
 - **480p, and `--generate-audio` was left at the server default** rather than
   set to `false` as this file recommends. The mux replaced the track anyway,
   which is the point of the default rather than a contradiction of it.
+
+**The deliberate decision not to close this gap**, recorded so nobody reopens
+it by accident: generating a full seven-segment chain at the lengths this file
+recommends would cost about $7.70, and the repo owner chose on 2026-09-17 to
+**scope the documentation to the measured scale instead of buying the
+measurement**. That is a cost decision, not a claim that seven segments fail.
+If a real seven-segment run ever happens, this section is where it lands.
 
 The rest of what this file rests on:
 
@@ -556,8 +590,8 @@ The rest of what this file rests on:
 | "Cut density by energy", "sections become segments", the whole mapping from a piece of music to a segment plan | **This skill's own reasoning**, built on the measurements above. The run above exercised the mechanism — segments, seams, mux — and nothing in this repo has yet cut a piece to a real track and judged whether it works as a music video |
 
 Practical consequence: the **pipeline** is no longer the experiment — three
-segments, two seams and the mux have been run. The **scale** still is: five to
-seven segments, 20–30-second segments and a real track have not. Draft one
+segments, two seams and the mux have been run. The **scale** still is: four
+segments and up, 20–30-second segments and a real track have not. Draft one
 segment cheaply, look at it, then price the **whole** chain — segment 1
 included, because the chain regenerates it. The draft is information, not the
 first link.

@@ -2,6 +2,57 @@
 
 All notable changes to the **keyframe-animation** skill. Versioning follows SemVer.
 
+## 1.2.0 — the duration claim is withdrawn; a real subject with text was run
+
+**Documentation only. No flag, default, price, question set or prompt template
+changed.** One section's *advice* is withdrawn rather than corrected, so a
+caller who was following it has to stop.
+
+A third paid job (`1b7a3fab`, 2026-09-17, 5s, 480p, 55 cents) used the first
+A/B pair that is **not** the red square this skill was built on: a real
+photographed product carrying a readable wordmark, left third to right third.
+
+**What a caller has to do differently:**
+
+- 🚨 **Stop telling users the motion arrives early and then holds.** That was
+  this file's "Duration" section, stated flatly, including "if they want the
+  arrival to land on the final frame, it won't". Measured per second as a
+  fraction of total travel:
+
+  | Elapsed | `259c3ce2` (4s) | `1b7a3fab` (5s) |
+  |---|---|---|
+  | 1s | ~53% | 20% |
+  | 2s | ~90% | 51% |
+  | 3s | arrived | 80% |
+  | 4.5s | — | arrived |
+
+  One clip is strongly front-loaded with a quarter of its length as a hold;
+  the other is near-linear and holds for about half a second. **Neither is the
+  model's behaviour** — they are two clips that disagree, on four variables at
+  once (duration, subject, distance, seed), and one sample each cannot
+  attribute the difference. The section is now headed "the easing curve is not
+  a property of the tool". Treat the arrival time as a **draft question**: no
+  clause is known to control it, and now no default is known either. The
+  troubleshooting row that called the early arrival "expected, and measured"
+  now says "possible, not expected".
+- **Do not budget duration around a promised hold.** "A longer clip buys more
+  hold" was the reasoning behind the short-clip default. The default stands;
+  that reason does not.
+
+**What improved, and it is the reason the run was worth 55 cents:**
+
+- **Lettering survives.** The wordmark is intact and legible at every sampled
+  point through the clip, not only at the two supplied ends. The advice to
+  drop the `no on-screen text` AVOID item when your own frames contain
+  lettering was inference; it now has a run behind it.
+- **Both ends honoured on a second input class**, so the one claim this skill
+  most depends on is now three jobs across two pairs — and the only claim that
+  came through the third run unchanged.
+- The evidence section is re-headed "three measured jobs on **two** pairs",
+  and the untested list no longer says "whether the front-loaded easing scales
+  with duration" (which assumed the front-loading and questioned only its
+  scaling) but that the curve itself is unmeasured, at any duration.
+
 ## 1.1.0 — the real-person refusal has an authorised route, and this file said it didn't
 
 Three places in `SKILL.md` told the reader `--real-person true` was untested on

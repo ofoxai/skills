@@ -2,6 +2,67 @@
 
 All notable changes to the **product-image** skill. Versioning follows SemVer.
 
+## 1.1.1 — the set-total "quote it as a floor" warning is withdrawn
+
+**Documentation only. No default, flag, question set, prompt template or
+command changed.**
+
+1.1.0 told callers that on a large source photo the set total should be
+presented as a **floor**, because the 1792x1008 edit anchor was believed to be
+missing its output-token count. That premise was wrong — the numbers were
+recovered and they close the pricing formula exactly — so the estimate does
+not under-quote and never did. A 1792x1008 input now quotes `ROUGH ~$0.0164`
+against a real $0.016249.
+
+**What a caller should do instead:** quote the dry run per image and sum it,
+exactly as this file already said. The source-size point stands and is worth
+keeping for a different reason — **the uploaded picture is the set's cost
+lever**, 74% of a large edit's bill, multiplied by N images. Cropping the
+source to the target ratio before the first call, which this file already
+recommends, cuts every image in the set.
+
+## 1.1.0 — the set claim was run; identity held, framing did not
+
+**Documentation only. No default, flag, question set, prompt template or
+command changed.** The `edit` route is still the route, and the "keep"
+sentence is still the sentence.
+
+This skill shipped having produced no set of its own; every figure in it was
+borrowed. One set was run on 2026-09-17 — three background variants of one
+real 1792x1008 product photograph, the `edit` route, one axis varied, one
+image plainly on white, about 1.6 cents each — and it both confirmed the claim
+the skill exists for and found a limit the file never mentioned.
+
+**Confirmed, and it is the load-bearing one:** the product is the same product
+in all three. Wordmark glyph shapes, letter spacing and relative size; the
+copper knurl; the two polished rings; the brushed grain; the waist taper — all
+identical across the set. Until now that rested on `ofox-image-core` editing a
+UI screenshot without disturbing its text, which is a weaker thing.
+
+**What a caller has to do differently:**
+
+- ⚠️ **Do not promise a grid-aligned set.** The "keep" sentence protects
+  identity; it does **not** hold the product's scale within the frame. The oak
+  image came back visibly larger than the white one and the grey-sweep image
+  slightly narrower — nothing cropped or distorted, just a different size in
+  frame. `--target-aspect` controls the frame's shape and has nothing to say
+  about this, and "do not move or re-frame it" was already in the prompt and
+  did not deliver it. Raise it **at the gate**, and plan to normalise scale in
+  an editor. A new check step 5 says so under "Check the set before you hand
+  it over".
+- ⚠️ **On the edit route with a source larger than 854x480, quote the set's
+  total as a floor.** Measured: a 1792x1008 input quotes
+  `ROUGH UPPER BOUND ~$0.0139` and bills **$0.016249**, because the anchor at
+  that input size is missing its output-token count and the estimator falls
+  back to a smaller point. Four images, ~5.6 cents quoted against ~6.5 billed.
+  Small money in the wrong direction on the number a user says yes to.
+  Cropping the source first — already recommended here — shrinks both the gap
+  and the bill. Detail in `ofox-image-core` 1.12.0.
+
+Still unmeasured, and the file still says so: the **generate** route has no
+set of its own, and three images of one product is not four images of a
+catalogue.
+
 ## 1.0.0 — first release
 
 The second of two **image** scenario skills added on 2026-09-15, and the one
