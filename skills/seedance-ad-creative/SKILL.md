@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.13.3"
+version: "1.13.4"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.13.3"
+  version: "1.13.4"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -859,8 +859,16 @@ both manual steps.
 If the reference image includes an actual person (e.g. a spokesperson or
 model in the shot, not just the product), Seedance 2.5 image-to-video
 refuses it at submission (`input_moderation_failed`, nothing billed).
-`--real-person true` exists for authorised references per the API contract,
-but whether it lifts the refusal on 2.5 is untested here. The
+`--real-person true` **does lift that refusal on 2.5** (measured 2026-09-16).
+It is Ofox's privacy-preserving preprocessing path for real-person references
+the caller is **authorised** to use — an authorisation route, never a way
+past the check: offer it only when the user holds the right to that person's
+likeness and has said so, never as a retry after a refusal, and never set it
+on their behalf. For this skill it is also rarely the answer, because the
+route below gets a model *and* a locked product without it. Evidence and
+every limit on it:
+[`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+→ "`--real-person true` lifts that refusal on 2.5". The
 `--real-person` path validates the image server-side and can fail with
 `bad_data_uri`/`download_failed`/`unreachable`/`not_image`/`too_large` if
 the image isn't a small, valid file the API can use — see the failure table
@@ -1042,7 +1050,11 @@ resolution; each shot is a separately billed job and the run estimates the
 total before spending. `chain` adds one constraint: no photoreal person in
 the carried frame on `bytedance/seedance-2.5` (`input_moderation_failed`), so
 a sequence built around a human model cannot be chained, while product and
-environment shots can. A chain of jobs can each carry timestamped cuts.
+environment shots can. That constraint is measured with the flag unset;
+`--real-person true` is an authorisation claim about a real person the user
+may use, which a model-generated face in a carried frame is not, and no chain
+has been run with it either way — so do not offer it as the way to chain a
+human. A chain of jobs can each carry timestamped cuts.
 
 ## Before you spend: the approval gate
 

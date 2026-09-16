@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.16.0"
+version: "1.16.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.16.0"
+  version: "1.16.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -929,9 +929,17 @@ cropped or padded to that ratio first.
 If the reference image includes an actual person (e.g. a hand modeling a
 ring, a person wearing the product), Seedance 2.5 image-to-video refuses it
 at submission (`input_moderation_failed`, nothing billed). `--real-person
-true` exists for authorised references per the API contract, but whether it
-lifts the refusal on 2.5 is untested here; the reliable route is a photo of
-the product alone. The `--real-person` path validates the image server-side
+true` **does lift that refusal on 2.5** (measured 2026-09-16) — but it is
+Ofox's privacy-preserving preprocessing path for real-person references the
+caller is **authorised** to use, an authorisation route rather than a way
+past the check, so it is offered only when the user holds the right to that
+person's likeness and says so, and never set on their behalf. For a product
+video it is almost never what the job needs: the thing that must be exactly
+right is the object, and the reliable route is still a photo of the product
+alone with any person written into the prompt text. Evidence and limits:
+[`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+→ "`--real-person true` lifts that refusal on 2.5". The `--real-person` path
+validates the image server-side
 and can fail with
 `bad_data_uri`/`download_failed`/`unreachable`/`not_image`/`too_large` if the
 image isn't a small, valid file the API can use — see the failure table
@@ -1346,7 +1354,7 @@ read frames, never a detector count alone` in
 | `--aspect-ratio` | settled by the brief's `Aspect` question (must-ask); `1:1` is the recommended option | e-commerce platforms vary: `1:1` fits most marketplace grids (Amazon, Etsy, Shopify), `4:3` matches older catalog templates, `9:16` suits mobile-first storefronts and TikTok Shop, `16:9` suits a website product-detail page. With a photo attached, don't pass the flag — the photo is cropped or padded to the ratio instead, per `Two ways to attach the photo` above. That holds on every model, for two different reasons: `seedance-2.5` overrides the flag with `adaptive`, and another model defaults to `adaptive` precisely because you left the flag off (pass it there and it is honoured, which is not what this route wants). On the text-only route the flag really does decide the frame: `16:9` in, exactly 1280x720 out, measured on this scenario's own clips |
 | Motion | camera orbits, product still — **written as timestamped waypoint pictures**: two interior views, each carrying its own shot size, and **no closing return inside the move** | *Which* motion comes from the gallery: every rotation there is written as camera movement or as a hand turning the product, and none writes a fixed-camera turntable — which now has one run of its own (job `dc02f604`, t2v, 5s): the product turned on its vertical axis with the camera fixed, and covered a quarter to a third of a turn against "most of one turn" asked for, so a 5-second clip cannot deliver a full 360 on either route. *How to write it* is measured rather than inferred, and the default would not survive without it: `the camera orbits ... a full 360 degrees` produced no orbit at all (job `1cf5ac46-058f-4615-a47b-067743f76f8c`), and the same prompt at the same seed with the angles written out as pictures produced a camera that moved (job `50f623b2-c54a-4d9d-9646-31dd06e2a926`). Three things are settled on top of that by a third, independent clip (job `8efeb556-bf38-45ec-940b-a792ef74bfcf`): a **shot size on every waypoint** kept the whole product in frame there, where an unstated one inherits the previous segment's macro closeness — ⚠️ though a fourth clip stated it and inherited a macro anyway (`cb6b7870`), so treat it as necessary and not sufficient and put a widening shot after a cut; the move covers about **half a turn** and stops, measured frame by frame; and a written return to the opening view **does not bring the camera home**, so that view belongs in the next segment after the cut. **Spacing** stays approximate — an interior view can arrive late or be absorbed, so no angle should be planned to land on a given second. Write each view as an appearance description rather than a camera position, which is reasoning from clip B's confound rather than a measurement. See "3. Camera motion: waypoint pictures, not a camera verb" and "4. A timestamp orders the pictures; it does not schedule them" |
 | `--generate-audio` | `false` (this scenario's default) | a silent product clip needs no audio track; this **overrides** the server's `generate_audio: true` default, unlike `seedance-short-drama`/`seedance-ad-creative` which leave audio on. Verified against `ofox-video-core`'s script: `--generate-audio false` sets `generate_audio: false` directly on the request — and measured end to end on all three of this scenario's clips, whose delivered files carry **no audio stream at all**, not a silent one. The one exception is the out-of-scope presenter clip, which left the flag off and took the server's `true` default; if a clip has spoken lines, this default is the wrong one and has to be dropped rather than set to `true` — omitting the flag is enough. |
-| `--real-person` | leave unset (`false`) | Seedance 2.5 image-to-video refuses photoreal people at submission; whether `true` lifts that on 2.5 is untested — prefer a photo of the product alone |
+| `--real-person` | leave unset (`false`) | Seedance 2.5 image-to-video refuses photoreal people at submission. `true` is Ofox's privacy-preserving preprocessing path for **authorised** real-person references and was measured lifting that refusal on 2.5 (2026-09-16) — an authorisation route, never a way past the check, only offered when the user holds the right to the likeness and has said so. This scenario rarely wants it anyway: a photo of the product alone locks what actually has to be right, and a person can be written in text. See [`api-params.md`](../ofox-video-core/references/api-params.md) → "`--real-person true` lifts that refusal on 2.5" |
 
 ## Choosing a video model
 
@@ -1730,7 +1738,7 @@ plus the product-video-specific ones:
 | Exit `1`, `references_conflict` | `--frame-first-image` and an `input_references` array in `--extra-json` in the same job | Pick one meaning — first frame, or identity references — and drop the other |
 | Exit `2` | `curl`/`jq` missing, or `OFOX_API_KEY` not set | Re-run `ofox-video-core`'s `check` and follow its install/signup guidance |
 | Exit `3`, `error.code: insufficient_credits` | Ofox balance too low | No charge was made; the user needs to add credits at `https://app.ofox.ai` before retrying |
-| Exit `3`, `error.code: input_moderation_failed` on an image-to-video job | The reference photo contains a photoreal person (a hand, a model) — refused at submission on Seedance 2.5, nothing billed | Use a photo of the product alone, or crop the person out; `--real-person true` is untested on 2.5 |
+| Exit `3`, `error.code: input_moderation_failed` on an image-to-video job | The reference photo contains a photoreal person (a hand, a model) — refused at submission on Seedance 2.5, nothing billed | Use a photo of the product alone, or crop the person out. Do **not** retry with `--real-person true`: it does lift this refusal on 2.5, but it asserts that the user holds the rights to that likeness, so it is never an error-recovery step — and here the product photo is the better fix anyway |
 | Exit `3`, job ends `failed`, or `invalid_request` on create, with no other error code hint | Likely a moderation rejection: a reference photo showing someone else's trademarked packaging/logo without rights, or a prohibited product category, is commonly rejected | Remove or crop the flagged trademark/brand element from the reference photo or prompt, then call `generate` again — this is a **new** request, not a resubmission of the failed one, so it's safe to retry immediately |
 | Exit `3`, job ends `failed`, `error.code: output_moderation_failed` | The generated **output** failed a post-generation content check — happens after the job ran, not at submission. Not billed (no `usage` field on the response) | Retry with a brand-new `generate` call using a different prompt or reference photo — a new request, not a resubmission of the failed one, so it's safe |
 | `bad_data_uri` / `download_failed` / `unreachable` / `not_image` / `too_large` | `api-params.md` documents these as `real_person: true` image-validation failures, raised when Ofox fetches the reference image: it isn't a small, valid image the API can use (a remote URL that isn't publicly reachable, or a local file that failed to read/encode) | Prefer a local file (auto-base64'd, more reliable than some remote URLs — see above); confirm it's a real image file under the size limit and retry |

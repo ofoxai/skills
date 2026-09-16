@@ -4,6 +4,28 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.16.1 — the real-person flag is measured; two rows and a paragraph said otherwise
+
+**Documentation only. No default, price, prompt template or behaviour
+changed.**
+
+The "Two ways to attach the photo" paragraph, the defaults table's
+`--real-person` row and the `input_moderation_failed` troubleshooting row all
+said it was untested whether `--real-person true` lifts Seedance 2.5's
+refusal. It was measured lifting it on 2026-09-16, and all three now say so —
+while saying what the flag actually is: Ofox's privacy-preserving
+preprocessing path for **authorised** real-person references, an
+authorisation route rather than a way past the check, offered only when the
+user holds the right to that likeness and never set on their behalf. The
+evidence and every limit on it are linked to `ofox-video-core`'s
+`references/api-params.md` rather than restated here.
+
+**The recommendation is unchanged, and that is the point.** For a product
+video the thing that has to be exactly right is the object: attach a photo of
+the product alone and write any person into the prompt text. The
+troubleshooting row in particular now warns *against* reaching for the flag as
+a retry — a refusal is a question about rights, not an error to route around.
+
 ## 1.16.0 — the turntable has been run: it works, and its speed does not listen
 
 1.15.2 added a warning to the one skip row that pointed at an option nobody

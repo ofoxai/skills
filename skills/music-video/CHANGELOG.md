@@ -2,6 +2,30 @@
 
 All notable changes to the **music-video** skill. Versioning follows SemVer.
 
+## 1.1.1 — a measured flag, a wall that stands anyway, and the difference stated
+
+**Documentation only. No default, price, prompt template or behaviour
+changed.**
+
+The defaults table's `--real-person` row said "untested on this model in this
+repo". It was measured on 2026-09-16 lifting `bytedance/seedance-2.5`'s
+refusal of a real-person reference image, and the row now says so, with the
+framing that matters: an authorisation route for references the user is
+**authorised** to use, never a way past the check. Linked to
+`ofox-video-core`'s `references/api-params.md` rather than restated.
+
+**The performer wall does not move, and the new paragraph in "Performers"
+exists to stop anyone assuming it does.** `chain` would pass the flag through
+to every segment, so the question is live — but the flag asserts a right to a
+**real** person's likeness, and the face in a carried closing frame is one the
+model invented in the previous segment. On top of that, no chain has ever been
+run with it set. Reaching for it here would invent an authorisation and a
+measurement at the same time.
+
+The performer table's "no on this model, by any route here" is now "no by any
+route measured here" — the same answer, without claiming to have checked
+routes nobody has run.
+
 ## 1.1.0 — the pipeline has been run end to end, and the scale has not
 
 **One paid run, 2026-09-16, and it is the first chain past two shots in this

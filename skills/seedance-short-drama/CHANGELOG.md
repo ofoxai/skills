@@ -4,6 +4,34 @@ All notable changes to the **seedance-short-drama** skill. Versioning follows Se
 
 This file starts at 1.0.3; earlier versions predate it.
 
+## 1.13.3 — this file was still calling a measured flag untested
+
+**Documentation only. No default, price, prompt template or behaviour
+changed.**
+
+Four places in this file said `--real-person true` was untested on
+`bytedance/seedance-2.5`. It was measured on 2026-09-16 — a single-variable
+A/B — and it **lifts** the submission refusal. Those four are corrected: the
+"Reference images and real people" bullet, the defaults table row, the
+`input_moderation_failed` troubleshooting row, and the "When NOT to use"
+entry about animating a real person's photo.
+
+The correction is deliberately not a green light. Every one of them now says
+the same two things: the flag is Ofox's privacy-preserving preprocessing path
+for **authorised** real-person references — an authorisation route, never a
+way past the check, never a retry after a refusal, never set on a user's
+behalf — and what was measured is one short single-frame clip at one tier on a
+synthetic portrait, which is nothing like a drama carrying one face across a
+shot list. The evidence and its limits live in `ofox-video-core`'s
+`references/api-params.md` and are linked rather than copied, so there is one
+place to correct next time.
+
+**What did not change, and why it is worth naming.** The identity-reference
+bullet (`input_references` with a real person, untested either way) is about a
+different route and is still true. The text route stays this skill's answer
+for character consistency — the measurement moved a wall, not this skill's
+default.
+
 ## 1.13.2 — routing against two new neighbours
 
 **Documentation only. No flag, default, price, prompt template or behaviour

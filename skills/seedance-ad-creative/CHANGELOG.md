@@ -4,6 +4,33 @@ All notable changes to the **seedance-ad-creative** skill. Versioning follows Se
 
 This file starts at 1.0.4; earlier versions predate it.
 
+## 1.13.4 — found by a grep this file should have been in from the start
+
+**Documentation only. No default, price, prompt template or behaviour
+changed.**
+
+The reference-image paragraph said `--real-person true` was untested on
+`bytedance/seedance-2.5`. It was measured on 2026-09-16 and it **lifts** the
+submission refusal. The paragraph now says that, with the framing that
+matters: the flag is Ofox's privacy-preserving preprocessing path for
+**authorised** real-person references — an authorisation claim, never a way
+past the check, never a retry after a refusal, never set on a user's behalf.
+Evidence and limits are linked to `ofox-video-core`'s
+`references/api-params.md` rather than copied in.
+
+This skill was **not** on the list of files to fix. The list was assembled
+from memory of which files had said it; this one turned up only when the
+search was run across the repo with a pattern that could cross a line break.
+That is the lesson worth keeping: the scope of a writeback is decided by a
+search, not by recall.
+
+**The route this skill recommends is untouched**, and it is still the better
+one: attach a frame of the product alone and write the model into the
+timeline as text. The `chain` constraint gains a clarification instead of a
+loophole — the flag is an assertion about a **real** person the user may use,
+which a face the model invented in the previous segment is not, and no chain
+has been run with it set.
+
 ## 1.13.3 — the UGC-variant table told you to say where the phone is
 
 **Documentation only. No flag, default, price or behaviour changed.**

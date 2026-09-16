@@ -2,6 +2,26 @@
 
 All notable changes to the **explainer** skill. Versioning follows SemVer.
 
+## 1.1.1 — the defaults table called a measured flag untested
+
+**Documentation only. No default, price, prompt template or behaviour
+changed.**
+
+The `--real-person` row said "untested on this model in this repo". It was
+measured on 2026-09-16 lifting `bytedance/seedance-2.5`'s refusal of a
+real-person reference image. The row now says so, names the flag for what it
+is — Ofox's privacy-preserving preprocessing path for **authorised**
+real-person references, an authorisation route rather than a way past a check
+— and links `ofox-video-core`'s `references/api-params.md` for the evidence
+and its limits.
+
+The advice itself does not move: this skill's presenter is written in text, a
+text-generated person was never what the refusal was about, and a skill whose
+presenter comes from a photograph is `talking-head`. The continuity table's
+"a portrait re-attached to each job is `talking-head`'s route, and its own
+continuity is unmeasured" is a claim about a different thing — whether a face
+holds across jobs — and nothing has measured that, so it stands as written.
+
 ## 1.1.0 — the number this skill is built on is no longer an extrapolation
 
 **One paid run, and it was aimed at the one claim that mattered.** Job

@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), for one person addressing the viewer rather than another character — a script read from a supplied portrait is talking-head, an idea pulled out of an article is explainer — or for anything not involving people/dialogue.
 license: MIT
-version: "1.13.2"
+version: "1.13.3"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.13.2"
+  version: "1.13.3"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -630,7 +630,7 @@ Natural blinks and breath, real skin texture, mouth matched to English. No prese
 ### Reference images and real people
 
 Both meanings of an attached image ("Reference assets as visual anchors" in
-the shared file) meet the same wall in this scenario:
+the shared file) run into the same check in this scenario:
 
 - `--frame-first-image` / `--frame-last-image` with a photoreal person is
   refused by `bytedance/seedance-2.5` at submission
@@ -638,21 +638,40 @@ the shared file) meet the same wall in this scenario:
 - The identity-reference route (`input_references` through `--extra-json`)
   has **not been tested with a real person in this repo either way** — do not
   assume it passes.
-- `--real-person true` is the documented path for authorised likenesses on
-  `bytedance/seedance-2.0`; whether it lifts the refusal on 2.5 is **untested
-  here** (`../ofox-video-core/references/api-params.md`).
+- `--real-person true` **does lift that refusal on 2.5** — measured
+  2026-09-16. It is Ofox's privacy-preserving preprocessing path for
+  real-person references the caller is **authorised** to use: an
+  authorisation route, never a way past the check. Offer it only when the
+  user holds the right to that person's likeness and has said so, never as a
+  retry after a refusal, and never set it on their behalf. Evidence and every
+  limit on it:
+  [`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+  → "`--real-person true` lifts that refusal on 2.5".
 
-So a short-drama character's consistency across jobs is text: the same
+**That opens a door this scenario has not walked through.** What was measured
+is a single 4-second 480p image-to-video job on one first frame, with a
+*synthetic* portrait, on `byteplus`. A short drama is the opposite shape:
+several shots, minutes of screen time, the same face required in every one of
+them, and — if the user brings a photograph — a real person rather than a
+generated one. Nothing here has measured a face holding across two jobs, so
+the default stands.
+
+A short-drama character's consistency across jobs is text: the same
 appearance block word for word, plus the `CONSISTENCY` line. If a user
 attaches a photo of a real person anyway, say what will happen before
-spending anything, and confirm they have rights to the likeness.
+spending anything, and confirm they have rights to the likeness — which is
+the same precondition the flag asserts, and the reason it is a conversation
+rather than a setting.
 
 ### Continuing a scene across jobs, when no frame can be attached
 
-The refusal above closes the frame route for this scenario specifically: the
-rest of the repo continues a clip by attaching its last frame, and a
-photoreal person cannot be attached at all. So when scene 3 has to open where
-scene 2 closed, the only instrument left is **the words route** — case 44's
+The refusal above closes the frame route for this scenario in practice: the
+rest of the repo continues a clip by attaching its last frame, and a frame
+holding a photoreal person is refused unless the caller asserts the rights to
+that likeness — which is a claim about a real person, not something an agent
+makes on a user's behalf, and which no measurement here has taken past one
+4-second clip. So when scene 3 has to open where scene 2 closed, the
+instrument to reach for is **the words route** — case 44's
 continuity block, described and measured under "Continuing a previous clip:
 the frame route and the words route" in
 `../ofox-video-core/references/prompt-structure.md`. Load that subsection; the
@@ -699,7 +718,7 @@ one.
 | `--resolution` | `720p` — a `seedance-2.5`/`wan-3.0-prime` value. On `minimax/hailuo-3` use `768p`: that model has no `720p` tier | realistic detail on faces and lip movement at a reasonable cost; `1080p` only for a hero shot the user will publish |
 | `--aspect-ratio` | whatever the brief's `Aspect` answer was; `9:16` when that question was skipped, delegated or never asked | short drama is consumed vertically on mobile feeds. Note the gallery's own short-drama sample skews landscape — 5 of the 6 cases that state a ratio are 16:9 (1, 2, 3, 7, 8) — so the default is about the audience, not about what the gallery did |
 | `--generate-audio` | `true` (server default, no flag needed) | dialogue needs an audio track — never set this `false` for a scene with spoken lines |
-| `--real-person` | leave unset (`false`) | see "Reference images and real people" — a text-described character does not need it, and its effect on 2.5 is untested |
+| `--real-person` | leave unset (`false`) — **unless the user holds the right to the likeness in an attached photo and has said so** | see "Reference images and real people". A text-described character never needs it. `true` is Ofox's privacy-preserving preprocessing path for **authorised** real-person references, measured lifting 2.5's refusal on 2026-09-16 — an authorisation route, never a way past the check, and never set on a user's behalf. What was measured is one 4s 480p first-frame job on a synthetic portrait; a multi-shot drama carrying a real face is outside it. See [`api-params.md`](../ofox-video-core/references/api-params.md) → "`--real-person true` lifts that refusal on 2.5" |
 
 Always confirm the actual duration/aspect ratio with the user's request first
 (e.g. "15 seconds" in the trigger example overrides the 10s default).
@@ -962,7 +981,7 @@ plus the short-drama-specific ones:
 | Exit `1`, no network call made | Bad `--duration`/`--resolution`/`--aspect-ratio`, or missing `--prompt` | Fix the flag per the error message and re-run `generate` — free to retry, nothing was submitted |
 | Exit `2` | `curl`/`jq` missing, or `OFOX_API_KEY` not set | Re-run `ofox-video-core`'s `check` and follow its install/signup guidance |
 | Exit `3`, `error.code: insufficient_credits` | Ofox balance too low | No charge was made; the user needs to add credits at `https://app.ofox.ai` before retrying |
-| Exit `3`, `error.code: input_moderation_failed` on create | An attached frame contains a real person — refused at submission, nothing billed | Drop the image and carry the character in text (see "Reference images and real people"); `--real-person true` is untested on 2.5 |
+| Exit `3`, `error.code: input_moderation_failed` on create | An attached frame contains a real person — refused at submission, nothing billed | Drop the image and carry the character in text (see "Reference images and real people"). Do **not** reach for `--real-person true` as the retry: it lifts this refusal on 2.5, but it is how a caller asserts they hold the rights to that likeness, so it belongs to a conversation with the user, never to error recovery |
 | Exit `3`, job ends `failed`, or `invalid_request` on create, with no other error code hint | Likely a moderation rejection: prompts describing real/identifiable public figures, sexual content, or graphic violence are commonly rejected before or during generation | Rewrite the prompt: use a generic character description instead of naming a real person, tone down graphic detail, then call `generate` again — this is a **new** request with a new prompt, not a resubmission of the failed one, so it's safe to retry immediately |
 | The clip renders exactly as written and still looks like nothing — held frames spliced together, no reason to keep watching | Every shot 5s or longer, every `CAMERA` movement static, and every boundary a bare hard cut: the slowest point of "Shot density — pick a register, then count", reached by writing the template's defaults instead of choosing a register | Re-ask the brief's `Camera` question, take the register the beat actually wants, then rewrite: more shots at 2–3s, or one travelling take, and a named transition kind at each boundary. This is a new prompt, so it is a new cost table |
 | Generated speech sounds rushed, garbled, or cut off | Too many words for the clip's tier — see "Dialogue budget — two tiers" | Extend `--duration` (within 4–30s) or trim the lines; never compress the delivery |
@@ -989,9 +1008,11 @@ plus the short-drama-specific ones:
   release note.
 - The user wants to animate an existing photo of a real person (a specific
   actor/likeness) rather than a described fictional character — Seedance 2.5
-  refuses real-person frames; `--real-person true` is untested on 2.5. Say
-  so before anything is spent, and confirm the user has rights to the
-  likeness before trying.
+  refuses real-person frames unless `--real-person true` asserts the rights to
+  the likeness, and what that has been measured doing is one short
+  single-frame clip, not a drama's worth of shots holding one face.
+  `talking-head` owns the portrait route. Say all of this before anything is
+  spent, and settle the rights question with the user rather than around it.
 - Stitching several generated clips into one file — this skill produces
   individual jobs (each of which may hold a few hard-cut shots); joining
   jobs is an external editing step.

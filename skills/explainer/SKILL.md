@@ -2,11 +2,11 @@
 name: explainer
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn an article, doc or release note into a short explainer clip — one person to camera, or a voiceover over illustrative footage. The user supplies the source text and the model generates the speech; audio cannot be uploaded, measured. A 30-second clip holds about ninety spoken words — under a tenth of a 1,200-word post — so this skill does not summarise an article, it picks the single idea worth saying and helps choose which one. Use when a user asks to turn writing into a short spoken video, e.g. "make a 30-second explainer from this blog post", "explain this feature in a short video", "turn our changelog into a clip", "a quick video explaining what this paper found". Do not use for a scene between people (see seedance-short-drama), a brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the user already has both a portrait and the finished words (see talking-head).
 license: MIT
-version: "1.1.0"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/explainer
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -532,7 +532,7 @@ bill, the words decide what you pay for.
 | `--generate-audio` | leave at the server default (`true`) | the speech is the deliverable |
 | `--seed` | let the script roll one and keep it | printed as `SEED` and written to the `.json` sidecar. It does **not** reproduce a take — measured, an identical request on a fixed seed came back a visibly different clip — so a re-render is another roll aimed at the same shot. Say that before the user pays for one |
 | `--frame-first-image` | unset, unless a prepared title card or screenshot is the opening frame | the only route to correct lettering; it also fixes the clip's shape to the image's |
-| `--real-person` | leave unset | untested on this model in this repo, and nothing here needs it |
+| `--real-person` | leave unset | nothing in this skill needs it — the presenter is written in text, and text-generated people are not what the refusal is about. `true` is Ofox's privacy-preserving preprocessing path for **authorised** real-person *reference images*, measured lifting seedance-2.5's refusal on 2026-09-16; it is an authorisation route, never a way past the check, and a skill whose presenter comes from a photo is `talking-head`, not this one. See [`api-params.md`](../ofox-video-core/references/api-params.md) → "`--real-person true` lifts that refusal on 2.5" |
 
 ## Choosing a model
 

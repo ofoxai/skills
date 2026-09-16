@@ -2,11 +2,11 @@
 name: ugc-ads
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a handheld, phone-shot UGC clip — imperfect framing, one practical light, vertical, no cinematic grading, no beauty filter. It inverts the polish every other video skill here defaults to — a UGC clip that looks like an ad has failed. Use when a user wants a video that reads as filmed by a real customer rather than by an agency, e.g. "a real-looking phone unboxing of this product", "a creator first-impression clip for TikTok", "an honest review video, nothing slick", or "make it look like a customer shot it". Do not use for a polished brand ad (see seedance-ad-creative), plain catalog footage (see seedance-product-video), a dialogue scene between people (see seedance-short-drama), or a set of cheap vertical drafts to choose from (see shorts-reels).
 license: MIT
-version: "1.0.1"
+version: "1.0.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ugc-ads
 metadata:
   author: ofoxai
-  version: "1.0.1"
+  version: "1.0.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -383,7 +383,12 @@ less restrictive than they first look:
 
 - **A photoreal person in an attached frame is refused at submission** on
   `bytedance/seedance-2.5` (`input_moderation_failed`, nothing billed). It is
-  a rule about the picture you attach.
+  a rule about the picture you attach. `--real-person true` lifts it —
+  measured 2026-09-16 — but as an **authorisation** claim about a likeness
+  the user has the right to use, not as a way past the check, so it is a
+  question for the user and never a flag an agent adds:
+  [`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+  → "`--real-person true` lifts that refusal on 2.5".
 - **A photoreal person generated from the prompt text is fine.** Several
   20–30 second text-to-video jobs built entirely around people have completed
   in this repo.
@@ -564,7 +569,7 @@ over the clip.
 | `--generate-audio` | leave at the server default (`true`) | room tone and action sounds are half of what makes it read as real |
 | `--seed` | let the script roll one and keep it | printed as `SEED` and written to the `.json` sidecar, which is what lets "that take, rendered properly" be re-submitted at all. It does **not** reproduce it: measured, an identical request on a fixed seed came back a visibly different clip. Say a re-render is another roll aimed at the same shot before the user pays for it |
 | `--frame-first-image` | only when a product photo exists, and only if it contains no person | the measured product-lock route; see "People, products and what the API refuses" |
-| `--real-person` | leave unset | untested on `bytedance/seedance-2.5` in this repo |
+| `--real-person` | leave unset | this skill's route does not need it — the product is the attached frame and the person is written in text. `true` is Ofox's privacy-preserving preprocessing path for **authorised** real-person reference images, measured lifting seedance-2.5's submission refusal on 2026-09-16: an authorisation route, never a way past the check, only offered when the user holds the right to that likeness and has said so, and never set on their behalf. See [`api-params.md`](../ofox-video-core/references/api-params.md) → "`--real-person true` lifts that refusal on 2.5" |
 
 ## Choosing a model
 

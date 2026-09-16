@@ -2,11 +2,11 @@
 name: music-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus the music file the finished video must carry. Your audio never reaches the API (measured) — the visuals are written to the track's tempo, mood and sections, then your own file is laid on locally at zero cost. One job caps at 30 seconds, so a three-minute song is six jobs minimum and the cost table says that before anything is spent. Use when a user has a specific piece of music and wants visuals for it, e.g. "make a music video for this track", "visuals for my song", "an MV for this instrumental", "generate footage cut to this beat". Do not use for cheap vertical social drafts (shorts-reels), a brand film that happens to have a music bed (seedance-ad-creative), or when there is no particular audio file the finished video has to carry.
 license: MIT
-version: "1.1.0"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/music-video
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -682,7 +682,7 @@ frame**, because that is the picture the next job attaches.
 | illustration, anime, a non-photoreal character | **yes** — an anime pair passed as an attached frame completed |
 | a photoreal person written in text, **who has left the frame before the segment ends** | **yes** — this is the measured route above, applied per segment. It is also the fiddliest thing in this file: every segment has to be written to end on the place rather than on the person |
 | a photoreal person **still in shot at the segment's last frame** | **no** on this model. The chain stops at the next submission, unbilled — the segments before it are kept and paid for |
-| **the same** photoreal performer across the whole piece | **no** on this model, by any route here. Each job generates its person fresh, and the mechanism that would carry them is the refused one |
+| **the same** photoreal performer across the whole piece | **no** by any route measured here. Each job generates its person fresh, and the mechanism that would carry them is the refused one |
 
 So a piece that needs a performer has four honest options: write them in and
 end every segment on the set (they will not be the same person from segment to
@@ -691,6 +691,16 @@ drop the performer and let the piece be about the place; or use a different
 model — and note that two other models have been measured accepting a
 real-person portrait for image-to-video, while **their `chain` behaviour has
 never been tested in this repo.** Do not promise it.
+
+**One thing that is measured and still does not change the table above.**
+`--real-person true` lifts seedance-2.5's submission refusal (2026-09-16 —
+[`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
+→ "`--real-person true` lifts that refusal on 2.5"), and `chain` would pass
+the flag through to every segment. It is not a route out of this wall, for two
+separate reasons: the flag is how a caller asserts they hold the rights to a
+**real person's** likeness, which a face the model invented in the previous
+segment is not, and no chain has ever been run with it set. Offering it here
+would be inventing an authorisation and a measurement at once.
 
 ## The prompt template
 
@@ -890,7 +900,7 @@ one to put in front of anyone.
 | `--shot` | **one per segment, always** | the only safe way to pass a multi-line prompt. See the rule in "Step 4" |
 | `--shots-file` | **never in this skill** | it reads one prompt per line, so a nine-line templated prompt becomes nine separately billed jobs. The core rejects the labelled shape and cannot catch a prose-lined one |
 | `--no-concat` | not passed | the join is what you mux onto. Skip it only if the segments are going into an editor individually |
-| `--real-person` | leave unset | untested on this model in this repo, and nothing here needs it |
+| `--real-person` | leave unset | nothing in this skill's route needs it, and `chain` has never been run with it either way. `true` is Ofox's privacy-preserving preprocessing path for **authorised** real-person reference images, measured lifting seedance-2.5's submission refusal on 2026-09-16 — an authorisation route, never a way past the check, and never set on a user's behalf. See [`api-params.md`](../ofox-video-core/references/api-params.md) → "`--real-person true` lifts that refusal on 2.5" |
 
 ## Step 4: generating, then the audio
 

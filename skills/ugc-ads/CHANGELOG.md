@@ -2,6 +2,25 @@
 
 All notable changes to the **ugc-ads** skill. Versioning follows SemVer.
 
+## 1.0.2 — the real-person flag is measured, and two places here said it was not
+
+**Documentation only. No default, price, prompt template or behaviour
+changed.**
+
+"People, products and what the API refuses" and the defaults table's
+`--real-person` row both treated the flag as untested on
+`bytedance/seedance-2.5`. It was measured on 2026-09-16 and it **lifts** the
+submission refusal of a real-person reference image. Both now say that, and
+both say what it is: Ofox's privacy-preserving preprocessing path for
+**authorised** real-person references — a question for the user about rights
+to a likeness, never a flag an agent adds to make a job go through, and never
+a retry after a refusal. `ofox-video-core`'s `references/api-params.md` holds
+the evidence and its limits; they are linked, not copied.
+
+The split this skill is built on is unchanged and still the recommended
+route: the product goes in the attached frame with no person in it, and the
+creator is written in the prompt text.
+
 ## 1.0.1 — the frontmatter did not parse, and the installer said nothing
 
 The `description` carried a `: ` (colon then space) inside an unquoted YAML
