@@ -2,11 +2,11 @@
 name: explainer
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn an article, doc or release note into a short explainer clip — one person to camera, or a voiceover over illustrative footage. The user supplies the source text and the model generates the speech; audio cannot be uploaded, measured. A 30-second clip holds about ninety spoken words — under a tenth of a 1,200-word post — so this skill does not summarise an article, it picks the single idea worth saying and helps choose which one. Use when a user asks to turn writing into a short spoken video, e.g. "make a 30-second explainer from this blog post", "explain this feature in a short video", "turn our changelog into a clip", "a quick video explaining what this paper found". Do not use for a scene between people (see seedance-short-drama), a brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the user already has both a portrait and the finished words (see talking-head).
 license: MIT
-version: "1.0.0"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/explainer
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -52,10 +52,12 @@ the first reply rather than after the bill.
 
 ### A thirty-second clip holds about ninety spoken words
 
-The measured word rates and their gallery cases live in the shared file —
+The two word-rate tiers and the gallery cases behind them live in the shared
+file —
 [`prompt-structure.md`](../ofox-video-core/references/prompt-structure.md) →
 "Dialogue and sound" → "Density — two tiers, not one" — and are not restated
-here. **The tier that applies to an explainer is monologue / talking head** —
+here; what this skill has measured on this API is below. **The tier that
+applies to an explainer is monologue / talking head** —
 one person speaking continuously — at 3.5 words a second in English and 5
 characters a second in Chinese. The other tier, dialogue drama at 0.4–1.7
 words/s, measures a different shape: two people, with silence between their
@@ -80,11 +82,40 @@ the same prompt. The asymmetry settles which way to round: under-filling costs
 a pause at the end, and overrunning comes back rushed, garbled or cut off,
 which costs the whole clip.
 
-**What kind of evidence this is.** Both tiers are counts of *gallery prompt
-text* against clip length, not of what this API delivered — see the table in
-"Before anyone pays" for how strong that is. The corpus is a Seedance 2.5
-collection and this skill's default is Seedance 2.5, so at least the model
-matches.
+**What kind of evidence this is — and the rate this file plans at is now its
+own model's.** Both tiers started as counts of *gallery prompt text* against
+clip length: real prompts and published clips, but unrecorded platforms and
+parameters, and no measurement of what this API delivers. That is still what
+the **3.5 / 5 ceiling** is. The **3 words a second this file budgets at** is
+no longer one of them: measured 2026-09-16 on this skill's own first paid run,
+`bytedance/seedance-2.5` delivered **3.05 words a second** — 59 scripted words
+across a 19.33-second speech span, every word spoken, nothing dropped. At 3.05
+a second a 30-second clip holds 91.5 words, which is the row the whole skill
+rests on.
+
+**Until that run this was an extrapolation across tiers, and that is a mistake
+this repo has already made once.** Every word rate measured here before today
+came from *two-person dialogue*, and handing the dialogue band to a continuous
+speaker is a category error rather than a conservative estimate — the dialogue
+tier's low floor is not somebody talking slowly, it is words spread across a
+clip where most seconds have nobody speaking at all. `talking-head` shipped
+that error and had to correct it. The monologue tier now has measurements of
+its own instead.
+
+**Two models, two rates, and that is two observations rather than a law.**
+`talking-head`'s first paid run measured **3.16 words a second** on
+`alibaba/wan-3.0-prime` (2026-09-16); this skill's measured **3.05** on
+`bytedance/seedance-2.5` the same day. They are close to each other and both
+sit just above the 3 a second both files plan at, which is the reassuring
+direction. But neither has been repeated, they are different scripts at
+different lengths on different models, and nothing has been measured in
+another language or at another resolution. Read them as two reasons to keep
+planning at 3 — not as a rate this API is known to hold to.
+
+⚠️ **Thirty seconds itself has not been run.** The measurement above is a
+**20-second** clip, and the 90-word row is that observation extended linearly.
+That is a reasonable assumption and it is still an assumption; the bounds are
+in "Before anyone pays" below.
 
 ### So the product is one idea, said once
 
@@ -165,21 +196,56 @@ the clip carries that one and not the post.
 
 ## Before anyone pays: what is measured here, and what is not
 
-**This skill has no paid run of its own.** Nothing has been generated from
-this file's template and no clip has been read against it. What it rests on:
+**This skill has one paid run of its own, and it settled the number the whole
+file is built on.** Job `edef379e-9ac0-41c9-ab59-6378d030239e`, 2026-09-16,
+`bytedance/seedance-2.5` on `byteplus`, **20 seconds at 480p**, seed
+`623333235`, text-to-video with nothing attached, `--generate-audio` left at
+the server default so the speech came back on the track, 2 dollars 20. The
+script was a 59-word presenter-to-camera monologue written from this file's
+own template, and the delivered clip was read afterwards — the audio measured
+and transcribed — rather than called done at `STATUS completed`.
+
+### The first run — 2026-09-16
+
+| Question | Measured | How |
+|---|---|---|
+| **Speech rate** | **3.05 words a second** | 59 words across a 19.33s speech span. `silencedetect` at -30dB puts the first word at 0.399s and the last at 19.729s, with 7 internal pauses. 3.05 x 30 = 91.5, so "about ninety words in thirty seconds" holds |
+| **Truncation** | **None** | A `whisper tiny.en` transcription returns all 59 words, in order, with nothing added or dropped |
+| **The closing beat** | **It fitted** | 0.335s of silence between the last word and the last frame, on a script budgeted at almost exactly 3 words a second. The template asks for that beat and the clip had room for it — under-filling by a hair is what bought it |
+| **Whether a 30-second clip behaves the same** | **Not measured** | The run is 20 seconds. The 90-word row is that observation extended linearly |
+
+⚠️ **One measurement here was nearly reported backwards, which is worth
+knowing before repeating it.** A first pass with `silencedetect` at a 0.35s
+minimum found no trailing silence, and the tempting reading was "a script at 3
+words a second squeezes the closing beat out". Wrong: the beat is plainly
+there in the frames — mouth closed, expression held — and the pause is 0.335s,
+sitting just under the threshold that was looking for it. A tool not reporting
+something is not the thing not happening. Check that the threshold can see the
+size of the thing you are asking about before concluding from its silence.
+
+**What that run does not establish:** one run, one script, English, 480p, 20
+seconds, presenter-to-camera. A faster or slower script, another language,
+another resolution, the voiceover shape and any duration past 20 seconds are
+all still unmeasured here.
+
+The rest of what this file rests on:
 
 | Claim | Strength |
 |---|---|
+| The monologue word rate this skill budgets against — **3 words a second** in English | **Measured** on this model, once, at 20 seconds: 3.05 w/s (above). `talking-head` measured 3.16 w/s on `alibaba/wan-3.0-prime` the same day, so there are two observations on two models rather than one — close together, both a little above the budget, and neither repeated |
 | A supplied audio track does not become the clip's audio | **Measured**, job `d8561509-dcc6-4f2c-8864-a193cd239b14`, 55 cents, 2026-09-15 — the input was near-continuous speech, the delivered track was sparse, correlation 0.41. The model generates its own voice |
-| The model renders a photoreal person speaking, from text alone | **Measured**, five `bytedance/seedance-2.5` text-to-video jobs of 20–30 seconds built entirely around photoreal people, all completed, four of them carrying spoken lines. What was checked on those runs was the picture and the timing; nobody transcribed the audio against the script |
+| The model renders a photoreal person speaking, from text alone | **Measured**, six `bytedance/seedance-2.5` text-to-video jobs of 20–30 seconds built entirely around photoreal people, all completed, five of them carrying spoken lines. On five of the six only the picture and the timing were checked; the sixth is this file's own run above, where the audio was transcribed against the script |
 | A photoreal person in an *attached* image is refused at submission on `bytedance/seedance-2.5` | **Measured** 2026-08-30, `input_moderation_failed`, nothing billed. It decides the continuity limits below |
 | Asking this model for music can fail output moderation on copyright | **Measured** once, unbilled |
 | Text rendered from a description comes back invented or garbled; text approved on a still and attached as a frame is preserved | **Measured**, several jobs. It decides the on-screen-text section below |
-| The word rates this skill budgets against — the monologue tier, 3.5 words/s English and 5 characters/s Chinese | **Gallery practice** — prompt text counted against clip length across a public corpus, not Ofox runs. It is a Seedance 2.5 collection and this repo's own spoken runs are all on that model, which is this skill's default, so the model at least matches; but for the community entries the platform that produced the clip is unrecorded, and none of it is a measurement of what this API delivers. The skill plans under the tier rather than at it |
+| The **ceiling** the budget sits under — the monologue tier at 3.5 words/s English and 5 characters/s Chinese — and the CJK budget of 4 characters/s | **Gallery practice** — prompt text counted against clip length across a public corpus, not Ofox runs. It is a Seedance 2.5 collection and this skill's default is Seedance 2.5, so the model at least matches; but for the community entries the platform that produced the clip is unrecorded. **Nothing here has been run in Chinese or Japanese**, so the character-per-second rows are exactly as strong as they were |
 | A voiceover with no visible speaker | **Gallery practice only** (one collected prompt cuts "to the voice only … as a voiceover"). Never run here. Price a first one as an experiment |
 
-Practical consequence: the first clip on this skill is an experiment. Run it
-short and cheap, read the frames, listen once, then price the deliverable.
+Practical consequence: the word budget is no longer the risky part of a first
+clip — the *shape* is. A presenter to camera in English at 480p has been run;
+a voiceover, a non-English script and any duration past 20 seconds have not.
+Draft short and cheap, read the frames, listen once, then price the
+deliverable.
 
 ## Where the core skill lives
 
@@ -233,7 +299,7 @@ selection, the script and the price can all be settled without a key — see
 | | **Presenter to camera** (recommended) | **Voiceover over footage** |
 |---|---|---|
 | What is on screen | one person, chest-up, speaking | the thing being explained; the speaker is never seen |
-| Evidence | five completed Ofox jobs built around photoreal people, text-to-video | gallery practice only, never run here |
+| Evidence | six completed Ofox jobs built around photoreal people, text-to-video — one of them this skill's own run, whose speech was transcribed against the script | gallery practice only, never run here |
 | Best for | an opinion, an announcement, anything whose credibility comes from a person saying it | a product, an interface, a process, a physical object |
 | Watch out for | the presenter is generated fresh every job and cannot be reused | a voice with nothing on screen to anchor it reads as stock footage with narration — and whether this model reliably produces a disembodied narrator at all is untested |
 | A real presenter's photo | **not this skill** — that is `talking-head`, and it needs a different model | — |
@@ -306,7 +372,8 @@ Brief
 - Duration: 9s (22 words at about 3 words/s, the talking-head tier, plus a closing beat)
 - Register: plain and direct (AI's pick)
 - 9:16, 480p draft, audio on
-- Note: this scenario has no paid run behind it; treat the draft as the experiment
+- Note: the word budget is measured on this model (3.05 w/s on one 20s run) — the
+  delivery is still a roll, so treat the draft as the take you listen to
 ```
 
 Then the full prompt, then the cost table `approval-gate.md` specifies, all in
@@ -459,7 +526,7 @@ bill, the words decide what you pay for.
 | Parameter | Default | Why |
 |---|---|---|
 | `--model` | the script's own default, `bytedance/seedance-2.5` — **unless the user named one**, which always wins | no portrait is attached here, so nothing forces a different model, and this repo's spoken-dialogue runs are all on it. See "Choosing a model" |
-| `--duration` | derived from the chosen idea's word count at about 3 words a second (4 characters a second in Chinese or Japanese), then clamped to the model's range — which `ofox-video.sh models` prints | the idea decides the length; a default that ignores it produces rushed speech |
+| `--duration` | derived from the chosen idea's word count at about 3 words a second (4 characters a second in Chinese or Japanese), then clamped to the model's range — which `ofox-video.sh models` prints | the idea decides the length; a default that ignores it produces rushed speech. The English figure is **measured on this model** at 3.05 w/s (one 20s run, job `edef379e`), so 3 leaves a little room and the closing beat still fitted; the CJK one is still gallery-derived and untested |
 | `--resolution` | draft at the model's cheapest tier, deliver one tier up | a face at the cheapest tier is where lip and eye detail goes first, so read the draft's frames rather than shipping it |
 | `--aspect-ratio` | `9:16` unless the brief or the platform said otherwise; **not passed** if a title card is attached as a frame | short explainers are watched in feeds |
 | `--generate-audio` | leave at the server default (`true`) | the speech is the deliverable |
@@ -519,11 +586,15 @@ Three things belong in that message beyond the table:
 - **the chosen idea, quoted in full**, as the words that will be said;
 - **one line saying what the clip is not** — a summary of the source — so the
   expectation is corrected before the money moves, not after;
-- **one line saying this scenario has no paid run behind it.**
+- **one line saying which parts are measured and which are a first attempt** —
+  the word budget is measured on this model at 20 seconds and 480p; the
+  voiceover shape, a non-English script and anything longer are not.
 
-This skill has **no cost anchor**, because it has never been billed. The
-`--dry-run` figure at the parameters you are about to send is the only number
-to put in front of anyone.
+This skill has exactly **one cost anchor**, and it anchors one point rather
+than a curve: 20 seconds at 480p on `bytedance/seedance-2.5`, text-to-video,
+billed **2 dollars 20** (job `edef379e`). Another duration or resolution is a
+different number, so the `--dry-run` figure at the parameters you are about to
+send is still the only one to put in front of anyone.
 
 Afterwards the **actual** bill is `VIDEO_COST` from the finished job. Report
 it as money, not as the raw ten-decimal string.
@@ -652,7 +723,9 @@ Three things, before calling it done. None of them is `STATUS completed`.
 
 1. **Were all the words said?** Listen once and count against the script.
    Rushed, clipped or dropped endings mean the clip was over budget; the fix
-   is a longer clip or fewer words, never a faster delivery.
+   is a longer clip or fewer words, never a faster delivery. The one run
+   measured here lost nothing, but that is one take on one script — delivery
+   is a roll, so check it rather than assuming this one.
 2. **Is the idea still the idea?** A generated delivery can land emphasis
    somewhere that changes the meaning. Read the source's claim against what
    you just heard.

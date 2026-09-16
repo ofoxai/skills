@@ -2,6 +2,59 @@
 
 All notable changes to the **music-video** skill. Versioning follows SemVer.
 
+## 1.1.0 — the pipeline has been run end to end, and the scale has not
+
+**One paid run, 2026-09-16, and it is the first chain past two shots in this
+repo.** `bytedance/seedance-2.5` on `byteplus`, three shots of 10 seconds at
+480p, text-to-video with nothing attached, `STATUS chain_completed`,
+`CHAIN_COST_TOTAL` **3 dollars 30** — 1 dollar 10 a shot.
+
+| Shot | Job | Seed |
+|---|---|---|
+| 1 | `ccc0ee59-c738-46fa-b750-1db316f549ca` | `987776252` |
+| 2 | `44f6ab24-b7c2-47e9-b30f-4c6f6c966371` | `822047377` |
+| 3 | `849a8cdc-aa20-44e6-ab2c-7e0a9b4a8136` | `150420425` |
+
+What it settled:
+
+- **Both seams carried, and the second was no worse than the first.** Shot 1
+  into shot 2: street, signs, wet reflections and framing all continued. Shot
+  2 into shot 3: the tram's position, the signs and the reflections all
+  continued. Every earlier `chain` measurement here was a two-shot run, so
+  "the frame is carried" and "a sequence holds" used to be one observation.
+  They are now two.
+- **`mux-audio` works on real `chain` output.** 30.2s of joined picture
+  against a deliberately 28-second track produced the documented note — `the
+  picture is truncated by 2.2s` — and a 28.000s file with exactly one audio
+  stream. The segments had come back carrying the model's own audio, so this
+  measured `mux-audio` **replacing** a track rather than laying one onto
+  silence.
+- **The arithmetic's design reason is now measured rather than reasoned.**
+  This file has always argued that both roundings go up so the picture
+  outlasts the track, the mux runs to the shorter of the two, and what gets
+  lost is the tail of the picture while the song finishes. That is exactly
+  what happened, with the note saying so at the time.
+
+**"This skill has no paid run of its own" is retired**, in the measured table,
+the recap template and the cost-anchor note. The anchor is now one small
+point — three 10-second 480p segments for 3 dollars 30 — and is written as a
+ranking figure, not a quote.
+
+**The bounds are kept prominent on purpose, because this file asks a user to
+approve seven jobs and three were run.** Five to seven segments are untested,
+and so is anything that drifts across four, five or six seams; the 10-shot cap
+was never approached; the segments were 10 seconds rather than the 20–30 the
+arithmetic normally produces; and the audio was a synthesised tone, so nothing
+here says how a real song sits against these visuals. "Whether a chained
+sequence really holds across six or seven segments" now says which distances
+have been walked and which have not, instead of implying it is all one
+question.
+
+No prompt, default, arithmetic or price changed. The only behavioural note
+added is that this run left `--generate-audio` at the server default rather
+than `false`; the mux replaced the track anyway, which is the reason for the
+default rather than a case against it.
+
 ## 1.0.2 — the frontmatter did not parse, and the installer said nothing
 
 The `description` carried a `: ` (colon then space) inside an unquoted YAML

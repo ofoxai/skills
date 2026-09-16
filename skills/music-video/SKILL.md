@@ -2,11 +2,11 @@
 name: music-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus the music file the finished video must carry. Your audio never reaches the API (measured) — the visuals are written to the track's tempo, mood and sections, then your own file is laid on locally at zero cost. One job caps at 30 seconds, so a three-minute song is six jobs minimum and the cost table says that before anything is spent. Use when a user has a specific piece of music and wants visuals for it, e.g. "make a music video for this track", "visuals for my song", "an MV for this instrumental", "generate footage cut to this beat". Do not use for cheap vertical social drafts (shorts-reels), a brand film that happens to have a music bed (seedance-ad-creative), or when there is no particular audio file the finished video has to carry.
 license: MIT
-version: "1.0.2"
+version: "1.1.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/music-video
 metadata:
   author: ofoxai
-  version: "1.0.2"
+  version: "1.1.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -249,7 +249,8 @@ Brief
 - What this is NOT: the model does not hear your track. The visuals are cut to the
   structure described above; your file goes on at the end, locally and free. Nothing
   here lands a cut on a specific beat.
-- This scenario has no paid run behind it — treat the first segment as the experiment
+- What has been run here: a 3-segment chain with both seams clean and the mux
+  working. 7 segments has not — treat the first segment as the experiment
 ```
 
 **When no section map was given, that `Sections` line changes shape and must
@@ -374,7 +375,9 @@ Two consequences the user must see **before** any money moves:
    the right direction: `mux-audio` runs the result to the shorter of the two,
    so an over-long picture loses its tail and the song still finishes.
    Under-long picture would cut the song off mid-phrase, which is audible and
-   bad.
+   bad. **Measured 2026-09-16** on this skill's own run — 30.2s of chained
+   picture, a 28-second track, a `NOTE:` saying the picture was truncated by
+   2.2s, and a 28.000s deliverable with the song complete.
 
 ### Land the segment boundaries on the section boundaries
 
@@ -472,15 +475,77 @@ prompt here, run the draft set there, bring the winner back.
 
 ## Before anyone pays: what is measured here, and what is not
 
-**This skill has no paid run of its own.** No piece has been generated from
-this file's template and no finished MV has been checked against it. What it
-rests on:
+**This skill has one paid run of its own, and it exercised the pipeline end to
+end.** 2026-09-16, `bytedance/seedance-2.5` on `byteplus`: a three-shot
+`chain` at 10 seconds each, 480p, 16:9 on shot 1 and `adaptive` on the rest,
+text-to-video with no image attached, `STATUS chain_completed`,
+`CHAIN_COST_TOTAL` **3 dollars 30** (1 dollar 10 a shot). Then `mux-audio`
+onto the joined file. What it settled, and what it did not, is immediately
+below; the summary is that the mechanism this file describes works and the
+*scale* this file recommends is still untested.
+
+### The first run — 2026-09-16
+
+| Shot | Job | Seed |
+|---|---|---|
+| 1 | `ccc0ee59-c738-46fa-b750-1db316f549ca` | `987776252` |
+| 2 | `44f6ab24-b7c2-47e9-b30f-4c6f6c966371` | `822047377` |
+| 3 | `849a8cdc-aa20-44e6-ab2c-7e0a9b4a8136` | `150420425` |
+
+Joined output 854x480, just over 30 seconds of picture.
+
+- **Three shots chained, and this is the first chain past two in this repo.**
+  Every earlier measurement of `chain` was a two-shot run, so "the frame is
+  carried" and "a sequence holds" were the same observation. They are now two.
+- **Both seams carried, and the second was no worse than the first.** Shot 1's
+  closing frame into shot 2's opening: street, signs, wet reflections and
+  framing all continued. Shot 2 into shot 3: the tram's position, the signs
+  and the reflections all continued. Read frame by frame either side of each
+  join, not from a scene score.
+- **`mux-audio` works on real `chain` output**, and the length mismatch was
+  reported exactly as this file promises. Picture 30.2s against a deliberately
+  28-second track:
+
+  ```
+  NOTE: the picture is 30.2s and the audio is 28.0s — the result runs 28.0s;
+  the picture is truncated by 2.2s.
+  ```
+
+  The result is **28.000s with exactly one audio stream** — and the segments
+  had come back carrying the model's own generated audio, so this is a
+  measurement of `mux-audio` **replacing** a track rather than mixing onto a
+  silent file.
+- **So the arithmetic's whole design reason is now measured rather than
+  reasoned.** Both roundings in Step 2 go up, the picture outlasts the track,
+  `mux-audio` runs to the shorter of the two, and what gets lost is the tail
+  of the picture while the song finishes. That is what happened, on a real
+  chain product, with the note saying so at the time.
+
+⚠️ **What this run does not license, and it is the part a user is being asked
+to approve.** This file asks a user to say yes to **seven** jobs for a
+three-minute track. Three were run.
+
+- **Five to seven segments are untested**, and so is everything about what
+  drifts across four, five or six seams — palette, brightness, whether the
+  style anchor survives being re-read that many times. Two seams held; that is
+  what was measured.
+- **The 10-shot cap was never approached.**
+- **Segments were 10 seconds, not the 20–30 this file's arithmetic normally
+  produces.** A longer segment is a longer single job, not three of these.
+- **The audio was a synthesised tone, not music.** Nothing here says how a
+  real song sits against these visuals — the model never hears it either way,
+  so what is untested is the *judgement*, not the mechanism.
+- **480p, and `--generate-audio` was left at the server default** rather than
+  set to `false` as this file recommends. The mux replaced the track anyway,
+  which is the point of the default rather than a contradiction of it.
+
+The rest of what this file rests on:
 
 | Claim | Strength |
 |---|---|
 | A supplied audio track does not become the clip's audio | **Measured**, job `d8561509-dcc6-4f2c-8864-a193cd239b14`, 55 cents, 2026-09-15 — envelope correlation 0.41 between the supplied speech and the delivered track |
-| `mux-audio` puts a specific track on a clip locally, at no cost | **Implemented and shipped** in `ofox-video-core`. It replaces the clip's own audio rather than mixing, runs to the shorter of the two inputs, and prints a `NOTE:` naming which one was cut when they differ by more than half a second |
-| `chain` carries a shot's closing frame into the next shot's opening frame | **Measured** — shot 2 opened on very nearly the exact frame it was fed: subject position and scale, window frame, table grain and light direction all carried over. Brightness can shift slightly across a seam |
+| `mux-audio` puts a specific track on a clip locally, at no cost | **Measured** on this skill's own run above — real `chain` output, the clip's own audio replaced rather than mixed, the result running to the shorter of the two, and the `NOTE:` naming which one was cut and by how much |
+| `chain` carries a shot's closing frame into the next shot's opening frame | **Measured** across three shots and two seams on this skill's own run, and on an earlier two-shot run where shot 2 opened on very nearly the exact frame it was fed. Brightness can shift slightly across a seam |
 | Cut timestamps inside one job are executed as cut boundaries, to about ±1 second | **Measured**, two jobs at 8s/480p (`fe6e7130`, `13b75096`), in two different timestamp notations |
 | A cut written at one named second is weaker than a cutting *rhythm* | **Measured** — `9cd773d0` wrote three hard-cut stamps in 15 seconds, one landed, two cuts arrived that nobody asked for |
 | Whether a written hard cut renders at all depends on the **mix** of the timeline | **Measured**, six jobs. A timeline where 3 of 9 boundaries were hard cuts rendered **none** of them; 3 of 8, 3 of 6, 5 of 7, 4 of 4 and 6 of 6 all rendered every one. Weighting the mix toward hard cuts is what buys a cutting rhythm |
@@ -488,12 +553,14 @@ rests on:
 | Asking this model for music can fail output moderation on copyright | **Measured** once, job `1ff72400`, unbilled: "the output audio may be related to copyright restrictions". It decides the `--generate-audio false` default below |
 | A photoreal person in an **attached** frame is refused at submission on `bytedance/seedance-2.5` | **Measured** 2026-08-30, `input_moderation_failed`, nothing billed. It decides the performer limit below |
 | A fixed seed does not reproduce a take | **Measured** 2026-09-15 — three submissions of one byte-identical request on seed `424242`: two completed as visibly different clips, one failed outright |
-| "Cut density by energy", "sections become segments", the whole mapping from a piece of music to a segment plan | **This skill's own reasoning**, built on the measurements above. Nothing in this repo has generated a music video and checked it against a track |
+| "Cut density by energy", "sections become segments", the whole mapping from a piece of music to a segment plan | **This skill's own reasoning**, built on the measurements above. The run above exercised the mechanism — segments, seams, mux — and nothing in this repo has yet cut a piece to a real track and judged whether it works as a music video |
 
-Practical consequence: the first piece run through this skill is an
-experiment. Draft one segment cheaply, look at it, then price the **whole**
-chain — segment 1 included, because the chain regenerates it. The draft is
-information, not the first link.
+Practical consequence: the **pipeline** is no longer the experiment — three
+segments, two seams and the mux have been run. The **scale** still is: five to
+seven segments, 20–30-second segments and a real track have not. Draft one
+segment cheaply, look at it, then price the **whole** chain — segment 1
+included, because the chain regenerates it. The draft is information, not the
+first link.
 
 ## Step 3: writing the visuals
 
@@ -800,9 +867,12 @@ Afterwards the **actual** bill is `CHAIN_COST_TOTAL`, built from each job's
 own usage. Report it as money, not as a raw ten-decimal string, and say how
 many segments it covers.
 
-This skill has **no cost anchor**, because it has never been billed. The
-`--dry-run` figure at the parameters you are about to send is the only number
-to put in front of anyone.
+This skill has exactly **one cost anchor**, and it is a small one: three
+10-second segments at 480p on `bytedance/seedance-2.5`, billed **3 dollars 30**
+in total, 1 dollar 10 a segment (2026-09-16). A real piece is longer segments,
+a higher tier and more of them, so that number ranks rather than quotes — the
+`--dry-run` figure at the parameters you are about to send is still the only
+one to put in front of anyone.
 
 ## Recommended defaults
 
@@ -958,17 +1028,24 @@ audio conditioning is impossible.
 
 ### Whether a chained sequence really holds across six or seven segments
 
-`chain` is measured carrying a frame between **two** jobs, and one job is
-measured holding up to 10 shots and 6 hard cuts. A seven-segment piece
-multiplies both and nobody in this repo has run one. What could drift: the
-palette across six seams, the cumulative brightness shift, whether the style
-anchor survives being re-read six times. Draft the first two segments before
-committing to seven.
+`chain` is now measured across **three** jobs and two seams — 2026-09-16, both
+seams carrying street, signage, reflections and framing, the second no worse
+than the first — and one job is measured holding up to 10 shots and 6 hard
+cuts. A seven-segment piece still multiplies both, and nobody here has run
+one: **four, five and six seams are untested**, and so is the 10-shot cap.
+What could drift over that distance: the palette, the cumulative brightness
+shift, whether the style anchor survives being re-read six times. The run that
+exists was also 10-second segments, not the 20–30 the arithmetic normally
+produces. Draft the first two segments before committing to seven.
 
 ### Endings, when the picture outruns the track
 
 Both roundings in Step 2 go up, so the picture is normally a few seconds
-longer than the song, and `mux-audio` trims that difference off the end. The
+longer than the song, and `mux-audio` trims that difference off the end.
+**That is measured now, not just reasoned** — 2026-09-16, 30.2s of chained
+picture against a 28-second track: the mux printed which one it cut and by how
+much, and the delivered file is 28.000s with the audio intact and the tail of
+the picture gone. The
 second rounding keeps it to a few seconds rather than up to a whole segment,
 which is most of the problem solved — but it is not all of it, because
 **whatever you wrote as the final beat may still land inside the trim.** Three
@@ -988,7 +1065,10 @@ shipping a truncated song.
 
 The cut-density register, sections-become-segments, the energy arc: all of it
 is reasoning from measured facts about the API, not a measurement of music
-videos. No piece has been made with this skill and checked against its track.
+videos. The 2026-09-16 run measured the **mechanism** — segments, seams, mux,
+the length note — against a synthesised tone. **No piece has been cut to a
+real track and judged against it**, which is the part of this file that is
+craft rather than measurement, and the part a first real piece is testing.
 
 ### Other models
 

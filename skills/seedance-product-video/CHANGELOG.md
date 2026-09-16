@@ -4,6 +4,61 @@ All notable changes to the **seedance-product-video** skill. Versioning follows 
 
 This file starts at 1.0.2; earlier versions predate it.
 
+## 1.16.0 — the turntable has been run: it works, and its speed does not listen
+
+1.15.2 added a warning to the one skip row that pointed at an option nobody
+had ever run. That option has now been run, so the warning changes shape: it
+is no longer "this is untested", it is "this works and here is the one thing
+it will not do".
+
+**Job `dc02f604-6c83-4837-b7fb-88e8df1876fb`**, 2026-09-16, seed `88995356`,
+`bytedance/seedance-2.5` on `byteplus`, **5 seconds at 480p, 1:1**,
+`--generate-audio false`, **text-to-video with no product photo**, billed
+**55 cents**. Subject: a matte black travel mug with a brushed steel band and
+a small logo plate — the plate chosen deliberately as the asymmetric feature
+that makes a rotation readable at all.
+
+**It works.** The logo plate tracks from a sliver at the left edge (0.1s), to
+fully face-on in the centre (3.2s, the small lettering on the steel band
+coming round with it), to heading off toward the right edge (4.8s). The mug's
+position, scale, contact shadow, background and framing are unchanged from the
+first frame to the last. So the camera really was fixed and the product really
+did turn on its own vertical axis, without tipping, sliding or floating —
+which is the whole of what this option promises.
+
+**And the rate does not listen.** The prompt asked for "most of one turn";
+five seconds delivered roughly **a quarter to a third**. That is not a new
+surprise, and the file is careful to say so: it is the same grammar as `a full
+360 degrees` producing about half a turn on both measured camera orbits, and
+of the hinge whose material and geometry landed while its knuckle count did
+not. The description renders; the quantity attached to it does not.
+
+**The practical calibration, which is what a user needs: a full 360 does not
+fit in 5 seconds.** Somebody asking for "a 360-degree showcase" is asking for
+the thing this run did not deliver, so the brief now says to correct that
+before the cost table and offer the choice — more seconds, or accepting that
+the clip shows part of the surface. **No seconds-per-turn figure is quoted**,
+deliberately: one run at one duration cannot support one, and inventing a
+helpful-sounding number would repeat the prompt's own mistake.
+
+Changed, five places: the `Motion` question's turntable option, the skip row
+for spin / turntable / rotate / 360-on-its-axis, the full template's TURNTABLE
+slot, the compact template's turntable swap, and the defaults table's Motion
+row. The template sentences now carry the phrasing that ran — axis, constant
+speed, fixed camera, stays in place, never tips — and **no degree count**,
+because the one that was written did not arrive and only set an expectation.
+Two rows were added to the failure table: the short turn, and how to tell a
+turntable from an orbit by reading three frames.
+
+**The bound that matters most here is the route.** One run, 5 seconds, and
+**text-to-video with no product photo** — which is not this skill's main path.
+A real SKU goes image-to-video, where an attached first frame fixes the
+product's appearance and the clip's shape, and whether a turntable behaves the
+same way with a frame attached is **untested**. So is any longer duration.
+Both are stated where the option is chosen, not only where it is documented.
+
+No prompt craft for the orbit, no default, no price and no routing moved.
+
 ## 1.15.2 — routing: stills now have skills of their own, and one skip row admits it is untested
 
 No prompt change, no defaults change, no new measurement, no mapping changed.

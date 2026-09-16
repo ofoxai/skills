@@ -2,6 +2,56 @@
 
 All notable changes to the **explainer** skill. Versioning follows SemVer.
 
+## 1.1.0 — the number this skill is built on is no longer an extrapolation
+
+**One paid run, and it was aimed at the one claim that mattered.** Job
+`edef379e-9ac0-41c9-ab59-6378d030239e`, 2026-09-16,
+`bytedance/seedance-2.5` on `byteplus`, 20 seconds at 480p, seed `623333235`,
+text-to-video with nothing attached, 2 dollars 20. A 59-word
+presenter-to-camera monologue written from this file's own template.
+
+| Question | Measured |
+|---|---|
+| **Speech rate** | **3.05 words a second** — 59 words across a 19.33s speech span (`silencedetect` at -30dB: first word 0.399s, last 19.729s, 7 internal pauses) |
+| **The thesis** | 3.05 x 30 = 91.5, so "a 30-second clip holds about ninety spoken words" holds |
+| **Truncation** | none — `whisper tiny.en` returns all 59 words in order, nothing added or dropped |
+| **The closing beat** | 0.335s of silence after the last word, at a script budgeted at almost exactly 3 words a second. The template asks for that beat and it fitted |
+
+**What changed in the file is the kind of evidence, not the number.** The 3
+words a second here was inherited from *two-person dialogue* measurements and
+applied to a single continuous speaker — which is not a conservative estimate
+but a category error, because the dialogue tier's low floor comes from clips
+where most seconds have nobody speaking at all. `talking-head` shipped exactly
+that mistake and had to correct it. The monologue tier now has its own
+measurement on this skill's own default model.
+
+**Two rates on two models, written as two observations.**
+`talking-head` measured 3.16 w/s on `alibaba/wan-3.0-prime` the same day; this
+skill measured 3.05 on `bytedance/seedance-2.5`. They agree, and they both sit
+a little above the budget — but neither is repeated, they are different
+scripts at different lengths, and the file says so rather than promoting the
+pair into a rate the API is known to hold to.
+
+**Bounds, written into the file rather than left implied:** one run, one
+script, English, 480p, **20 seconds**. Thirty seconds was never run — the
+ninety-word row is a linear extension of a twenty-second observation, and the
+file now says that where the row is stated. The Chinese and Japanese
+characters-per-second budgets are exactly as untested as they were.
+
+**Also retired: "this skill has no paid run of its own"**, in all four places
+it appeared — the measured table, the recap template, the pre-spend message
+and the cost-anchor note. The anchor is now one point (20s / 480p / t2v,
+2 dollars 20), stated as one point, with `--dry-run` still the only source of
+a quote.
+
+**And one methodology note kept rather than tidied away.** A first pass with
+`silencedetect` at a 0.35s minimum found no trailing silence, and the reading
+drawn from it — "a script at 3 words a second squeezes the closing beat out" —
+was wrong. The beat is there in the frames; the pause is 0.335s, just under
+the threshold looking for it. That is written into the file as a warning about
+concluding from a tool's silence, because it is the kind of error that reads
+like a finding.
+
 ## 1.0.0 — first release
 
 A scenario skill for turning something written — an article, a README, a

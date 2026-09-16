@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.15.2"
+version: "1.16.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.15.2"
+  version: "1.16.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -127,7 +127,7 @@ options instead; if the user answers "I don't know" in free text, fall to
 | 1 | must-ask | `Photo` | Do you have a photo of the product? A listing is compared against the real item, so the photo is what keeps the shape and label right. | **Yes — I'll give a local path (recommended)**: image-to-video from the real photo; every gallery prompt that had to match a real product or logo used an image (cases 12, 13, 24). / **No — describe it in text**: acceptable for a generic item or a fictional brand (the gallery's product prompts, cases 16–19, are all text-only and all fictional); for a real SKU the result may not match the item — I will say so. **No AI option.** | No image attached and the user did not say "no photo". |
 | 2 | must-ask | `Aspect` | Which platform is this for? It fixes the frame shape, and with a photo I have to crop or pad the photo to that shape before generating. | **1:1 marketplace grid (recommended)**: Amazon, Etsy, Shopify, eBay listings. / **9:16 TikTok Shop and mobile storefronts**. / **16:9 website product-detail page**. / **4:3 legacy catalog template**. **No AI option** — four platform options fill the slot; a free-text "don't know" falls to 1:1, marked (AI's pick). | No platform or ratio in the request. |
 | 3 | ask-if-open | `Background` | What should sit behind the product? | **Pure white (recommended)**: what most marketplace listing rules ask for; no props, no shadows on the backdrop. / **Light grey studio**: a soft neutral surface with true reflections (the gallery's cleanest product prompt, case 17, uses a bright reflective surface with softbox light). / **Keep the photo's own background**: the scene stays as shot, pinned in place (case 41 locks its background geometry rather than removing it). / **Let the AI decide**. | No background word in the request. |
-| 4 | ask-if-open | `Motion` | How should the product be shown? | **Camera orbits, product still (recommended)**: every rotation in the gallery is written as camera movement or as a hand turning the product (`360-degree orbit`, official case 42; `the camera slowly circles the build platform`, case 39). Answering this does not settle how the segment gets written — the words "the camera orbits" produced no orbit at all on a real run, and the option only delivers in the **waypoint** form of "3. Camera motion: waypoint pictures, not a camera verb" below, each waypoint carrying its own shot size, whose spacing between angles is approximate rather than scheduled and which covers about **half a turn**, not a circuit, on both clips that have been measured. / **Product turntable 360, camera fixed**: the classic listing spin; no gallery prompt writes it this way and it has never been run here — kept because platforms and users ask for it by name. / **Slow push-in on a detail**: one feature fills the frame (cases 19, 24, 39). / **Let the AI decide**. | No motion word in the request. |
+| 4 | ask-if-open | `Motion` | How should the product be shown? | **Camera orbits, product still (recommended)**: every rotation in the gallery is written as camera movement or as a hand turning the product (`360-degree orbit`, official case 42; `the camera slowly circles the build platform`, case 39). Answering this does not settle how the segment gets written — the words "the camera orbits" produced no orbit at all on a real run, and the option only delivers in the **waypoint** form of "3. Camera motion: waypoint pictures, not a camera verb" below, each waypoint carrying its own shot size, whose spacing between angles is approximate rather than scheduled and which covers about **half a turn**, not a circuit, on both clips that have been measured. / **Product turntable, camera fixed**: the classic listing spin. No gallery prompt writes it this way, and it has one run here (job `dc02f604`, t2v, 2026-09-16): the product did turn on its own vertical axis with the camera fixed, and five seconds covered only **a quarter to a third of a turn** rather than the "most of one turn" asked for — so if the user said "360", say that a full circuit does not fit in 5 seconds before quoting. Untested with a product photo attached, which is this skill's main path. / **Slow push-in on a detail**: one feature fills the frame (cases 19, 24, 39). / **Let the AI decide**. | No motion word in the request. |
 
 Not asked: 720p vs 1080p (two rows in the cost table); duration (5s for a
 single orbit, 10–15s for the segmented template — a row, and the recap says
@@ -148,7 +148,7 @@ On top of the generic rows in `creative-brief.md`:
 | "grey", "studio", "neutral" | Background | light grey studio |
 | "keep the background", "as shot", "in place" | Background | the photo's own background |
 | "orbit", "circle around", "camera moves around" | Motion | camera orbits, product still |
-| "spin", "turntable", "rotate", "360 on its axis" | Motion | product turntable, camera fixed — ⚠️ **but say what that costs before spending.** This is the one skip row that maps onto the untested option: the fixed-camera turntable phrasing has no gallery source and has never been run here, while the camera orbit is the measured default. Take the user's word — they named it — and tell them in the same breath that the orbit is the one with evidence behind it, so they can choose. The rows above and below map onto measured options and need no such warning |
+| "spin", "turntable", "rotate", "360 on its axis" | Motion | product turntable, camera fixed — ⚠️ **and if they said "360", correct the length before spending.** One run (job `dc02f604`, 5s, t2v) shows the motion itself works: the product turned on its own vertical axis with the camera fixed, nothing tipping or sliding. What it does **not** do is finish a circuit — five seconds covered a quarter to a third of a turn against "most of one turn" asked for. So take the user's word for the motion, and in the same breath tell them a full 360 will not fit in 5 seconds, so they can choose more seconds or accept part of the surface. Still untested with a product photo attached, which is this skill's main path |
 | "close-up", "zoom in on the detail", "push in" | Motion | slow push-in on a detail |
 
 ### From answers to prompt — traceability
@@ -219,7 +219,7 @@ SCENE: the product centered on a <pure white | light grey | matte neutral> surfa
            | <static front view, product centered, camera still>.
 <a>–<b>s   DETAIL — the camera pushes in to a macro of <the seam | hinge | logo | fabric weave>; reflections slide across the surface.   (cases 19, 39, 24)
 <b>–<c>s   ORBIT — one single continuous camera move, no cut anywhere inside this segment. The camera travels around the product at constant height and constant speed, the product centered the whole way, and the frame shows a new side as it goes: at about <t1>s <what is in shot and what is out of sight — an appearance description, not a camera position>, <with the whole product in frame, <top> to <bottom>, and margin around it>; at about <t2>s <the same, for a view the first one could not see>, <the same framing clause again>. At every one of those views the entire product is inside the frame, nothing cropped. The product does not move, does not rotate on its axis and does not tip.   (the orbit is cases 42, 39; the waypoint form and the per-waypoint framing clause are both measured — "3. Camera motion" — and the budget and the loose timing are section 4. **Expect the move to cover about half a turn and stop there**: a written `by <c>s the camera is back on the exact front view of the opening shot` has now failed to bring the camera home on both measured clips, so if the clip must end on the opening view, put it in the next segment after the cut)
-           | TURNTABLE — the product rotates 360 degrees on its own axis at constant speed; the camera is fixed and centered.   (no gallery prompt, and never run here; kept as the listing convention)
+           | TURNTABLE — the product rotates slowly and steadily on its own vertical axis at a constant speed; the camera is completely fixed and centered, and the product stays in exactly the same place in frame and never tips, slides or floats.   (no gallery prompt; one run here, job `dc02f604` — the axis rotation and the fixed camera both landed, and no degree count is written because the one that was asked for did not)
 <c>–<N>s   [ACCESSORIES — <A>, <B> lie on the surface to the <side> of the main unit and only to the <side>, both on the same line, evenly spaced and not touching each other or the product; nothing lies to the other side of the product; a slow macro pan across them]   (case 17; the "only to the <side>" wording is measured — the left/right axis holds, the same line does not, see the slot notes)
            | back to the front view; hold the final frame.   (cases 39, 40)
 
@@ -343,10 +343,16 @@ formula order — subject first (shared file, `The vendor's own formula (ByteDan
 <Product name>, <main colour>, <material and finish>, <shape point>[, "<label text verbatim>"]. Centered on a pure white surface against a pure white backdrop; even studio softbox lighting, true reflections, no props, no shadows. The camera orbits the product 360 degrees at constant height and speed; the product stays still and identical in shape, colour, proportions and label throughout. No subtitles, no logo overlays, no watermarks; no deformation, no floating parts; no camera shake, no zoom. Hyper-realistic textures, realistic reflections, smooth motion.
 ```
 
-Swap the motion sentence for `The product rotates 360 degrees on its own
-axis at constant speed; the camera is fixed and centered` when the brief
-chose the turntable — that phrasing has **no gallery source and has never been
-run here**; it is the listing convention written out. Sources for the rest: 5s +
+Swap the motion sentence for `The product rotates slowly and steadily on its
+own vertical axis at a constant speed; the camera is completely fixed and
+centered. The product stays in exactly the same place in frame and never tips,
+slides or floats` when the brief chose the turntable. That is close to the
+sentence that actually ran at 5 seconds (job `dc02f604`), and it is what
+produced a real axis rotation with a fixed camera. **Leave the degree count
+out of it** — the run asked for "most of one turn" and delivered a quarter to
+a third, so a number there buys nothing and sets an expectation the clip will
+not meet. The turntable phrasing still has **no gallery source**; it is the
+listing convention, now with one run behind it. Sources for the rest: 5s +
 `360-degree orbit` from official case 42;
 surface and light from case 17; the lock from cases 19 and 24; the negative
 list from cases 38 and 41.
@@ -407,6 +413,15 @@ the two fixes clip B's defects had produced. All three are
 `bytedance/seedance-2.5` on `byteplus`, **pure text-to-video with no image
 attached**, 12s, 720p, `--aspect-ratio 16:9`, `--generate-audio false`, billed
 2.88 USD each (8.64 USD for the three).
+
+**Two more clips sit outside that set and are written up where they belong.**
+Clip D is a 30-second presenter clip that breaks this skill's own people
+exclusion on purpose — "One clip outside this skill's own boundary" below.
+Clip E is the **turntable** run of 2026-09-16 (job
+`dc02f604-6c83-4837-b7fb-88e8df1876fb`, 5s, 480p, 1:1, t2v, 55 cents), which
+finally puts a run behind the motion option the skip table has always pointed
+at; it lives with that option, in "The turntable alternative: it works, and
+its speed does not listen" under §3.
 
 | | Job | Outcome |
 |---|---|---|
@@ -1193,27 +1208,75 @@ the opening view, that view is the next segment, after the cut. The budget and
 the reason for it are in "4. A timestamp orders the pictures; it does not
 schedule them" below.
 
-The turntable alternative is unchanged and **untested here** — no gallery
-prompt writes it and this repo has never run it:
-
-```
-The product rotates smoothly 360 degrees on its own axis at a constant speed, camera fixed and centered.
-```
-
-Whether the waypoint rule carries over to a rotating product — waypoints
-describing **what the frame shows** as the product turns, rather than the
-rotation as a verb and a degree count — is an untested inference from the pair
-above, not a measurement: **a rotating product has never been run here at
-all.** Worth noticing what the sentence above is made of, though. One motion
-verb plus a degree count is the shape that produced no movement when the verb
-belonged to the camera; whether it behaves the same way when the verb belongs
-to the product is precisely what nobody here has measured. Say so if you write
-it either way.
-
 Use only orbit, push-in, macro pan and static from the shared file's `Camera
 language`. Avoid `seedance-ad-creative`'s vocabulary (dolly-in with a speed
 ramp, rack focus, rim light, moody backlight) — the point is to see the
 product clearly from several angles, not to evoke a mood.
+
+#### The turntable alternative: it works, and its speed does not listen
+
+**It has now been run.** Job `dc02f604-6c83-4837-b7fb-88e8df1876fb`,
+2026-09-16, seed `88995356`, `bytedance/seedance-2.5` on `byteplus`, **5
+seconds at 480p, 1:1**, `--generate-audio false`, **text-to-video with no
+product photo**, billed **55 cents**. Until that run this option had no
+gallery source and no run at all behind it, while the skip table routed every
+"spin", "turntable", "rotate" and "360 on its axis" straight to it.
+
+What was sent, as the motion and camera paragraphs:
+
+```
+The mug rotates slowly and steadily on its own vertical axis, anticlockwise, completing most of one turn over the clip, so the steel band and the logo plate come around into view and continue past. The mug stays in exactly the same place in frame and never tips, slides or floats.
+CAMERA: completely fixed. No pan, no tilt, no push, no orbit. The framing at the last frame is identical to the framing at the first.
+```
+
+**The behaviour is what the option promises.** The subject was a matte black
+travel mug with a brushed steel band and a small logo plate, and the plate is
+the protractor — the asymmetric feature that makes a rotation readable at all
+(shared file, "Measuring a camera's travel: only inside one continuous shot"):
+
+| Time | Where the logo plate is |
+|---|---|
+| 0.1s | a thin sliver at the left edge |
+| 3.2s | fully face-on, centre of frame — the small lettering on the steel band comes round with it |
+| 4.8s | travelling on toward the right edge |
+
+Meanwhile the mug's position, its scale, its contact shadow, the background
+and the framing are **unchanged from the first frame to the last**. So the
+product genuinely turned on its own vertical axis, the camera genuinely stayed
+put, and nothing tipped, slid or floated. That is the whole of what the
+turntable option asks for.
+
+⚠️ **The rate did not listen — and that is this file's existing rule, not a
+new surprise.** The prompt asked for "most of one turn"; five seconds
+delivered roughly **a quarter to a third**. Same grammar as "A description is
+honoured; a number attached to it is not" in the shared file: the *rotating
+product* rendered and the *how much of it* did not, exactly as `a full 360
+degrees` produced about half a turn on both measured camera orbits.
+
+**The calibration to put in front of a user: a full 360 does not fit in five
+seconds.** Somebody who asks for "a 360-degree showcase" is asking for the one
+thing this run did not deliver, so say it before the cost table and give them
+the choice — a longer clip, or accepting that the clip shows part of the
+surface rather than all of it. **Do not quote a seconds-per-turn figure**: one
+run at one duration cannot support one, and inventing a helpful-sounding
+number here would be the same move the prompt made.
+
+**What this does not cover, and the gap matters more here than in the rest of
+this file.** One run, 5 seconds, and **text-to-video with no product photo** —
+which is not this skill's main path. A real SKU goes image-to-video, where an
+attached first frame fixes the product's appearance and the clip's shape, and
+**whether a turntable behaves the same way with a frame attached is
+untested**. No longer duration has been run either, so whether more seconds
+buy a proportionally bigger turn is unknown.
+
+Whether the waypoint rule carries over to a rotating product — waypoints
+describing **what the frame shows** as the product turns, rather than the
+rotation as a verb and a quantity — is still an untested inference from the
+camera-orbit pair. Worth noticing what the sentence that ran is made of: one
+motion verb plus a quantity is the shape that produced *no movement at all*
+when the verb belonged to the camera, and here the movement happened and only
+the quantity was lost. That is a real difference between the two cases and one
+run cannot explain it.
 
 ### 4. A timestamp orders the pictures; it does not schedule them
 
@@ -1281,7 +1344,7 @@ read frames, never a detector count alone` in
 | `--duration` | `5` for the compact orbit; `10`–`15` for the segmented template | a full 360-degree orbit reads clearly in 5 seconds (official case 42 does it in 5s) and keeps cost low; three or four segments need 3–5s each; Seedance 2.5 accepts 4–30. The one clip here that ran past this range went to 30s, and it did so because it was carrying spoken lines and three separate demands — see "One clip outside this skill's own boundary" |
 | `--resolution` | `720p` — a `seedance-2.5`/`wan-3.0-prime` value. On `minimax/hailuo-3` use `768p`: that model has no `720p` tier | catalog/listing thumbnails rarely benefit from more; show `1080p` as a second row in the cost table when the target platform might require it (`2k` on `hailuo-3`, which has no `1080p` either) |
 | `--aspect-ratio` | settled by the brief's `Aspect` question (must-ask); `1:1` is the recommended option | e-commerce platforms vary: `1:1` fits most marketplace grids (Amazon, Etsy, Shopify), `4:3` matches older catalog templates, `9:16` suits mobile-first storefronts and TikTok Shop, `16:9` suits a website product-detail page. With a photo attached, don't pass the flag — the photo is cropped or padded to the ratio instead, per `Two ways to attach the photo` above. That holds on every model, for two different reasons: `seedance-2.5` overrides the flag with `adaptive`, and another model defaults to `adaptive` precisely because you left the flag off (pass it there and it is honoured, which is not what this route wants). On the text-only route the flag really does decide the frame: `16:9` in, exactly 1280x720 out, measured on this scenario's own clips |
-| Motion | camera orbits, product still — **written as timestamped waypoint pictures**: two interior views, each carrying its own shot size, and **no closing return inside the move** | *Which* motion comes from the gallery: every rotation there is written as camera movement or as a hand turning the product, and none writes a fixed-camera turntable, which is also untested here. *How to write it* is measured rather than inferred, and the default would not survive without it: `the camera orbits ... a full 360 degrees` produced no orbit at all (job `1cf5ac46-058f-4615-a47b-067743f76f8c`), and the same prompt at the same seed with the angles written out as pictures produced a camera that moved (job `50f623b2-c54a-4d9d-9646-31dd06e2a926`). Three things are settled on top of that by a third, independent clip (job `8efeb556-bf38-45ec-940b-a792ef74bfcf`): a **shot size on every waypoint** kept the whole product in frame there, where an unstated one inherits the previous segment's macro closeness — ⚠️ though a fourth clip stated it and inherited a macro anyway (`cb6b7870`), so treat it as necessary and not sufficient and put a widening shot after a cut; the move covers about **half a turn** and stops, measured frame by frame; and a written return to the opening view **does not bring the camera home**, so that view belongs in the next segment after the cut. **Spacing** stays approximate — an interior view can arrive late or be absorbed, so no angle should be planned to land on a given second. Write each view as an appearance description rather than a camera position, which is reasoning from clip B's confound rather than a measurement. See "3. Camera motion: waypoint pictures, not a camera verb" and "4. A timestamp orders the pictures; it does not schedule them" |
+| Motion | camera orbits, product still — **written as timestamped waypoint pictures**: two interior views, each carrying its own shot size, and **no closing return inside the move** | *Which* motion comes from the gallery: every rotation there is written as camera movement or as a hand turning the product, and none writes a fixed-camera turntable — which now has one run of its own (job `dc02f604`, t2v, 5s): the product turned on its vertical axis with the camera fixed, and covered a quarter to a third of a turn against "most of one turn" asked for, so a 5-second clip cannot deliver a full 360 on either route. *How to write it* is measured rather than inferred, and the default would not survive without it: `the camera orbits ... a full 360 degrees` produced no orbit at all (job `1cf5ac46-058f-4615-a47b-067743f76f8c`), and the same prompt at the same seed with the angles written out as pictures produced a camera that moved (job `50f623b2-c54a-4d9d-9646-31dd06e2a926`). Three things are settled on top of that by a third, independent clip (job `8efeb556-bf38-45ec-940b-a792ef74bfcf`): a **shot size on every waypoint** kept the whole product in frame there, where an unstated one inherits the previous segment's macro closeness — ⚠️ though a fourth clip stated it and inherited a macro anyway (`cb6b7870`), so treat it as necessary and not sufficient and put a widening shot after a cut; the move covers about **half a turn** and stops, measured frame by frame; and a written return to the opening view **does not bring the camera home**, so that view belongs in the next segment after the cut. **Spacing** stays approximate — an interior view can arrive late or be absorbed, so no angle should be planned to land on a given second. Write each view as an appearance description rather than a camera position, which is reasoning from clip B's confound rather than a measurement. See "3. Camera motion: waypoint pictures, not a camera verb" and "4. A timestamp orders the pictures; it does not schedule them" |
 | `--generate-audio` | `false` (this scenario's default) | a silent product clip needs no audio track; this **overrides** the server's `generate_audio: true` default, unlike `seedance-short-drama`/`seedance-ad-creative` which leave audio on. Verified against `ofox-video-core`'s script: `--generate-audio false` sets `generate_audio: false` directly on the request — and measured end to end on all three of this scenario's clips, whose delivered files carry **no audio stream at all**, not a silent one. The one exception is the out-of-scope presenter clip, which left the flag off and took the server's `true` default; if a clip has spoken lines, this default is the wrong one and has to be dropped rather than set to `true` — omitting the flag is enough. |
 | `--real-person` | leave unset (`false`) | Seedance 2.5 image-to-video refuses photoreal people at submission; whether `true` lifts that on 2.5 is untested — prefer a photo of the product alone |
 
@@ -1677,6 +1740,8 @@ plus the product-video-specific ones:
 | The ORBIT segment renders as a near-static front view — no new angle at all | The segment named the camera's move (`the camera orbits the product a full 360 degrees ...`) instead of picturing the frame at each angle. Measured on job `1cf5ac46-058f-4615-a47b-067743f76f8c`, where 3.7 of 12 seconds delivered nothing new | Rewrite ORBIT as timestamped waypoints — what the frame contains at two interior views, written as appearance rather than as camera positions, each carrying its own framing clause. The same prompt at the same seed, written that way, moved (job `50f623b2-c54a-4d9d-9646-31dd06e2a926`; how far it travelled is unmeasurable there, and that is stated in §3), and an independent clip written the same way moved through about half a turn (job `8efeb556-bf38-45ec-940b-a792ef74bfcf`). Do not add a closing return to the opening view inside the move — neither clip's camera came home. New prompt, so a new cost table — see "3. Camera motion: waypoint pictures, not a camera verb" |
 | The orbit travels, but the product's base or top is out of frame the whole way | No shot size was written on the waypoints, so the segment inherited the framing of the macro DETAIL segment before it. Observed on job `50f623b2-c54a-4d9d-9646-31dd06e2a926`. ⚠️ It also happens **with** the shot size written — job `cb6b7870-22f7-4a15-9168-8a013805775f` stated it on all three waypoints and inherited a macro anyway | Give every waypoint its own shot size ("the whole product in frame, top to base, with margin") and close the paragraph with "at every one of those views the entire product is inside the frame, nothing cropped" — **once held (`8efeb556`), once failed (`cb6b7870`)**, so necessary and not sufficient. Then read a 480p draft's frames. If the framing must open up, put the wider view in its own shot after a cut, where three clips have delivered it. New prompt, new cost table |
 | A countable feature comes back with the wrong count — four knuckles for three, five spokes for four | Expected: the description renders and the number does not. Measured on `8efeb556` (an interleaved barrel hinge, correct in material, side and geometry, with four knuckle blocks against three written) and, in `seedance-ad-creative`, on `60fbea52`, where a limb limit written twice was ignored | Nothing in the prompt reliably fixes it — check the count on a 480p draft and re-roll, or frame the feature so the count is not readable. A spatial description in the same sentence (`the whole product in frame, top to base, with margin`) *is* honoured, so keep those. See `A description is honoured; a number attached to it is not` in the shared file |
+| A turntable turns, but nowhere near a full circuit — the user asked for a 360 and sees one face of the product | Expected, and the same grammar as the count row above: the rotation renders and the quantity does not. Measured on `dc02f604` (5s, 480p, 1:1, t2v) — "most of one turn" was written and a quarter to a third arrived, while the axis rotation, the fixed camera and the unchanged framing all landed exactly as asked | Not fixable in the prompt, so fix it in the brief: tell the user before the cost table that a full 360 does not fit in 5 seconds, and let them choose more seconds or accept part of the surface. Do not quote a seconds-per-turn figure — one run cannot support one. And leave the degree count out of the motion sentence; it buys nothing and sets the expectation that gets missed. See "The turntable alternative" in §3 |
+| A turntable was asked for and the product is sitting still while the camera moves, or vice versa | Not something observed here — the one run did exactly what it was told on this axis. Worth checking anyway, because the two options look alike in a thumbnail and differ completely in a listing | Read three frames: if the product's contact shadow, scale and position in frame are unchanged while its surface features travel across it, the turntable happened. If the background parallaxes, the camera moved instead. `dc02f604`'s frames are the reference for what the correct one looks like |
 | The orbit travels but stops half way round, never reaching the opening view it was told to end on | Expected. Both measured clips covered about half a turn and stopped: `50f623b2` happened to end on the named front view because its move began at the rear, and `8efeb556` — whose azimuth is readable frame by frame — began at the front and finished at the rear | Nothing to fix in the move. Choose two interior views that make half a turn worth watching, and if the clip has to end on the opening view, write that view as the next segment after the cut, where the timestamps hold. See "The closing return is not honoured" in §3 |
 | An accessory sits forward of or behind the line it was written on | The left/right axis is controllable and depth is not, measured on `8efeb556`: `to the right of the glasses and only to the right ... nothing lies to the left` held, while `both on the same line` did not — the cloth sits forward of and below the case | Name the side (that part works, and it repairs `beside`, which was read as "on either side of" on both grinder clips), then check the depth on the draft and accept it or re-roll. One run each way, on two accessories |
 | The orbit moves, but one written angle never shows up, or the views are bunched instead of evenly spaced | Expected: the pictures are honoured, their spacing is not. On job `50f623b2-c54a-4d9d-9646-31dd06e2a926` three interior views were written and two rendered, and the move held one of them for roughly 2 of its 4 seconds; on `8efeb556-bf38-45ec-940b-a792ef74bfcf` two were written and two rendered, one on time and one about 0.6s late | Nothing to fix in a delivered clip — plan for it instead: two interior pictures for a four-second orbit, no angle required to land on a given second, and read the frames rather than assuming the stamps. See "4. A timestamp orders the pictures; it does not schedule them" |
