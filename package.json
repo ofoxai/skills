@@ -1,6 +1,6 @@
 {
   "name": "ofox-skills",
-  "version": "1.5.5",
+  "version": "1.6.0",
   "description": "Agent skills for the Ofox platform: video generation (Seedance 2.5 short drama, ad creative, product video, anime drama, first-to-last-frame keyframe animation, UI product demos, extending footage you already have or re-shooting its ending from one of its own frames, handheld UGC clips, cheap vertical Shorts/Reels drafts, talking-head clips from a portrait and a script, explainers that pick the one idea a short clip can actually hold, and music videos whose visuals are written to a track's structure because the model never hears the audio), image generation and editing (change one thing in a photo you already have, or a whole set of product images priced as a set), SSH-key encrypted secrets, ImageMagick image handling, and static-site deploys to Cloudflare.",
   "keywords": [
     "claude-code",
