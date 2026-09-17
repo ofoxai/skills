@@ -1086,6 +1086,15 @@ print_estimate() {
     if [ -n "$pair_known" ] && [ "$m_q" = "$req_q" ] && [ "$m_size" = "$req_size" ]; then
       exact="$m_tokens|$m_q|$m_size|$m_date"
     fi
+    # Ranking on output tokens is CORRECT here, unlike on the edit path.
+    # Audited 2026-09-17 when the edit selector was fixed: a generation's cost
+    # is tokens * rate — ONE term, with a rate that is constant per model — so
+    # "most output tokens" and "dearest" are the same ordering by
+    # construction. An edit adds a second term for the uploaded image, which
+    # dominates at large input sizes, and that is what made the same key wrong
+    # over there. If a per-point rate is ever introduced here, this stops being
+    # safe and must move to comparing computed cost, as print_edit_estimate
+    # now does.
     if [ "$m_tokens" -gt "$best_tokens" ]; then
       best_tokens="$m_tokens"
       best="$m_tokens|$m_q|$m_size|$m_date"
@@ -1219,21 +1228,45 @@ print_edit_estimate() {
   # approved for a 15.4-cent frame.
   local model="$1" count="${2:-1}" req_q="${3:-}" in_size="${4:-}"
   local rate rate_img per_image total tail
-  local best="" best_tokens=-1 points=0 exact="" bound=""
-  local m_out m_in m_insize m_q m_date measurements
+  local best="" best_tokens=-1 best_cost=-1 points=0 exact="" bound=""
+  local m_out m_in m_insize m_q m_date m_cost measurements
   local a_out a_in a_insize a_q a_date
 
   load_models >/dev/null 2>&1 || true
   rate="$(output_image_rate "$model")" || rate=""
   measurements="$(edit_anchor_measurements "$model")" || measurements=""
 
+  # Resolved BEFORE the loop on purpose: the dearest point has to be chosen on
+  # the money, and the money needs the input-token rate as well as the output
+  # one. This used to sit below the loop, which is why the loop could only
+  # compare output tokens.
+  rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '.pricing.image // empty' 2>/dev/null)" || rate_img=""
+  [ -n "$rate_img" ] || rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '(.pricing.input // .pricing.prompt) // empty' 2>/dev/null)" || rate_img=""
+  [ -n "$rate_img" ] || rate_img=0
+
   # Same shape as print_estimate: quote the point measured at this request's
   # own conditions when one exists, otherwise the DEAREST point, never an
   # interpolation between them. The condition that matters differs though.
   # For a generation it is (quality, size); for an edit the two measured
   # points have identical output size, quality and model and still differ 2.3x
-  # in output tokens, while tracking the INPUT image closely — so the input's
-  # size is what a point is matched on here.
+  # in output tokens, while the INPUT image is what the bill tracks — so the
+  # input's size is what a point is matched on here.
+  #
+  # "DEAREST" IS MEASURED IN MONEY, NOT IN OUTPUT TOKENS, and that is a fix
+  # rather than a preference. Through 1.13.0 this loop kept the point with the
+  # highest output_tokens. The four measured points run 129 / 229 / 301 / 129
+  # output tokens ordered by input size, and 0.006054 / 0.009182 / 0.013894 /
+  # 0.016438 in real cost — so the genuinely dearest point (1792x1008) has the
+  # EQUAL-LOWEST output count and the old key skipped straight past it. Any
+  # input without an exact match was handed 0.013894 as an "upper bound" over
+  # a point known to bill 0.016438. On an edit the uploaded picture is most of
+  # the bill at large sizes (1508 image tokens = 74% of that run), so output
+  # tokens are the smaller half and ranking on them ranks on the wrong thing.
+  # A bound that is not the largest known value is not a bound.
+  #
+  # With no published rate there is no money to compare, so the old
+  # output-token ordering stays as the fallback — that path cannot print a
+  # figure anyway and only names the point's token counts.
   while IFS="$(printf '\t')" read -r m_out m_in m_insize m_q m_date; do
     [ -n "${m_out:-}" ] || continue
     case "$m_out" in '' | *[!0-9]*) continue ;; esac
@@ -1241,7 +1274,14 @@ print_edit_estimate() {
     if [ -n "$in_size" ] && [ "$m_insize" = "$in_size" ]; then
       exact="$m_out|$m_in|$m_insize|$m_q|$m_date"
     fi
-    if [ "$m_out" -gt "$best_tokens" ]; then
+    if [ -n "$rate" ]; then
+      m_cost="$(awk -v o="$m_out" -v i="$m_in" -v r="$rate" -v ri="$rate_img" \
+        'BEGIN { printf "%.10f", o * r + i * ri }')"
+      if awk -v a="$m_cost" -v b="$best_cost" 'BEGIN { exit !(a > b) }'; then
+        best_cost="$m_cost"
+        best="$m_out|$m_in|$m_insize|$m_q|$m_date"
+      fi
+    elif [ "$m_out" -gt "$best_tokens" ]; then
       best_tokens="$m_out"
       best="$m_out|$m_in|$m_insize|$m_q|$m_date"
     fi
@@ -1276,9 +1316,7 @@ EOF
     echo "Estimated cost: cannot be predicted — no published output_image rate for '$model' (offline, or the model is missing from the list). Its measured edit spent $a_out output tokens and $a_in input tokens (input image $a_insize, --quality $a_q); the rate to multiply them by is what's missing." >&2
     return 0
   fi
-  rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '.pricing.image // empty' 2>/dev/null)" || rate_img=""
-  [ -n "$rate_img" ] || rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '(.pricing.input // .pricing.prompt) // empty' 2>/dev/null)" || rate_img=""
-  [ -n "$rate_img" ] || rate_img=0
+  # rate_img was resolved before the selection loop — see the note there.
 
   per_image="$(awk -v o="$a_out" -v i="$a_in" -v r="$rate" -v ri="$rate_img" \
     'BEGIN { printf "%.4f", o * r + i * ri }')"
@@ -1307,12 +1345,12 @@ EOF
   # request's own input is a different size from the measured one.
   if [ -n "$bound" ]; then
     if [ -n "$in_size" ]; then
-      echo "  UPPER BOUND because nothing has been measured on a $in_size input for '$model'; this is the dearest of $points measured point(s), quoted as a ceiling so the figure errs high rather than low. An edit bills the uploaded picture as input tokens, and the points on record move with it but NOT in proportion to it — 240 image tokens for a 320x180 input, 256 for 256x256, 576 for 854x480, which is 6.3x the pixels of the last for 2.25x the tokens. That is exactly why nothing is interpolated between them; see references/token-anchors.json's edit_anchors." >&2
+      echo "  UPPER BOUND because nothing has been measured on a $in_size input for '$model'; this is the dearest of $points measured point(s), quoted as a ceiling so the figure errs high rather than low. An edit bills the uploaded picture as input tokens, and the points on record move with it but NOT in proportion to it — 240 image tokens for a 320x180 input, 256 for 256x256, 576 for 854x480 and 1508 for 1792x1008; 854x480 has 6.3x the pixels of 256x256 for 2.25x the tokens, and 1792x1008 has 4.4x the pixels of 854x480 for 2.6x the tokens. That input term is most of the bill at large sizes (1508 tokens = 74% of the 1792x1008 run), which is why the dearest point is chosen on computed cost rather than on output tokens — those run 129/229/301/129 across the four points and do not track the input at all. Nothing is interpolated between them; see references/token-anchors.json's edit_anchors." >&2
     else
       echo "  UPPER BOUND because the input image could not be measured (ffprobe missing, or --image-url was used), so no measured point can be matched to it. This is the dearest of $points measured point(s). Nothing is interpolated; see references/token-anchors.json's edit_anchors." >&2
     fi
   else
-    echo "  Measured on an input image of exactly this size, which is the condition that matters most on this endpoint: two of the points on record share a model, a quality and an identical 1672x941 output and still differ 2.3x in output tokens, tracking the input rather than the output. The token count is still only exact after the fact." >&2
+    echo "  Measured on an input image of exactly this size, which is the condition that matters most on this endpoint: two of the points on record share a model, a quality and an identical 1672x941 output and still differ 2.3x in output tokens. What the bill tracks is the uploaded image, not the delivered one. The token count is still only exact after the fact." >&2
   fi
   if [ "$points" -le 1 ]; then
     echo "  Single sample: '$model' has been measured on exactly one edit, so this is not a ceiling anyone has tested — on the generations endpoint the same model's measured points sit 26x apart across two flags. Measure more pairs and add them to references/token-anchors.json rather than leaning on this line." >&2

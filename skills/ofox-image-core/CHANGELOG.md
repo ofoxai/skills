@@ -4,6 +4,71 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.13.1 — the edit estimate's "upper bound" could be below a known real bill
+
+**Code fix in `references/ofox-image.sh` (`print_edit_estimate`), plus the
+test that would have caught it.** Behaviour changes only on the **unmatched**
+path; an exact input-size match quotes exactly what it quoted in 1.13.0.
+
+**The defect.** When no measured point matches the request's input size, the
+script quotes the dearest one as a `ROUGH UPPER BOUND`. It chose "dearest" by
+`output_tokens`. An edit's bill is
+`output_tokens x out_rate + input_tokens x img_rate`, and at large input sizes
+the second term is most of it — 1508 image tokens is **74%** of the 1792x1008
+run's $0.016249. The four measured points run **129 / 229 / 301 / 129** output
+tokens and **0.006054 / 0.009182 / 0.013894 / 0.016438** in money, so the
+genuinely dearest point has the *equal-lowest* output count and the old key
+walked straight past it.
+
+**What a caller has to do differently:** nothing, but re-read any cost table
+built from an unmatched edit quote on 1.13.0 or earlier. Measured on a
+1400x787 input:
+
+```
+before:  ROUGH UPPER BOUND ~$0.0139   (854x480 point)    <- below a known bill
+after:   ROUGH UPPER BOUND ~$0.0164   (1792x1008 point)  <- correct
+```
+
+A bound that is not the largest known value is not a bound, and this one was
+**below a figure this repo had already been billed**. The never-under-quote
+rule exists for exactly this.
+
+**Why it survived four anchors: the test was wrong in the same place as the
+code.** `edit.test.sh` asserted the unmatched case quotes `301 output` and
+never `129 output` — encoding the identical premise that dearest means most
+output tokens. When the 1792x1008 point landed the assertion **inverted**, and
+began requiring the cheaper point and forbidding the dearest, the exact
+opposite of the intent in the comment above it. It had passed all along. A
+check cannot catch a bug it also contains.
+
+The assertion is now expressed in **money and derived from the data at run
+time** — it computes the dearest measured point's real cost from
+`token-anchors.json` and the rate card and asserts the quoted figure is `>=`
+it. No token count and no dollar figure is hardcoded, so a fifth anchor keeps
+it correct with no edit; swapping one constant for another would only have
+moved the mine. Verified by planting the defect: with the key reverted to
+`output_tokens` the suite reports
+
+```
+FAIL  an unmeasured input was quoted BELOW a known real bill
+      quoted=0.0139 dearest=0.016438
+```
+
+and returns to `passed: 50  failed: 0` when the fix is restored.
+
+**The `generate` path was audited and does not have this shape.** A
+generation's cost is `output_tokens x rate` — one term, rate constant per
+model — so "most output tokens" and "dearest" are the same ordering by
+construction. Confirmed live: an unmatched generate request quotes the 5063
+point at `~$0.1519`, the dearest it has. A comment in `print_estimate` now
+records that this was checked, and that it stops being safe if a per-point
+rate is ever introduced.
+
+Also refreshed: the `UPPER BOUND` explanation printed to the user still listed
+only three input sizes and their pixel/token ratios. It now carries all four,
+both ratio comparisons, and the reason the selector uses cost rather than
+output tokens.
+
 ## 1.13.0 — 1.12.0 was wrong: the anchor is complete, and the under-quote never existed
 
 **Data and documentation only. `references/ofox-image.sh` is untouched.**
