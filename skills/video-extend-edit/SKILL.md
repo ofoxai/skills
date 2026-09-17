@@ -2,11 +2,11 @@
 name: video-extend-edit
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus a video you already have. Makes an existing clip longer, or replaces its ending. Use when a user wants more of footage they already have, e.g. "extend this 5-second clip to 15", "keep going from where this one ends", "re-shoot the ending from 4 seconds on", or "add another shot onto this". A frame is pulled out of the clip at zero cost and becomes the first frame of a newly generated segment, which is then joined onto the original. Do not use to change what is inside the picture — measured, the API accepts an edit mode field and silently ignores it, so no content-editing route exists here and none returns an error either; for two stills you already have see keyframe-animation, and for a clip from nothing see the seedance-* scenarios.
 license: MIT
-version: "1.2.0"
+version: "1.3.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/video-extend-edit
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.3.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -586,6 +586,25 @@ The rest of the fallbacks, because the gap here is easy to overstate:
   it**, on purpose, to isolate the frame-shape question. It therefore says
   nothing about real-person footage, in either direction.
 
+**Read the PNG before you write the ACTION line — every object in it, and the
+state each one is already in.** This one is measured. In job
+`565e3193-68d7-4223-bb15-337723e89836` the ACTION asked a hard case lid to
+close onto its base. In the attached frame that case was **already closed**,
+so the instruction had no starting state: nothing closed, nothing moved, and
+there was no error, no warning, and nothing in the returned metadata to say a
+clause had been dropped. The other half of the same ACTION line — a folded
+cloth drawn out of frame to the right — landed in the same job, and was
+confirmed to be a real translation rather than the push-in cropping it out.
+The difference was not the wording. One object was in a state its action could
+start from and the other was not.
+
+The failure mode is specific to this route and worth naming: you are writing
+from the scene in your head, which includes the twelve seconds the viewer just
+watched. **The model sees one still.** A lid that closed at second 9 of the
+source is, at the anchor frame, simply a closed lid. So walk the frame object
+by object and ask of each verb you are about to write: can this start from
+what is actually in the picture?
+
 Two other things worth a look while the PNG is open, both free to fix and
 neither of them measured — they are craft, not findings: whether the frame
 lands mid-motion (a blurred frame is a blurry opening second — step a little
@@ -606,9 +625,37 @@ camera move written only as a verb tends not to happen, so write the frames it
 passes through; and negative clauses are honoured more reliably than positive
 ones.
 
+⚠️ That second finding is about the **AVOID list** — prohibitions on things
+entering the frame. Do not carry it over to a clause inside `CAMERA` that
+describes a *framing state*. Measured on this route, one `CAMERA` sentence in
+job `565e3193` produced three different outcomes at once:
+
+| Clause | Outcome |
+|---|---|
+| "a wide shot holding all three objects with margin on every side" | landed |
+| "the case is cropped at the right edge" | landed |
+| "a close shot on the left lens rim and the hinge, the tortoiseshell grain legible" | landed — though the hinge is peripheral in the delivered frames, not a co-subject |
+| "the glasses fill about two thirds of the frame width" | **short.** Measured 52% of frame width at the 6s mark, and the pair was itself cropped at the left edge, so at most about 58% counting the part off-frame |
+| "from 8s the case is no longer in frame" | **did not land at all.** The case sat at the right edge for the whole segment |
+
+Two things to take from that, both n=1 and neither a rule:
+
+- **A quantified framing instruction is the same species as a count.** This
+  repo has already measured counts as uncontrollable while every quality in the
+  same sentence holds — case 1011 asked for three hinge knuckles and got four,
+  with the barrel shape and the two materials all correct. "Two thirds of the
+  frame width" behaved the same way: right direction, wrong amount. Write the
+  size you want as a relation to something visible ("the frame front reaches
+  from edge to edge with the temple tips just cropped") rather than as a
+  fraction, and expect to check it rather than trust it.
+- **A negative framing state was the one clause that did nothing at all.** When
+  you need something out of frame, the positive form ("the frame holds only the
+  lens rim and the hinge, with pale grey surface to every edge") is the one with
+  evidence behind it on this route.
+
 ```
 CONTINUES FROM: the attached frame is the last frame of the preceding footage — the same <subject>, the same <set>, the same light. Nothing about the scene resets.
-ACTION: <what happens next, as one thing, in physical words>.
+ACTION: <what happens next, as one thing, in physical words — in a state the attached frame can actually start from>.
 CAMERA: <the move, written as the pictures it passes through, each with its own shot size> — or "the camera holds where it is" if it should not move.
 ENDING: <the state the segment finishes in>.
 AVOID: a cut back to an establishing shot; the <subject> changing shape, colour or position between the first frame and the second; a new character or object entering that was not in the frame; subtitles, captions, on-screen text, watermarks.

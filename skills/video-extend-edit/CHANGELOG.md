@@ -2,6 +2,41 @@
 
 All notable changes to the **video-extend-edit** skill. Versioning follows SemVer.
 
+## 1.3.0 — an ACTION clause with no starting state fails silently
+
+**Documentation only. No default, price, prompt template slot, command or
+route changed.**
+
+Carrying a published 12-second product clip 12 seconds further (job
+`565e3193-68d7-4223-bb15-337723e89836`, $2.88, i2v + a local ffmpeg join)
+produced two findings about writing the prompt, and both are now in the file.
+
+- **An ACTION verb that has no starting state in the attached frame does
+  nothing, and says nothing.** The clause asked a hard case lid to close onto
+  its base; in the anchor frame that case was already closed. No error, no
+  warning, nothing in the returned metadata. The other half of the same ACTION
+  line — a cloth drawn out of frame — landed in the same job, verified as a
+  real translation rather than the push-in cropping it out. "Read the PNG
+  before you write the ACTION line" is now a measured step in **Pull the
+  frame**, not a line of craft advice, and the template's `ACTION` slot says
+  it too.
+- **"Negative clauses are honoured more reliably" is about the AVOID list, and
+  one `CAMERA` sentence warns against carrying it there.** The same sentence
+  produced three outcomes, now tabulated in **The prompt**: three qualitative
+  framing clauses landed; the one *quantified* clause came up short ("about two
+  thirds of the frame width" measured 52%, at most ~58% counting the part
+  cropped off-frame); and the one *negative* framing-state clause ("from 8s the
+  case is no longer in frame") did nothing at all. The quantified miss lines up
+  with this repo's existing count-versus-quality finding rather than being new.
+  Both readings are marked n=1 and as shapes to watch, not rules, and the
+  positive rewrite to reach for meanwhile is given.
+
+**What a caller has to do differently:** before writing `ACTION`, open the
+extracted PNG and walk it object by object, checking that each verb can start
+from what is actually in the picture. An agent that fills the slot from the
+scene described by the user — rather than from the frame — can write a clause
+that is silently discarded, and the job still completes and still bills.
+
 ## 1.2.0 — this skill's reason for existing was an inference; it is now a measurement
 
 **Documentation only. No default, price, prompt template, command or route
