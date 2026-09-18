@@ -93,8 +93,12 @@ function check(body, o = {}) {
   if (!o.noChangelog) {
     writeFileSync(
       join(dir, "probe", "CHANGELOG.md"),
-      `# Changelog\n\n## ${o.changelogVersion ?? o.version ?? "1.0.0"} — first\n`,
+      `# Changelog\n\n## ${o.changelogVersion ?? o.version ?? "1.0.0"} — first\n${o.changelog ?? ""}`,
     );
+  }
+  if (o.reference) {
+    mkdirSync(join(dir, "probe", "references"), { recursive: true });
+    writeFileSync(join(dir, "probe", "references", "notes.md"), o.reference);
   }
 
   const results = checkSkills(dir);
@@ -106,6 +110,9 @@ function check(body, o = {}) {
 }
 
 const messages = (r) => r.problems.map((p) => `${p.line}:${p.column ?? 0} ${p.message}`);
+// Rule 6 can report against any shipped file, so its assertions carry one.
+const located = (r) =>
+  r.problems.map((p) => `${p.file ?? "SKILL.md"}:${p.line}:${p.column ?? 0} ${p.message}`);
 const cmd = (...lines) =>
   ["```bash", "bash ../ofox-video-core/references/ofox-video.sh generate \\", ...lines, "```", ""].join("\n");
 
@@ -286,6 +293,150 @@ test("a bin reached only through the core script it delegates to is accepted", (
   // appears in the core script, never in this skill's text.
   const r = check("Body with no tool names in it at all.\n", { bins: "curl" });
   assert.deepEqual(r.problems, []);
+});
+
+// ---------------------------------------------------------------------------
+// Rule 6 — install commands name what they install
+//
+// The line every one of these is built from is the one that put 14 of this
+// repo's 19 skills into `suspicious` on ClawHub on 2026-09-18:
+//
+//     npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
+//
+// All 14 have been narrowed by hand. Nothing held the narrowing in place, so
+// the first two tests below are the whole reason this rule exists: they plant
+// that exact line back and assert the gate goes red at the character.
+// ---------------------------------------------------------------------------
+
+const BROAD = "npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes";
+
+test("the overbroad install line is caught in a fenced block, at the character", () => {
+  const r = check(["```bash", BROAD, "```", ""].join("\n"));
+  assert.deepEqual(located(r), [
+    "SKILL.md:18:30 `--skill '*'` on an install command — this installs every skill in the repo, when the caller is missing exactly one",
+    "SKILL.md:18:42 `--agent '*'` on an install command — this installs every agent's configuration on the machine",
+    "SKILL.md:18:54 `--global … --yes` on an install command — this installs the whole repo machine-wide with confirmation suppressed",
+  ]);
+});
+
+test("the overbroad install line is caught in an inline-code span too", () => {
+  // This is the shape it really shipped in — recovery prose, not a code block.
+  const r = check("  `" + BROAD + "`, which asks for nothing.\n");
+  assert.deepEqual(
+    located(r).map((m) => m.split(" ").slice(0, 2).join(" ")),
+    ["SKILL.md:17:33 `--skill", "SKILL.md:17:45 `--agent", "SKILL.md:17:57 `--global"],
+  );
+});
+
+test("the narrowed install line — the one that replaced it — is not reported", () => {
+  // Must not fire: this is what all 14 skills say today. If this ever goes red
+  // the rule is broader than the defect and will be switched off, not fixed.
+  const r = check(
+    "  `npx skills add ofoxai/skills --skill ofox-video-core`, then hand it over.\n" +
+      "  This repo's wrapper is `npx ofox-skills ofox-video-core`.\n",
+  );
+  assert.deepEqual(r.problems, []);
+});
+
+test("a CHANGELOG entry that says which flag went, without naming the installer, is not reported", () => {
+  // The line between recommending a command and recording that one was
+  // removed is FORM: a recommendation is runnable. An entry has to be able to
+  // say what it removed — the alternative is an opt-out marker, which erodes.
+  const r = check("Body.\n", {
+    changelog:
+      "\nRecovery advice no longer passes `--skill '*'`, `--agent '*'`, `--global`\nor `--yes`. It names the one skill that is missing.\n",
+  });
+  assert.deepEqual(r.problems, []);
+});
+
+test("but a CHANGELOG that reproduces the runnable command IS reported", () => {
+  // CHANGELOG.md is in scope on purpose. Measured precedent: ofox-video-core
+  // 1.21.1 moved a secret-shaped literal out of its fixtures and into the
+  // entry explaining the move, and the registry finding moved with it. A gate
+  // that stopped at SKILL.md would be green while the registry was red.
+  const r = check("Body.\n", { changelog: "\nThe old advice was `" + BROAD + "`.\n" });
+  assert.equal(r.problems.length, 3);
+  assert.equal(r.problems[0].file, "CHANGELOG.md");
+  assert.equal(r.problems[0].line, 5);
+  assert.match(r.problems[0].message, /--skill '\*'/);
+});
+
+test("a shipped reference file is in scope too, and is named in the report", () => {
+  const r = check("Body.\n", { reference: "Install with `" + BROAD + "` first.\n" });
+  assert.equal(r.problems.length, 3);
+  assert.equal(r.problems[0].file, "references/notes.md");
+  assert.equal(r.problems[0].line, 1);
+});
+
+test("`--global --yes` with no wildcard is still the whole repo, and is caught", () => {
+  // `skills add <repo>` already defaults to every skill, so a partial
+  // paste-back that drops the wildcards is exactly as broad.
+  const r = check("```bash\nnpx skills add ofoxai/skills --global --yes\n```\n");
+  assert.deepEqual(located(r), [
+    "SKILL.md:18:30 `--global … --yes` on an install command — this installs the whole repo machine-wide with confirmation suppressed",
+  ]);
+});
+
+test("`--yes` alone, on a pinned exec that is not an installer, is not reported", () => {
+  // cloudflare-drop's real command. `--yes` is ordinary; only the pair with
+  // `--global`, on an install command, is breadth.
+  const r = check("```bash\nnpm exec --yes wrangler@4.134.0 -- deploy ./dist\n```\n");
+  assert.deepEqual(r.problems, []);
+});
+
+test("`--global` alone still asks, and is not reported", () => {
+  const r = check("```bash\nnpx skills add ofoxai/skills --skill ofox-video-core --global\n```\n");
+  assert.deepEqual(r.problems, []);
+});
+
+test("the wildcard inside a quoted prompt is not read as a flag", () => {
+  // The prompt's quoted run is masked before the line is examined, so neither
+  // the installer nor the flags inside it start a command.
+  const r = check(
+    cmd(
+      "  --duration 4 \\",
+      `  --prompt "a poster that reads: ${BROAD}"`,
+    ),
+  );
+  assert.deepEqual(r.problems, []);
+});
+
+test("a file outside a skill directory is never read", () => {
+  // The repo's own README.md carries the whole-repo install line deliberately
+  // and lives one level above skills/. This rule reads what ships INSIDE a
+  // skill directory — the same bundle the registry scanner reads — so the
+  // README is out of scope by construction rather than by an exemption. The
+  // stand-in here sits beside the skill directories for the same reason.
+  const dir = join(ROOT, "outside");
+  mkdirSync(join(dir, "probe"), { recursive: true });
+  writeFileSync(join(dir, "README.md"), "```bash\n" + BROAD + "\n```\n");
+  // No bins: this fixture has no core script beside it, so rule 5 would
+  // otherwise report the two it declares and drown the thing under test.
+  writeFileSync(join(dir, "probe", "SKILL.md"), frontmatter("probe", { bins: "" }) + "\nBody.\n");
+  writeFileSync(join(dir, "probe", "CHANGELOG.md"), "# Changelog\n\n## 1.0.0 — first\n");
+  const results = checkSkills(dir);
+  assert.equal(results.length, 1, "only the skill directory is a subject");
+  assert.deepEqual(results[0].problems, []);
+});
+
+test("the count of install commands and scanned files is reported, and counts every one", () => {
+  // Same reason rule 1 asserts its total: an extractor that quietly stops
+  // matching prints the identical `ok`, and the only visible difference is a
+  // number nobody was shown. Four commands here — two in the body, one in the
+  // changelog, one in the reference — and three shipped files.
+  const r = check(
+    "Run `npx skills add ofoxai/skills --skill ofox-video-core`.\n" +
+      "```bash\nnpx ofox-skills ofox-video-core\n```\n" +
+      "A span that does not OPEN with the installer — `ofoxai/skills` — is\n" +
+      "prose about a command rather than a command.\n",
+    {
+      changelog: "\nUse `npx ofox-skills ofox-video-core` instead.\n",
+      reference: "Install it with `npx skills add ofoxai/skills --skill ofox-image-core`.\n",
+    },
+  );
+  assert.deepEqual(r.problems, []);
+  assert.equal(r.installCommands, 4);
+  assert.equal(r.installFiles, 3); // SKILL.md, CHANGELOG.md, references/notes.md
 });
 
 // ---------------------------------------------------------------------------

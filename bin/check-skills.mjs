@@ -38,6 +38,24 @@
 //   - whether a bin the skill actually needs is MISSING from `requires.bins`.
 //     Only the listed-but-unused direction is checked; the other one cannot be
 //     decided from a text search without guessing at prose mentions.
+//   - the "unpinned" half of ClawHub's T08 finding. Rule 6 checks breadth and
+//     nothing else. Every install line in this repo names `skills` /
+//     `ofox-skills` with no `@version`, and that is a decision rather than an
+//     oversight (recorded in .trellis/tasks/09-18-clawhub-suspicious): this
+//     repo's bar is that every published command has been run on a real
+//     machine, and an installer version pin is an element only a real install
+//     can verify — and since the recovery text is handed to the USER to run,
+//     pinning them to a stale installer is actively worse than not pinning.
+//   - anything outside a skill directory. Rule 6 reads what SHIPS INSIDE
+//     `skills/<name>/`, which is also what the registry scanner reads. The
+//     repo's own README.md:173, README.zh-CN.md and bin/ofox-skills.mjs:37 all
+//     carry the whole-repo install line on purpose — the first two document a
+//     deliberate human choice to install everything, and the third is the
+//     program that supplies those defaults. They are out of scope by
+//     construction, not by an exemption.
+//   - a breadth flag with no installer named on the same command. See rule 6's
+//     own note: that is the line drawn between recommending a command and
+//     recording that one was removed.
 //   - `name` matching the directory, `license`, `metadata.author`, the
 //     README/skills.sh.json tables. Those are CONTRIBUTING.md rules too; they
 //     have not bitten yet, and a rule added before its first defect is a rule
@@ -45,7 +63,7 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { KEY_LINE, checkFrontmatter, frontmatterEnd } from "./check-frontmatter.mjs";
 
 // Codex truncates a skill description at roughly this many characters when it
@@ -507,19 +525,32 @@ function withoutFrontmatter(text) {
   return end === -1 ? text : lines.slice(end + 1).join("\n");
 }
 
-function skillTextCorpus(skill, skillsDir) {
-  const chunks = [];
-  const walk = (dir) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) walk(path);
-      else if (TEXT_FILE.test(entry.name)) {
-        const text = readFileSync(path, "utf8");
-        chunks.push(path === skill.path ? withoutFrontmatter(text) : text);
-      }
+// Every shipped text file in the skill directory, in a stable order, each
+// tagged with its path relative to that directory. Read once and shared: rule
+// 5 joins them into one corpus, rule 6 reads them file by file because it has
+// to name the file a problem sits in.
+function walkTextFiles(dir, base = dir, out = []) {
+  const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+    a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+  );
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) walkTextFiles(path, base, out);
+    else if (TEXT_FILE.test(entry.name)) {
+      out.push({
+        path,
+        rel: relative(base, path).split(/[\\/]/).join("/"),
+        text: readFileSync(path, "utf8"),
+      });
     }
-  };
-  walk(skill.dir);
+  }
+  return out;
+}
+
+function skillTextCorpus(skill, skillsDir) {
+  const chunks = skill.files.map((f) =>
+    f.path === skill.path ? withoutFrontmatter(f.text) : f.text,
+  );
   for (const script of skill.cores) {
     const core = CORES[script];
     try {
@@ -554,6 +585,184 @@ function checkBins(skill, skillsDir) {
     });
   }
   return problems;
+}
+
+// ---------------------------------------------------------------------------
+// Rule 6 — an install command in shipped text names what it installs
+// ---------------------------------------------------------------------------
+
+// On 2026-09-18, 14 of this repo's 19 skills were `suspicious` on ClawHub for
+// one line each:
+//
+//     npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
+//
+// carried as recovery advice for "the core skill is missing". Unpinned is the
+// half the scanner names first and the half that matters least here; the
+// breadth is the defect. A skill that is missing exactly one dependency told
+// an agent to install the whole repo, into every agent on the machine,
+// system-wide, with confirmation suppressed — and to run it itself, outside
+// the working directory.
+//
+// All 14 have been narrowed. The reason this rule exists is that the narrowing
+// is held in place by nothing: paste the old line back into any SKILL.md and
+// no check in this repo goes red. We would find out at the next publish, at
+// the next scan, whenever somebody next opened the registry page. A check that
+// only runs in somebody else's infrastructure is not a check we have.
+//
+// SCOPE, and the two decisions inside it:
+//
+//   * CHANGELOG.md is IN scope, along with references/ and any other shipped
+//     file — the same bundle the registry scanner reads. That is measured, not
+//     assumed: `ofox-video-core` 1.21.1 moved a secret-shaped literal out of
+//     its test fixtures and into the changelog entry explaining the move, and
+//     the finding moved with it (see external-api-integration.md). A gate that
+//     stopped at SKILL.md would be green while the registry was red.
+//
+//   * What separates "recommending this command" from "recording that it was
+//     removed" is FORM, not sentiment: a recommendation is runnable. This rule
+//     only reads text that is a runnable install command — a line inside a
+//     fenced block, or an inline-code span that OPENS with the installer. A
+//     changelog sentence that needs to say which flag went can name the flag
+//     without naming the installer, and that is deliberate. It keeps the
+//     narration route open without an opt-out marker, which is the alternative
+//     and which erodes. Note the current changelogs already describe the
+//     removal without reproducing the command; this rule makes that the rule
+//     rather than a habit.
+const INSTALLER_CORE = String.raw`(?:npx\s+)?(?:skills\s+(?:add|install)|ofox-skills)(?![\w-])`;
+const INSTALLER_ANYWHERE = new RegExp(String.raw`(?<![\w-])${INSTALLER_CORE}`);
+const INSTALLER_OPENS = new RegExp(String.raw`^\s*${INSTALLER_CORE}`);
+
+// `'*'`, `"*"` or a bare `*`. Written against the RAW line, because masking
+// the quoted runs (which is what keeps a `--prompt` from being read as shell)
+// would blank the very character being looked for. The flag token's own
+// position is checked against the mask instead — see unmasked() below.
+const WILDCARD = String.raw`(?:'\*'|"\*"|\*)`;
+const BREADTH = [
+  {
+    re: new RegExp(String.raw`(?<![\w-])(?:--skill|-s)(?:=|\s+)${WILDCARD}(?![\w-])`, "g"),
+    says: "every skill in the repo, when the caller is missing exactly one",
+  },
+  {
+    re: new RegExp(String.raw`(?<![\w-])(?:--agent|-a)(?:=|\s+)${WILDCARD}(?![\w-])`, "g"),
+    says: "every agent's configuration on the machine",
+  },
+  {
+    re: /(?<![\w-])--all(?![\w-])/g,
+    says: "everything the installer can find",
+  },
+];
+// The same breadth with no wildcard in sight: `skills add <repo>` already
+// defaults to every skill, so `--global --yes` on its own is the whole repo,
+// machine-wide, unattended. Checked as a PAIR — `--yes` alone is ordinary and
+// legitimate (cloudflare-drop's `npm exec --yes wrangler@4.134.0` is pinned
+// and scoped), and a lone `--global` still asks.
+const GLOBAL_FLAG = /(?<![\w-])(?:--global|-g)(?![\w-])/;
+const YES_FLAG = /(?<![\w-])(?:--yes|-y)(?![\w-])/;
+
+// Returns install commands as groups of line segments — a group, not a line,
+// because `--global` and `--yes` can straddle a backslash continuation and the
+// pair is only a defect together.
+//
+// Markdown files are read the way rule 1 reads them (fenced blocks are code,
+// everything else is prose where only an inline-code span counts). A shipped
+// .sh/.mjs/.json file has no fences, so it is read as code end to end.
+function collectInstallCommands(text, { markdown }) {
+  const commands = [];
+  const lines = text.split("\n");
+  let inCode = !markdown;
+  let current = null;
+  let carry = null;
+
+  const close = () => {
+    if (current) commands.push(current);
+    current = null;
+    carry = null;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    if (markdown && /^\s*(```|~~~)/.test(raw)) {
+      inCode = !inCode;
+      close();
+      continue;
+    }
+
+    if (inCode) {
+      const { out: masked, quote } = maskQuoted(raw, carry);
+      if (!current && INSTALLER_ANYWHERE.test(masked)) current = { segments: [] };
+      current?.segments.push({ line: i + 1, offset: 0, raw, masked });
+      carry = quote;
+      // A command ends at the first line that neither continues with a
+      // backslash nor leaves a quoted run open.
+      if (current && !carry && !/\\\s*$/.test(raw)) close();
+      continue;
+    }
+    carry = null;
+
+    // Prose. A span that OPENS with the installer is a command someone copies
+    // and runs; a span that merely contains the word is a sentence about one.
+    for (const span of raw.matchAll(/`([^`]+)`/g)) {
+      if (!INSTALLER_OPENS.test(span[1])) continue;
+      commands.push({
+        segments: [{ line: i + 1, offset: span.index + 1, raw: span[1], masked: span[1] }],
+      });
+    }
+  }
+  close();
+  return commands;
+}
+
+// Returns the problems AND the subjects counted, for the same reason rule 1
+// does: an extractor that quietly stops matching prints the identical `ok`.
+function checkInstalls(skill) {
+  const problems = [];
+  let commands = 0;
+
+  const report = (file, seg, index, text, says) =>
+    problems.push({
+      rule: "install",
+      file: file.rel,
+      line: seg.line,
+      column: seg.offset + index + 1,
+      message: `\`${text}\` on an install command — this installs ${says}`,
+      excerpt: (seg.offset ? seg.raw : seg.raw.trim()).slice(0, 96),
+      consequence:
+        "ClawHub reads this as T08 (overbroad third-party installation) and marks the skill `suspicious`. An agent that copies it writes outside the working directory, into configuration the user never named, with confirmation suppressed.",
+      fix: "name the one thing that is missing — `--skill ofox-video-core` — and hand the command to the user rather than running it. If this line is RECORDING a command that was removed, describe the flag without naming the installer on the same command; this rule only reads text that is runnable.",
+    });
+
+  for (const file of skill.files) {
+    const found = collectInstallCommands(file.text, { markdown: file.rel.endsWith(".md") });
+    commands += found.length;
+    for (const command of found) {
+      for (const seg of command.segments) {
+        // The mask blanks quoted characters to spaces while keeping the line's
+        // length, so a character that survived unchanged was outside quotes.
+        const unmasked = (i) => seg.masked[i] === seg.raw[i];
+        for (const { re, says } of BREADTH) {
+          for (const m of seg.raw.matchAll(re)) {
+            if (!unmasked(m.index)) continue;
+            report(file, seg, m.index, m[0], says);
+          }
+        }
+      }
+      const whole = command.segments.map((s) => s.masked).join(" ");
+      if (!YES_FLAG.test(whole) || !GLOBAL_FLAG.test(whole)) continue;
+      for (const seg of command.segments) {
+        const m = GLOBAL_FLAG.exec(seg.masked);
+        if (!m) continue;
+        report(
+          file,
+          seg,
+          m.index,
+          `${m[0]} … ${YES_FLAG.exec(whole)[0]}`,
+          "the whole repo machine-wide with confirmation suppressed",
+        );
+        break;
+      }
+    }
+  }
+  return { problems, files: skill.files.length, commands };
 }
 
 // ---------------------------------------------------------------------------
@@ -655,20 +864,34 @@ export function checkSkills(skillsDir) {
       cores,
       isScenario: cores.length > 0 && !shipsOwnScript,
       fm: readFrontmatter(path),
+      files: walkTextFiles(dir),
     };
 
     const flags = checkFlags(skill, flagsByScript);
+    const installs = checkInstalls(skill);
+    // Problems from four rules keyed on SKILL.md plus one that can name any
+    // shipped file, so the file has to sort first or the list reads as one
+    // document with the line numbers jumbled.
+    const problems = [
+      ...flags.problems,
+      ...checkVersions(skill),
+      ...checkHomepage(skill),
+      ...checkBins(skill, skillsDir),
+      ...installs.problems,
+    ].sort(
+      (a, b) =>
+        (a.file ?? "SKILL.md").localeCompare(b.file ?? "SKILL.md") ||
+        a.line - b.line ||
+        (a.column ?? 0) - (b.column ?? 0),
+    );
     results.push({
       name,
       path,
       skipped: false,
       flagsChecked: flags.checked,
-      problems: [
-        ...flags.problems,
-        ...checkVersions(skill),
-        ...checkHomepage(skill),
-        ...checkBins(skill, skillsDir),
-      ].sort((a, b) => a.line - b.line || (a.column ?? 0) - (b.column ?? 0)),
+      installFiles: installs.files,
+      installCommands: installs.commands,
+      problems,
       description: describeDescription(skill),
     });
   }
@@ -730,7 +953,7 @@ if (isMain) {
   for (const { name, problems } of broken) {
     for (const p of problems) {
       console.error(
-        `BROKEN  ${name}/SKILL.md:${p.line}${p.column ? ":" + p.column : ""}  ${p.message}`,
+        `BROKEN  ${name}/${p.file ?? "SKILL.md"}:${p.line}${p.column ? ":" + p.column : ""}  ${p.message}`,
       );
       if (p.excerpt) console.error(`          …${p.excerpt}…`);
       if (p.consequence) console.error(`          ${p.consequence}`);
@@ -751,13 +974,18 @@ if (isMain) {
       `\n${count} problem${count === 1 ? "" : "s"} across ${broken.length} of ${results.length} skills.`,
     );
     console.error(
-      "Every one of these is a claim the documentation makes that the execution layer does not keep. Fix before publishing.",
+      "Each one is a promise the shipped documentation makes and something else has to keep — the execution layer, the registry, or the user's machine. Fix before publishing.",
     );
     process.exit(1);
   }
   if (skipped.length) process.exit(1);
   const checked = results.reduce((n, r) => n + (r.flagsChecked ?? 0), 0);
+  const installFiles = results.reduce((n, r) => n + (r.installFiles ?? 0), 0);
+  const installCommands = results.reduce((n, r) => n + (r.installCommands ?? 0), 0);
   console.log(
     `ok  ${results.length} skills: ${checked} documented flag mentions all exist, versions agree in three places, homepages match, declared bins are real.`,
+  );
+  console.log(
+    `    ${installCommands} install commands across ${installFiles} shipped files each name what they install.`,
   );
 }
