@@ -4,6 +4,136 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.14.0 — the API key goes to one host, and neither escape hatch can reach past its own job
+
+Three guards, each narrowing a capability this script really had rather than
+removing it. New suite: `references/test/keyguard.test.sh` (66 checks), which
+constructs the refused input for every rule instead of watching a good input
+pass. Written alongside the same change in `ofox-video-core` 1.30.0.
+
+### `--extra-form` will not read local files
+
+`--extra-form K=V` goes straight into curl's `-F`, where a **value** starting
+`@` uploads that local file and one starting `<` sends that file's contents as
+the field value. `--extra-form "mask=@$HOME/.ssh/id_rsa"` therefore worked:
+any file the user could read, uploaded to whatever `API_BASE` points at. The
+field name was never the issue, so the rule is on the value.
+
+Both prefixes are refused (exit **1**, before the request). Unaffected: every
+ordinary pair, including `k=user@example.com`, `k=a<b` and `k=` — only a value
+*starting* with the character is refused. Also unaffected are the script's own
+`-F "image=@PATH"` and `-F "image_url=<TEMPFILE"`, which are built from
+`--image` / `--image-url`, not from this flag; both are asserted still working
+in the new suite.
+
+**What a caller has to do differently:** send images with `--image` or
+`--image-url`. And the standing suggestion to try a mask with
+`--extra-form "mask=@FILE"` — in `SKILL.md` and `references/api-params.md` —
+is withdrawn: masked edits were never established, and establishing them needs
+a flag with its own path validation, not a general file-upload hole left open
+for the one field that might want it. Both documents now say so.
+
+### `--extra-form` cannot overwrite a field that has a flag either
+
+The value rule above closed the file-read. The **key** rule was the older one
+and had gone stale: it refused `image`, `image_url`, `model` and `prompt`
+while the same function also builds `quality`, `size`, `n`, `output_format`
+and `background` from flags. Those five were reachable, and a second multipart
+part with an owned name is not a harmless duplicate — the server picks one of
+the two, the value that arrived this way skipped the flag's own validation
+(`--quality` is checked per resolved model), and it is appended **after**
+`print_edit_estimate` has been computed from the flags.
+
+`n` is the sharp one, because it multiplies the bill. Measured on the dry-run
+path before the fix:
+
+```
+$ ofox-image.sh edit --image in.png --prompt p --extra-form "n=10" --dry-run
+Estimated cost: ROUGH UPPER BOUND ~$0.0164 ...
+N 1
+FORM_FIELDS image model prompt n
+```
+
+One image quoted and reported, ten requested. That is the never-under-quote
+rule broken through the escape hatch — the same defect `--extra-json` is
+refused for on the generations side, which the comment above it already
+claimed this path covered.
+
+All nine owned keys are refused now (exit **1**, before the request and before
+the quote). `--extra-form` keeps working for every field with no flag of its
+own; a name that merely *contains* an owned one (`n_hint`, `mask_hint`,
+`size_note`, `background_music`) is a different field and still passes.
+
+**What a caller has to do differently:** pass `--quality`, `--size`, `--n`,
+`--output-format` and `--background` as flags. Sent through `--extra-form`
+they now exit 1 instead of quietly changing what was billed.
+
+The test derives the list of owned keys from the script's own `form+=` lines
+rather than restating it, and asserts the count, so a flag added without a
+matching guard entry turns the suite red with no edit to the test —
+`falsifiable-gates.md`'s "the check and the code share one wrong premise" is
+exactly how the original four-name list survived review.
+
+### `--extra-json` cannot overwrite a field that has a flag, and cannot be empty
+
+It is merged **last** and its keys **win**, while the cost estimate is printed
+**before** the merge — so `--quality low --extra-json
+'{"quality":"high","size":"1792x1024"}'` quoted ~0.6 cents for the request
+that measured **15.4** cents.
+
+Refused now (exit **1**, before any request):
+
+- `model`, `prompt`, `quality`, `size`, `n`, `output_format`, `background` —
+  every field that has a flag. The error names the flag to use instead.
+  **This widens one existing rule**: an `n` key in `--extra-json` used to be
+  refused only for `google/gemini-3.1-flash-image`, and is now refused for
+  every model. The narrower branch was removed rather than left as a check
+  that could no longer run.
+- an explicitly empty value. The script now records whether the flag was
+  *written on the command line*, which is the one thing bash cannot recover
+  from the value; omitting it is byte-for-byte what it always was, asserted
+  against `--extra-json '{}'` in the new suite. An empty value is never
+  anything but a failed command substitution, and it used to mean *every check
+  skipped and nothing merged* — the request went out and billed without the
+  fields the caller meant to add. (Measured on the sibling video script,
+  2026-09-17; the same guard shape existed here.)
+- anything that is not a JSON **object**. The merge is jq's `*`, undefined
+  between other types: a non-object made the merge fail, the command
+  substitution yield an empty payload, and an empty body go out. Validity is
+  also now checked with `jq empty` rather than `jq -e .`, which keyed its exit
+  status on the *output value* and so reported a valid `null` or `false` as
+  "not valid JSON".
+
+Unaffected: `extra_body.provider.type`, and any other field with no flag.
+`--extra-json` is also merged through a temp file and `--slurpfile` now
+instead of `--argjson`, so a large value is not bounded by `ARG_MAX`.
+
+### `OFOX_API_BASE_URL` must be https, and an override is announced
+
+Still supported — a staging deployment is a legitimate use — but it decides
+which host receives the key:
+
+- a non-`https://` base is refused (exit **2**) unless the host is loopback
+  (`localhost`, `127.0.0.1`, `[::1]`), which keeps local test servers working;
+- a value that is not an http(s) URL at all is refused (exit **2**);
+- when it is set, a `NOTE:` on stderr names the host that will receive the
+  key. **Relay that line.**
+
+There is no polling-URL counterpart to the video skill's matching fix here,
+and that is checked rather than assumed: the new suite asserts that both
+authenticated requests are still built from `$API_BASE` and that no URL from a
+response body is ever fetched.
+
+### The "`ofox-video-core` isn't installed" paragraph matches the scenario skills again
+
+`SKILL.md`'s approval-gate probe ended by naming `npx skills add
+ofoxai/skills` — the whole repo — while the 14 scenario skills were narrowed in
+the same uncommitted change to ask for the **one** missing skill and to hand
+the command to the user rather than run it. It now says the same thing they do:
+one skill, three routes (skills.sh / `npx ofox-skills` / LobeHub-ClawHub), the
+user runs it. No behaviour change; `ofox-video-core` 1.30.0 carries the
+matching fix for its two shared reference files.
+
 ## 1.13.1 — the edit estimate's "upper bound" could be below a known real bill
 
 **Code fix in `references/ofox-image.sh` (`print_edit_estimate`), plus the

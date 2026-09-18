@@ -2,11 +2,11 @@
 name: music-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus the music file the finished video must carry. Your audio never reaches the API (measured) — the visuals are written to the track's tempo, mood and sections, then your own file is laid on locally at zero cost. One job caps at 30 seconds, so a three-minute song is six jobs minimum and the cost table says that before anything is spent. Use when a user has a specific piece of music and wants visuals for it, e.g. "make a music video for this track", "visuals for my song", "an MV for this instrumental", "generate footage cut to this beat". Do not use for cheap vertical social drafts (shorts-reels), a brand film that happens to have a music bed (seedance-ad-creative), or when there is no particular audio file the finished video has to carry.
 license: MIT
-version: "1.2.0"
+version: "1.2.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/music-video
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.2.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -1164,12 +1164,20 @@ before deciding which:
 - **The probe printed a directory** — the core is installed and only the
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run against what the probe printed.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.

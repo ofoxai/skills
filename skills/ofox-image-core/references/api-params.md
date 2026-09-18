@@ -20,7 +20,7 @@ body directly, always base64-encoded (no URL option, ever).
 | `model` | string | yes | `--model` (optional flag) | The API field is required; the flag is not — omit it and the script resolves one from its cheapest-first priority chain (`MODEL_CHAIN` in `ofox-image.sh`, the only place that list exists) and reports any fallback. Run `ofox-image.sh models` for the live list — 16 image models as of 2026-09-15, and the script accepts any of them. Documented in depth here: `openai/gpt-image-2`, `google/gemini-3.1-flash-image` (this is "Nano Banana 2" — use this exact model id string, **not** `-preview`; the model catalog page's URL slug differs from the actual API model id), `qwen/qwen-image-3.0-pro`. Others work but their size/quality support is not documented here. |
 | `prompt` | string | yes | `--prompt` | Text description of the image. |
 | `quality` | string | yes per doc | `--quality` | One of `auto`/`low`/`medium`/`high`/`standard`/`hd` — that is the union across models, and **no model is known to accept all six**. The script requires you to pass one explicitly rather than guessing a safe default, and since 1.7.0 validates it twice: against the union, then against the resolved model's own accepted set where that set has been enumerated first-hand. So `openai/gpt-image-2` + `standard` is now a client-side rejection at `--dry-run` (exit `1`, no call) instead of a submission-time HTTP 400. Where a model has never enumerated its set, the union still stands — see "Confirmed gotcha: supported `--quality` values differ per model" below. |
-| `n` | integer | no | `--n` | 1-10, server default 1. **`google/gemini-3.1-flash-image` does not support `n` at all — passing it (even `n: 1`) errors.** The script rejects `--n` client-side whenever the effective model is Gemini, and also rejects an `n` key set via `--extra-json` for that model. |
+| `n` | integer | no | `--n` | 1-10, server default 1. **`google/gemini-3.1-flash-image` does not support `n` at all — passing it (even `n: 1`) errors.** The script rejects `--n` client-side whenever the effective model is Gemini, and since 1.14.0 rejects an `n` key set via `--extra-json` for **every** model — `n` has a flag, and a key with a flag cannot come through the escape hatch. |
 | `size` | string | no | `--size` | One of `auto`/`1024x1024`/`1536x1024`/`1024x1536`/`256x256`/`512x512`/`1792x1024`/`1024x1792`. **This enum cannot express 16:9 or 9:16** — see the ratio table below. `--target-aspect W:H` / `--target-size WxH` are not API fields: they are client-side, and they pick this value, then crop the written file to the ratio asked for. |
 | `input_images` | string[] | no | not exposed — out of scope | URL or base64, 1-3 items, **Qwen only**, for image-to-image. **Any other field name is silently ignored** — the request silently degrades to text-to-image with no error, so get the field name exactly right if you ever add this. Still unexposed, and still rejected when set via `--extra-json`, rather than silently sending a request that would ignore it. **If you want to change an existing image, that is `ofox-image.sh edit` (`POST /v1/images/edits`), not this field** — a different endpoint, working on every model whose catalog entry carries it rather than on Qwen alone. This row stays out of scope because a field name that degrades silently to text-to-image is a trap, not because editing is. |
 | `output_format` | string | no | `--output-format` | One of `png`/`jpeg`/`webp`. The script maps `jpeg` to a `.jpg` file extension; `png`/`webp` keep their own extension. Defaults to `png` when not set (the documented example uses `png`, it's lossless, and it's the safest cross-model assumption — the response body itself does not include an explicit format field to infer from). |
@@ -30,10 +30,31 @@ body directly, always base64-encoded (no URL option, ever).
 
 `--extra-json` is merged into the built request body last (object merge —
 its keys win over anything the flags set), so it's the escape hatch for any
-field not exposed as a dedicated flag. It must be valid JSON; the script
-checks that with `jq` before submitting, and additionally rejects
-`input_images`, `stream: true`, and (for `google/gemini-3.1-flash-image`
-only) `n` if set this way, for the reasons above.
+field not exposed as a dedicated flag.
+
+### What `--extra-json` will not do (1.14.0)
+
+Because it is merged *last* and *wins*, it could rewrite fields the script had
+just validated and priced. Refusals, all before any request:
+
+| Input | Result |
+|---|---|
+| `--extra-json ""` written explicitly | error, exit 1. Omitting the flag is unchanged — asserted byte-for-byte against `--extra-json '{}'` in `references/test/keyguard.test.sh`. |
+| anything that is not a JSON object (`[…]`, `"s"`, `42`, `null`, `false`) | error, exit 1 — the merge is jq's `*`, which only works between objects |
+| a key that has a flag: `model`, `prompt`, `quality`, `size`, `n`, `output_format`, `background` | error, exit 1, naming the flag to use instead |
+| `input_images`, `stream: true` | error, exit 1, for the reasons in the rows above |
+
+Everything else still passes through, `extra_body.provider.type` included.
+
+The third row is the one with money attached: the estimate is computed from
+the flags, and this merge happens after it — so `--quality low` plus
+`--extra-json '{"quality":"high","size":"1792x1024"}'` would quote ~0.6 cents
+and send the request that measured **15.4** cents.
+
+Note what that row absorbed: `n` is now refused for **every** model, not only
+for `google/gemini-3.1-flash-image` as before. The narrower Gemini-specific
+check for `n` in `--extra-json` was removed rather than left as a branch that
+could no longer run.
 
 ### Confirmed gotcha: supported `--quality` values differ per model
 
@@ -218,12 +239,47 @@ payload.
 | `n` | integer | no | `--n` | 1-10. Multiplies the spend. |
 | `output_format` | string | no | `--output-format` | `png`/`jpeg`/`webp`. Unlike generations, the **response echoes this field**, so the script names the saved file from what the API says it wrote and falls back to the request only when the field is absent. |
 | `background` | string | no | `--background` | `transparent`/`opaque`/`auto`. The response echoes it (`"opaque"` observed). |
-| `mask` | file upload | unknown | via `--extra-form` | Whether masked/inpainting edits are supported is **not established**. Finding out costs a billed edit per attempt, so it was left alone. Pass one through `--extra-form` if you want to try, and record the result here. |
+| `mask` | file upload | unknown | **not reachable from this script** | Whether masked/inpainting edits are supported is **not established**, and finding out costs a billed edit per attempt. Until 1.14.0 this row said to try it with `--extra-form "mask=@FILE"`; that spelling is now refused along with every other `@`/`<` value, because it uploads whatever local file it names (see the `--extra-form` note below). Attaching a mask needs its own flag with its own path validation — nobody has written one, so this stays open. |
 
 Input formats are enumerated by the API's own refusal of a `text/plain`
 upload: *"Supported file formats are 'image/jpeg', 'image/png', and
 'image/webp'."* That is the API enumerating its own set, which is the only
 basis on which the script keeps a local copy of it.
+
+### `--extra-form` is for extra FIELDS, and since 1.14.0 only for fields
+
+This endpoint is multipart, so the escape hatch is `--extra-form K=V` rather
+than a JSON merge. Two prefixes on the **value** are refused (exit 1, before
+the request):
+
+| Value | What curl does with it | Now |
+|---|---|---|
+| `@path` | uploads the file at `path` | refused |
+| `<path` | reads `path` and sends its contents as the field value | refused |
+| anything else | sends it as a literal value | unchanged |
+
+`--extra-form "mask=@$HOME/.ssh/id_rsa"` was a working way to make this script
+upload any file the user can read to whatever `API_BASE` points at. The field
+name did not matter, so the fix is on the value, not on a list of field names.
+
+This does **not** touch the script's own uploads: `-F "image=@PATH"` and
+`-F "image_url=<TEMPFILE"` are built from `--image` / `--image-url`, which are
+validated paths the script chose, and both are asserted still working in
+`references/test/keyguard.test.sh`. An ordinary pair — `k=user@example.com`,
+`k=a<b`, `k=` — is unaffected; only a value *starting* with the character is.
+
+The **key** is narrowed too, for the same reason `--extra-json` is on the
+generations side: `image`, `image_url`, `model`, `prompt`, `quality`, `size`,
+`n`, `output_format` and `background` all have flags, and every one of them is
+refused here. A second multipart part with an owned name is not a harmless
+duplicate — the server picks one of the two, the value that arrived this way
+skipped the flag's validation, and it is appended **after**
+`print_edit_estimate` has already been computed from the flags. `--extra-form
+"n=10"` printed `N 1`, quoted a single image and asked for ten; `n` multiplies
+the bill directly, so that is the never-under-quote rule broken through the
+escape hatch. The guard list is extracted from the script's own form builders
+by the test suite rather than retyped there, so a flag added without a matching
+entry goes red on its own.
 
 ### ⚠️ This endpoint does not validate parameters the way generations does — and the failure mode is a bill
 

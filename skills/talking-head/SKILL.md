@@ -2,11 +2,11 @@
 name: talking-head
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a portrait plus a short script into a clip of one person speaking those words to camera. You supply the text and the model generates the voice — audio cannot be uploaded, measured. Defaults to alibaba/wan-3.0-prime rather than this repo's usual seedance-2.5, because seedance-2.5 refuses a real person's photo at submission. Use when a user has a face and some words and wants the face to say them, e.g. "make this headshot read my intro", "a spokesperson clip from this portrait", "have her say this line to camera", "use this avatar to read the announcement". Do not use for a scene between two or more people (see seedance-short-drama), a polished brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the words still have to be pulled out of an article and no particular face is required (see explainer).
 license: MIT
-version: "1.1.0"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/talking-head
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -675,12 +675,20 @@ before deciding which:
 - **The probe printed a directory** — the core is installed and only the
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run against what the probe printed.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.

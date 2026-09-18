@@ -2,11 +2,11 @@
 name: cloudflare-drop
 description: Publish a static site (a folder of HTML/CSS/JS/images/fonts) to Cloudflare and get back a live, shareable URL in seconds. Use when you have a finished static page or site and need to hand someone a link they can open on any device — reports, mockups, one-off landing pages, AI-generated HTML, "give me a link I can share". Runs one packaged command (references/deploy.mjs) built on the Wrangler CLI, which is what Cloudflare's own agent guidance tells agents to use. Deploys permanently to your Cloudflare account when credentials are present, or as a 60-minute claimable preview when they are not — and says plainly which one you got. Bakes an expiry countdown into previews (matched to the real 60-minute limit; --ttl to shorten it), and supports optional server-side six-digit access-code protection with -otp for permanent links only. Unprotected delivery may fall back to a file; protected delivery fails closed.
 license: MIT
-version: "2.3.0"
+version: "2.4.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/cloudflare-drop
 metadata:
   author: ofoxai
-  version: "2.3.0"
+  version: "2.4.0"
   openclaw:
     requires:
       bins: [node, npm, npx, curl]
@@ -50,11 +50,42 @@ copies sibling files too. Keep CSV exports, credentials, source repositories and
 unrelated reports out of that folder. A protected share authorizes access to **all**
 its staged assets after login. Use a fresh worker name when moving previously public
 content behind a password; old downloads and cached public copies cannot be revoked.
+Every deploy now prints the staging review described below **before** it uploads —
+read it, and say something to the user if it flags a file.
+
+## What is about to become public
+
+Staging copies the page's whole sibling directory, recursively, because a
+multi-file page renders broken without its assets. `node_modules`, `.git`,
+`__MACOSX` and every dotfile (so `.env` too) were already excluded. What was
+never visible is the ordinarily-named file — `secrets.json`, `credentials.txt`,
+`backup.sql`, `id_rsa` — and this skill's whole job is to turn a folder into a
+public URL.
+
+So every run prints, on stderr, before the upload:
+
+```
+STAGED_FILES 7
+STAGED_REVIEW 4 of 7 staged files are outside HTML/CSS/JS/images/fonts. …
+  SENSITIVE_NAME  secrets.json  (312 bytes)
+  UNEXPECTED_TYPE  backup.sql  (24 bytes)
+```
+
+A clean run prints `STAGED_FILES n` and `STAGED_REVIEW ok` — the headline is
+printed on every path, so its **absence** means the review did not run, not that
+there was nothing to say.
+
+**This never blocks a deploy** (discipline #3). It is a report. When it flags
+something, the fixes are: re-stage from a folder holding only the deliverable,
+or re-run with `--assets-only`, which stages only recognised static assets and
+prints `STAGED_SKIPPED` naming every file it left behind. Relay the flagged
+names to the user rather than deciding for them — a `data.sql` someone means to
+publish is their call.
 
 ## The one command
 
 ```bash
-node references/deploy.mjs <page.html> [--ttl 30m] [--name my-report] [--permanent]
+node references/deploy.mjs <page.html> [--ttl 30m] [--name my-report] [--permanent] [--assets-only]
 ```
 
 It resolves the countdown window → stages the page as `index.html` at a clean root
@@ -93,6 +124,34 @@ sentinel — a blank/truncated page that still 200s fails as `URL_UNVERIFIED`.
 | `--permanent` | force a normal (account) deploy. Requires credentials. |
 | `--no-pause-oauth` | never touch the local OAuth file (see below). |
 | `--no-countdown` | skip baking the countdown into the page. The real expiry is unchanged — a temporary preview still dies at 60 minutes and the CLI still prints `EXPIRY_EPOCH`; only the on-page banner is omitted. Use when the reader finds the banner noisy and you (the operator) own the claim-before-expiry responsibility. |
+| `--assets-only` | stage only recognised static assets (HTML/CSS/JS/images/fonts) and skip everything else, printing `STAGED_SKIPPED` with every file left behind. Off by default — the default stages everything and only *reports* on it. |
+
+## What the deploy subprocess can see
+
+Wrangler is a third-party CLI running on your machine, so two things are pinned
+rather than left floating:
+
+- **A fixed version.** The deploy runs `wrangler@4.134.0`, not `wrangler@latest`.
+  Bumping it is a reviewed change to `references/wrangler.mjs`, not something
+  that happens silently on the next npm publish.
+- **An allowlisted environment.** It receives `PATH`/`HOME`/`TMPDIR` and their
+  Windows equivalents, the proxy variables, `NODE_EXTRA_CA_CERTS`, the
+  Cloudflare credential variables (`CLOUDFLARE_API_TOKEN`, `CF_API_TOKEN`,
+  `CLOUDFLARE_ACCOUNT_ID`, `CF_ACCOUNT_ID`, `CLOUDFLARE_API_KEY`, `CF_API_KEY`,
+  `CLOUDFLARE_EMAIL`, `CF_EMAIL`), `WRANGLER_HOME`/`XDG_CONFIG_HOME`/
+  `XDG_CACHE_HOME`, and `CI`. **Every other variable is withheld**, including
+  other vendors' API keys and `CLOUDFLARE_API_BASE_URL` (which would redirect
+  your Cloudflare token to another host). The count withheld is printed as a
+  `NOTE`.
+
+If a deploy needs a variable that is not on the list, add it by name:
+
+```bash
+CLOUDFLARE_DROP_ENV_PASSTHROUGH="WRANGLER_LOG,CLOUDFLARE_API_BASE_URL" \
+  node references/deploy.mjs report.html
+```
+
+The names it forwarded are printed back, so the widening is never silent.
 
 ## Optional six-digit access code
 
@@ -245,3 +304,6 @@ raising).
   permanent path or Pages/Workers.
 - **Uploading a page without its assets** — a lone `index.html` that references
   `style.css`/`app.js`/images renders broken.
+- **Ignoring a `STAGED_REVIEW` that flagged something.** It is a report, not a
+  gate, so the deploy succeeded and the file is already public. Say what was
+  flagged.

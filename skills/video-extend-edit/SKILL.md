@@ -2,11 +2,11 @@
 name: video-extend-edit
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus a video you already have. Makes an existing clip longer, or replaces its ending. Use when a user wants more of footage they already have, e.g. "extend this 5-second clip to 15", "keep going from where this one ends", "re-shoot the ending from 4 seconds on", or "add another shot onto this". A frame is pulled out of the clip at zero cost and becomes the first frame of a newly generated segment, which is then joined onto the original. Do not use to change what is inside the picture — measured, the API accepts an edit mode field and silently ignores it, so no content-editing route exists here and none returns an error either; for two stills you already have see keyframe-animation, and for a clip from nothing see the seedance-* scenarios.
 license: MIT
-version: "1.3.0"
+version: "1.3.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/video-extend-edit
 metadata:
   author: ofoxai
-  version: "1.3.0"
+  version: "1.3.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -883,12 +883,20 @@ before deciding which:
 - **The probe printed a directory** — the core is installed and only the
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run against what the probe printed.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.

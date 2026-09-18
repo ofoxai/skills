@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.17.1"
+version: "1.17.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.17.1"
+  version: "1.17.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -1688,13 +1688,20 @@ lives" before deciding which one it is:
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run the command against what the
   probe printed. Nothing needs installing.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own, every skill into every agent) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher. Naming only the skills.sh command to a LobeHub user reads as
-  "abandon your installer", which isn't the advice.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, say which skill is missing and where it is expected rather than
 relaying the raw path error, which names neither.

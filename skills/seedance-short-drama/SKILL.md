@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), for one person addressing the viewer rather than another character — a script read from a supplied portrait is talking-head, an idea pulled out of an article is explainer — or for anything not involving people/dialogue.
 license: MIT
-version: "1.13.4"
+version: "1.13.5"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "1.13.4"
+  version: "1.13.5"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -880,13 +880,20 @@ lives" before deciding which one it is:
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run the command against what the
   probe printed. Nothing needs installing.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own, every skill into every agent) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher. Naming only the skills.sh command to a LobeHub user reads as
-  "abandon your installer", which isn't the advice.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, say which skill is missing and where it is expected rather than
 relaying the raw path error, which names neither.

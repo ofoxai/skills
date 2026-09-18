@@ -2,11 +2,11 @@
 name: keyframe-animation
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus two images you already have, a start frame and an end frame. Animates the motion between them as one video — both frames go into a single Ofox video job, the clip opens on A, closes on B, and the model fills the middle. Use when a user has two stills and wants the in-between animated, e.g. "here is the before and the after, animate the transition", "make a video that starts on this image and ends on that one", "tween these two frames", or "move the object from where it sits in the first picture to where it sits in the second". Do not use when only one image exists (animating a single frame is seedance-ad-creative or seedance-product-video), or when the pair is two states of a user interface (see product-demo).
 license: MIT
-version: "1.2.0"
+version: "1.2.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/keyframe-animation
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.2.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -614,12 +614,20 @@ before deciding which:
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run the command against what the probe
   printed. Nothing needs installing.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, say which skill is missing and where it was expected rather than
 relaying the raw path error, which names neither.

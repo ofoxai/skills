@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.29.0"
+version: "1.30.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.29.0"
+  version: "1.30.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -36,8 +36,18 @@ report the exact cost. Scenario skills (`seedance-short-drama`,
   Locate it (`.env` at the repo root is the usual spot), then
   `set -a; . <path>; set +a` in the shell you'll call the script from. Sourcing
   a dotenv pulls in *every* variable in the file, not just the key —
-  `OFOX_API_BASE_URL` is one this script reads, and it silently redirects every
-  API call — so read the file before you load it. Never echo the value.
+  `OFOX_API_BASE_URL` is one this script reads, and it redirects every API call
+  — so read the file before you load it. Never echo the value.
+- **The key goes to exactly one host, and you are told when that host is not
+  Ofox.** Since 1.30.0 `OFOX_API_BASE_URL` must be `https://` (a loopback host
+  may be `http://`, for a local test server) and an override prints a `NOTE:`
+  on stderr naming the host that will receive the key. Relay that line if you
+  see it: it is the difference between "we are talking to Ofox" and "we are
+  talking to whatever that variable says". And the `polling_url` the API
+  returns in its create response — which the poll loop authenticates to — is
+  followed only when it is on the same scheme/host/port as the base. A
+  response pointing somewhere else stops the run with the job id printed, so
+  the job you already paid for is collected with `poll`, not abandoned.
 - **Never print, log, or echo the raw key value** — not in chat, not in a
   file, not in a command you show the user, not in verbose curl output.
   `references/ofox-video.sh` never uses `curl -v`/`--trace` for exactly this
@@ -795,8 +805,10 @@ Key flags: `--model` (default `bytedance/seedance-2.5`), `--duration`,
 `--frame-last-image URL|PATH`, `--real-person true|false` (**an authorization
 assertion about the attached likeness, not a moderation switch** — read the
 real-person section of `references/api-params.md` before you pass it),
-`--callback-url`, `--extra-json '<json>'` (advanced fields not covered by a flag, e.g.
-`input_references`, `provider`), `--max-wait SECONDS` (default 540),
+`--callback-url`, `--extra-json '<json>'` (a JSON **object** of fields not covered
+by a flag, e.g. `input_references`, `provider.options` — it may not be empty, and
+it may not set a field that has a flag; see below),
+`--max-wait SECONDS` (default 540),
 `--poll-interval SECONDS` (default 6). Full parameter reference:
 `references/api-params.md`. Pricing and the cost-estimate formula:
 `references/pricing.md`.
@@ -839,19 +851,25 @@ lesson.
 made", and what was actually recorded is a **stderr line**, not an exit
 status — nobody wrote down whether that run aborted or carried on. The
 distinction turned out to matter, because the same wall on the **caller's**
-side of the fence does *not* stop anything:
+side of the fence did *not* stop anything:
 
 > Building a `data:` URI into `--extra-json` yourself — the documented route
 > for `input_references` — passes that URI to `jq` as a command-line
 > argument. Over `ARG_MAX`, `jq` never runs, the command substitution yields
-> an empty string, `--extra-json ""` is treated as **not passed**, and the
-> job is submitted and billed with **no references in it at all**. One line
+> an empty string, `--extra-json ""` was treated as **not passed**, and the
+> job was submitted and billed with **no references in it at all**. One line
 > on stderr, exit `0`. Measured 2026-09-17.
 
-So the two paths behave in opposite directions at the same file size: the
-flag path (this script's own encoding) is safe, and the escape-hatch path
-fails open. Full reproduction, and the three-step guard that catches it, are
-under "An empty `--extra-json` is treated as 'not passed'" in
+**Closed in 1.30.0**: an `--extra-json` that was *written on the command line*
+but is empty is now an error (exit 1, nothing submitted), while omitting the
+flag is byte-for-byte what it always was. The script cannot tell an empty
+value from an absent one by looking at the value, so it remembers whether the
+flag was typed. The ARG_MAX wall itself is still there — this stops it costing
+money, it does not make a 2.5 MB argument work. Keep a reference small enough
+to pass (a 768 px long edge is tens of kilobytes), or attach it with
+`--frame-first-image`, which encodes through a temp file and has no such
+limit. The two paths are still asymmetric at the same file size; only the
+failure is now loud on both. Full reproduction in
 [`references/api-params.md`](references/api-params.md).
 
 **An attached frame changes what happens to `aspect_ratio`, and it is not

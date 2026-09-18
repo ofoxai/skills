@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.14.1"
+version: "1.14.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.14.1"
+  version: "1.14.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -1081,15 +1081,22 @@ opening frames:
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`, `ofoxai-skills-ofox-image-core`). Re-run
   the command against what the probe printed. Nothing needs installing.
-- **The probe printed nothing** — that core really is absent, and the fix
-  belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own, every skill into every agent) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install the missing core from the same
-  publisher. Naming only the skills.sh command to a LobeHub user reads as
-  "abandon your installer", which isn't the advice. Name **which** core is
-  missing — this skill needs both, and losing `ofox-image-core` alone stops
-  Step 1 while Step 2 would still run.
+- **The probe printed nothing** — that core really is absent, and installing
+  it is the user's call to make, not yours: an install writes outside this
+  working directory, so hand over the command and let them run it rather than
+  running it for them. Which command depends on the installer they already
+  have — skills.sh is `npx skills add ofoxai/skills --skill ofox-video-core`
+  (or `npx skills add ofoxai/skills --skill ofox-image-core`), which asks for
+  that one core and answers none of the agent, scope or confirmation questions
+  on the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core` (or `npx ofox-skills ofox-image-core`),
+  the same install with all three answered in advance (every agent,
+  user-level, no prompts); on LobeHub or ClawHub, install the missing core
+  from the same publisher. Ask for the one core that is missing rather than
+  the whole repo, and give all three routes — pointing a LobeHub user at the
+  skills.sh line alone reads as "abandon your installer", which isn't the
+  advice. Name **which** core is missing — this skill needs both, and losing
+  `ofox-image-core` alone stops Step 1 while Step 2 would still run.
 
 Either way, say which skill is missing and where it is expected rather than
 relaying the raw path error, which names neither.

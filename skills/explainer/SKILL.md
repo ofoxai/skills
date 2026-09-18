@@ -2,11 +2,11 @@
 name: explainer
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn an article, doc or release note into a short explainer clip — one person to camera, or a voiceover over illustrative footage. The user supplies the source text and the model generates the speech; audio cannot be uploaded, measured. A 30-second clip holds about eighty spoken words in eight sentences — measured, and well under a tenth of a 1,200-word post — so this skill does not summarise an article, it picks the single idea worth saying and helps choose which one. Use when a user asks to turn writing into a short spoken video, e.g. "make a 30-second explainer from this blog post", "explain this feature in a short video", "turn our changelog into a clip", "a quick video explaining what this paper found". Do not use for a scene between people (see seedance-short-drama), a brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the user already has both a portrait and the finished words (see talking-head). Budget sentences as well as words — each sentence boundary costs about 0.7 seconds of silence, so a script with more sentences runs longer at the same word count.
 license: MIT
-version: "1.2.0"
+version: "1.2.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/explainer
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.2.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -707,12 +707,20 @@ before deciding which:
 - **The probe printed a directory** — the core is installed and only the
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run against what the probe printed.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.

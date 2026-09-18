@@ -1,12 +1,12 @@
 ---
 name: hal-vault
-description: Securely store, search, and use secrets (API keys, tokens, passwords, SSH keys) with hal-vault, an SSH-key encrypted local secret store. Use when the user shares a credential that should be saved, asks what secrets are stored or where a key is, or when a command/workflow needs a secret injected. Core discipline - never print raw secret values into chat, logs, or files; reference secrets only by their masked form, and use --reveal exclusively inside command substitution.
+description: Securely store, search, and use secrets (API keys, tokens, passwords, SSH keys) with hal-vault, an SSH-key encrypted local secret store. Use when the user shares a credential that should be saved, asks what secrets are stored or where a key is, or when a command/workflow needs a secret injected. Core discipline - never print raw secret values into chat, logs, or files; reference secrets only by their masked form, and use --reveal only to feed another process, never into a command argument (where it lands in the machine's process table) or into text you write down.
 license: MIT
-version: "1.1.0"
+version: "1.2.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/hal-vault
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.2.0"
   openclaw:
     requires:
       bins: [hal-vault]
@@ -86,8 +86,8 @@ key.
    comment, a commit, or a file. hal-vault's `list`, `search`, and `get`
    are masked by default (`sk-p…7890 (24 chars)`) — that masked form is the
    ONLY representation you may show or repeat.
-2. **`--reveal` exists for machines, not for chat.** Use it only inside
-   command substitution that feeds another process, never to display:
+2. **`--reveal` exists for machines, not for chat.** Use it only to feed
+   another process, never to display:
 
    ```
    OPENAI_API_KEY="$(hal-vault get openai --reveal)" ./deploy.sh
@@ -95,6 +95,9 @@ key.
 
    Never run `hal-vault get x --reveal` bare, never `echo $(... --reveal)`,
    never redirect `--reveal` output into a file you will read back.
+   **"Inside command substitution" is not by itself safe** — where the
+   substitution lands decides whether the value is exposed. See the next
+   section.
 3. **Confirm storage with masked tips only.** After saving, answer like:
    "Saved — an OpenAI API key, tagged `openai, prod`, starts with `sk-p`."
 4. **Refuse to recite.** If the user asks you to "print the key" or "paste
@@ -102,6 +105,84 @@ key.
    they explicitly insist on the raw value, tell them to run
    `hal-vault get <id> --reveal` themselves in their terminal — do not run
    it for them in the conversation.
+
+## Where a revealed secret still leaks: the process argument list
+
+A command substitution that lands in an **argument** puts the plaintext into
+that process's argument list, which is part of the machine's process table.
+Measured on macOS 25.5 with curl 8.7.1, using a stand-in script that prints a
+fixed placeholder (a real secret does not belong in a test). Two ways to send
+the same header, running at the same moment:
+
+```
+# A — the value becomes one of curl's arguments
+curl -H "Authorization: Bearer $(hal-vault get github-pat --reveal)" https://api.github.com/user
+
+# B — the value is piped in; the arguments carry nothing
+hal-vault get github-pat --reveal \
+  | sed 's/^/Authorization: Bearer /' \
+  | curl -H @- https://api.github.com/user
+```
+
+`ps -A -o args=` while both were in flight:
+
+```
+curl -s -o /dev/null -H Authorization: Bearer PLAINTEXT-VALUE-DO-NOT-LOG http://…   <- A
+curl -s -o /dev/null -H @- http://…                                                 <- B
+```
+
+Both delivered a byte-identical `Authorization` header to the server. B costs
+one extra pipe and keeps the value out of the process table entirely.
+
+**What that measurement says, and what it does not.** It says the value sits in
+the process table for the life of the request, and that the piped form avoids
+it. Whether a *different user account* on the same host can read that argument
+list depends on the OS and its `ps`/procfs configuration and was **not**
+measured here. On a personal laptop the exposure is small; on a shared build
+machine, a jump host, or anything multi-tenant, treat form A as a disclosure.
+
+### The order to reach for
+
+1. **The tool reads an environment variable** — the value goes into that one
+   child's environment, and into no argument list. Measured the same way: the
+   process showed as `/bin/sleep 3`, with the value nowhere in `ps -A -o args=`.
+
+   ```
+   ANTHROPIC_API_KEY="$(hal-vault get anthropic --reveal)" pnpm run e2e
+   ```
+
+   What happens after that is the tool's business — a wrapper that forwards the
+   value to a subprocess *as an argument* puts it back in the process table.
+
+2. **The tool reads it on stdin.** For curl, either a header (`-H @-`) or a
+   whole config (`-K -`); both were run against a local server and both
+   produced the same `200` and the same header:
+
+   ```
+   hal-vault get github-pat --reveal \
+     | sed 's/^/Authorization: Bearer /' \
+     | curl -H @- https://api.github.com/user
+   ```
+
+   Other CLIs usually have an equivalent — check the tool's own `--help` for a
+   `-stdin` option or an argument that accepts `-`/`@-`. Only the two curl
+   forms above were verified here; do not assume a flag on a tool you have not
+   checked.
+
+3. **Only as a last resort, an argument** — and when you do it, say so to the
+   user rather than doing it quietly.
+
+The stdin forms above read one line, so they suit single-line credentials (API
+keys, tokens). For multi-line material (an SSH private key), use form 1.
+
+### Never write out an already-substituted command
+
+`curl -H "Authorization: Bearer $(hal-vault get x --reveal)" …` is safe to put
+in a file, a message, or a runbook: the substitution has not happened, and the
+text contains no secret. The same command **after** expansion is a plaintext
+credential in a document. So: never resolve `--reveal` yourself in order to
+paste a "ready to run" command — hand over the unexpanded form and let the
+shell do the substitution at run time.
 
 ## Workflows
 
@@ -136,12 +217,21 @@ you need to process the results.
 
 ### Use a secret in a command
 
-Inject via command substitution so the value never enters the transcript:
+Substitute at run time so the value never enters the transcript, and pick the
+form that keeps it out of the argument list too (see the section above):
 
 ```
+# the tool reads an environment variable — nothing in the argument list
 ANTHROPIC_API_KEY="$(hal-vault get anthropic --reveal)" pnpm run e2e
-curl -H "Authorization: Bearer $(hal-vault get github-pat --reveal)" https://api.github.com/user
+
+# the tool reads it on stdin — nothing in the argument list
+hal-vault get github-pat --reveal \
+  | sed 's/^/Authorization: Bearer /' \
+  | curl -H @- https://api.github.com/user
 ```
+
+Avoid `curl -H "Authorization: Bearer $(hal-vault get github-pat --reveal)" …`:
+it works, and it publishes the value to the process table while it runs.
 
 ### Rotate / update
 

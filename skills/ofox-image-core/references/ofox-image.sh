@@ -8,6 +8,13 @@
 # caller sources it into this script's environment first. The raw key is never
 # printed by this script.
 #
+# The key only ever goes to one host: whatever API_BASE names. Every request
+# here is built from API_BASE and no URL out of a response body is ever
+# fetched, so the only way to move it is OFOX_API_BASE_URL — still supported
+# (staging), but since 1.14.0 it must be https (loopback excepted) and the
+# override is announced on stderr, naming the host that will receive the key.
+# Covered by references/test/keyguard.test.sh.
+#
 # Unlike the Ofox video API, image generation is SYNCHRONOUS — there is no
 # job id and no polling. One request either returns the image(s) in the
 # response body, or fails. That also means there is no free "poll to check
@@ -101,15 +108,23 @@
 #                          that Gemini rejects the n field outright.
 #   --output-format VAL  optional. One of: png jpeg webp
 #   --background VAL     optional. One of: transparent opaque auto
-#   --extra-json JSON    optional, merged into the request body as-is
-#                          (escape hatch for fields not exposed as a flag,
-#                          e.g. extra_body.provider.type — gpt-image-2 only).
-#                          Rejected if it sets "input_images" (image-to-image
-#                          is out of scope for this script — see below) or
-#                          "stream": true (this script only parses a plain
-#                          JSON response body, not a streamed one), or if it
-#                          sets "n" while --model is
-#                          google/gemini-3.1-flash-image.
+#   --extra-json JSON    optional. A JSON OBJECT merged into the request body:
+#                          the escape hatch for fields with no flag of their
+#                          own, e.g. extra_body.provider.type (gpt-image-2
+#                          only). Rejected if it is empty (an explicit ""
+#                          used to be indistinguishable from omitting the
+#                          flag, which skipped every check below AND the
+#                          merge, and billed the request anyway), if it is not
+#                          an object (it is merged with jq's `*`, which only
+#                          works between objects), if it sets a field that has
+#                          a flag — model, prompt, quality, size, n,
+#                          output_format, background, which are validated and
+#                          priced from the flags while this merge happens
+#                          after the estimate — or if it sets "input_images"
+#                          (image-to-image is out of scope for this script —
+#                          see below) or "stream": true (this script only
+#                          parses a plain JSON response body, not a streamed
+#                          one).
 #   --out-dir DIR        optional, default: current directory.
 #   --out-name NAME      optional base filename (no extension, no path
 #                          separators). Default: ofox_image_<timestamp>_<pid>.
@@ -167,11 +182,29 @@
 #                          loudly. Same reason as generate — an attached
 #                          frame's ratio becomes the finished video's ratio.
 #   --extra-form K=V     optional, repeatable. Escape hatch for a multipart
-#                          field with no flag. This endpoint is multipart, so
+#                          field with no flag — and only for those. A KEY this
+#                          script already sets from a flag (image, image_url,
+#                          model, prompt, quality, size, n, output_format,
+#                          background) is refused, because a second part with
+#                          the same name skips that flag's validation and is
+#                          added AFTER the estimate is computed: `--extra-form
+#                          "n=10"` used to quote one image and request ten.
+#                          Use the flag. This endpoint is multipart, so
 #                          there is no --extra-json equivalent: a JSON body is
 #                          rejected outright (measured — an application/json
 #                          body with model set came back "You must provide a
 #                          model parameter", i.e. the field was never seen).
+#                          The VALUE may not start with '@' or '<': curl reads
+#                          those as filesystem instructions ('@path' uploads
+#                          that file, '<path' sends its contents as the field
+#                          value), which made this flag a way to upload any
+#                          file the user can read. Refused since 1.14.0; every
+#                          ordinary key=value pair is unaffected, and the
+#                          script's own -F "image=@PATH" comes from --image,
+#                          not from here. Every OTHER field this script sets
+#                          goes through curl's --form-string, which has no
+#                          such prefixes — so a --prompt that opens with '@'
+#                          is a prompt, not a file read.
 #   --dry-run            validate everything, resolve the model, assemble and
 #                          print the multipart field list, quote a cost — then
 #                          stop. No request, no key needed, nothing billed.
@@ -185,8 +218,15 @@
 #     /v1/images/generations, which stays unexposed.
 #   - Masked / inpainting edits. The endpoint may or may not accept a 'mask'
 #     field; nothing here establishes that it does, and finding out costs a
-#     billed edit per attempt. Pass one via --extra-form if you want to try,
-#     and record what happens.
+#     billed edit per attempt.
+#     WHAT 1.14.0 NARROWED, stated rather than left to be discovered: until
+#     then the suggestion here was to attach one with
+#     --extra-form "mask=@FILE". That spelling is now refused along with
+#     every other '@'/'<' value, because the same spelling uploads any file
+#     the user can read. A mask therefore cannot be attached through this
+#     script today. Establishing masked edits needs its own flag, with its
+#     own path validation, not a general file-upload hole left open for the
+#     one field that might want it.
 #
 # Exit codes:
 #   0  success — image(s) decoded and saved, usage token counts printed.
@@ -213,7 +253,12 @@
 
 set -u
 
-API_BASE="${OFOX_API_BASE_URL:-https://api.ofox.ai/v1}"
+DEFAULT_API_BASE="https://api.ofox.ai/v1"
+# Overridable on purpose (pointing a run at a staging deployment is a real
+# need), but never silently: validate_api_base() below refuses a plaintext
+# non-loopback host and announces the override on stderr, because this
+# variable decides which host receives OFOX_API_KEY.
+API_BASE="${OFOX_API_BASE_URL:-$DEFAULT_API_BASE}"
 GET_KEY_URL="https://app.ofox.ai"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -388,6 +433,111 @@ list_contains() {
     [ "$item" = "$needle" ] && return 0
   done
   return 1
+}
+
+# ---------------------------------------------------------------------------
+# where OFOX_API_KEY is allowed to go
+#
+# This script makes exactly three network calls — the public keyless model
+# list, POST /images/generations and POST /images/edits — and every one of
+# them is built from API_BASE. No URL from a response body is ever fetched,
+# so the sibling ofox-video.sh's polling_url problem has no counterpart here.
+# What both scripts do share is OFOX_API_BASE_URL: it points the client, and
+# the Authorization header with it, at whatever host it names. That stays (a
+# staging deployment is the obvious legitimate use) but is narrowed to https
+# — loopback excepted, for a local test server — and is announced on stderr
+# naming the host that is about to receive the key.
+#
+# Duplicated in ofox-video-core/references/ofox-video.sh on purpose: each
+# skill has to work when installed on its own, so a file shared across skill
+# directories is not an option (CONTRIBUTING rule 7). Fix both.
+# ---------------------------------------------------------------------------
+
+url_origin() {
+  # $1 = a URL. Prints "scheme://host:port" lowercased, with the scheme's
+  # default port made explicit so https://api.ofox.ai and
+  # https://api.ofox.ai:443 compare equal. Returns 1 for anything that is not
+  # an http(s) URL.
+  local url="$1" scheme rest authority host port
+  case "$url" in
+    [Hh][Tt][Tt][Pp]://*|[Hh][Tt][Tt][Pp][Ss]://*) : ;;
+    *) return 1 ;;
+  esac
+  scheme="$(printf '%s' "${url%%://*}" | tr '[:upper:]' '[:lower:]')"
+  rest="${url#*://}"
+  authority="${rest%%/*}"
+  authority="${authority%%\?*}"
+  authority="${authority%%#*}"
+  # Keep only what follows the last '@': the userinfo of
+  # "https://api.ofox.ai@evil.example/v1" is not the host, and the host is
+  # what receives the request.
+  authority="${authority##*@}"
+  case "$authority" in
+    \[*\]*)
+      host="${authority%%\]*}]"
+      port="${authority#*\]}"
+      port="${port#:}"
+      ;;
+    *:*)
+      host="${authority%%:*}"
+      port="${authority#*:}"
+      ;;
+    *)
+      host="$authority"
+      port=""
+      ;;
+  esac
+  [ -n "$host" ] || return 1
+  if [ -z "$port" ]; then
+    case "$scheme" in
+      http) port=80 ;;
+      https) port=443 ;;
+    esac
+  fi
+  case "$port" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s://%s:%s' "$scheme" "$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')" "$port"
+}
+
+url_host() {
+  # $1 = a URL. Prints just the host, for messages that have to name it.
+  local origin="$1"
+  origin="$(url_origin "$origin")" || return 1
+  origin="${origin#*://}"
+  printf '%s' "${origin%:*}"
+}
+
+is_loopback_host() {
+  case "$1" in
+    localhost|127.*|\[::1\]|::1) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_api_base() {
+  # Runs once per invocation, before anything can use API_BASE. The default
+  # is fine by construction, so this is entirely about the override.
+  local override="${OFOX_API_BASE_URL:-}" origin host
+  [ -n "$override" ] || return 0
+
+  if ! origin="$(url_origin "$override")"; then
+    echo "ERROR: OFOX_API_BASE_URL is set to '$override', which is not an http:// or https:// URL." >&2
+    echo "Unset it to use $DEFAULT_API_BASE, or set it to a full base URL such as https://staging.example.com/v1." >&2
+    return 2
+  fi
+  host="$(url_host "$override")"
+  case "$origin" in
+    https://*) : ;;
+    *)
+      if ! is_loopback_host "$host"; then
+        echo "ERROR: OFOX_API_BASE_URL is set to '$override', which is not https://." >&2
+        echo "OFOX_API_KEY travels in an Authorization header on every request this script makes, so a plaintext base URL would put your key on the wire in clear text." >&2
+        echo "Use an https:// URL, or a loopback host (localhost, 127.0.0.1, [::1]) for a local test server." >&2
+        return 2
+      fi
+      ;;
+  esac
+  echo "NOTE: OFOX_API_BASE_URL is set, so this run talks to host '$host' ($override) instead of $DEFAULT_API_BASE — including any request that carries your OFOX_API_KEY in an Authorization header. Unset OFOX_API_BASE_URL to go back to Ofox." >&2
+  return 0
 }
 
 decode_b64_to_file() {
@@ -1658,6 +1808,13 @@ cmd_generate() {
   local output_format=""
   local background=""
   local extra_json=""
+  # Whether --extra-json was written on the command line at all. bash cannot
+  # tell "flag omitted" from "flag given an empty value" by looking at the
+  # value, and treating the two as one is a fail-open: an empty value from a
+  # command substitution that died (jq over ARG_MAX is the measured case on
+  # the sibling video script) skipped every check below AND the merge, and
+  # the request went out and billed without the fields the caller meant.
+  local extra_json_seen=""
   local out_dir="$PWD"
   local out_name=""
   local dry_run=""
@@ -1694,7 +1851,7 @@ cmd_generate() {
       --n) n="$val" ;;
       --output-format) output_format="$val" ;;
       --background) background="$val" ;;
-      --extra-json) extra_json="$val" ;;
+      --extra-json) extra_json="$val"; extra_json_seen=1 ;;
       --out-dir) out_dir="$val" ;;
       --out-name) out_name="$val" ;;
       --target-aspect) target_aspect="$val" ;;
@@ -1898,9 +2055,46 @@ cmd_generate() {
     esac
   fi
 
+  # An explicitly empty --extra-json is an error; omitting the flag behaves
+  # byte-for-byte as it always did. The asymmetry is the point — no existing
+  # caller that leaves the flag off is affected, and the one shape that used
+  # to be dropped in silence now stops the run before anything is billed.
+  if [ -n "$extra_json_seen" ] && [ -z "$extra_json" ]; then
+    echo "ERROR: --extra-json was given an empty value." >&2
+    echo "This usually means a command substitution produced nothing. Before 1.14.0 that empty string was treated as 'flag not passed': no JSON check, nothing merged, and the request sent and billed without your extra fields." >&2
+    echo "Build the JSON into a variable, check it with 'jq -e .', then pass it — or drop the flag if you meant to send nothing." >&2
+    return 1
+  fi
+
   if [ -n "$extra_json" ]; then
-    if ! printf '%s' "$extra_json" | jq -e . >/dev/null 2>&1; then
+    # `jq empty`, not `jq -e .`: -e keys its exit status on the OUTPUT value,
+    # so a perfectly valid `null` or `false` was reported as "not valid
+    # JSON". Both are still refused — by the object check below, which says
+    # what is actually wrong with them.
+    if ! printf '%s' "$extra_json" | jq empty >/dev/null 2>&1; then
       echo "ERROR: --extra-json is not valid JSON." >&2
+      return 1
+    fi
+    # It is merged with jq's `*`, which is only defined between objects. A
+    # valid-but-not-object value made the merge fail, the command
+    # substitution yield an empty payload, and the request go out empty.
+    if ! printf '%s' "$extra_json" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      echo "ERROR: --extra-json must be a JSON object (it is merged into the request body), got $(printf '%s' "$extra_json" | jq -r 'type')." >&2
+      return 1
+    fi
+    # Merged last, so its keys win over the flags — including over the model,
+    # size and n that the estimate was just computed from. A field this
+    # script owns through a flag is therefore refused here, exactly as the
+    # edit path already refuses one through --extra-form. Everything without
+    # a flag (extra_body.provider.type, the documented case) still passes.
+    local clash
+    clash=$(printf '%s' "$extra_json" | jq -r '
+      ["model","prompt","quality","size","n","output_format","background"] as $guarded
+      | [ keys_unsorted[] | select(. as $k | $guarded | index($k)) ] | join(", ")')
+    if [ -n "$clash" ]; then
+      echo "ERROR: --extra-json sets $clash, which this script validates and prices from its own flag(s). Use the flag instead: --model, --prompt, --quality, --size, --n, --output-format, --background." >&2
+      echo "A key merged through --extra-json wins over the flags and is applied AFTER the cost estimate is computed, so this would send a request that does not match the price anyone approved." >&2
+      echo "Fields with no flag are unaffected — extra_body.provider.type still passes through here." >&2
       return 1
     fi
     if printf '%s' "$extra_json" | jq -e 'has("input_images")' >/dev/null 2>&1; then
@@ -1911,10 +2105,12 @@ cmd_generate() {
       echo "ERROR: --extra-json sets 'stream: true' — this script only parses a plain JSON response body, not a streamed one. Omit stream or leave it false." >&2
       return 1
     fi
-    if [ "$model" = "$NO_N_MODEL" ] && printf '%s' "$extra_json" | jq -e 'has("n")' >/dev/null 2>&1; then
-      echo "ERROR: --extra-json sets 'n' while --model is $NO_N_MODEL, which does not support n at all. Remove it from --extra-json." >&2
-      return 1
-    fi
+    # There used to be a narrower rule here, rejecting an `n` key only when
+    # the resolved model was $NO_N_MODEL. The clash rule above now refuses
+    # `n` for every model — `n` has a flag — so that branch could never run
+    # again and was removed rather than left as a check nobody can make fire.
+    # Passing n through --n is still refused for $NO_N_MODEL specifically,
+    # above, where that message lives.
   fi
 
   # --out-dir is resolved (created if needed) and validated BEFORE the
@@ -1947,7 +2143,22 @@ cmd_generate() {
   [ -n "$background" ] && payload=$(printf '%s' "$payload" | jq --arg v "$background" '.background=$v')
 
   if [ -n "$extra_json" ]; then
-    payload=$(printf '%s' "$payload" | jq --argjson extra "$extra_json" '. * $extra')
+    # Through a temp file and --slurpfile, not --argjson: a command-line
+    # value is bound by ARG_MAX, and --extra-json is exactly where a caller
+    # might embed something large. Same fix the video script's frame_images
+    # build already carries.
+    local tmp_extra merged
+    tmp_extra=$(mktemp)
+    printf '%s' "$extra_json" >"$tmp_extra"
+    merged=$(printf '%s' "$payload" | jq --slurpfile extra "$tmp_extra" '. * $extra[0]')
+    rm -f "$tmp_extra"
+    # A failed merge leaves the command substitution empty, which without
+    # this would POST an empty body to a billable endpoint.
+    if [ -z "$merged" ]; then
+      echo "ERROR: merging --extra-json into the request body failed, so nothing was submitted and nothing was billed." >&2
+      return 1
+    fi
+    payload="$merged"
   fi
 
   # Say what this will cost before spending anything. The quality and size
@@ -2441,9 +2652,46 @@ cmd_edit() {
         return 1
         ;;
     esac
+    # Every field this function adds to the form from a flag. The list used to
+    # be image/image_url/model/prompt while the builder below also set
+    # quality, size, n, output_format and background — the guard and the
+    # builder had drifted, and the comment on --extra-json above claimed the
+    # two hatches were symmetric, which made the gap read as covered.
+    # A duplicate part is not a harmless
+    # duplicate: the server picks one of the two (which one is not this
+    # script's to decide), the value that arrived here skipped the flag's
+    # validation — `quality` is checked per-model, and the union-table defect
+    # this repo already has a gotcha for lives on that path — and it is added
+    # to the form AFTER print_edit_estimate has been computed from the flags.
+    # `n` is the sharp one: it multiplies the bill directly, so
+    # `--extra-form "n=10"` quoted one image, printed `N 1`, and asked for
+    # ten. That is the never-under-quote rule broken through the escape
+    # hatch, which is the same shape --extra-json is refused for in
+    # cmd_generate above. Keep the two lists in step with what each path
+    # actually sends.
     case "${form_item%%=*}" in
-      ''|image|image_url|model|prompt)
-        echo "ERROR: --extra-form '${form_item%%=*}' collides with a field this script sets from a flag. Use the flag." >&2
+      ''|image|image_url|model|prompt|quality|size|n|output_format|background)
+        echo "ERROR: --extra-form '${form_item%%=*}' collides with a field this script sets from a flag. Use the flag: --model, --prompt, --quality, --size, --n, --output-format, --background, --image/--image-url." >&2
+        echo "A second multipart part with the same name skips that flag's validation and is added after the cost estimate is computed, so this would send a request that does not match the price anyone approved — '--extra-form \"n=10\"' quoted one image and asked for ten." >&2
+        return 1
+        ;;
+    esac
+    # curl's -F reads two prefixes on a VALUE as filesystem instructions:
+    # '@path' uploads that file, '<path' reads the file and sends its
+    # contents as the field value. Passed straight through, --extra-form was
+    # therefore a way to make this script upload any file the user can read
+    # (`--extra-form "mask=@$HOME/.ssh/id_rsa"`) to whatever API_BASE points
+    # at. The field itself stays available; only the two curl prefixes are
+    # refused, so every ordinary key=value pair is untouched.
+    #
+    # The script's own -F "image=@$image" / -F "image_url=<$url_file" are
+    # built from --image / --image-url, which are validated paths this
+    # function chose. They do not come through here.
+    case "${form_item#*=}" in
+      @*|\<*)
+        echo "ERROR: --extra-form '${form_item%%=*}' has a value starting with '$(printf '%s' "${form_item#*=}" | cut -c1)', which curl reads as a filesystem instruction: '@path' uploads that file and '<path' sends that file's contents as the field value." >&2
+        echo "This script will not use --extra-form to read local files — it is an escape hatch for extra FIELDS, not a file picker. To send an image, use --image (upload) or --image-url." >&2
+        echo "If the value is genuinely meant to start with that character, there is no way to send it through this flag today; say what you need it for rather than working around this." >&2
         return 1
         ;;
     esac
@@ -2519,6 +2767,20 @@ cmd_edit() {
   # URI of any real photo runs past this machine's ARG_MAX (1,048,576 bytes)
   # and dies with "Argument list too long" before a single byte is sent — the
   # exact failure ofox-video.sh's frame_images build already had to fix.
+  #
+  # Which is also why every field whose value this script sets LITERALLY uses
+  # `--form-string`, not `-F`. Those two prefixes are not opt-in: curl applies
+  # them to any -F value, including one that arrived as free text. `--prompt`
+  # is free text, and a prompt may legitimately open with '@' ("@golden hour,
+  # ...") or '<'. Measured 2026-09-18 against a local listener, curl 8.7.1:
+  # `-F "prompt=@secret.txt"` sent that file's contents as the prompt field,
+  # with `filename="secret.txt"` in the part header; pointed at a file that
+  # does not exist it aborts with exit 26 before connecting. `--form-string`
+  # takes the value verbatim, whatever it starts with.
+  #
+  # `--extra-form` keeps plain `-F` on purpose: its values are screened above,
+  # and moving it to --form-string would make that screen unfalsifiable while
+  # quietly re-opening the '@path' spelling this version refuses (ADR D1).
   local -a form=()
   local url_file=""
   if [ -n "$image" ]; then
@@ -2532,13 +2794,13 @@ cmd_edit() {
     printf '%s' "$image_url" >"$url_file"
     form+=(-F "image_url=<$url_file")
   fi
-  form+=(-F "model=$model")
-  form+=(-F "prompt=$prompt")
-  [ -n "$quality" ] && form+=(-F "quality=$quality")
-  [ -n "$size" ] && form+=(-F "size=$size")
-  [ -n "$n" ] && form+=(-F "n=$n")
-  [ -n "$output_format" ] && form+=(-F "output_format=$output_format")
-  [ -n "$background" ] && form+=(-F "background=$background")
+  form+=(--form-string "model=$model")
+  form+=(--form-string "prompt=$prompt")
+  [ -n "$quality" ] && form+=(--form-string "quality=$quality")
+  [ -n "$size" ] && form+=(--form-string "size=$size")
+  [ -n "$n" ] && form+=(--form-string "n=$n")
+  [ -n "$output_format" ] && form+=(--form-string "output_format=$output_format")
+  [ -n "$background" ] && form+=(--form-string "background=$background")
   for form_item in ${extra_form+"${extra_form[@]}"}; do
     form+=(-F "$form_item")
   done
@@ -2580,7 +2842,7 @@ cmd_edit() {
     local f names=""
     for f in "${form[@]}"; do
       case "$f" in
-        -F) continue ;;
+        -F|--form-string) continue ;;
       esac
       names="$names ${f%%=*}"
     done
@@ -2790,6 +3052,16 @@ cmd_edit() {
 
 main() {
   local mode="${1:-}"
+  # Every subcommand here builds its requests from API_BASE, so the base is
+  # validated (and an override announced) before any of them runs. The list is
+  # written out rather than applied unconditionally so that adding a local,
+  # offline subcommand later is a deliberate decision about this guard too —
+  # the sibling ofox-video.sh has four such commands and they are excluded.
+  case "$mode" in
+    check|models|generate|edit)
+      validate_api_base || return 2
+      ;;
+  esac
   case "$mode" in
     check)
       cmd_check

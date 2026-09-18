@@ -11,7 +11,7 @@ test('parseArgs: defaults — countdown on, oauth pause on', () => {
     name: null,
     permanent: false,
     pauseOAuth: true,
-    noCountdown: false, otp: false,
+    noCountdown: false, otp: false, assetsOnly: false,
   });
 });
 
@@ -23,6 +23,7 @@ test('parseArgs: every flag lands on its field', () => {
     '--permanent',
     '--no-pause-oauth',
     '--no-countdown',
+    '--assets-only',
   ]);
   assert.deepEqual(a._, ['page.html']);
   assert.equal(a.ttl, '30m');
@@ -30,4 +31,5 @@ test('parseArgs: every flag lands on its field', () => {
   assert.equal(a.permanent, true);
   assert.equal(a.pauseOAuth, false);
   assert.equal(a.noCountdown, true);
+  assert.equal(a.assetsOnly, true);
 });

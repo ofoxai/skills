@@ -2,6 +2,110 @@
 
 All notable changes to the **cloudflare-drop** skill. Versioning follows SemVer.
 
+## 2.4.0 — Pinned Wrangler, allowlisted deploy environment, staging review
+
+Answers the two findings ClawHub's scanner raised against 2.3.0. Neither was a
+false positive; both named a capability that really existed.
+
+**Wrangler is pinned to `4.134.0`** (`references/wrangler.mjs`,
+`WRANGLER_VERSION`). It was `wrangler@latest`, so every deploy fetched and
+executed whatever npm resolved that minute. The pin was verified on a real
+machine before it was written down — `npm exec --yes wrangler@4.134.0 --
+--version` printed `4.134.0` and exited 0 — as this repo requires of every
+command it publishes. Bumping it is now a reviewable one-line change.
+
+**The deploy subprocess gets an allowlisted environment, not `process.env`.**
+It previously saw every variable in the session, including API keys belonging
+to other vendors. What it gets now, and why each group is there rather than
+guessed at:
+
+- `PATH` / `HOME` / `TMPDIR` plus the Windows equivalents — without them the
+  process cannot run at all.
+- `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` (and lowercase) plus
+  `NODE_EXTRA_CA_CERTS` — measured, not assumed: the verification run above
+  printed *"Proxy environment variables detected. We'll use your proxy for
+  fetch requests."* Withholding these would have broken deploys behind a proxy.
+- `CLOUDFLARE_API_TOKEN` / `CF_API_TOKEN` (what `detectAuthMode()` reads), plus
+  `CLOUDFLARE_ACCOUNT_ID` / `CF_ACCOUNT_ID` / `CLOUDFLARE_API_KEY` /
+  `CF_API_KEY` / `CLOUDFLARE_EMAIL` / `CF_EMAIL` (the other auth inputs
+  wrangler 4.134.0 reads).
+- `WRANGLER_HOME` / `XDG_CONFIG_HOME` / `XDG_CACHE_HOME` — `oauthConfigPath()`
+  keys off the first two, so wrangler has to resolve the same paths this skill
+  does, or the OAuth pause and wrangler disagree about which file matters.
+- `CI`.
+
+**Withheld on purpose**, and worth knowing if you relied on it:
+`CLOUDFLARE_API_BASE_URL` / `CF_API_BASE_URL` / `CLOUDFLARE_BASE_URL`, which
+redirect the Cloudflare token to a host of someone else's choosing, and
+`CLOUDFLARE_INCLUDE_PROCESS_ENV`, which asks wrangler to copy the process
+environment into the deployed Worker.
+
+**Callers who need a withheld variable**: name it in
+`CLOUDFLARE_DROP_ENV_PASSTHROUGH="NAME1,NAME2"`. The forwarded names are
+printed back. A narrowing with no route around it would block work that used to
+succeed, which this repo treats as the worse bug — but a silent one reads, to
+whoever debugs the next failure, as "wrangler broke", so the withheld count is
+printed as a `NOTE` on every run that withholds anything.
+
+**Every deploy prints what it staged, before the upload.** Staging copies the
+page's whole sibling directory, recursively, and this skill exists to make a
+directory public. The pre-existing filter already dropped `node_modules`,
+`.git`, `__MACOSX` and every dotfile — `.env` was never the gap. The gap was the
+ordinarily-named file: `secrets.json`, `credentials.txt`, `backup.sql`,
+`id_rsa`. New on stderr, before anything is uploaded:
+
+```
+STAGED_FILES 7
+STAGED_REVIEW 4 of 7 staged files are outside HTML/CSS/JS/images/fonts. …
+  SENSITIVE_NAME  secrets.json  (312 bytes)
+  UNEXPECTED_TYPE  backup.sql  (24 bytes)
+```
+
+A clean run prints `STAGED_FILES n` + `STAGED_REVIEW ok`, so the headline is on
+every path and its absence means the review did not run. **It never blocks** —
+discipline #3 is fail open, and a staging check that could refuse a deploy would
+be a worse defect than the one it prevents.
+
+**New `--assets-only`** (opt-in, off by default): stage only recognised static
+assets and print `STAGED_SKIPPED` naming every file left behind.
+
+**Caller-visible changes**: `stageForDrop()` now returns `{files, skipped}`
+alongside `{stagedDir, indexPath}`; `deployWithWrangler()` returns
+`{envWithheld, envPassedThrough}` and accepts a `note` callback; `deployPage()`
+accepts `note`, `run` and `assetsOnly`. Anything reading the CLI's **stdout**
+is unaffected — the review goes to stderr, next to the existing
+`INDEX_WRITE_SKIPPED`.
+
+**Verified by running the shipped command, not only the suites.** With a
+deliberately invalid `CLOUDFLARE_API_TOKEN` (so nothing could be published) and
+an unrelated vendor key in the session, `node references/deploy.mjs report.html
+--permanent --name drop-smoke-test` printed:
+
+```
+STAGED_FILES 5
+STAGED_REVIEW 2 of 5 staged files are outside HTML/CSS/JS/images/fonts. …
+  UNEXPECTED_TYPE  backup.sql  (24 bytes)
+  SENSITIVE_NAME  secrets.json  (18 bytes)
+NOTE wrangler runs with 7 allowlisted environment variables; 79 were withheld. …
+DEPLOY_FAILED Command failed: npm exec --yes wrangler@4.134.0 -- deploy … --name drop-smoke-test …
+  A request to the Cloudflare API (/accounts) failed. Invalid request headers
+```
+
+Three things that run confirms and the unit tests cannot: the pinned version is
+what actually gets executed, wrangler still starts and still reaches the
+Cloudflare API on the narrowed environment (its own *"Proxy environment
+variables detected"* warning proves the proxy variables arrived), and the
+unrelated key was among the 79 withheld. The same page with `--assets-only`
+printed `STAGED_FILES 3`, `STAGED_REVIEW ok`, and `STAGED_SKIPPED 2` naming
+`secrets.json` and `backup.sql`.
+
+Tests: 79 passing, including two new falsification suites
+(`references/test/wrangler-env.test.mjs`, `references/test/staging-review.test.mjs`).
+Each was confirmed by planting the defect it exists to catch — `wrangler@latest`
+restored, the full `process.env` handed back to the child, the classifier made
+blind, and the review computed but never emitted — and watching it go red, then
+green on revert.
+
 ## 2.3.0 — Optional server-side access code
 
 - Add `-otp` / `--otp` for permanent deployments. Temporary mode and preview

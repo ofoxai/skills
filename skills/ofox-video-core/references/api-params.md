@@ -29,16 +29,38 @@ Seedance 2.5) before it ever calls the API.
 
 `--extra-json` is merged into the built request body last (object merge —
 its keys win over anything the flags set), so it's the escape hatch for any
-field not exposed as a dedicated flag. It must be valid JSON; the script
-checks that with `jq` before submitting.
+field not exposed as a dedicated flag. It must be a valid JSON **object**; the
+script checks both with `jq` before submitting.
 
-### 🚨 An empty `--extra-json` is treated as "not passed" — and a big `data:` URI produces one silently
+### What `--extra-json` will not do (1.30.0)
 
-**Measured 2026-09-17.** This is a fail-open, and it costs money rather than
-printing an error, so read it before building an `--extra-json` payload that
-embeds a base64 image.
+Because it is merged *last* and *wins*, it could rewrite fields the script had
+just validated and priced. Three refusals, all before any request:
 
-The validation is guarded by `if [ -n "$extra_json" ]`. An **empty string is
+| Input | Result |
+|---|---|
+| `--extra-json ""` written explicitly | error, exit 1. Omitting the flag is unchanged. |
+| anything that is not a JSON object (`[…]`, `"s"`, `42`, `null`, `false`) | error, exit 1 — the merge is jq's `*`, which only works between objects |
+| a key that has a flag: `model`, `prompt`, `duration`, `resolution`, `aspect_ratio`, `size`, `generate_audio`, `seed`, `real_person`, `callback_url`, `frame_images`, and `provider.type` | error, exit 1, naming the flag to use instead |
+
+Everything else still passes straight through. `input_references` is the main
+one, and **`provider.options` still works** — only `provider.type` is refused,
+so `{"provider":{"options":{"byteplus":{…}}}}` merges alongside the pinned
+type rather than replacing it.
+
+The third rule is the one with money attached: `--duration 4 --resolution 480p
+--extra-json '{"duration":30,"resolution":"1080p"}'` quoted 44 cents and would
+have submitted a job billing about 7 dollars, because the estimate is printed
+from the flags and the merge happens after it.
+
+### 🚨 An empty `--extra-json` used to be treated as "not passed" — and a big `data:` URI produces one silently
+
+**Measured 2026-09-17, fixed in 1.30.0.** The fix is the first row of the
+table above; everything below is the reproduction, kept because the *cause* is
+still live — `jq` still dies over `ARG_MAX`, it just cannot cost you a job
+silently any more.
+
+The validation was guarded by `if [ -n "$extra_json" ]`. An **empty string was
 therefore indistinguishable from the flag never being passed**: no JSON check,
 no `references_conflict` check, and **nothing merged into the body**. That is
 fine when you meant to pass nothing. The problem is how easily you can mean to
@@ -62,17 +84,26 @@ STATUS dry_run
 EXIT=0
 ```
 
-**There is no `input_references` in that payload.** Exit code `0`. Drop
-`--dry-run` and that is a submitted, fully billed **plain text-to-video job**
-that the caller believes is a reference-to-video job. Nothing refuses it,
-nothing warns, and the delivered clip simply ignores the reference — which
-looks exactly like the model "not following" the references.
+**There is no `input_references` in that payload.** Exit code `0`. Dropping
+`--dry-run` submitted a fully billed **plain text-to-video job** that the
+caller believed was a reference-to-video job — nothing refused it, nothing
+warned, and the delivered clip simply ignored the reference, which looks
+exactly like the model "not following" the references.
 
-**The one stderr line is the only signal, and it is easy to miss** — it is
+**The one stderr line was the only signal, and it is easy to miss** — it is
 emitted by the shell, not by this script, so it does not carry a script
-prefix and it scrolls past above the normal output.
+prefix and it scrolls past above the normal output. That line is still the
+only warning you get *before* the script sees the empty value; what changed in
+1.30.0 is what happens next:
 
-**How to not get caught:**
+```
+ERROR: --extra-json was given an empty value.
+...
+EXIT=1
+```
+
+**How to not get caught** (1 and 2 still matter — the script can only refuse
+the job, it cannot make an oversized argument work):
 
 1. **Build the JSON into a variable first, and check it is non-empty and
    parses**, before it ever reaches the command line.
@@ -97,9 +128,14 @@ Verified on the same 1.9 MB PNG — the payload really carries the full
 file size**, which is precisely why the flag path is not evidence about the
 `--extra-json` path.
 
-**Script hardening for the empty-string case is deliberately not done here**
-— treating an empty `--extra-json` as "not passed" is existing behaviour that
-something else may rely on, so changing it is a separate decision.
+**Script hardening for the empty-string case landed in 1.30.0** (this section
+previously said it was deliberately not done, on the grounds that something
+might rely on the old behaviour). What made it safe: the script now records
+whether the flag was *written*, so "omitted" and "empty" stop being the same
+input. Omitting `--extra-json` is byte-for-byte unchanged — asserted in
+`references/test/keyguard.test.sh` by comparing the built payload against
+`--extra-json '{}'` — and only the explicitly-empty spelling, which was never
+anything but a failure, is refused.
 
 ## Reference inputs (`input_references`) and video-to-video
 

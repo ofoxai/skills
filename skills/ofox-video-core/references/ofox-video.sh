@@ -8,6 +8,17 @@
 # caller sources it into this script's environment first. The raw key is never
 # printed by this script.
 #
+# The key only ever goes to one host: whatever API_BASE names. Two ways that
+# could have stopped being true, both closed in 1.30.0 and both covered by
+# references/test/keyguard.test.sh —
+#   - OFOX_API_BASE_URL overrides API_BASE. Still supported (staging), but it
+#     must be https (loopback excepted) and the override is announced on
+#     stderr, naming the host that will receive the key.
+#   - the create response supplies its own polling_url, and the poll loop
+#     authenticates to it. It is now followed only when its scheme://host:port
+#     matches API_BASE; otherwise the run stops with the job id printed, so
+#     the paid job is collected with `poll` instead of being abandoned.
+#
 # Usage:
 #   ofox-video.sh check
 #   ofox-video.sh models
@@ -82,8 +93,25 @@
 #                               file support and aspect_ratio behavior)
 #   --real-person true|false
 #   --callback-url URL          must be https://
-#   --extra-json JSON           merged into the request body as-is (advanced:
-#                               input_references, provider, etc.)
+#   --extra-json JSON           a JSON OBJECT merged into the request body,
+#                               for fields with no flag of their own
+#                               (input_references, provider.options, ...).
+#                               Three things it will not do, each of which
+#                               used to be possible and expensive:
+#                                 - be empty. An explicit --extra-json ""
+#                                   is an error, because it used to be
+#                                   indistinguishable from not passing the
+#                                   flag: every check skipped, nothing
+#                                   merged, job billed without your fields.
+#                                 - not be an object. It is merged with jq's
+#                                   `*`, which only works between objects.
+#                                 - set a field that has a flag (model,
+#                                   prompt, duration, resolution,
+#                                   aspect_ratio, size, generate_audio, seed,
+#                                   real_person, callback_url, frame_images,
+#                                   provider.type). Those are validated and
+#                                   priced from the flags, and this merge
+#                                   happens after the estimate is printed.
 #   --out-dir DIR                default: current directory
 #   --max-wait SECONDS           default: 540 (9 minutes)
 #   --poll-interval SECONDS      default: 6
@@ -127,7 +155,12 @@
 
 set -u
 
-API_BASE="${OFOX_API_BASE_URL:-https://api.ofox.ai/v1}"
+DEFAULT_API_BASE="https://api.ofox.ai/v1"
+# Overridable on purpose (pointing a run at a staging deployment is a real
+# need), but never silently: validate_api_base() below refuses a plaintext
+# non-loopback host and announces the override on stderr, because this
+# variable decides which host receives OFOX_API_KEY.
+API_BASE="${OFOX_API_BASE_URL:-$DEFAULT_API_BASE}"
 GET_KEY_URL="https://app.ofox.ai"
 DEFAULT_MODEL="bytedance/seedance-2.5"
 DEFAULT_MAX_WAIT=540
@@ -258,6 +291,136 @@ list_contains() {
   for item in $hay; do
     [ "$item" = "$needle" ] && return 0
   done
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# where OFOX_API_KEY is allowed to go
+#
+# Two hosts in this script are not chosen by its own code, and the key rides
+# along with both:
+#
+#   1. OFOX_API_BASE_URL points the whole client — Authorization header
+#      included — wherever it says. That is a capability worth keeping (a
+#      staging deployment is the obvious legitimate use), so it is not
+#      removed; it is narrowed to https (loopback excepted, for a local test
+#      server) and made impossible to set without being told, on stderr,
+#      which host is about to receive the key.
+#   2. The create response carries its own `polling_url`, and the poll loop
+#      sends `Authorization: Bearer $OFOX_API_KEY` to it. That is the one
+#      path here that needs no compromised local environment at all: a
+#      tampered or misconfigured API response is enough to hand the key to a
+#      third party. So every polling URL is checked against API_BASE's origin
+#      before the first request goes to it. The field is still honoured —
+#      it is a normal shape for a job API — it just cannot move hosts.
+#
+# Duplicated in ofox-image-core/references/ofox-image.sh on purpose: each
+# skill has to work when installed on its own, so a file shared across skill
+# directories is not an option (CONTRIBUTING rule 7). Fix both.
+# ---------------------------------------------------------------------------
+
+url_origin() {
+  # $1 = a URL. Prints "scheme://host:port" lowercased, with the scheme's
+  # default port made explicit so https://api.ofox.ai and
+  # https://api.ofox.ai:443 compare equal. Returns 1 for anything that is not
+  # an http(s) URL.
+  local url="$1" scheme rest authority host port
+  case "$url" in
+    [Hh][Tt][Tt][Pp]://*|[Hh][Tt][Tt][Pp][Ss]://*) : ;;
+    *) return 1 ;;
+  esac
+  scheme="$(printf '%s' "${url%%://*}" | tr '[:upper:]' '[:lower:]')"
+  rest="${url#*://}"
+  authority="${rest%%/*}"
+  authority="${authority%%\?*}"
+  authority="${authority%%#*}"
+  # Userinfo is never part of an Ofox URL, and keeping only what follows the
+  # last '@' is what makes "https://api.ofox.ai@evil.example/v1/videos/x"
+  # report evil.example — the host that would really receive the request —
+  # instead of reading as ours to anyone (or any check) skimming the string.
+  authority="${authority##*@}"
+  case "$authority" in
+    \[*\]*)
+      host="${authority%%\]*}]"
+      port="${authority#*\]}"
+      port="${port#:}"
+      ;;
+    *:*)
+      host="${authority%%:*}"
+      port="${authority#*:}"
+      ;;
+    *)
+      host="$authority"
+      port=""
+      ;;
+  esac
+  [ -n "$host" ] || return 1
+  if [ -z "$port" ]; then
+    case "$scheme" in
+      http) port=80 ;;
+      https) port=443 ;;
+    esac
+  fi
+  case "$port" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s://%s:%s' "$scheme" "$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')" "$port"
+}
+
+url_host() {
+  # $1 = a URL. Prints just the host, for messages that have to name it.
+  local origin="$1"
+  origin="$(url_origin "$origin")" || return 1
+  origin="${origin#*://}"
+  printf '%s' "${origin%:*}"
+}
+
+is_loopback_host() {
+  case "$1" in
+    localhost|127.*|\[::1\]|::1) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_api_base() {
+  # Runs once per invocation, before anything can use API_BASE. The default
+  # is fine by construction, so this is entirely about the override.
+  local override="${OFOX_API_BASE_URL:-}" origin host
+  [ -n "$override" ] || return 0
+
+  if ! origin="$(url_origin "$override")"; then
+    echo "ERROR: OFOX_API_BASE_URL is set to '$override', which is not an http:// or https:// URL." >&2
+    echo "Unset it to use $DEFAULT_API_BASE, or set it to a full base URL such as https://staging.example.com/v1." >&2
+    return 2
+  fi
+  host="$(url_host "$override")"
+  case "$origin" in
+    https://*) : ;;
+    *)
+      if ! is_loopback_host "$host"; then
+        echo "ERROR: OFOX_API_BASE_URL is set to '$override', which is not https://." >&2
+        echo "OFOX_API_KEY travels in an Authorization header on every request this script makes, so a plaintext base URL would put your key on the wire in clear text." >&2
+        echo "Use an https:// URL, or a loopback host (localhost, 127.0.0.1, [::1]) for a local test server." >&2
+        return 2
+      fi
+      ;;
+  esac
+  echo "NOTE: OFOX_API_BASE_URL is set, so this run talks to host '$host' ($override) instead of $DEFAULT_API_BASE — including any request that carries your OFOX_API_KEY in an Authorization header. Unset OFOX_API_BASE_URL to go back to Ofox." >&2
+  return 0
+}
+
+assert_same_origin_as_api_base() {
+  # $1 = a URL the API handed back, $2 = what it is, for the message.
+  # Succeeds only when that URL points at the same scheme://host:port this
+  # client was configured for.
+  local url="$1" what="$2" got want
+  want="$(url_origin "$API_BASE")" || want=""
+  got="$(url_origin "$url")" || got=""
+  if [ -z "$got" ]; then
+    echo "ERROR: the API returned a $what this script will not follow: '$url' is not an http:// or https:// URL." >&2
+    return 1
+  fi
+  [ "$got" = "$want" ] && return 0
+  echo "ERROR: the API returned a $what pointing at a different host: '$(url_host "$url")' (from '$url'), while this client is configured for '$(url_host "$API_BASE")' ($API_BASE)." >&2
+  echo "Polling sends 'Authorization: Bearer \$OFOX_API_KEY', so a URL from the response body is never followed off the configured host — a tampered or misconfigured response must not be able to redirect your API key." >&2
   return 1
 }
 
@@ -772,6 +935,13 @@ cmd_generate() {
   local real_person=""
   local callback_url=""
   local extra_json=""
+  # Whether --extra-json was written on the command line at all. bash cannot
+  # tell "flag omitted" from "flag given an empty value" by looking at the
+  # value, and the difference is the whole of the 2026-09-17 defect: a
+  # `--extra-json "$(jq …)"` whose jq died on ARG_MAX hands over an empty
+  # string, the `[ -n "$extra_json" ]` guard skips every check AND the merge,
+  # and the job is submitted and billed with none of the references in it.
+  local extra_json_seen=""
   local name_hint=""
   local out_dir="$PWD"
   local max_wait="$DEFAULT_MAX_WAIT"
@@ -820,7 +990,7 @@ cmd_generate() {
       --frame-last-image) frame_last="$val" ;;
       --real-person) real_person="$val" ;;
       --callback-url) callback_url="$val" ;;
-      --extra-json) extra_json="$val" ;;
+      --extra-json) extra_json="$val"; extra_json_seen=1 ;;
       --name) name_hint="$val" ;;
       --out-dir) out_dir="$val" ;;
       --max-wait) max_wait="$val" ;;
@@ -1007,13 +1177,58 @@ cmd_generate() {
     esac
   fi
 
+  # An explicitly empty --extra-json is an error, and omitting the flag is
+  # byte-for-byte what it always was. The asymmetry is the point: every
+  # existing caller that does not pass the flag is unaffected, while the one
+  # shape that used to be silently dropped now stops the run before anything
+  # is billed.
+  if [ -n "$extra_json_seen" ] && [ -z "$extra_json" ]; then
+    echo "ERROR: --extra-json was given an empty value." >&2
+    echo "This usually means a command substitution produced nothing — most often '\$(jq -n …)' with a large data: URI, which dies on ARG_MAX, writes one line to stderr and yields an empty string." >&2
+    echo "Until 1.30.0 that empty string was treated as 'flag not passed': no JSON check, nothing merged, and the job submitted and billed with none of your extra fields in it. Build the JSON into a variable, check it with 'jq -e .', then pass it — or drop the flag if you meant to send nothing." >&2
+    return 1
+  fi
+
   if [ -n "$extra_json" ]; then
-    if ! printf '%s' "$extra_json" | jq -e . >/dev/null 2>&1; then
+    # `jq empty`, not `jq -e .`: -e keys its exit status on the OUTPUT value,
+    # so a perfectly valid `null` or `false` was reported as "not valid
+    # JSON". Both are still refused — by the object check below, which says
+    # what is actually wrong with them.
+    if ! printf '%s' "$extra_json" | jq empty >/dev/null 2>&1; then
       echo "ERROR: --extra-json is not valid JSON." >&2
+      return 1
+    fi
+    # It is merged with jq's `*`, which is only defined between objects. A
+    # valid-but-not-object value made the merge fail, the command
+    # substitution yield an empty payload, and the request go out empty.
+    if ! printf '%s' "$extra_json" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      echo "ERROR: --extra-json must be a JSON object (it is merged into the request body), got $(printf '%s' "$extra_json" | jq -r 'type')." >&2
       return 1
     fi
     if { [ -n "$frame_first" ] || [ -n "$frame_last" ]; } && printf '%s' "$extra_json" | jq -e 'has("input_references")' >/dev/null 2>&1; then
       echo "ERROR: cannot combine --frame-first-image/--frame-last-image with input_references in --extra-json (references_conflict) — use one or the other." >&2
+      return 1
+    fi
+    # --extra-json is merged LAST, so any key it carries wins over the flags.
+    # For a field with a flag, that means it lands in the request having
+    # skipped the per-model validation, the aspect-ratio rules and the price
+    # estimate the flag goes through — i.e. the body says 30 seconds at 1080p
+    # while the quote the user approved said 4 seconds at 480p. Same rule the
+    # sibling ofox-image.sh already applies to --extra-form: if a flag owns
+    # the field, use the flag. Everything without a flag still passes
+    # through, which is what the escape hatch is for.
+    local clash
+    clash=$(printf '%s' "$extra_json" | jq -r '
+      ["model","prompt","duration","resolution","aspect_ratio","size",
+       "generate_audio","seed","real_person","callback_url","frame_images"] as $guarded
+      | [ (keys_unsorted[] | select(. as $k | $guarded | index($k)))
+        , (select(.provider? | type == "object" and has("type")) | "provider.type")
+        , (select(has("provider") and (.provider | type != "object")) | "provider")
+        ] | join(", ")')
+    if [ -n "$clash" ]; then
+      echo "ERROR: --extra-json sets $clash, which this script validates and prices from its own flag(s). Use the flag instead: --model, --prompt, --duration, --resolution, --aspect-ratio, --size, --generate-audio, --seed, --real-person, --callback-url, --frame-first-image/--frame-last-image, --provider." >&2
+      echo "A key merged through --extra-json wins over the flags and is merged AFTER the cost estimate is computed, so this would submit a job that does not match the price anyone approved." >&2
+      echo "Fields with no flag are unaffected — input_references and provider.options still pass through here." >&2
       return 1
     fi
   fi
@@ -1169,11 +1384,20 @@ cmd_generate() {
   fi
 
   if [ -n "$extra_json" ]; then
-    local tmp_extra
+    local tmp_extra merged
     tmp_extra=$(mktemp)
     printf '%s' "$extra_json" >"$tmp_extra"
-    payload=$(printf '%s' "$payload" | jq --slurpfile extra "$tmp_extra" '. * $extra[0]')
+    merged=$(printf '%s' "$payload" | jq --slurpfile extra "$tmp_extra" '. * $extra[0]')
     rm -f "$tmp_extra"
+    # A failed merge leaves the command substitution empty, which without this
+    # would post an empty body to a billable endpoint. The object check above
+    # should make it unreachable; an unreachable check that costs nothing and
+    # guards a paid request stays.
+    if [ -z "$merged" ]; then
+      echo "ERROR: merging --extra-json into the request body failed, so nothing was submitted and nothing was billed." >&2
+      return 1
+    fi
+    payload="$merged"
   fi
 
   if [ -n "$print_payload" ]; then
@@ -1264,7 +1488,29 @@ cmd_generate() {
     printf '%s\n' "$body" >&2
     return 3
   fi
-  [ -z "$polling_url" ] && polling_url="$API_BASE/videos/$job_id"
+  # The response's own polling_url is used when it is on the host this client
+  # is configured for, and the canonical URL is the fallback when the field is
+  # absent — both are normal. What is not normal is a polling_url on another
+  # host: the poll loop authenticates, so following one would send the key
+  # somewhere the caller never named. That is refused, and refusing it must
+  # not strand the job, which by this line exists and is billable.
+  if [ -z "$polling_url" ]; then
+    polling_url="$API_BASE/videos/$job_id"
+  elif ! assert_same_origin_as_api_base "$polling_url" "polling_url"; then
+    local bad_abs_out
+    bad_abs_out="$(cd "$out_dir" 2>/dev/null && pwd)" || bad_abs_out="$out_dir"
+    # The request half of the record, so the recovery poll below can still
+    # write a complete sidecar.
+    save_request_handoff "$payload" "$bad_abs_out" "$job_id"
+    echo "" >&2
+    echo "The job WAS created and is billable: $job_id. Nothing has been lost — it was not polled, that is all." >&2
+    echo "Collect it over the configured host instead (poll builds the URL itself, it never reads one from a response):" >&2
+    echo "  $0 poll $job_id --out-dir $bad_abs_out" >&2
+    echo "JOB_ID $job_id"
+    echo "SEED $seed"
+    echo "OUT_DIR $bad_abs_out"
+    return 3
+  fi
 
   echo "Job created: $job_id" >&2
   echo "Polling: $polling_url" >&2
@@ -2664,6 +2910,19 @@ poll_and_download() {
   # unlucky — retrying at the same cadence keeps it over budget. Any response
   # that gets through resets this to 0.
   local rate_limit_hits=0
+
+  # Second line of defence for the same thing cmd_generate checks: every
+  # request below carries the API key, and this function is reached with a URL
+  # its caller chose. cmd_poll and cmd_batch build that URL from API_BASE, and
+  # cmd_generate has already screened the one the response supplied — but the
+  # check belongs next to the request that would leak, not only next to the
+  # place the URL came from, because a future caller will not remember.
+  if ! assert_same_origin_as_api_base "$polling_url" "polling URL"; then
+    echo "Job $job_id was NOT polled and was not affected by this. Do NOT re-run 'generate' — collect it with:" >&2
+    echo "  $0 poll $job_id --out-dir $out_dir" >&2
+    return 3
+  fi
+
   poll_started=$(date +%s)
   local out_dir_input="$out_dir"
 
@@ -3307,6 +3566,17 @@ download_result() {
 
 main() {
   local mode="${1:-}"
+  # Every subcommand that builds a request from API_BASE validates the base
+  # first, and says so when it has been overridden. The four local tools are
+  # deliberately not in this list: they run ffmpeg over a file the caller
+  # already has, so an environment variable that cannot affect them is no
+  # reason to refuse them — and a notice about where the API key goes is
+  # false on a command that sends none.
+  case "$mode" in
+    check|models|providers|generate|create|batch|chain|poll)
+      validate_api_base || return 2
+      ;;
+  esac
   case "$mode" in
     check)
       cmd_check

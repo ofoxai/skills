@@ -47,7 +47,10 @@ hal-vault get ID|LABEL [--reveal] [--json] [-d DIR]
 
 - Default: human-readable detail view with the value **masked**.
 - `--reveal`: prints the raw value plus exactly one trailing newline —
-  designed for `KEY=$(hal-vault get x --reveal)`.
+  designed for `KEY=$(hal-vault get x --reveal)`, and for piping into a tool
+  that reads the value on stdin. A substitution that lands in a command
+  **argument** instead puts the plaintext in the process table; see
+  "Where a revealed secret still leaks" in `SKILL.md`.
 - `--json`: JSON object `{id,label,type,tags,note,masked,created_at,updated_at}`;
   a `value` field is included **only** when `--reveal` is also given.
 - Lookup: exact ID match wins; otherwise case-insensitive exact label

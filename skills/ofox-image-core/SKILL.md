@@ -2,11 +2,11 @@
 name: ofox-image-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox image API (api.ofox.ai) — validates parameters client-side, sends one synchronous request, base64-decodes the result, saves it to a file, and reports the real usage token counts and the computed dollar cost. Does both text-to-image (generate) and editing an existing image you supply as a local file (edit — change the background, recolour an element, alter a product photo, while leaving the rest of the picture intact). This is a library skill, not a standalone user-facing one — it is meant to be invoked by scenario skills that build model/prompt/size choices for a specific use case and then call into this skill's script rather than re-implementing the API calls — image-edit owns "change this image so that...", product-image owns a set of product images to choose between, and seedance-anime-drama owns character images for a video pipeline. Load this skill directly only when a user explicitly names the Ofox image API, asks to call it with specific low-level parameters, asks to debug a failed Ofox image request, or wants a plain "generate an image of..." from text — which is the one common case no scenario skill covers.
 license: MIT
-version: "1.13.1"
+version: "1.14.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-image-core
 metadata:
   author: ofoxai
-  version: "1.13.1"
+  version: "1.14.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -38,8 +38,25 @@ happened" recovery path if a request goes wrong mid-flight.
   Locate it (`.env` at the repo root is the usual spot), then
   `set -a; . <path>; set +a` in the shell you'll call the script from. Sourcing
   a dotenv pulls in *every* variable in the file, not just the key —
-  `OFOX_API_BASE_URL` is one this script reads, and it silently redirects every
-  API call — so read the file before you load it. Never echo the value.
+  `OFOX_API_BASE_URL` is one this script reads, and it redirects every API call
+  — so read the file before you load it. Never echo the value.
+- **The key goes to exactly one host, and you are told when that host is not
+  Ofox.** Since 1.14.0 `OFOX_API_BASE_URL` must be `https://` (a loopback host
+  may be `http://`, for a local test server) and an override prints a `NOTE:`
+  on stderr naming the host that will receive the key. Relay that line if you
+  see it. Every request this script makes is built from that base — no URL out
+  of a response body is ever fetched — so there is nothing else to check.
+- **`edit --extra-form` will not read local files.** A value starting `@` or
+  `<` is refused (curl reads those as "upload this file" / "send this file's
+  contents"). Use `--image` to send an image; `--extra-form` is for extra
+  *fields*.
+- **Neither escape hatch can set a field that has a flag.** `--extra-json`
+  (generate) and `--extra-form` (edit) are both refused for `model`, `prompt`,
+  `quality`, `size`, `n`, `output_format`, `background` — and `--extra-form`
+  for `image`/`image_url` too. Those are validated per model and priced
+  *before* the hatch is applied, so a value arriving that way would change
+  what is billed after the quote the user approved: `--extra-form "n=10"`
+  printed `N 1` and asked for ten images. Pass them as flags.
 - **Never print, log, or echo the raw key value** — not in chat, not in a
   file, not in a command you show the user, not in verbose curl output.
   `references/ofox-image.sh` never uses `curl -v`/`--trace` for exactly this
@@ -222,10 +239,15 @@ done
 ```
 
 Nothing found means `ofox-video-core` isn't installed at all. **The gate still
-applies** — its rule is the paragraph above and the dry run below, and the
-spec's detail comes back with that skill, from whichever installer the user
-has (`npx ofox-skills`, `npx skills add ofoxai/skills`, or `ofox-video-core`
-from the same publisher on LobeHub / ClawHub).
+applies** — its rule is the paragraph above and the dry run below. The spec's
+detail comes back with that skill, and installing it is the user's call, not
+yours: hand over the command for whichever installer they already have rather
+than running it. skills.sh is
+`npx skills add ofoxai/skills --skill ofox-video-core`, this repo's wrapper is
+`npx ofox-skills ofox-video-core`, and on LobeHub or ClawHub it is
+`ofox-video-core` from the same publisher. Ask for the one missing skill
+rather than the whole repo, and give all three routes — naming one installer
+tells a user of the other two to abandon theirs.
 
 What this skill contributes to that table:
 
@@ -463,8 +485,9 @@ delivered file must really be — see "The size enum cannot express 16:9 or
 `google/gemini-3.1-flash-image`**, rejected client-side before any network
 call if combined with that model, even `--n 1`), `--output-format`
 (`png`/`jpeg`/`webp`), `--background` (`transparent`/`opaque`/`auto`),
-`--extra-json '<json>'` (advanced fields not covered by a flag, e.g.
-`extra_body.provider.type` for `openai/gpt-image-2`), `--out-dir` (default:
+`--extra-json '<json>'` (a JSON **object** of fields not covered by a flag, e.g.
+`extra_body.provider.type` for `openai/gpt-image-2` — it may not be empty and
+may not set a field that has a flag; see below), `--out-dir` (default:
 current directory), `--out-name` (bare filename, no extension, no path
 separators — default: a timestamp-based name). Full parameter reference:
 `references/api-params.md`. The cost formula and the invoice it was verified
@@ -706,8 +729,13 @@ down as open rather than guessed at.
   clear message.
 - **Masked / inpainting edits.** Whether `POST /v1/images/edits` accepts a
   `mask` is not established. Finding out costs a billed edit per attempt, so
-  it was left alone rather than guessed at. Pass one via `edit --extra-form`
-  if you want to try, and record what happens in `references/api-params.md`.
+  it was left alone rather than guessed at. **Nor can you try it through
+  `edit --extra-form "mask=@FILE"` any more** — 1.14.0 refuses any
+  `--extra-form` value starting `@` or `<`, because that spelling uploads
+  whatever local file it names, which made this flag a file-exfiltration
+  primitive. Stating the narrowing rather than leaving it to be discovered:
+  attaching a mask now needs its own flag with its own path validation, and
+  nobody has needed one enough to write it.
 
   (`POST /v1/images/edits` itself is **no longer out of scope** — it is the
   `edit` subcommand as of 1.11.0. It is also not "OpenAI models only", as

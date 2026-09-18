@@ -2,11 +2,11 @@
 name: image-edit
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Change one thing in an image you already have and leave the rest of the picture alone — swap the background, recolour a part, remove or add an object, clean up a photo — from a local jpeg/png/webp file. Delegates to ofox-image-core's `edit` subcommand (POST /v1/images/edits, one synchronous request), prices the job with --dry-run before spending, and reports the real token cost including the uploaded picture, which is billed. Use when a user hands over an image and asks for a change to it, e.g. "change the background of this photo to a beach and keep the person unchanged", "make this button green", "remove the car in the background", or "put this product on a plain white background". Do not use to draw a new image from a text description with no input picture (that is ofox-image-core's `generate`), to produce a set of several images to choose between (see product-image), or to turn a photo into video (see seedance-product-video or seedance-ad-creative). Editing the content of an existing video — "change the background of my clip, keep the product" — has no route here and none in the video API either (measured; the mode field an edit would use is accepted and silently ignored, so nothing errors); this skill edits a single still, and routing such a request to a video skill generates brand-new footage instead of changing theirs.
 license: MIT
-version: "1.1.1"
+version: "1.1.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/image-edit
 metadata:
   author: ofoxai
-  version: "1.1.1"
+  version: "1.1.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -577,12 +577,20 @@ lives" before deciding which one it is:
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-image-core`). Re-run against what the probe printed.
   Nothing needs installing.
-- **The probe printed nothing** — `ofox-image-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-image-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-image-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-image-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-image-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-image-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.

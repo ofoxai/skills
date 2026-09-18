@@ -18,9 +18,13 @@ LobeHub unpacks each skill as `ofoxai-skills-<name>`, so there it is
 the link doesn't use — the skill's own "Where the core skill lives" section
 (called "Where the two core skills live" in a skill that uses both) has the
 probe that finds it. Only if that probe comes back empty was the
-skill really installed without `ofox-video-core`, which `npx ofox-skills`,
-`npx skills add ofoxai/skills`, or installing `ofox-video-core` from the same
-publisher on LobeHub / ClawHub each fix.
+skill really installed without `ofox-video-core`. Installing it is the user's
+call, not yours — hand over the command rather than running it: skills.sh is
+`npx skills add ofoxai/skills --skill ofox-video-core`, this repo's wrapper is
+`npx ofox-skills ofox-video-core`, and on LobeHub or ClawHub it is
+`ofox-video-core` from the same publisher. Ask for the one missing skill
+rather than the whole repo, and give all three routes — naming one installer
+tells a user of the other two to abandon theirs.
 
 ## The rule
 

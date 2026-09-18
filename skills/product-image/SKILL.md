@@ -2,11 +2,11 @@
 name: product-image
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Produce a set of product images to choose between — several styles, backgrounds or treatments of one product, for a listing, a store page or an ad — and quote the whole set's cost before any of it is spent. From a real product photo it edits that photo once per style, so the item stays identical across the set; for a fictional or prototype product with no photo it generates from text instead, and says what that costs in accuracy. Delegates to ofox-image-core. Use when a user asks for several product images at once, e.g. "give me 4 main images in different styles for this product", "a few background options for this photo", "some listing images for my shop", or "show this product on white, on wood, and in a lifestyle scene". Do not use for a single change to a single image (see image-edit), for video from a product photo (see seedance-product-video), or for one plain text-to-image render (that is ofox-image-core's `generate`).
 license: MIT
-version: "1.1.1"
+version: "1.1.2"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/product-image
 metadata:
   author: ofoxai
-  version: "1.1.1"
+  version: "1.1.2"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -709,12 +709,20 @@ lives" before deciding which one it is:
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-image-core`). Re-run against what the probe printed.
   Nothing needs installing.
-- **The probe printed nothing** — `ofox-image-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-image-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-image-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-image-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-image-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-image-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.

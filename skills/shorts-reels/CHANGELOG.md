@@ -2,6 +2,38 @@
 
 All notable changes to the **shorts-reels** skill. Versioning follows SemVer.
 
+## 1.0.1 — the recovery command asked for the whole repo, and asked the agent to run it
+
+**Documentation only. No flag, price, prompt template or generation behaviour
+changed.**
+
+"If the script isn't found" ended in a skills.sh command that installed *every*
+skill in this repo, into *every* agent, user-level, with confirmation
+suppressed — four widenings past the one skill that was actually missing.
+ClawHub's scanner flags exactly that (rule T08, "unpinned and overbroad
+third-party installation via npx"), and the flag is accurate rather than noise:
+an agent that read the line and ran it would have rewritten the user's whole
+skills setup to recover one relative path.
+
+The line now asks for the missing skill and nothing else —
+`npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that one
+skill and answers none of the agent, scope or confirmation questions on the
+user's behalf. The repo's own `npx ofox-skills ofox-video-core` still answers
+all three (every agent, user-level, no prompts), which is why the line handed
+to the user is the skills.sh one.
+
+**What a caller has to do**: nothing changes for any command this skill
+already prints, and nothing changes while `ofox-video-core` is installed. What
+changes is conduct on the one path where it genuinely is absent — **relay the
+command and let the user run it**; do not run an installer yourself. An
+install writes outside the working directory, and that is not a decision to
+take silently for someone.
+
+All three distribution routes are still named (this repo's own
+`npx ofox-skills`, skills.sh, and LobeHub or ClawHub), because recovery advice
+that names one installer is wrong advice on every other channel this skill
+ships through.
+
 ## 1.0.0 — first release
 
 The live-fire findings of 2026-09-15 — this scenario's own paid batch —

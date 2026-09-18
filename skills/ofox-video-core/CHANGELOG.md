@@ -4,6 +4,118 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 1.30.0 — the API key goes to one host, and the escape hatch cannot rewrite what you approved
+
+Four guards, all of them narrowing capabilities this script really had. None
+of them removes a capability; each one names the smaller shape it now has.
+New suite: `references/test/keyguard.test.sh` (55 checks), which constructs
+the refused input for every rule rather than watching a good input pass.
+
+### The polling URL out of the create response is no longer followed off-host
+
+`POST /videos` returns a `polling_url`, and the poll loop sends
+`Authorization: Bearer $OFOX_API_KEY` to it. Until now that URL was used
+verbatim, so **a tampered or misconfigured API response was enough to redirect
+the key to a third party** — the only path here that needs no compromised
+local environment at all.
+
+It is now followed only when its `scheme://host:port` matches `API_BASE`.
+Also refused: a URL whose authority hides the real host behind userinfo
+(`http://api.ofox.ai@evil.example/…` is `evil.example`), a different port, a
+different scheme, and anything that is not an http(s) URL.
+
+**What a caller has to do differently:** nothing, unless the response really
+does point elsewhere. The field is still used when it is on the configured
+host, and the `API_BASE/videos/<id>` fallback when the field is absent is
+unchanged. If it *is* refused, `generate`/`create` exits **3** with the job id
+still on stdout, the request handoff saved, and the recovery command printed —
+the job exists and is billable, so it is collected with
+`ofox-video.sh poll <id>`, not abandoned and not re-created. `poll` builds its
+URL itself and never reads one from a response.
+
+The same check also sits inside `poll_and_download`, next to the request that
+would leak rather than only next to the place the URL came from.
+
+### `OFOX_API_BASE_URL` must be https, and an override is announced
+
+Still supported — pointing a run at a staging deployment is a legitimate use
+— but it decides which host receives the key, so:
+
+- a non-`https://` base is refused (exit **2**) unless the host is loopback
+  (`localhost`, `127.0.0.1`, `[::1]`), which keeps local test servers working;
+- a value that is not an http(s) URL at all is refused (exit **2**);
+- when it is set, a `NOTE:` on stderr names the host that will receive the
+  key. **Relay that line** — it is the difference between "we are talking to
+  Ofox" and "we are talking to whatever that variable says".
+
+Checked for `check`, `models`, `providers`, `generate`, `create`, `batch`,
+`chain` and `poll`. The four local tools (`contact-sheet`, `last-frame`,
+`frame-at`, `mux-audio`) are deliberately excluded: they run ffmpeg over a
+file you already have, send nothing, and refusing them over a variable that
+cannot affect them would be overreach.
+
+### `--extra-json` cannot overwrite a field that has a flag
+
+It is merged **last** and its keys **win**, and the cost estimate is printed
+**before** the merge. So `--duration 4 --resolution 480p --extra-json
+'{"duration":30,"resolution":"1080p"}'` quoted 44 cents and would have
+submitted a job billing about 7 dollars, having skipped every per-model check
+on the way.
+
+Refused now (exit **1**, before any request): `model`, `prompt`, `duration`,
+`resolution`, `aspect_ratio`, `size`, `generate_audio`, `seed`,
+`real_person`, `callback_url`, `frame_images`, and `provider.type`. The error
+names the flag to use instead.
+
+**What a caller has to do differently:** move those keys onto their flags.
+Everything without a flag still passes through — `input_references` unchanged,
+and **`provider.options` still works**: only `provider.type` is refused, so
+`{"provider":{"options":{…}}}` merges alongside the pinned type rather than
+replacing it.
+
+### An explicitly empty `--extra-json` is an error (the 1.29.0 defect, closed)
+
+1.29.0 documented this and deliberately left the behaviour alone. It is fixed
+now, and the fix is narrow: the script records whether the flag was **written
+on the command line**, which is the one thing bash cannot recover from the
+value. Omitting `--extra-json` is byte-for-byte what it always was — asserted
+by comparing the built payload against `--extra-json '{}'` — and only the
+explicitly-empty spelling, which was never anything but a failed command
+substitution, is refused.
+
+**What a caller has to do differently:** an `--extra-json "$(jq …)"` whose
+`jq` died on `ARG_MAX` now exits 1 instead of submitting a fully billed job
+with none of your references in it. The `ARG_MAX` wall itself has not moved:
+keep an encoded reference small (a 768 px long edge is tens of kilobytes) or
+use `--frame-first-image`, which encodes through a temp file.
+
+Two smaller things in the same area, both fail-open cases that could empty the
+request body:
+
+- `--extra-json` must be a JSON **object**. It is merged with jq's `*`, which
+  is undefined between other types; a non-object made the merge fail, the
+  command substitution yield an empty payload, and an empty body go out.
+- validity is now checked with `jq empty` rather than `jq -e .`, which keyed
+  its exit status on the *output value* and so called a perfectly valid `null`
+  or `false` "not valid JSON". Both are still refused, by the object rule,
+  which says what is actually wrong with them.
+
+### The shared references now give the same recovery advice the scenario skills do
+
+`references/approval-gate.md` and `references/creative-brief.md` each end their
+"if this link didn't resolve" paragraph with an install command, and both still
+said `npx skills add ofoxai/skills` — the whole repo. The 14 scenario skills
+were narrowed in the same uncommitted change to ask for the **one** missing
+skill and to hand the command to the user rather than run it, so the repo was
+telling an agent two different things about the same situation depending on
+which file it happened to read. Both now match: one skill, three routes
+(skills.sh / `npx ofox-skills` / LobeHub-ClawHub), the user runs it.
+
+No behaviour change. It is here because a rule that lives in two places drifts,
+and this is the drift — the extraction convention in
+`.trellis/spec/skills/index.md` exists precisely to keep these paragraphs in
+one voice.
+
 ## 1.29.0 — an oversized `--extra-json` drops your references and bills you anyway
 
 **Documentation only. No script, flag, default or guard changed** — and the

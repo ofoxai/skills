@@ -2,11 +2,11 @@
 name: ugc-ads
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a handheld, phone-shot UGC clip — imperfect framing, one practical light, vertical, no cinematic grading, no beauty filter. It inverts the polish every other video skill here defaults to — a UGC clip that looks like an ad has failed. Use when a user wants a video that reads as filmed by a real customer rather than by an agency, e.g. "a real-looking phone unboxing of this product", "a creator first-impression clip for TikTok", "an honest review video, nothing slick", or "make it look like a customer shot it". Do not use for a polished brand ad (see seedance-ad-creative), plain catalog footage (see seedance-product-video), a dialogue scene between people (see seedance-short-drama), or a set of cheap vertical drafts to choose from (see shorts-reels).
 license: MIT
-version: "1.1.0"
+version: "1.1.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ugc-ads
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "1.1.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -765,12 +765,20 @@ before deciding which:
 - **The probe printed a directory** — the core is installed and only the
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run against what the probe printed.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.
