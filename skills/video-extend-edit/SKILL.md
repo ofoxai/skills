@@ -2,11 +2,11 @@
 name: video-extend-edit
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus a video you already have. Makes an existing clip longer, or replaces its ending. Use when a user wants more of footage they already have, e.g. "extend this 5-second clip to 15", "keep going from where this one ends", "re-shoot the ending from 4 seconds on", or "add another shot onto this". A frame is pulled out of the clip at zero cost and becomes the first frame of a newly generated segment, which is then joined onto the original. Do not use to change what is inside the picture — measured, the API accepts an edit mode field and silently ignores it, so no content-editing route exists here and none returns an error either; for two stills you already have see keyframe-animation, and for a clip from nothing see the seedance-* scenarios.
 license: MIT
-version: "1.3.1"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/video-extend-edit
 metadata:
   author: ofoxai
-  version: "1.3.1"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -127,6 +127,12 @@ root.
 
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
+
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
 
 ## Before generating: the availability check
 
@@ -486,7 +492,7 @@ frame. Its first shot is normally text-to-video with no frame — but
 from the user's own footage in one command:
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh chain \
+bash ../ofox-video-core/references/ofox-video.sh chain --approved \
   --frame-first-image /absolute/path/to/out/their-clip-lastframe.png \
   --shot "<what happens next>" \
   --shot "<and then this>" \
@@ -494,6 +500,12 @@ bash ../ofox-video-core/references/ofox-video.sh chain \
   --name "<what the sequence is>" \
   --out-dir /absolute/path/to/out
 ```
+
+That is a real run, which is why it carries `--approved` — see "Before you
+spend". Swap it for `--dry-run` to price the whole sequence first; `chain`
+commits every segment in one command, so the quote is the only place it can
+still be stopped. The frame extraction and the join are local ffmpeg, free and
+ungated.
 
 **What is verified about that, exactly.** Two things, worth keeping apart:
 how the flags route, read out of the script, and what a paid run of the whole
@@ -700,9 +712,21 @@ bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
 ```
 
 Relay the `Estimated cost:` line it prints — never a number of your own — then
-wait for a yes, then re-run the identical command with `--dry-run` removed.
-The estimate a *real* run prints comes microseconds before the request goes
-out, too late to relay.
+wait for a yes, then re-run the identical command with `--dry-run` swapped for
+`--approved`. The estimate a *real* run prints comes microseconds before the
+request goes out, too late to relay.
+
+`--approved` is where that yes gets typed out. Since `ofox-video-core` 2.0.0
+the four billable subcommands — `generate`, `create`, `batch`, `chain` —
+refuse to run without it, while `--dry-run` never needs it, so the quote above
+is still free and still works with no API key. Be exact about what the flag
+does: it records a stance, it cannot prove one. Nothing in a shell script can
+observe the conversation you had, and it can be typed without showing anyone a
+price. What it changes is that spending without quoting is no longer the
+default — it has to be written into the command, where a transcript shows it.
+The `chain` command above is the one to be most careful with: it commits every
+segment at once. The rule above is still the rule, and it is still yours to
+follow.
 
 Two things specific to this scenario:
 

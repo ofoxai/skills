@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.13.7"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.13.7"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -71,6 +71,12 @@ commands and in the `references/*.md` links alike.
 
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
+
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
 
 ## Before generating: the availability check
 
@@ -817,11 +823,15 @@ the opening composition matters; choose identity references when several
 product images (front, back, box, logo) should inform the whole clip.
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "Begin with the exact composition of the reference image. Camera slowly orbits 30 degrees around the product, soft rim light, cinematic color grade, no dialogue" \
   --frame-first-image "/path/to/local/product-photo.jpg" \
   --duration 10 --resolution 1080p
 ```
+
+That is a real run, which is why it carries `--approved` — see "Before you
+spend". To see what it would cost without sending it, run the same line with
+`--dry-run` in place of `--approved`.
 
 **Do not pass `--aspect-ratio` on this route.** With an image attached,
 `ofox-video-core` forces `aspect_ratio` to `adaptive` on
@@ -1075,9 +1085,19 @@ bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
 ```
 
 Relay the `Estimated cost:` line it prints — never a number of your own — then
-wait for a yes, then re-run the identical command with `--dry-run` removed.
-The estimate a *real* run prints comes microseconds before the request goes
-out, too late to relay; that is what `--dry-run` is for.
+wait for a yes, then re-run the identical command with `--dry-run` swapped for
+`--approved`. The estimate a *real* run prints comes microseconds before the
+request goes out, too late to relay; that is what `--dry-run` is for.
+
+`--approved` is where that yes gets typed out. Since `ofox-video-core` 2.0.0
+the four billable subcommands — `generate`, `create`, `batch`, `chain` —
+refuse to run without it, while `--dry-run` never needs it, so the quote above
+is still free and still works with no API key. Be exact about what the flag
+does: it records a stance, it cannot prove one. Nothing in a shell script can
+observe the conversation you had, and it can be typed without showing anyone a
+price. What it changes is that spending without quoting is no longer the
+default — it has to be written into the command, where a transcript shows it.
+The rule above is still the rule, and it is still yours to follow.
 
 The brief recap (see the creative brief section) goes in the **same
 message** as the prompt and the table, above them — the user approves the
@@ -1268,13 +1288,18 @@ it is `skills/ofox-video-core/references/ofox-video.sh`.
 ## Generating
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the ad-creative prompt built above>" \
   --name "<short spot name, e.g. perfume bottle hero ad>" \
   --duration 10 \
   --resolution 1080p \
   --aspect-ratio 16:9
 ```
+
+`--approved` is not decoration: without it the script refuses, submits
+nothing, and prints the quote-first steps instead. Add it only once the cost
+table has actually gone in front of the user and come back with a yes — the
+flag cannot check that for you.
 
 This one call validates the parameters, submits the job, polls to
 completion, downloads the mp4, and prints `STATUS`, `JOB_ID`, `VIDEO_PATH`,

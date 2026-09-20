@@ -62,6 +62,18 @@
 #                               payload and print the cost estimate, then stop
 #                               WITHOUT submitting. Nothing is billed. Use this
 #                               to quote a price to someone before spending.
+#   --approved                  required by generate/create/batch/chain, and
+#                               only by those four — they are the only
+#                               subcommands that can reach the one billable
+#                               request in this file. Without it the command
+#                               refuses, having submitted nothing. --dry-run
+#                               does not need it and must not: quoting is how
+#                               the number being approved is produced.
+#                               It records a stance; it cannot prove one. An
+#                               agent can pass it without showing anyone a
+#                               price. What it changes is that spending
+#                               unquoted now has to be typed out rather than
+#                               being the default.
 #   --print-payload             dump the request body to stderr before sending
 #                               (the API key is in a header, not the body)
 #   --name TEXT                 short, human-readable name for the output file,
@@ -128,7 +140,8 @@
 #
 # Exit codes:
 #   0  success — job completed, video downloaded
-#   1  usage / parameter validation error (no network call made)
+#   1  usage / parameter validation error (no network call made) — including
+#      a billable subcommand run without --approved
 #   2  environment error (missing curl/jq/OFOX_API_KEY)
 #   3  API rejected the request, or the job ended failed/cancelled/expired
 #   4  timed out waiting for a terminal state — the job is still running
@@ -640,6 +653,9 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh generate --prompt "..." [OPTIONS]
   ofox-video.sh create   --prompt "..." [OPTIONS]   (submit only, returns a job id)
          add --dry-run to any of generate/batch/chain to price it without spending
+         generate/create/batch/chain refuse to run without --approved. Quote the
+         job with --dry-run, show the user the estimate, then re-run the same
+         command with --approved. --dry-run itself never needs it.
   ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [--concurrency N] [OPTIONS]
   ofox-video.sh poll JOB_ID [JOB_ID...] [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS] [--concurrency N]
   ofox-video.sh chain --shot "..." --shot "..." [--shots-file FILE] [--no-concat] [OPTIONS]
@@ -911,6 +927,69 @@ print_api_error() {
 }
 
 # ---------------------------------------------------------------------------
+# the spend gate
+# ---------------------------------------------------------------------------
+
+# There is exactly one billable request in this file: the POST to
+# $API_BASE/videos in cmd_generate. Every other curl here is a GET. So the set
+# of subcommands that can put a charge on the account is exactly the set that
+# reaches that POST — `generate`, `create` (the same call without the wait),
+# `batch` (N of them) and `chain` (N of them) — and those four refuse to run
+# without --approved.
+#
+# Nothing else is guarded, and each omission is a decision rather than an
+# oversight:
+#   check / models / providers   read-only, and `models`/`providers` are the
+#                                public catalog: free, no key needed.
+#   contact-sheet / last-frame / frame-at / mux-audio
+#                                local ffmpeg over a file the caller already
+#                                has. No network call at all.
+#   poll                         only ever issues GETs against a job that
+#                                already exists. Guarding it would be actively
+#                                harmful: it is the recovery command this
+#                                script prints whenever a run is refused,
+#                                times out or is interrupted, so blocking it
+#                                would strand a job that has already been paid
+#                                for.
+# references/test/approval.test.sh derives both halves of that split from the
+# usage text at run time rather than from a list retyped here, so a new
+# subcommand that reaches the POST without a guard turns the suite red.
+#
+# --dry-run returns before this guard in all four, on purpose. Quoting a price
+# is the step that produces the number the user approves; a gate that blocked
+# the quote would close the only route through itself.
+#
+# What this flag is: a place where spending has to be typed out, which makes it
+# visible in a transcript and refusable by a reviewer.
+#
+# What it is NOT — and the docs must not claim otherwise: evidence that an
+# approval happened. Nothing in a shell script can observe the conversation
+# between an agent and its user, and an agent can pass --approved without ever
+# showing anyone a price, exactly as it could previously just run the command.
+# This moves "spend without quoting" from the default behaviour to a
+# deliberate, auditable act. It does not detect it.
+require_approved() {
+  # require_approved SUBCOMMAND APPROVED_FLAG
+  local sub="$1" approved="${2:-}"
+  [ -n "$approved" ] && return 0
+  echo "" >&2
+  echo "ERROR: '$sub' spends real money and was run without --approved." >&2
+  echo "Nothing was submitted and nothing was billed." >&2
+  echo "  1. Quote it first, for free: re-run this exact command with --dry-run" >&2
+  echo "       $0 $sub --dry-run ...   (submits nothing, needs no API key)" >&2
+  echo "  2. Show the user the 'Estimated cost:' line it prints, together with" >&2
+  echo "     the model, the full prompt and the parameters being quoted. The" >&2
+  echo "     table that belongs in front of them is in this skill's" >&2
+  echo "     references/approval-gate.md." >&2
+  echo "  3. Once they have said yes to THAT table, run the original command" >&2
+  echo "     again with --approved added." >&2
+  echo "--approved records a stance; it cannot prove anyone was asked. It is" >&2
+  echo "here so that spending without quoting has to be typed out instead of" >&2
+  echo "being what happens by default." >&2
+  return 1
+}
+
+# ---------------------------------------------------------------------------
 # generate: validate params, build payload, POST, poll, download
 # ---------------------------------------------------------------------------
 
@@ -922,6 +1001,7 @@ cmd_generate() {
   local provider_explicit=""
   local print_payload=""
   local dry_run=""
+  local approved=""
   local submit_only="${OFOX_SUBMIT_ONLY:-}"
   local prompt=""
   local duration=""
@@ -958,6 +1038,11 @@ cmd_generate() {
         ;;
       --dry-run)
         dry_run=1
+        shift
+        continue
+        ;;
+      --approved)
+        approved=1
         shift
         continue
         ;;
@@ -1253,6 +1338,11 @@ cmd_generate() {
     DRY_RUN_ACTIVE=1
   else
     if ! check_api_key; then return 2; fi
+    # A run with no --approved is going to be refused below, after the estimate
+    # has printed. DRY_RUN_ACTIVE means "this run is quoting, not spending",
+    # which is exactly true here — without it the estimate would end "Actual
+    # billing is reported below" on a run that reports no billing at all.
+    [ -z "$approved" ] && DRY_RUN_ACTIVE=1
   fi
 
   # --out-dir is resolved here, under dry run too. A path that can't be
@@ -1443,6 +1533,14 @@ cmd_generate() {
     return 0
   fi
 
+  # Last free instant. Everything above is validation, resolution and the
+  # quote; the next statement is the POST that bills. The guard sits here
+  # rather than at the top of the function on purpose: refusing after the
+  # estimate has printed means the refusal carries the number the user needs
+  # to be shown, and it leaves every parameter error still reported as a
+  # parameter error.
+  require_approved "${SUBCOMMAND:-generate}" "$approved" || return 1
+
   echo "Submitting job to Ofox (model=$model, provider=$provider_label)..." >&2
   # payload can itself now be well over 1MB (a resolved frame image is
   # inlined into it above) — pass it to curl via `--data-binary @file`, not
@@ -1605,7 +1703,7 @@ cmd_generate() {
 MAX_TAKES=10
 
 cmd_batch() {
-  local takes="" seed_given="" prompt_seen="" batch_provider="" batch_dry=""
+  local takes="" seed_given="" prompt_seen="" batch_provider="" batch_dry="" batch_approved=""
   local passthrough=() out_dir="$PWD" duration="" resolution="" model="$DEFAULT_MODEL"
   local sheet="auto"
   local concurrency="$DEFAULT_CONCURRENCY"
@@ -1638,6 +1736,11 @@ cmd_batch() {
         ;;
       --dry-run)
         batch_dry=1; shift; continue
+        ;;
+      --approved)
+        # Forwarded as well as recorded: every take goes through cmd_generate,
+        # which has the same guard sitting next to the POST it makes.
+        batch_approved=1; passthrough+=("$key"); shift; continue
         ;;
       *)
         if [ $# -lt 2 ]; then
@@ -1699,22 +1802,30 @@ cmd_batch() {
   # --- estimate before spending ---
 
   [ -n "$batch_dry" ] && DRY_RUN_ACTIVE=1
+  # Same reason as cmd_generate's copy: an unapproved batch is refused below,
+  # so its estimate must not promise a bill "reported below".
+  [ -z "$batch_approved" ] && DRY_RUN_ACTIVE=1
   print_estimate "$model" "${resolution:-}" "t2v" "${batch_provider:-}" "$duration" "$takes"
 
+  # Validate one take through the real path so a bad parameter is caught here
+  # rather than after the first one is paid for. This used to run only under
+  # --dry-run; it runs on both paths now, because it has to come BEFORE the
+  # spend gate below. A batch with a bad --duration and no --approved would
+  # otherwise report the missing approval, and "add --approved and try again"
+  # is the last thing to teach someone whose parameters are wrong.
+  #
+  # Capture the inner call's stderr instead of letting it through: it prints
+  # its own single-take estimate, and a caller told "there is exactly one
+  # Estimated cost line, relay it" would otherwise see two and quite
+  # reasonably relay the last one — the per-take figure this skill spends
+  # two documents telling people not to quote. Errors still surface.
+  local inner_err
+  if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --dry-run 2>&1 >/dev/null)"; then
+    printf '%s\n' "$inner_err" >&2
+    return 1
+  fi
+
   if [ -n "$batch_dry" ]; then
-    # Validate one take through the real path so a bad parameter is caught
-    # here rather than after the first one is paid for, then stop.
-    #
-    # Capture the inner call's stderr instead of letting it through: it prints
-    # its own single-take estimate, and a caller told "there is exactly one
-    # Estimated cost line, relay it" would otherwise see two and quite
-    # reasonably relay the last one — the per-take figure this skill spends
-    # two documents telling people not to quote. Errors still surface.
-    local inner_err
-    if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --dry-run 2>&1 >/dev/null)"; then
-      printf '%s\n' "$inner_err" >&2
-      return 1
-    fi
     echo "DRY RUN — $takes takes would be created one at a time, then waited for concurrently, $concurrency at once. Nothing was billed." >&2
     echo "The figure above is the whole batch. $takes takes means $takes bills, and running them concurrently means they all arrive at once — quote the total before starting, never the per-take figure." >&2
     concurrency_rpm_note "$concurrency" "$poll_interval"
@@ -1724,6 +1835,12 @@ cmd_batch() {
     echo "CONCURRENCY $concurrency"
     return 0
   fi
+
+  # Checked here as well as inside each take's cmd_generate. Letting take 1
+  # trip the inner guard would work, but it would report a money refusal as
+  # "take 1 could not be submitted (exit 1)" — and a batch is N bills, so the
+  # one place it can still be stopped is before the first submission.
+  require_approved "${SUBCOMMAND:-batch}" "$batch_approved" || return 1
 
   # --- phase 1: create every take, one at a time ---
   #
@@ -2422,7 +2539,7 @@ shot_looks_like_prompt_fragment() {
 
 cmd_chain() {
   local shots=() shots_file="" out_dir="$PWD" duration="" resolution=""
-  local model="$DEFAULT_MODEL" concat="auto" aspect="" chain_dry=""
+  local model="$DEFAULT_MODEL" concat="auto" aspect="" chain_dry="" chain_approved=""
   local chain_name=""
   local passthrough=() key val
 
@@ -2442,6 +2559,10 @@ cmd_chain() {
         ;;
       --dry-run)
         chain_dry=1; shift; continue
+        ;;
+      --approved)
+        # Forwarded as well as recorded, for the same reason batch forwards it.
+        chain_approved=1; passthrough+=("$key"); shift; continue
         ;;
       --print-payload)
         passthrough+=("$key"); shift; continue
@@ -2541,20 +2662,31 @@ cmd_chain() {
   fi
 
   [ -n "$chain_dry" ] && DRY_RUN_ACTIVE=1
+  [ -z "$chain_approved" ] && DRY_RUN_ACTIVE=1
   print_estimate "$model" "${resolution:-}" "t2v" "" "$duration" "$n"
 
+  # Shot 1 through the real path, stopping before the request. Like batch's
+  # copy of this, it used to run only under --dry-run and now runs on both
+  # paths, so that a bad parameter is reported as a bad parameter rather than
+  # as a missing approval.
+  local inner_err
+  if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --prompt "${shots[0]}" --dry-run 2>&1 >/dev/null)"; then
+    printf '%s\n' "$inner_err" >&2
+    return 1
+  fi
+
   if [ -n "$chain_dry" ]; then
-    local inner_err
-    if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --prompt "${shots[0]}" --dry-run 2>&1 >/dev/null)"; then
-      printf '%s\n' "$inner_err" >&2
-      return 1
-    fi
     echo "DRY RUN — $n shots would be submitted in sequence. Nothing was billed." >&2
     echo "Re-run without --dry-run to generate." >&2
     echo "STATUS dry_run"
     echo "SHOTS_REQUESTED $n"
     return 0
   fi
+
+  # Same reasoning as batch: a chain is N bills, and shot 1 tripping the inner
+  # guard would be reported as "shot 1 failed (exit 1)" rather than as a money
+  # refusal.
+  require_approved "${SUBCOMMAND:-chain}" "$chain_approved" || return 1
 
   mkdir -p "$out_dir" 2>/dev/null
   local abs_out
@@ -3566,6 +3698,11 @@ download_result() {
 
 main() {
   local mode="${1:-}"
+  # Recorded so require_approved can echo back the subcommand the caller
+  # actually typed ('create' and 'batch' both run cmd_generate). Taken from
+  # main's own dispatch word, never by scanning "$@" for it: a prompt is free
+  # text, and `--prompt "run it with --approved"` must not read as a flag.
+  SUBCOMMAND="$mode"
   # Every subcommand that builds a request from API_BASE validates the base
   # first, and says so when it has been overridden. The four local tools are
   # deliberately not in this list: they run ffmpeg over a file the caller

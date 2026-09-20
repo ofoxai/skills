@@ -134,7 +134,9 @@ fi
 #
 # The script as a library, with curl stubbed: one POST answers 202 with a body
 # this test chooses, and every invocation is logged so the test can assert
-# WHERE the key was sent, not just what was printed.
+# WHERE the key was sent, not just what was printed. Both drivers pass
+# --approved because the thing under test happens after the create call, so
+# they have to get past the spend gate; the stub means nothing is billed.
 # ---------------------------------------------------------------------------
 
 echo
@@ -158,7 +160,7 @@ curl() {
   return 0
 }
 OFOX_SUBMIT_ONLY=1 cmd_generate --prompt x --duration 4 --resolution 480p \
-  --seed 42 --out-dir "$OUTD"
+  --seed 42 --out-dir "$OUTD" --approved
 echo "RC=$?"
 EOF
 
@@ -182,7 +184,7 @@ curl() {
   return 0
 }
 cmd_generate --prompt x --duration 4 --resolution 480p --seed 42 \
-  --out-dir "$OUTD" --max-wait 1 --poll-interval 1
+  --out-dir "$OUTD" --max-wait 1 --poll-interval 1 --approved
 echo "RC=$?"
 EOF
 
@@ -348,7 +350,7 @@ fi
 # It has to fire through batch too: batch forwards the flag verbatim, and a
 # batch is N times the bill.
 out=$(bash "$TARGET" batch --prompt x --takes 2 --duration 4 --resolution 480p \
-  --out-dir "$WORK/out" --extra-json "" 2>&1)
+  --out-dir "$WORK/out" --extra-json "" --approved 2>&1)
 code=$?
 # "exit non-zero" alone would pass even with the guard gone, because the base
 # is unroutable and the submission would fail anyway. What distinguishes them

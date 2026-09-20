@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.14.2"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.14.2"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -121,6 +121,14 @@ the other.
 Either probe printing nothing → that core isn't installed, and Step 1 needs
 `ofox-image-core` as surely as Step 2 needs `ofox-video-core`; see "If the
 script isn't found".
+
+**Step 2 needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+`ofox-video.sh` command below passes it. An older core does not know the flag
+and stops with `unknown option '--approved'` before any request — nothing is
+submitted and nothing is billed, so the fix is to update the core, never to
+drop the flag. Step 1's `ofox-image.sh` has no equivalent flag; the spend rule
+binds there in exactly the same way, only the reminder is missing.
 
 ## Before generating: two availability checks
 
@@ -749,7 +757,7 @@ frame-lock shape for a single shot, the 15–30s manifest when the job holds
 several timestamped shots — then call:
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the shot prompt from the template>" \
   --frame-first-image "<that shot's opening frame — the ABSOLUTE path printed in Step 1>" \
   --duration 8 \
@@ -759,6 +767,12 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 
 `ofox-video-core` auto-base64-encodes a local file path like this one — no
 need to upload it anywhere first.
+
+`--approved` is not decoration: without it the script refuses, submits
+nothing, and prints the quote-first steps instead. It belongs on this command
+only once the two-phase cost table has gone in front of the user and come back
+with a yes — the flag cannot check that for you. To price a shot without
+sending it, swap `--approved` for `--dry-run`.
 
 ### `aspect_ratio: adaptive` is applied for you here — expected, not a bug
 
@@ -923,6 +937,19 @@ expensive v2v tier, now measured at both resolutions anyone here uses: 4s at
 would have been 30 cents/s. Only a *video* input moves the tier, and this
 skill never sends one. The script picks the tier; take it from the dry run
 rather than assuming either way.
+
+After the yes, run the identical command with `--dry-run` swapped for
+`--approved`. That flag is where the yes gets typed out: since
+`ofox-video-core` 2.0.0 the four billable subcommands — `generate`, `create`,
+`batch`, `chain` — refuse to run without it, while `--dry-run` never needs it,
+so both quotes above stay free and keep working with no API key. Be exact
+about what it does: it records a stance, it cannot prove one. Nothing in a
+shell script can observe the conversation you had, and it can be typed without
+showing anyone a price. What it changes is that spending without quoting is no
+longer the default — it has to be written into the command, where a transcript
+shows it. The two approvals above are still the rule, and they are still yours
+to follow. Phase 1's `ofox-image.sh` has no equivalent flag; Approval 1 binds
+there just as firmly, only the reminder is missing.
 
 Afterwards, report both real figures — `IMAGE_COST` from phase 1 and
 `VIDEO_COST` from each finished shot — and the total across the two phases.
@@ -1183,7 +1210,8 @@ bash ../ofox-image-core/references/ofox-image.sh generate \
 # IMAGE_PATH_UNCROPPED is the API's untouched bytes, kept for a human who wants a different crop.
 
 # Step 2 — the shot, opening on that exact frame (the SAME absolute IMAGE_PATH Step 1 printed)
-bash ../ofox-video-core/references/ofox-video.sh generate \
+# --approved goes on only after the two-phase table came back with a yes.
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "Start exactly on the opening frame. The silver-bobbed girl in the navy uniform stands at the rooftop edge at sunset; modern theatrical anime, cel-shaded. One shot, 8 seconds. Low medium shot, slow push-in. The wind lifts her hair; she looks toward the horizon, then says, quietly and without turning: \"I'm not going back.\" The camera settles; hold one second. AUDIO: wind, distant traffic, no music. CONSISTENCY: her face, silver bob, green eyes, uniform and red ribbon unchanged. AVOID: subtitles, watermarks; photorealism, game CG; identity drift." \
   --name "rooftop confession shot 1" \
   --frame-first-image "/absolute/path/to/assets/ofox_image_20260829183214_4821.png" \

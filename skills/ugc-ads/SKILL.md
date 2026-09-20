@@ -2,11 +2,11 @@
 name: ugc-ads
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a handheld, phone-shot UGC clip — imperfect framing, one practical light, vertical, no cinematic grading, no beauty filter. It inverts the polish every other video skill here defaults to — a UGC clip that looks like an ad has failed. Use when a user wants a video that reads as filmed by a real customer rather than by an agency, e.g. "a real-looking phone unboxing of this product", "a creator first-impression clip for TikTok", "an honest review video, nothing slick", or "make it look like a customer shot it". Do not use for a polished brand ad (see seedance-ad-creative), plain catalog footage (see seedance-product-video), a dialogue scene between people (see seedance-short-drama), or a set of cheap vertical drafts to choose from (see shorts-reels).
 license: MIT
-version: "1.1.1"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ugc-ads
 metadata:
   author: ofoxai
-  version: "1.1.1"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -228,6 +228,12 @@ root.
 
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
+
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
 
 ## Before generating: the availability check
 
@@ -698,10 +704,21 @@ bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
 ```
 
 Relay the `Estimated cost:` line it prints — never a number of your own — then
-wait for a yes, then re-run the identical command with `--dry-run` removed.
-The estimate a *real* run prints comes microseconds before the request goes
-out, too late to relay. Pass the same `--out-dir` to both: the dry run creates
-and enters it, so a bad path fails as exit `6` with nothing submitted.
+wait for a yes, then re-run the identical command with `--dry-run` swapped
+for `--approved`. The estimate a *real* run prints comes microseconds before
+the request goes out, too late to relay. Pass the same `--out-dir` to both:
+the dry run creates and enters it, so a bad path fails as exit `6` with
+nothing submitted.
+
+`--approved` is where that yes gets typed out. Since `ofox-video-core` 2.0.0
+the four billable subcommands — `generate`, `create`, `batch`, `chain` —
+refuse to run without it, while `--dry-run` never needs it, so the quote above
+is still free and still works with no API key. Be exact about what the flag
+does: it records a stance, it cannot prove one. Nothing in a shell script can
+observe the conversation you had, and it can be typed without showing anyone a
+price. What it changes is that spending without quoting is no longer the
+default — it has to be written into the command, where a transcript shows it.
+The rule above is still the rule, and it is still yours to follow.
 
 The brief recap goes in the **same message** as the prompt and the table,
 above them.
@@ -833,7 +850,7 @@ sidecar holding the full job id, the prompt, the seed and the real cost.
 ## Generating
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the UGC prompt built above>" \
   --name "<short clip name, e.g. hand grinder unboxing>" \
   --duration 10 \
@@ -844,6 +861,11 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 
 Drop `--aspect-ratio` when a product photo is attached — see "Vertical by
 default".
+
+`--approved` is not decoration: without it the script refuses, submits
+nothing, and prints the quote-first steps instead. Add it only once the cost
+table has actually gone in front of the user and come back with a yes — the
+flag cannot check that for you.
 
 This one call validates the parameters, submits the job, polls to completion,
 downloads the mp4, and prints `STATUS`, `JOB_ID`, `VIDEO_PATH`,

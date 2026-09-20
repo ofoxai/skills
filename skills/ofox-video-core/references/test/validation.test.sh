@@ -64,11 +64,17 @@ expect_reject() {
 # expect_accept DESC -- ARGS...
 # Asserts validation did NOT reject: the script must get far enough to attempt
 # the network call and fail there (exit 5 = ambiguous create failure).
+#
+# --approved is added here and nowhere in expect_reject: reaching the network
+# call means getting past the spend gate, and the base is unroutable so the
+# attempt costs nothing. expect_reject deliberately keeps running without it —
+# every one of those cases asserts exit 1 AND a message naming the parameter,
+# so if the gate ever started firing ahead of validation they would go red.
 expect_accept() {
   local desc="$1"
   shift 2 # drop desc and the literal '--'
   local out code
-  out=$(bash "$TARGET" generate "$@" 2>&1)
+  out=$(bash "$TARGET" generate "$@" --approved 2>&1)
   code=$?
   if [ "$code" -eq 1 ]; then
     printf 'FAIL  %s\n      validation rejected a combination the model supports\n      output: %s\n' \
@@ -146,7 +152,7 @@ expect_accept "unknown model deferred to the API when only a snapshot is availab
 echo
 echo "=== Escape hatch: per-model checks can be skipped ==="
 out=$(OFOX_SKIP_MODEL_VALIDATION=1 bash "$TARGET" generate \
-  --model alibaba/wan-2.7 --prompt x --duration 30 2>&1)
+  --model alibaba/wan-2.7 --prompt x --duration 30 --approved 2>&1)
 code=$?
 if [ "$code" -ne 1 ]; then
   printf 'ok    OFOX_SKIP_MODEL_VALIDATION=1 bypasses per-model limits (exit %s)\n' "$code"

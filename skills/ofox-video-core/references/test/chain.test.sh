@@ -159,7 +159,9 @@ fi
 
 echo
 echo "=== A failed shot stops the run ==="
-out=$(run_chain --shot "a" --shot "b" --shot "c" --duration 5 --out-dir "$WORK/out")
+# --approved because this case has to reach the submit attempt; the base is
+# unroutable, so the attempt fails without spending.
+out=$(run_chain --shot "a" --shot "b" --shot "c" --duration 5 --out-dir "$WORK/out" --approved)
 submits=$(printf '%s' "$out" | grep -ci 'submitting job' || true)
 if [ "$submits" -eq 1 ]; then
   pass "shot 1 failing stopped the run (1 submit attempt, not 3)"

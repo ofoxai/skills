@@ -482,7 +482,7 @@ off. Regenerate the snapshot with `bash references/refresh-snapshot.sh`.
 ## Image-to-video example (first frame only)
 
 ```bash
-bash references/ofox-video.sh generate \
+bash references/ofox-video.sh generate --approved \
   --model bytedance/seedance-2.0 \
   --prompt "Make the dog in the frame start running" \
   --duration 5 \
@@ -492,7 +492,7 @@ bash references/ofox-video.sh generate \
 A local file path also works and is preferred when available (see below):
 
 ```bash
-bash references/ofox-video.sh generate \
+bash references/ofox-video.sh generate --approved \
   --prompt "Make the dog in the frame start running" \
   --duration 5 \
   --frame-first-image "/Users/me/photos/dog.jpg"

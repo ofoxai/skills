@@ -2,11 +2,11 @@
 name: music-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus the music file the finished video must carry. Your audio never reaches the API (measured) — the visuals are written to the track's tempo, mood and sections, then your own file is laid on locally at zero cost. One job caps at 30 seconds, so a three-minute song is six jobs minimum and the cost table says that before anything is spent. Use when a user has a specific piece of music and wants visuals for it, e.g. "make a music video for this track", "visuals for my song", "an MV for this instrumental", "generate footage cut to this beat". Do not use for cheap vertical social drafts (shorts-reels), a brand film that happens to have a music bed (seedance-ad-creative), or when there is no particular audio file the finished video has to carry.
 license: MIT
-version: "1.2.1"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/music-video
 metadata:
   author: ofoxai
-  version: "1.2.1"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -154,6 +154,12 @@ root.
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
 
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
+
 ## Before generating: the availability check
 
 Run this once per session (not on every request):
@@ -180,10 +186,12 @@ Find this out **now** rather than after the segments are paid for — `chain`
 refuses to start a multi-shot run without `ffmpeg` for exactly that reason,
 and a piece with its audio still missing is not the thing the user asked for.
 
-**This skill needs `ofox-video-core` 1.25.0 or newer**, which is the version
-`mux-audio` arrives in. On an older core the segments generate fine and the
-final step — the whole reason this skill exists — fails with an unknown
-subcommand. Confirm it before quoting a piece, not after generating one:
+**This skill needs `ofox-video-core` 2.0.0 or newer.** Two separate reasons
+now: `mux-audio` arrived in 1.25.0 — on an older core the segments generate
+fine and the final step, the whole reason this skill exists, fails with an
+unknown subcommand — and 2.0.0 is where `chain` began refusing to run without
+`--approved`, which every real-run command below passes. Confirm it before
+quoting a piece, not after generating one:
 
 ```bash
 grep -m1 '^version:' ../ofox-video-core/SKILL.md
@@ -839,7 +847,19 @@ It prints exactly one `Estimated cost:` line covering every shot — the line
 says "takes" where it means shots, which is the shared estimator's wording,
 not a different unit. **Relay that line; never a figure of your own.** Then
 wait for an explicit yes, then re-run the identical command with `--dry-run`
-removed.
+swapped for `--approved`.
+
+`--approved` is where that yes gets typed out. Since `ofox-video-core` 2.0.0
+the four billable subcommands — `generate`, `create`, `batch`, `chain` —
+refuse to run without it, while `--dry-run` never needs it, so the quote above
+is still free and still works with no API key. Be exact about what the flag
+does: it records a stance, it cannot prove one. Nothing in a shell script can
+observe the conversation you had, and it can be typed without showing anyone a
+price. What it changes is that spending without quoting is no longer the
+default — it has to be written into the command, where a transcript shows it.
+A chain is the worst place to skip that, because one command commits every
+segment at once. The rule above is still the rule, and it is still yours to
+follow.
 
 🚨 **Before relaying anything, check that `SHOTS_REQUESTED` equals your segment
 count.** One `--shot` per segment, always; `--shots-file` reads one prompt per
@@ -980,7 +1000,7 @@ EOF
 
 ```bash
 # 1. the segments, in order, each opening on the previous one's closing frame
-bash ../ofox-video-core/references/ofox-video.sh chain \
+bash ../ofox-video-core/references/ofox-video.sh chain --approved \
   --shot "$SEG1" \
   --shot "$SEG2" \
   ... \
@@ -995,6 +1015,12 @@ bash ../ofox-video-core/references/ofox-video.sh mux-audio \
   /Users/me/music/coast-road.wav \
   --out-dir /absolute/path/to/out
 ```
+
+`--approved` sits on step 1 only. `mux-audio` is local ffmpeg — no request, no
+key, no cost — so there is nothing there to approve. Without the flag step 1
+refuses, submits nothing and prints the quote-first steps instead; add it once
+the table above has come back with a yes, which the flag itself cannot check
+for you.
 
 What `chain` prints: `STATUS chain_completed`, `SHOTS_REQUESTED`,
 `SHOTS_COMPLETED`, one `SHOT N <job id> <cost> <path>` line per segment,

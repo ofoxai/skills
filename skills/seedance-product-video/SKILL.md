@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "1.17.2"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "1.17.2"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -73,6 +73,12 @@ commands and in the `references/*.md` links alike.
 
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
+
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
 
 ## Before generating: the availability check
 
@@ -960,11 +966,14 @@ only when the user has several angles of the product and wants them all to
 count.
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the compact template above>" \
   --frame-first-image "/path/to/local/product-photo.jpg" \
   --duration 5 --resolution 720p --generate-audio false
 ```
+
+That is a real run — hence `--approved`, see "Before you spend" below. Swap it
+for `--dry-run` to price the job without sending it.
 
 **Do not pass `--aspect-ratio` here** for the default model
 (`bytedance/seedance-2.5`) — `ofox-video-core` forces `aspect_ratio` to
@@ -1557,11 +1566,15 @@ that blocks chaining live-action sequences doesn't apply to objects, so
 product footage chains freely.
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh chain \
+bash ../ofox-video-core/references/ofox-video.sh chain --approved \
   --shot "the product centered on a pure white surface and backdrop; the camera orbits it 360 degrees at constant height; the product does not move" \
   --shot "the camera pushes in to a macro of the same product's label, same white background, same light" \
   --duration 5 --resolution 720p --generate-audio false
 ```
+
+That is a real run — hence `--approved`, see "Before you spend" below. Swap it
+for `--dry-run` to price the whole sequence first, which is the order to work
+in: one `chain` command commits every shot at once.
 
 ## Before you spend: the approval gate
 
@@ -1582,9 +1595,20 @@ bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
 ```
 
 Relay the `Estimated cost:` line it prints — never a number of your own — then
-wait for a yes, then re-run the identical command with `--dry-run` removed.
-The estimate a *real* run prints comes microseconds before the request goes
-out, too late to relay; that is what `--dry-run` is for.
+wait for a yes, then re-run the identical command with `--dry-run` swapped for
+`--approved`. The estimate a *real* run prints comes microseconds before the
+request goes out, too late to relay; that is what `--dry-run` is for.
+
+`--approved` is where that yes gets typed out, and it is why every real-run
+command in this file carries it. Since `ofox-video-core` 2.0.0 the four
+billable subcommands — `generate`, `create`, `batch`, `chain` — refuse to run
+without it, while `--dry-run` never needs it, so the quote above is still free
+and still works with no API key. Be exact about what the flag does: it records
+a stance, it cannot prove one. Nothing in a shell script can observe the
+conversation you had, and it can be typed without showing anyone a price. What
+it changes is that spending without quoting is no longer the default — it has
+to be written into the command, where a transcript shows it. The rule above is
+still the rule, and it is still yours to follow.
 
 The brief recap (see the creative brief section) goes in the **same
 message** as the prompt and the table, above them — the user approves the
@@ -1774,7 +1798,7 @@ remote URL when one is available; the photo already cropped or padded to the
 platform's ratio):
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the product-video prompt built above>" \
   --name "<short product name, e.g. sneaker orbit>" \
   --frame-first-image "<local path or URL to the product photo>" \
@@ -1791,13 +1815,18 @@ the photo` and `What changes when the model changes`). Without a product photo
 to the platform ratio the brief settled:
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the product-video prompt built above>" \
   --duration 5 \
   --resolution 720p \
   --aspect-ratio 1:1 \
   --generate-audio false
 ```
+
+`--approved` is not decoration on either of those: without it the script
+refuses, submits nothing, and prints the quote-first steps instead. Add it
+only once the cost table has actually gone in front of the user and come back
+with a yes — the flag cannot check that for you.
 
 This one call validates the parameters, submits the job, polls to
 completion, downloads the mp4, and prints `STATUS`, `JOB_ID`, `VIDEO_PATH`,

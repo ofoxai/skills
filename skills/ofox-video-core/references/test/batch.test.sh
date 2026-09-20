@@ -76,7 +76,9 @@ fi
 
 echo
 echo "=== A failed take stops the run — it never burns the rest ==="
-out=$(run_batch --prompt x --takes 3 --duration 5 --out-dir "$WORK/out")
+# --approved because this case has to reach the submit attempt to be about
+# anything; the base is unroutable, so the attempt fails without spending.
+out=$(run_batch --prompt x --takes 3 --duration 5 --out-dir "$WORK/out" --approved)
 submits=$(printf '%s' "$out" | grep -ci 'submitting job' || true)
 if [ "$submits" -eq 1 ]; then
   pass "take 1 failing stopped the run (1 submit attempt, not 3)"

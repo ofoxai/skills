@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.30.0"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.30.0"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -125,7 +125,7 @@ next one as its opening frame. The two mechanisms combine rather than compete
 — every job in a chain can itself contain several timestamped shots:
 
 ```bash
-bash references/ofox-video.sh chain \
+bash references/ofox-video.sh chain --approved \
   --shot "a white cup on a dark table, steam rising, static camera" \
   --shot "the camera pushes in slowly toward the same cup" \
   --duration 4 --resolution 480p
@@ -161,7 +161,7 @@ one prompt however many newlines it contains, which is the case a shots file
 cannot express:
 
 ```bash
-bash references/ofox-video.sh chain \
+bash references/ofox-video.sh chain --approved \
   --shot "$(cat shot1.txt)" \
   --shot "$(cat shot2.txt)" \
   --duration 8 --resolution 480p
@@ -273,7 +273,7 @@ makes that one command, and — the part nobody else does — tells you what it
 actually cost.
 
 ```bash
-bash references/ofox-video.sh batch --prompt "..." --takes 3 [OPTIONS]
+bash references/ofox-video.sh batch --approved --prompt "..." --takes 3 [OPTIONS]
 ```
 
 Every option `generate` takes works here. What `batch` adds:
@@ -322,11 +322,11 @@ Draft cheap, render the keeper expensive:
 
 ```bash
 # 5 drafts at 480p on the cheapest model — about 40 cents
-bash references/ofox-video.sh batch --prompt "..." --takes 5 \
+bash references/ofox-video.sh batch --approved --prompt "..." --takes 5 \
   --model bytedance/seedance-2.0-mini --resolution 480p --duration 4
 
 # then the winner, on the good model
-bash references/ofox-video.sh generate --prompt "<the one that worked>" \
+bash references/ofox-video.sh generate --approved --prompt "<the one that worked>" \
   --model bytedance/seedance-2.5 --resolution 1080p --duration 4
 ```
 
@@ -385,7 +385,7 @@ immediately — seconds, not minutes — printing the job id. Then poll in
 however many short calls it takes:
 
 ```bash
-bash references/ofox-video.sh create --prompt "..." --duration 15 --out-dir ./out
+bash references/ofox-video.sh create --approved --prompt "..." --duration 15 --out-dir ./out
 # -> STATUS submitted
 #    JOB_ID 7b41f0c9-...
 #    POLLING_URL https://api.ofox.ai/v1/videos/7b41f0c9-...
@@ -423,11 +423,11 @@ over every job id:
 
 ```bash
 # submit all three; each returns in seconds with its own job id
-bash references/ofox-video.sh create --prompt "<shot A>" --duration 15 \
+bash references/ofox-video.sh create --approved --prompt "<shot A>" --duration 15 \
   --resolution 720p --name "kitchen argument" --out-dir ./out
-bash references/ofox-video.sh create --prompt "<shot B>" --duration 15 \
+bash references/ofox-video.sh create --approved --prompt "<shot B>" --duration 15 \
   --resolution 720p --name "she walks out" --out-dir ./out
-bash references/ofox-video.sh create --prompt "<shot C>" --duration 15 \
+bash references/ofox-video.sh create --approved --prompt "<shot C>" --duration 15 \
   --resolution 720p --name "the station" --out-dir ./out
 
 # then wait for all three at once, not one after another
@@ -474,7 +474,7 @@ Serially, the answer to that was a re-run and another ten minutes. Concurrently
 it costs the same wall clock as the first attempt:
 
 ```bash
-bash references/ofox-video.sh batch --prompt "..." --takes 3 \
+bash references/ofox-video.sh batch --approved --prompt "..." --takes 3 \
   --duration 15 --resolution 720p --out-dir ./out
 ```
 
@@ -559,12 +559,33 @@ bash references/ofox-video.sh generate --dry-run --prompt "..." --duration 15 --
 
 # 2. tell the user the number, get a yes
 
-# 3. run the identical command without --dry-run
+# 3. run the identical command with --dry-run swapped for --approved
+bash references/ofox-video.sh generate --approved --prompt "..." --duration 15 --resolution 720p
 ```
 
 **Do not skip step 2.** The estimate a real run prints appears microseconds
 before the request goes out — by the time you could relay it, the job exists
 and is billable. `--dry-run` is what makes quoting-then-confirming possible.
+
+### `--approved` is required, and `--dry-run` never needs it
+
+Since 2.0.0 the four subcommands that can bill — `generate`, `create`, `batch`,
+`chain` — refuse to run without **`--approved`**, printing the three steps
+above and submitting nothing. Nothing else is gated: `check`, `models`,
+`providers`, the four local ffmpeg tools, and — deliberately — **`poll`**,
+which is the command that collects a job you have already paid for.
+
+Be accurate about what the flag is. **It records a stance; it cannot prove
+one.** No shell script can see the conversation between an agent and its user,
+and an agent is perfectly able to type `--approved` without ever showing anyone
+a price. What changed is that spending without quoting is no longer what
+happens by default — it now has to be written into the command, where a
+transcript shows it and a reviewer can object to it. Do not describe this as
+"approval is enforced".
+
+`--dry-run` works with no `--approved` and no API key, because the quote is how
+the number being approved is produced; a gate in front of it would close the
+only route through itself.
 
 A dry run also catches a bad parameter for free, so an invalid combination
 costs a message instead of a job.
@@ -595,8 +616,8 @@ Pricing is identical across the two — this is a region and moderation choice,
 never a cost one. Say so if a user asks which is cheaper.
 
 ```bash
-bash references/ofox-video.sh generate --provider volcengine ...  # mainland
-bash references/ofox-video.sh generate --provider auto ...        # let Ofox route
+bash references/ofox-video.sh generate --approved --provider volcengine ...  # mainland
+bash references/ofox-video.sh generate --approved --provider auto ...        # let Ofox route
 export OFOX_VIDEO_PROVIDER=volcengine                             # persistent default
 bash references/ofox-video.sh providers                           # see a model's upstreams
 ```
@@ -651,7 +672,7 @@ are present — it makes no network call. Handle each failure mode plainly:
 ```bash
 bash references/ofox-video.sh models
 bash references/ofox-video.sh generate --dry-run --prompt "..." [OPTIONS]
-bash references/ofox-video.sh generate --prompt "..." [OPTIONS]
+bash references/ofox-video.sh generate --approved --prompt "..." [OPTIONS]
 bash references/ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT]
 bash references/ofox-video.sh poll JOB_ID JOB_ID JOB_ID [--concurrency N]
 ```
@@ -676,7 +697,7 @@ VIDEO_COST <exact cost from usage.video_cost>
 Pass `--name` with a short description of what the clip actually is:
 
 ```bash
-bash references/ofox-video.sh generate --prompt "..." --name "convenience store breakup"
+bash references/ofox-video.sh generate --approved --prompt "..." --name "convenience store breakup"
 ```
 
 The file lands as `convenience-store-breakup-d12c2787.mp4` instead of a bare

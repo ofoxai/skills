@@ -2,11 +2,11 @@
 name: explainer
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn an article, doc or release note into a short explainer clip — one person to camera, or a voiceover over illustrative footage. The user supplies the source text and the model generates the speech; audio cannot be uploaded, measured. A 30-second clip holds about eighty spoken words in eight sentences — measured, and well under a tenth of a 1,200-word post — so this skill does not summarise an article, it picks the single idea worth saying and helps choose which one. Use when a user asks to turn writing into a short spoken video, e.g. "make a 30-second explainer from this blog post", "explain this feature in a short video", "turn our changelog into a clip", "a quick video explaining what this paper found". Do not use for a scene between people (see seedance-short-drama), a brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the user already has both a portrait and the finished words (see talking-head). Budget sentences as well as words — each sentence boundary costs about 0.7 seconds of silence, so a script with more sentences runs longer at the same word count.
 license: MIT
-version: "1.2.1"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/explainer
 metadata:
   author: ofoxai
-  version: "1.2.1"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -336,6 +336,12 @@ root.
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
 
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
+
 ## Before generating: the availability check
 
 Run this once per session (not on every request):
@@ -643,9 +649,19 @@ bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
 ```
 
 Relay the `Estimated cost:` line it prints — never a number of your own — then
-wait for a yes, then re-run the identical command with `--dry-run` removed.
-The estimate a *real* run prints comes microseconds before the request goes
-out, too late to relay. Pass the same `--out-dir` to both.
+wait for a yes, then re-run the identical command with `--dry-run` swapped for
+`--approved`. The estimate a *real* run prints comes microseconds before the
+request goes out, too late to relay. Pass the same `--out-dir` to both.
+
+`--approved` is where that yes gets typed out. Since `ofox-video-core` 2.0.0
+the four billable subcommands — `generate`, `create`, `batch`, `chain` —
+refuse to run without it, while `--dry-run` never needs it, so the quote above
+is still free and still works with no API key. Be exact about what the flag
+does: it records a stance, it cannot prove one. Nothing in a shell script can
+observe the conversation you had, and it can be typed without showing anyone a
+price. What it changes is that spending without quoting is no longer the
+default — it has to be written into the command, where a transcript shows it.
+The rule above is still the rule, and it is still yours to follow.
 
 Three things belong in that message beyond the table:
 
@@ -772,7 +788,7 @@ full job id, the prompt, the seed and the real cost.
 ## Generating
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the explainer prompt built above>" \
   --name "<short idea name, e.g. v4 retry removal>" \
   --duration 9 \
@@ -783,6 +799,11 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 
 Drop `--aspect-ratio` if a title card or screenshot is attached as the first
 frame — the clip then follows the image's shape.
+
+`--approved` is not decoration: without it the script refuses, submits
+nothing, and prints the quote-first steps instead. Add it only once the cost
+table has actually gone in front of the user and come back with a yes — the
+flag cannot check that for you.
 
 This one call validates the parameters, submits the job, polls to completion,
 downloads the mp4, and prints `STATUS`, `JOB_ID`, `VIDEO_PATH`,

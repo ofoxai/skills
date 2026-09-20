@@ -37,7 +37,7 @@ env -u OFOX_API_KEY bash "$TARGET" providers >/dev/null 2>&1 || true
 offline
 
 echo "=== create submits without polling ==="
-out=$(OFOX_API_KEY=x bash "$TARGET" create --prompt x --duration 4 --resolution 480p 2>&1)
+out=$(OFOX_API_KEY=x bash "$TARGET" create --prompt x --duration 4 --resolution 480p --approved 2>&1)
 if printf '%s' "$out" | grep -qi 'submitting job'; then
   pass "create attempts a submit"
 else

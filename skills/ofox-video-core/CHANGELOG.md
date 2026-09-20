@@ -4,6 +4,100 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 2.0.0 — spending needs `--approved`
+
+**Breaking.** Every command in this repo, and in every skill built on it, that
+actually generates a video now has to carry one more flag. That is a change to
+the command-line contract rather than to any behaviour behind it, which is what
+a major version is for; calling it a minor bump would mean callers discovering
+it from an error instead of from this file.
+
+### What a caller has to do differently
+
+**Add `--approved` to every real run of `generate`, `create`, `batch` and
+`chain`.** Without it the command prints what to do and exits **1**, having
+submitted nothing and billed nothing.
+
+```bash
+# before
+bash references/ofox-video.sh generate --prompt "..." --duration 8 --resolution 720p
+# after
+bash references/ofox-video.sh generate --approved --prompt "..." --duration 8 --resolution 720p
+```
+
+`--dry-run` does **not** take it and never will: the quote is how the number
+being approved gets produced, so a gate in front of it would close the only
+route through itself. `batch` and `chain` forward the flag to each take/shot,
+so it is written once per command, not once per job.
+
+Nothing else is gated. `check`, `models`, `providers`, `contact-sheet`,
+`last-frame`, `frame-at`, `mux-audio` and — deliberately — **`poll`** all run
+exactly as before. `poll` is the command that collects a job you have already
+paid for, and it is what this script prints as the recovery step whenever a run
+is refused, times out or is interrupted; gating it would strand money rather
+than protect it.
+
+**Scenario skills still document the old commands.** Their examples are being
+updated in their own next versions. Until then, an example copied out of
+`shorts-reels`, `ugc-ads`, `product-demo`, `keyframe-animation`,
+`talking-head`, `music-video`, `explainer`, `image-edit`, `product-image`,
+`video-extend-edit` or any `seedance-*` skill needs `--approved` appended by
+hand. The command is otherwise unchanged.
+
+### Why
+
+ClawHub's registry scan reported it, and the report was right: the approval
+gate was written down in `references/approval-gate.md` as a rule an agent
+should obey, and the script did not check anything. The rule is unchanged; it
+now has a hook in the tool.
+
+### What the flag does and does not do
+
+It **records a stance. It cannot prove one.** No shell script can observe the
+conversation between an agent and its user, and an agent can pass `--approved`
+without ever showing anyone a price — exactly as it could previously just run
+the command. What changed is that spending without quoting is no longer the
+default: it has to be typed into the command, where a transcript shows it and a
+reviewer can object to it.
+
+This changelog, `SKILL.md` and `references/approval-gate.md` all say that in
+those terms on purpose. "Approval is now enforced" would be a claim about the
+world made from evidence that only supports a claim about the command line.
+
+### Where the guard sits, and one behaviour change that follows
+
+The refusal happens at the last free instant: after arguments are parsed, after
+every parameter is validated against the model, after the provider is resolved
+and after the estimate is printed — immediately before the one `POST` in this
+script. Two consequences worth knowing:
+
+- a wrong `--duration` is still reported as a wrong `--duration`, not as a
+  missing approval, so nobody learns "add `--approved`" as the way past a
+  parameter error;
+- the refusal carries the `Estimated cost:` line with it, which is the number
+  the user has to be shown anyway.
+
+To keep that ordering true for `batch` and `chain`, both now run their
+single-take/single-shot validation pass (the one `--dry-run` has always done)
+on the **real** path too, before the gate. It sends nothing and costs nothing;
+the visible difference is that a bad parameter is reported before
+`--- creating take 1/N ---` rather than inside it.
+
+### Tests
+
+New suite: `references/test/approval.test.sh` (41 checks). It derives the
+subcommand list from the script's own usage text, runs all twelve without the
+flag, and asserts the split is exactly 4 gated / 8 free — so a subcommand added
+later that reaches the billable request without a guard lands in the wrong set
+and turns it red. Two defects are planted in throwaway copies and both are
+confirmed to change the outcome: neutering `require_approved` makes an
+unapproved `generate` run straight to the create call, and removing `batch`'s
+forwarding makes an approved batch break at take 1.
+
+Existing suites were updated where a case has to reach the request to be about
+anything; `expect_reject` in `validation.test.sh` deliberately still runs
+without the flag, so the gate preempting validation would show up there.
+
 ## 1.30.0 — the API key goes to one host, and the escape hatch cannot rewrite what you approved
 
 Four guards, all of them narrowing capabilities this script really had. None
