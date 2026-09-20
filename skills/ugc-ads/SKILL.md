@@ -2,11 +2,11 @@
 name: ugc-ads
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a handheld, phone-shot UGC clip — imperfect framing, one practical light, vertical, no cinematic grading, no beauty filter. It inverts the polish every other video skill here defaults to — a UGC clip that looks like an ad has failed. Use when a user wants a video that reads as filmed by a real customer rather than by an agency, e.g. "a real-looking phone unboxing of this product", "a creator first-impression clip for TikTok", "an honest review video, nothing slick", or "make it look like a customer shot it". Do not use for a polished brand ad (see seedance-ad-creative), plain catalog footage (see seedance-product-video), a dialogue scene between people (see seedance-short-drama), or a set of cheap vertical drafts to choose from (see shorts-reels).
 license: MIT
-version: "1.0.2"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ugc-ads
 metadata:
   author: ofoxai
-  version: "1.0.2"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -111,26 +111,71 @@ positive form is below, under "What actually reads as UGC".
 
 ## What has been tested, and what has not
 
-**This scenario has exactly one paid run, and one run is one run.** Job
-`2ecbedec`, `bytedance/seedance-2.5`, 8 seconds, 480p, 9:16, text-to-video,
-hands only, no attached photo — **billed 88 cents**. The prompt was this
-skill's own template, filled in by an agent working from this file and
-nothing else, so what the run tested was the whole chain — skill → agent →
-command → artifact — rather than the API. It was judged on frames extracted
-from the delivered clip against criteria fixed before it ran, not on
-`STATUS completed`.
+**This scenario has two paid runs**, both `bytedance/seedance-2.5`, 8 seconds,
+480p, 9:16, **88 cents each**, and both with the prompt filled in from this
+file's own template by an agent working from this file and nothing else — so
+what they tested was the whole chain (skill → agent → command → artifact)
+rather than the API. Both were judged on frames extracted from the delivered
+clip against criteria fixed before the run, not on `STATUS completed`.
+
+| Run | Shape |
+|---|---|
+| `2ecbedec` (2026-09-15) | text-to-video, **no attached photo**, hands only |
+| `ede33e6d` (2026-09-17) | **a real product photo attached** as the first frame, and **the corrected CAPTURE wording** |
+
+### Run 1, `2ecbedec`
 
 | What was checked | Result |
 |---|---|
 | **Does the anti-polish steering actually hold?** The criterion, written before the run: the clip must *not* look like the ad `seedance-ad-creative` would produce — no centred hero framing, no dramatic lighting, no shallow-focus beauty shot | **It held.** Off-centre, loosely composed framing; a single practical window light with real falloff; no grade |
 | Hands only, no invented face | held — hands throughout, no face anywhere in the clip |
 | The product | rendered as described, no drift |
-| **The capture line** | **failed** — the line said where the phone was, and the model put a phone in the room. See the ⚠️ under "The capture is part of the fiction". The template has been corrected; **the corrected wording has not itself been run** |
+| **The capture line** | **failed** — the line said where the phone was, and the model put a phone in the room. See the ⚠️ under "The capture is part of the fiction" |
 
-Read that as one clip, not a guarantee. One model, one duration, one tier,
-one product, one room, hands only, no dialogue, no attached photo. The
-inversion is the claim it genuinely supports, because the inversion is the
-claim it was designed to falsify and did not.
+### Run 2, `ede33e6d` — the corrected CAPTURE line, and three new findings
+
+The correction made after run 1 had never itself been generated. It has now.
+
+| What was checked | Result |
+|---|---|
+| **The corrected CAPTURE wording** — does converting the device from an object in the room into a viewpoint keep it out of the shot? | ✅ **It held.** Six sampled frames across the clip contain **no phone, no camera, no tripod and no lit screen**. One candidate object, enlarged, is an out-of-focus wooden desk item; the left-hand shape is a lamp arm with a blue practical behind it, which is the `SCENE` line's own "a warm lamp on the left" |
+| The product, against the attached photo | held — wordmark, copper cap and gunmetal brushed finish all match the photo |
+| Hands only, no invented face | held for the whole clip |
+| The beat chain | ran in the written order |
+| ❌ **The opening** | **a flash frame and a hard cut** — see below |
+| ⚠️ **Anti-polish** | **weaker than run 1, and this run cannot say why** — see below |
+
+**❌ The opening flash cut.** The attached photo was a white studio shot; the
+`SCENE` was written as a desk at night. Background brightness at the top-left:
+**250** at 0.00 / 0.04 / 0.08s, **33** from 0.12s onward. So the clip opens on
+about a tenth of a second of the product photo and then **hard-cuts** into the
+scene. This is a general mechanism, measured across three runs and written up
+once in
+[`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md)
+→ "If the attached frame's background disagrees with your SCENE". **It hurts
+this scenario more than any other**, because an unbroken, un-staged single take
+is the entire product and the cut lands on frame one. Fixes, cheapest first:
+write the `SCENE` as the place the photo was actually taken; or use a photo
+already shot in the target setting; or trim the first 0.15s before delivery.
+
+**⚠️ Anti-polish was weaker, and two variables changed at once.** Run 1's
+pre-registered criterion was that the clip must not look like
+`seedance-ad-creative`'s output. Run 2 leans toward polish: the bottle sits
+near centre, the background is shallow-focus, the key light is warm with
+falloff, and the steam is flattering. **But run 2 changed both the photo and
+the CAPTURE wording**, so the cause is not attributable. A plausible
+hypothesis — *attaching a clean studio product photo pulls the whole clip
+toward polish* — is worth testing and is **not a finding**. The single-variable
+run that would settle it: the same prompt, the same corrected CAPTURE line,
+with and without the photo. Until then, **when a photo is attached, look
+specifically for polish creeping in** and treat a re-roll without the photo as
+a live option.
+
+Read those as two clips, not a guarantee. One model, one duration, one tier,
+one product, hands only, no dialogue. The anti-polish inversion is the claim
+run 1 genuinely supports, because it was designed to falsify it and did not —
+and run 2 is the reason that claim is now stated for the text-only path rather
+than for the skill as a whole.
 
 What it is built on besides that run:
 
@@ -146,10 +191,12 @@ What it is built on besides that run:
   than one on a *tempo*; a camera move written only as a verb tends not to
   happen. Each is cited where it is used below.
 
-Practical consequence: **one clip is thin evidence.** Anything outside that
-run's parameters — a photo attached, a person on camera, a spoken line, a
-longer clip, a different model, a higher tier — is still an experiment and
-should be priced and described as one. Draft it small before anyone pays for
+Practical consequence: **two clips is still thin evidence.** Anything outside
+those runs' parameters — a person on camera, a spoken line, a longer clip, a
+different model, a higher tier — is still an experiment and should be priced
+and described as one. The attached-photo path is no longer unrun, but its one
+run carried two defects (the flash cut, the polish drift), so it is the path
+to draft cheaply rather than the safe one. Draft small before anyone pays for
 a deliverable — see "Several takes, and the cheap vertical route".
 
 ## Where the core skill lives
@@ -181,6 +228,12 @@ root.
 
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
+
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
 
 ## Before generating: the availability check
 
@@ -251,12 +304,26 @@ On top of the generic rows in `creative-brief.md`:
 
 | Answer | Lands in |
 |---|---|
-| Photo: yes, path | `--frame-first-image PATH` (product alone), plus the anchor sentence at the top of the prompt; no `--aspect-ratio` flag |
+| Photo: yes, path | `--frame-first-image PATH` (product alone), plus the anchor sentence at the top of the prompt; no `--aspect-ratio` flag — ⚠️ **so crop the photo to 9:16 first**, see below |
 | Photo: no | a text PRODUCT line, and `--aspect-ratio 9:16` becomes effective |
 | On camera | the CAPTURE line and what each beat says is in frame |
 | Beat | the timeline's action chain |
 | Talk | the AUDIO line, and a quoted line with a delivery note |
 | Duration | `--duration` and the timestamps |
+
+⚠️ **Those first two rows contradict each other on a landscape photo, and the
+table used to hide it.** This file says 9:16 is the default and never asks
+about it. But with a frame attached, `bytedance/seedance-2.5` forces
+`aspect_ratio: adaptive` and the **clip takes the photo's shape** — so
+attaching an ordinary landscape product shot, which is most product shots,
+delivers a landscape clip. The vertical premise is cancelled by the very
+route the table recommends, silently, and nothing errors.
+
+**So crop the photo to the target ratio before attaching it.** That is a free,
+local step, and it is what the measured run did: the product photo was cropped
+to 9:16 (529x941) first, and the clip came back 480x854. Found by reading the
+two rows against each other rather than by spending anything; the crop is the
+fix, and putting the crop in the recap is how the user finds out it happened.
 
 ### The recap for this scenario
 
@@ -267,8 +334,14 @@ Brief:
 - Beat: unboxing — parcel, open, lift out, turn, first pour (AI's pick)
 - Talk: no dialogue, ambient sound only (AI's pick)
 - Vertical 9:16, 10s, 480p draft — with a 720p row below
-- Note: the one measured run behind this scenario was text-only at 8s/480p; an
-  attached photo is outside it, so the draft is the experiment
+- Photo prep: your kettle.jpg is landscape, so I will crop it to 9:16 before
+  attaching it — free and local. With a frame attached the clip takes the
+  photo's shape, so an uncropped landscape photo would produce a landscape clip
+- Note: the attached-photo route has one run behind it (8s/480p). It came back
+  with the product right and two problems: a ~0.1s flash of the photo then a
+  hard cut at the open, because the photo's background was not the scene; and
+  a more polished look than the text-only run. The draft is still the
+  experiment
 ```
 
 Then the full prompt, then the cost table, all in one message — the order and
@@ -315,6 +388,15 @@ from the back of the table, at mug height and a little too low`. Identical
 framing, no object. Then put **`a phone, a camera, a tripod or a lit screen
 visible anywhere in the shot`** in AVOID as a backstop, phrased as objects,
 which is the form this repo has measured holding (lever 4).
+
+✅ **And the fix has now been generated, not just reasoned.** Job `ede33e6d`
+(2026-09-17, 8s, 480p, 88 cents) ran the converted form — viewpoint wording,
+no object, plus the AVOID backstop — and **six sampled frames contain no phone,
+camera, tripod or lit screen**. The one candidate object, enlarged, is an
+out-of-focus wooden desk item. So this is a rare pair: the failing
+construction and its replacement have each been run once, on the same model
+and tier. That is still one run each, and the conversion is a rule about
+*wording*, not a guarantee about every room you describe.
 
 **Nothing catches this before delivery**, which is why it is worth this much
 space. That prompt passed `--dry-run`, passed `--print-payload`, and passed
@@ -452,9 +534,14 @@ Six things about that shape:
 
 - **`CAPTURE:` describes the shot, never the phone**, and the AVOID list names
   the device as an object anyway. That slot was `DEVICE:` and read "where the
-  phone is", which put a phone in the delivered clip on this skill's one paid
-  run — the ⚠️ under "The capture is part of the fiction" has the measurement.
-  It is the one line in this template with a known failure behind it.
+  phone is", which put a phone in the delivered clip on run `2ecbedec` — the
+  ⚠️ under "The capture is part of the fiction" has that measurement. **The
+  corrected wording has since been run and held**: job `ede33e6d`
+  (2026-09-17), six sampled frames, no phone, camera, tripod or lit screen
+  anywhere. So this line now has a measurement on **both** sides — the
+  construction that fails and the conversion that fixes it — which is the
+  strongest evidence any single line in this template carries. One run each;
+  the conversion rule is still worth re-reading before you write the slot.
 - **No header FORMAT line and no shot manifest.** UGC clips are short and
   single-shot; the shared file's `Short prompts (10 seconds or less)` says to
   skip the manifest, and a manifest is itself a tell.
@@ -485,8 +572,11 @@ Six things about that shape:
 Text-to-video, no photo. **This example has not been generated as written** —
 it is the template filled in, not a clip anyone has paid for. Its `CAPTURE`
 line and its last two beats are the *corrected* form of the construction that
-put a phone in the shot on job `2ecbedec`; the correction itself is reasoning
-from that run, not a second measurement.
+put a phone in the shot on job `2ecbedec`. **That correction is no longer
+reasoning alone**: the same corrected construction was generated on job
+`ede33e6d` (2026-09-17, with a photo attached) and no device appeared. This
+particular filled-in example is still unrun; the shape of its `CAPTURE` line
+has a run behind it.
 
 ```
 STYLE: real phone capture texture, slight sensor noise and compression artefacts, mild autofocus hunting, exposure shifting when a bright surface enters the frame. Vertical, one continuous shot. Nothing is graded, lit or staged.
@@ -614,10 +704,21 @@ bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
 ```
 
 Relay the `Estimated cost:` line it prints — never a number of your own — then
-wait for a yes, then re-run the identical command with `--dry-run` removed.
-The estimate a *real* run prints comes microseconds before the request goes
-out, too late to relay. Pass the same `--out-dir` to both: the dry run creates
-and enters it, so a bad path fails as exit `6` with nothing submitted.
+wait for a yes, then re-run the identical command with `--dry-run` swapped
+for `--approved`. The estimate a *real* run prints comes microseconds before
+the request goes out, too late to relay. Pass the same `--out-dir` to both:
+the dry run creates and enters it, so a bad path fails as exit `6` with
+nothing submitted.
+
+`--approved` is where that yes gets typed out. Since `ofox-video-core` 2.0.0
+the four billable subcommands — `generate`, `create`, `batch`, `chain` —
+refuse to run without it, while `--dry-run` never needs it, so the quote above
+is still free and still works with no API key. Be exact about what the flag
+does: it records a stance, it cannot prove one. Nothing in a shell script can
+observe the conversation you had, and it can be typed without showing anyone a
+price. What it changes is that spending without quoting is no longer the
+default — it has to be written into the command, where a transcript shows it.
+The rule above is still the rule, and it is still yours to follow.
 
 The brief recap goes in the **same message** as the prompt and the table,
 above them.
@@ -681,12 +782,20 @@ before deciding which:
 - **The probe printed a directory** — the core is installed and only the
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run against what the probe printed.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.
@@ -741,7 +850,7 @@ sidecar holding the full job id, the prompt, the seed and the real cost.
 ## Generating
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the UGC prompt built above>" \
   --name "<short clip name, e.g. hand grinder unboxing>" \
   --duration 10 \
@@ -752,6 +861,11 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 
 Drop `--aspect-ratio` when a product photo is attached — see "Vertical by
 default".
+
+`--approved` is not decoration: without it the script refuses, submits
+nothing, and prints the quote-first steps instead. Add it only once the cost
+table has actually gone in front of the user and come back with a yes — the
+flag cannot check that for you.
 
 This one call validates the parameters, submits the job, polls to completion,
 downloads the mp4, and prints `STATUS`, `JOB_ID`, `VIDEO_PATH`,

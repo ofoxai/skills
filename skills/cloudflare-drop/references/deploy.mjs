@@ -9,16 +9,16 @@
 //                         before reporting (never report an unverified URL)
 //
 // Usage:
-//   node references/deploy.mjs <page.html> [--ttl 30m] [--name my-report] [--permanent]
+//   node references/deploy.mjs <page.html> [--ttl 30m] [--name my-report] [--permanent] [--assets-only]
 //   node references/deploy.mjs renew <url|id> [--ttl 30m]
 //
 // Prints RESULT_URL / MODE / CLAIM_LINK / EXPIRY_EPOCH on success; fails open
 // otherwise (the caller then delivers the file — it must NOT reflexively ask for
 // a token; that discipline lives in hal-html, not here).
 
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, existsSync, statSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, existsSync, statSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname, basename } from 'node:path';
+import { join, dirname, basename, relative, sep } from 'node:path';
 import { stageOtp, verifyOtp } from './otp.mjs';
 import { injectCountdown } from './inject-countdown.mjs';
 import { recordDeploy, renew as renewDeploy, idFromUrl } from './drop-index.mjs';
@@ -32,6 +32,118 @@ import { deployWithWrangler, detectAuthMode } from './wrangler.mjs';
 // immediately (no delay before it); these are the waits BETWEEN probes.
 export const BACKOFF_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000];
 
+// ---------------------------------------------------------------------------
+// What is actually about to become public (2.4.0).
+//
+// Staging copies the source page's WHOLE sibling directory, recursively,
+// because a multi-file page renders broken without its assets. The existing
+// filter already drops `node_modules`, `.git`, `__MACOSX` and every dotfile —
+// so `.env` was never at risk and is not what this section is about. The gap
+// is the ordinarily-named file: `secrets.json`, `credentials.txt`,
+// `backup.sql`, `id_rsa`. This skill's entire job is to turn a folder into a
+// public URL, so a file staged by accident is a file published by accident.
+//
+// The response is VISIBILITY, not a silent narrowing: every deploy prints what
+// it staged and flags anything outside the asset types this skill claims to
+// publish. It never blocks — discipline #3 (fail open) means a staging review
+// that could refuse to deploy would be a worse bug than the one it prevents.
+// `--assets-only` is the opt-in for callers who want the narrowing too, and it
+// prints every file it left behind.
+// ---------------------------------------------------------------------------
+
+/** The asset types the skill's own description claims: HTML/CSS/JS/images/fonts. */
+export const STATIC_ASSET_EXTENSIONS = new Set([
+  'html', 'htm',
+  'css',
+  'js', 'mjs', 'cjs', 'map',
+  'json', 'xml', 'webmanifest', 'txt',
+  'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'avif', 'ico', 'bmp',
+  'woff', 'woff2', 'ttf', 'otf', 'eot',
+]);
+
+// Names that are almost never meant to be world-readable, checked whatever the
+// extension is — `secrets.json` has an allowed extension and is still the
+// exact file this exists to catch.
+const SENSITIVE_NAME_PATTERNS = [
+  /secret/i, /credential/i, /passwd/i, /password/i, /\btoken\b/i,
+  /api[-_]?key/i, /\.env\b/i, /(^|[^a-z])env$/i,
+  /id_rsa/i, /id_ed25519/i, /id_ecdsa/i, /id_dsa/i,
+  /\.pem$/i, /\.key$/i, /\.p12$/i, /\.pfx$/i, /\.keystore$/i,
+  /htpasswd/i, /\.netrc$/i, /kubeconfig/i,
+];
+
+/**
+ * Classify one staged file by its path relative to the staged root.
+ *
+ * @param {string} relPath
+ * @returns {'asset'|'unexpected'|'sensitive'}
+ */
+export function classifyStagedFile(relPath) {
+  const p = String(relPath || '');
+  const name = basename(p);
+  if (SENSITIVE_NAME_PATTERNS.some((re) => re.test(name))) return 'sensitive';
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+  return STATIC_ASSET_EXTENSIONS.has(ext) ? 'asset' : 'unexpected';
+}
+
+/**
+ * Walk a staged directory and describe every file that will be uploaded.
+ *
+ * @param {string} stagedDir
+ * @returns {{path:string, bytes:number, kind:'asset'|'unexpected'|'sensitive'}[]}
+ */
+export function listStagedFiles(stagedDir) {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile()) {
+        const rel = relative(stagedDir, full).split(sep).join('/');
+        out.push({ path: rel, bytes: statSync(full).size, kind: classifyStagedFile(rel) });
+      }
+    }
+  };
+  if (existsSync(stagedDir)) walk(stagedDir);
+  return out;
+}
+
+/**
+ * The lines printed before the upload. Always returns a headline (so its
+ * absence means something), and names every flagged file in full — a review an
+ * agent is told to relay has to print on every path, clean runs included.
+ *
+ * @param {{path:string,bytes:number,kind:string}[]} files
+ * @param {{skipped?:{path:string,kind:string}[]}} [opts]
+ * @returns {string[]}
+ */
+export function stagingReview(files, opts = {}) {
+  const list = Array.isArray(files) ? files : [];
+  const flagged = list.filter((f) => f.kind !== 'asset');
+  const lines = [`STAGED_FILES ${list.length}`];
+  if (flagged.length === 0) {
+    lines.push('STAGED_REVIEW ok — every staged file is HTML/CSS/JS/an image/a font');
+  } else {
+    lines.push(
+      `STAGED_REVIEW ${flagged.length} of ${list.length} staged files are outside ` +
+      'HTML/CSS/JS/images/fonts. Everything staged becomes publicly readable at the ' +
+      'URL — check this list before you share the link, and re-stage from a folder ' +
+      'holding only the deliverable (or re-run with --assets-only) if anything here ' +
+      'was not meant to be public.',
+    );
+    for (const f of flagged) {
+      lines.push(`  ${f.kind === 'sensitive' ? 'SENSITIVE_NAME' : 'UNEXPECTED_TYPE'}  ${f.path}  (${f.bytes} bytes)`);
+    }
+  }
+  const skipped = opts.skipped || [];
+  if (skipped.length > 0) {
+    lines.push(`STAGED_SKIPPED ${skipped.length} file(s) left behind by --assets-only:`);
+    for (const f of skipped) lines.push(`  ${f.path}`);
+  }
+  return lines;
+}
+
 /**
  * Stage an HTML deliverable: inject the countdown and write it as index.html at
  * a clean staged root (only `/` serves reliably).
@@ -41,9 +153,11 @@ export const BACKOFF_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000];
  * @param {number|null} expiryEpoch  unix seconds for the countdown; falsy = no countdown
  *        (permanent deploys get none — there is nothing to count down to)
  * @param {string} [baseDir]     where to create the staged dir (default: a temp dir)
- * @returns {{stagedDir:string, indexPath:string}}
+ * @param {{assetsOnly?:boolean}} [opts]  assetsOnly copies only recognised
+ *        static assets, and reports every file it left behind
+ * @returns {{stagedDir:string, indexPath:string, files:object[], skipped:object[]}}
  */
-export function stageForDrop(htmlPath, expiryEpoch, baseDir) {
+export function stageForDrop(htmlPath, expiryEpoch, baseDir, opts = {}) {
   const root = baseDir || mkdtempSync(join(tmpdir(), 'drop-'));
   const stagedDir = join(root, 'site');
   mkdirSync(stagedDir, { recursive: true });
@@ -52,6 +166,7 @@ export function stageForDrop(htmlPath, expiryEpoch, baseDir) {
   // the source dir is a SEPARATE directory (not our staged root's parent), and
   // never the staged dir itself, so we can't recurse into our own output.
   const srcDir = dirname(htmlPath);
+  const skipped = [];
   if (
     existsSync(srcDir) &&
     statSync(srcDir).isDirectory() &&
@@ -60,12 +175,23 @@ export function stageForDrop(htmlPath, expiryEpoch, baseDir) {
   ) {
     cpSync(srcDir, stagedDir, {
       recursive: true,
-      filter: (s) =>
-        !s.includes('node_modules') &&
-        !s.includes('.git') &&
-        !s.includes('__MACOSX') &&
-        !basename(s).startsWith('.') &&
-        s !== stagedDir, // guard against copying the staged dir into itself
+      filter: (s) => {
+        const keep =
+          !s.includes('node_modules') &&
+          !s.includes('.git') &&
+          !s.includes('__MACOSX') &&
+          !basename(s).startsWith('.') &&
+          s !== stagedDir; // guard against copying the staged dir into itself
+        if (!keep) return false;
+        if (!opts.assetsOnly) return true;
+        // Directories still recurse; only files are filtered by type, and the
+        // page itself is written separately below, so it can never be dropped.
+        if (statSync(s).isDirectory()) return true;
+        const kind = classifyStagedFile(basename(s));
+        if (kind === 'asset') return true;
+        skipped.push({ path: relative(srcDir, s).split(sep).join('/'), kind });
+        return false;
+      },
     });
   }
 
@@ -73,7 +199,7 @@ export function stageForDrop(htmlPath, expiryEpoch, baseDir) {
   const staged = expiryEpoch ? injectCountdown(html, expiryEpoch) : html;
   const indexPath = join(stagedDir, 'index.html');
   writeFileSync(indexPath, staged);
-  return { stagedDir, indexPath };
+  return { stagedDir, indexPath, files: listStagedFiles(stagedDir), skipped };
 }
 
 /**
@@ -223,7 +349,7 @@ function sanitizeName(s) {
 
 /** Minimal flag parser for the CLI (`--ttl 30m`, `--name x`, `--permanent`). */
 export function parseArgs(argv) {
-  const out = { _: [], ttl: null, name: null, permanent: false, pauseOAuth: true, noCountdown: false, otp: false };
+  const out = { _: [], ttl: null, name: null, permanent: false, pauseOAuth: true, noCountdown: false, otp: false, assetsOnly: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--ttl') out.ttl = argv[++i];
@@ -232,6 +358,7 @@ export function parseArgs(argv) {
     else if (a === '--permanent') out.permanent = true;
     else if (a === '--no-pause-oauth') out.pauseOAuth = false;
     else if (a === '--no-countdown') out.noCountdown = true;
+    else if (a === '--assets-only') out.assetsOnly = true;
     else out._.push(a);
   }
   return out;
@@ -247,6 +374,7 @@ export function parseArgs(argv) {
  *
  * @param {string} htmlPath
  * @param {{ttl?:string|number, name?:string, permanent?:boolean, pauseOAuth?:boolean,
+ *          assetsOnly?:boolean, note?:Function, run?:Function,
  *          probe?:Function, fetchFn?:Function, sleepFn?:Function}} [opts]
  * @returns {Promise<{url:string|null, claim:string|null, expiryEpoch:number|null,
  *                    mode:string, verified:boolean, ttlNote:string|null, indexPath?:string}>}
@@ -271,7 +399,14 @@ export async function deployPage(htmlPath, opts = {}) {
   // --no-countdown skips only the on-page banner; the real 60m expiry of a
   // temporary preview is unchanged and EXPIRY_EPOCH is still printed.
   const pageExpiry = opts.noCountdown ? null : expiryEpoch;
-  const { stagedDir, indexPath } = stageForDrop(htmlPath, pageExpiry);
+  const { stagedDir, indexPath, files, skipped } = stageForDrop(htmlPath, pageExpiry, undefined, {
+    assetsOnly: opts.assetsOnly,
+  });
+  // Printed BEFORE the upload, on stderr, on every run — a review that only
+  // appears when something is wrong cannot be distinguished from one that
+  // failed to run at all.
+  const note = opts.note || ((line) => console.error(line));
+  for (const line of stagingReview(files, { skipped })) note(line);
   const name = workerNameFrom(htmlPath, opts.name);
   const compatibilityDate = todayISO();
   let protection;
@@ -283,6 +418,11 @@ export async function deployPage(htmlPath, opts = {}) {
       compatibilityDate,
       mode,
       allowPauseOAuth: opts.pauseOAuth !== false,
+      note,
+      // Injectable upload seam, matching probe/fetchFn/sleepFn below: it is the
+      // only way to test that the staging review prints BEFORE anything is
+      // uploaded without actually uploading something.
+      ...(opts.run ? { run: opts.run } : {}),
     });
     if (!res.url) {
       return { url: null, claim: null, expiryEpoch, mode, verified: false, ttlNote,
@@ -366,7 +506,7 @@ export async function deployHtmlString(html, opts = {}) {
 }
 
 // CLI entry — two modes:
-//   node deploy.mjs <page.html> [--ttl 30m] [--name n] [--permanent] [-otp]
+//   node deploy.mjs <page.html> [--ttl 30m] [--name n] [--permanent] [-otp] [--assets-only]
 //   node deploy.mjs renew <url|id> [--ttl 30m]
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = parseArgs(process.argv.slice(2));
@@ -415,7 +555,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else {
     const htmlPath = arg1;
     if (!htmlPath || !existsSync(htmlPath)) {
-      console.error('usage: node deploy.mjs <page.html> [--ttl 30m] [--name n] [--permanent] [-otp]');
+      console.error('usage: node deploy.mjs <page.html> [--ttl 30m] [--name n] [--permanent] [-otp] [--assets-only]');
       console.error('       node deploy.mjs renew <url|id> [--ttl 30m]');
       process.exit(2);
     }

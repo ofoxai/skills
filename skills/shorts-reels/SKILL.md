@@ -2,11 +2,11 @@
 name: shorts-reels
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate cheap vertical 9:16 drafts in one priced batch, pick a winner off the contact sheet, then re-render only that one. The cheap tier is the point — several times cheaper per second, so a whole set can cost less than one flagship clip. Use when a user wants Shorts/Reels/TikTok raw material rather than one finished video, e.g. "give me 5 vertical clips to choose from", "a few Reels drafts for this product", "some cheap options before we commit", or "batch me some 9:16 takes". Do not use when one finished clip is wanted — go straight to the scenario skill (seedance-ad-creative, ugc-ads, seedance-short-drama, seedance-product-video), which is also where this skill gets the prompt it drafts.
 license: MIT
-version: "1.0.0"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/shorts-reels
 metadata:
   author: ofoxai
-  version: "1.0.0"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -98,6 +98,12 @@ root.
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
 
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
+
 ## First: "five clips" means two different things
 
 Settle this before anything else, because the two routes are different
@@ -117,7 +123,8 @@ The second route is `ofox-video-core`'s
 with `create` (returns a job id in seconds), then poll them all at once:
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh create --prompt "<idea A>" \
+bash ../ofox-video-core/references/ofox-video.sh create --approved \
+  --prompt "<idea A>" \
   --duration 4 --resolution 480p --aspect-ratio 9:16 \
   --name "idea a" --out-dir /absolute/path/to/out
 # ...one create per idea, each printing its own JOB_ID...
@@ -125,6 +132,12 @@ bash ../ofox-video-core/references/ofox-video.sh create --prompt "<idea A>" \
 bash ../ofox-video-core/references/ofox-video.sh poll JOB_ID_A JOB_ID_B JOB_ID_C \
   --out-dir /absolute/path/to/out
 ```
+
+`create` spends, so it carries `--approved` and refuses without it; `poll` does
+not and is never gated — it is how jobs you have already paid for get
+collected. Price the whole set with `generate --dry-run` per idea *before* the
+first `create`, because five creates commit five bills within seconds of each
+other. See "Drafting" for what that flag is and is not.
 
 Each job's output is replayed under a `=== JOB i/N <id> ===` delimiter in the
 order the ids were given, and `POLL_COST_TOTAL` sums the real bills. Five
@@ -320,7 +333,20 @@ bash ../ofox-video-core/references/ofox-video.sh batch --dry-run \
   --out-dir /absolute/path/to/out
 ```
 
-Then, after a yes, the identical command without `--dry-run`.
+Then, after a yes, the identical command with `--dry-run` swapped for
+`--approved`.
+
+`--approved` is where that yes gets typed out. Since `ofox-video-core` 2.0.0
+the four billable subcommands — `generate`, `create`, `batch`, `chain` —
+refuse to run without it, while `--dry-run` never needs it, so the quote above
+is still free and still works with no API key. Be exact about what the flag
+does: it records a stance, it cannot prove one. Nothing in a shell script can
+observe the conversation you had, and it can be typed without showing anyone a
+price. What it changes is that spending without quoting is no longer the
+default — it has to be written into the command, where a transcript shows it.
+A batch is where that matters most: it commits all five bills at once, so the
+cost table is the only place the set can still be stopped. The rule is still
+the rule, and it is still yours to follow.
 
 What comes back, and what to do with each part:
 
@@ -393,7 +419,7 @@ you can name and re-submit at all. It is **not** a promise that take 3 comes
 back. To aim at it:
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the identical prompt, read back from the sidecar>" \
   --seed SEED --model MODEL --resolution RES \
   --duration 4 --aspect-ratio 9:16 --name "..." \
@@ -403,6 +429,12 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 `SEED` is the winning take's own seed off its `TAKE` line or sidecar; `MODEL`
 and `RES` are whatever the promotion steps up to — change one of them, not
 both, if you want the result to stay recognisable.
+
+**A promotion is a second purchase and gets its own table.** Dry-run it at the
+promotion's model and resolution, show that row, and only then add
+`--approved` — which is exactly what the flag is for here: the batch's yes was
+a yes to five cheap drafts, not to this. The contact-sheet command above is
+local ffmpeg and stays free and ungated.
 
 Four honest boundaries on that, all of them cheap to respect:
 
@@ -545,12 +577,20 @@ before deciding which:
 - **The probe printed a directory** — the core is installed and only the
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run against what the probe printed.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.

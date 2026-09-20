@@ -2,6 +2,125 @@
 
 All notable changes to the **ugc-ads** skill. Versioning follows SemVer.
 
+## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
+
+**Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its
+four billable subcommands — `generate`, `create`, `batch`, `chain` — refuse to
+run unless `--approved` is on the command line. This skill's one real-run
+`generate` command now passes it. The `--dry-run` commands are untouched: a
+quote is how the number being approved gets produced, so gating it would close
+the only route through itself.
+
+**What a caller has to do differently**
+
+- **Install `ofox-video-core` 2.0.0 or newer.** This version of this skill
+  needs it. On an older core the updated commands stop with `unknown option
+  '--approved'` before any request — nothing is submitted and nothing is
+  billed, so the failure is safe, but every real run fails.
+- **A command copied from an older version of this file is now refused.**
+  Anything pasted from an earlier revision, a transcript or a wrapper script
+  hits the guard, prints the quote-first steps and exits non-zero. Nothing is
+  submitted and nothing is billed. Re-run it with `--dry-run` to get the
+  quote, or with `--approved` once the cost table has gone in front of the
+  user.
+- **The `batch` route needs it too.** This file shows only `batch --dry-run`;
+  its real run takes `--approved` in the same place.
+
+**What `--approved` is not.** It does not prove that an approval happened — an
+agent can type it without showing anyone a price, exactly as it could
+previously just run the command. What changed is that spending without quoting
+is no longer the default: it now has to be written into the command, where a
+transcript shows it and a reviewer can object. The gate in
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
+is still the rule, and this skill still states it in full.
+
+**Documentation only otherwise. No price, default, prompt template, flag
+meaning or generation behaviour changed.**
+
+## 1.1.1 — the recovery command asked for the whole repo, and asked the agent to run it
+
+**Documentation only. No flag, price, prompt template or generation behaviour
+changed.**
+
+"If the script isn't found" ended in a skills.sh command that installed *every*
+skill in this repo, into *every* agent, user-level, with confirmation
+suppressed — four widenings past the one skill that was actually missing.
+ClawHub's scanner flags exactly that (rule T08, "unpinned and overbroad
+third-party installation via npx"), and the flag is accurate rather than noise:
+an agent that read the line and ran it would have rewritten the user's whole
+skills setup to recover one relative path.
+
+The line now asks for the missing skill and nothing else —
+`npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that one
+skill and answers none of the agent, scope or confirmation questions on the
+user's behalf. The repo's own `npx ofox-skills ofox-video-core` still answers
+all three (every agent, user-level, no prompts), which is why the line handed
+to the user is the skills.sh one.
+
+**What a caller has to do**: nothing changes for any command this skill
+already prints, and nothing changes while `ofox-video-core` is installed. What
+changes is conduct on the one path where it genuinely is absent — **relay the
+command and let the user run it**; do not run an installer yourself. An
+install writes outside the working directory, and that is not a decision to
+take silently for someone.
+
+All three distribution routes are still named (this repo's own
+`npx ofox-skills`, skills.sh, and LobeHub or ClawHub), because recovery advice
+that names one installer is wrong advice on every other channel this skill
+ships through.
+
+## 1.1.0 — the CAPTURE fix was run and held; the photo path brought two problems
+
+**Documentation only. No default, price, prompt template or flag changed** —
+but three things a caller says or does before spending are new, and one of
+them is a free local step that was missing.
+
+A second paid run (`ede33e6d`, 2026-09-17, 8s / 480p / 9:16, 88 cents) tested
+the two things this file most needed: the **corrected CAPTURE wording**, which
+had been shipped without ever being generated, and the **attached-photo
+route**, which the brief recommends and nothing had ever run.
+
+**✅ The correction held.** Six sampled frames contain no phone, no camera, no
+tripod and no lit screen. The failing construction (`DEVICE:`, "where the
+phone is") and its replacement (`CAPTURE:`, the device as a viewpoint) have
+now each been measured once, which makes this the best-evidenced line in the
+template rather than the one with a known defect and a hopeful fix.
+
+**What a caller has to do differently:**
+
+- ⚠️ **Crop a landscape product photo to 9:16 before attaching it.** The
+  traceability table carried an unflagged contradiction: `Photo: yes` → attach
+  the frame and pass **no** `--aspect-ratio`, while this file treats 9:16 as
+  the default nobody is asked about. With a frame attached the model forces
+  `adaptive` and the clip takes the **photo's** shape, so an ordinary
+  landscape product shot silently cancels the vertical premise — no error, no
+  warning, and it is discovered on delivery. The crop is free and local, it is
+  what the measured run did (529x941 in, 480x854 out), and it now appears in
+  the table, in a note under it, and as a line in the recap. Found by reading
+  two rows of this file against each other; it cost nothing.
+- ⚠️ **Expect a flash frame and a hard cut when the photo's background is not
+  the scene.** Measured here: background brightness 250 through 0.08s (the
+  white studio photo), 33 from 0.12s (the night desk the prompt described).
+  About a tenth of a second of the photo, then a cut. **This scenario is the
+  worst place in the repo for it**, because an unbroken un-staged take is the
+  whole product and the cut lands on frame one. Write the SCENE as the place
+  the photo was actually taken, or supply a photo from the target setting, or
+  trim the first 0.15s. The mechanism is general and is written up once in
+  `ofox-video-core` 1.28.0 (`prompt-structure.md`).
+- ⚠️ **With a photo attached, look specifically for polish creeping back in.**
+  Run 2 leans toward the look this skill exists to avoid — bottle near centre,
+  shallow-focus background, warm key with falloff, flattering steam. **But it
+  changed two variables at once** (the photo and the CAPTURE wording), so
+  nothing here attributes the drift to the photo. That reading is a
+  **hypothesis, not a finding**, and it is labelled as one in the file; the
+  single-variable run that would settle it is the same prompt with and without
+  the photo. Until then: check for polish, and treat a text-only re-roll as a
+  live option.
+
+"What has been tested, and what has not" is rewritten around two runs instead
+of one, and the anti-polish pass is now claimed for the **text-only** path
+specifically rather than for the skill as a whole.
+
 ## 1.0.2 — the real-person flag is measured, and two places here said it was not
 
 **Documentation only. No default, price, prompt template or behaviour

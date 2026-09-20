@@ -375,7 +375,7 @@ if command -v ffprobe >/dev/null 2>&1 && command -v ffmpeg >/dev/null 2>&1; then
   q_out=$(bash "$TARGET" edit --image "$square" --prompt x --model openai/gpt-image-2 --dry-run 2>&1)
   o_out=$(bash "$TARGET" edit --image "$odd" --prompt x --model openai/gpt-image-2 --dry-run 2>&1)
 
-  if printf '%s' "$s_out" | grep -q '129 output'; then
+  if printf '%s' "$s_out" | grep -q 'input image of 320x180'; then
     ok "a 320x180 input quotes the point measured at 320x180"
   else
     bad "a measured input size must quote its own point" "$(printf '%s' "$s_out" | grep -m1 Estimated)"
@@ -383,29 +383,61 @@ if command -v ffprobe >/dev/null 2>&1 && command -v ffmpeg >/dev/null 2>&1; then
   # The 1:1 point. It exists because two 16:9 samples could not distinguish
   # "output follows the input ratio" from "output is a fixed 1672x941", and the
   # first of those had been written down as a finding on the strength of them.
-  if printf '%s' "$q_out" | grep -q '229 output'; then
+  if printf '%s' "$q_out" | grep -q 'input image of 256x256'; then
     ok "a 256x256 input quotes the point measured at 256x256"
   else
     bad "a measured input size must quote its own point" "$(printf '%s' "$q_out" | grep -m1 Estimated)"
   fi
-  if printf '%s' "$l_out" | grep -q '301 output'; then
+  if printf '%s' "$l_out" | grep -q 'input image of 854x480'; then
     ok "an 854x480 input quotes the point measured at 854x480"
   else
     bad "a measured input size must quote its own point" "$(printf '%s' "$l_out" | grep -m1 Estimated)"
   fi
-  # No match: quote the DEAREST point, labelled. Never the cheaper one, and
-  # never something interpolated between them — a table that errs low is how a
-  # 26x bill got approved on the other endpoint.
-  if printf '%s' "$o_out" | grep -q 'ROUGH UPPER BOUND' &&
-    printf '%s' "$o_out" | grep -q '301 output'; then
-    ok "an unmeasured input size quotes the dearest point as an UPPER BOUND"
+  # No match: quote the DEAREST point, labelled. Never a cheaper one, and never
+  # something interpolated between them — a table that errs low is how a 26x
+  # bill got approved on the other endpoint.
+  #
+  # ⚠️ THESE ASSERTIONS USED TO COMPARE OUTPUT-TOKEN COUNTS, and that was the
+  # same mistake as the code they check. Both treated "dearest" as "most output
+  # tokens". An edit's bill is dominated by the INPUT image at large sizes, so
+  # those are different orderings, and when the 1792x1008 point landed (129
+  # output tokens, yet the dearest point on record at 0.016438) the old
+  # assertions INVERTED: they began demanding the cheaper point and forbidding
+  # the dearest — the exact opposite of the comment above them. They had passed
+  # all along because implementation and test shared one wrong premise. A check
+  # cannot catch a bug it also contains.
+  #
+  # So this is judged in MONEY now, derived from the anchor file and the rate
+  # card at run time. Nothing here hardcodes a token count or a dollar figure:
+  # swapping one hardcoded number for another would only move the mine. A fifth
+  # anchor, at any size, keeps this assertion correct with no edit.
+  edit_rate_out=$(jq -r '.data[]? // .[]? | select(.id=="openai/gpt-image-2")
+    | .pricing.output_image // empty' "$SNAPSHOT" 2>/dev/null | head -1)
+  edit_rate_in=$(jq -r '.data[]? // .[]? | select(.id=="openai/gpt-image-2")
+    | (.pricing.image // .pricing.input // .pricing.prompt) // empty' "$SNAPSHOT" 2>/dev/null | head -1)
+  # The dearest measured point, priced the way the script prices one.
+  dearest=$(jq -r --arg ro "$edit_rate_out" --arg ri "$edit_rate_in" '
+    .edit_anchors["openai/gpt-image-2"] as $a
+    | ([$a] + ($a.additional_measurements // []))
+    | map(select((.output_tokens | type) == "number")
+          | (.output_tokens * ($ro | tonumber)) + ((.input_tokens // 0) * ($ri | tonumber)))
+    | max' "$ANCHORS" 2>/dev/null)
+  quoted=$(printf '%s' "$o_out" | grep -m1 'Estimated cost:' \
+    | sed -n 's/.*~\$\([0-9.]*\).*/\1/p')
+
+  if printf '%s' "$o_out" | grep -q 'ROUGH UPPER BOUND'; then
+    ok "an unmeasured input size is labelled an UPPER BOUND"
   else
-    bad "an unmeasured input must err high and say so" "$(printf '%s' "$o_out" | grep -m1 Estimated)"
+    bad "an unmeasured input must say it is a bound" "$(printf '%s' "$o_out" | grep -m1 Estimated)"
   fi
-  if printf '%s' "$o_out" | grep -q '129 output'; then
-    bad "an unmeasured input must never quote the CHEAPER point" ""
+  # The bound must be >= the dearest thing anyone has actually been billed.
+  # Printed to 4dp, so allow half a unit in the last place and nothing more.
+  if [ -n "$quoted" ] && [ -n "$dearest" ] &&
+    awk -v q="$quoted" -v d="$dearest" 'BEGIN { exit !(q + 0.00005 >= d) }'; then
+    ok "the bound ($quoted) is >= the dearest measured point ($(awk -v d="$dearest" 'BEGIN{printf "%.6f", d}'))"
   else
-    ok "and never the cheaper one"
+    bad "an unmeasured input was quoted BELOW a known real bill — a bound that is not the largest known value is not a bound" \
+      "quoted=$quoted dearest=$dearest :: $(printf '%s' "$o_out" | grep -m1 Estimated)"
   fi
 else
   printf 'skip  input-size matching (needs ffmpeg/ffprobe)\n'

@@ -158,7 +158,9 @@ echo "=== Fail open when catalog data is unavailable ==="
 # Same cross-model mistake, but with no catalog cache and no network: we must
 # NOT block a request just because we could not check it.
 rm -rf "${XDG_CACHE_HOME:?}"
-out=$(bash "$TARGET" generate --prompt x --duration 5 --provider aliyun 2>&1)
+# --approved: what is under test is that an uncheckable provider does not
+# BLOCK the run, so the run has to get past the spend gate to show it.
+out=$(bash "$TARGET" generate --prompt x --duration 5 --provider aliyun --approved 2>&1)
 code=$?
 if [ "$code" -ne 1 ]; then
   pass "an uncheckable provider is passed through, not blocked (fail open)"
@@ -191,13 +193,13 @@ fi
 
 echo
 echo "=== The chosen upstream is visible on the submit line ==="
-out=$(bash "$TARGET" generate --prompt x --duration 5 2>&1)
+out=$(bash "$TARGET" generate --prompt x --duration 5 --approved 2>&1)
 if printf '%s' "$out" | grep -q 'Submitting job to Ofox.*provider=byteplus'; then
   pass "submit line shows the pinned upstream"
 else
   fail "submit line should show the upstream" "$(printf '%s' "$out" | grep -i submitting | head -1)"
 fi
-out=$(bash "$TARGET" generate --prompt x --duration 5 --provider auto 2>&1)
+out=$(bash "$TARGET" generate --prompt x --duration 5 --provider auto --approved 2>&1)
 if printf '%s' "$out" | grep -qi 'Submitting job to Ofox.*provider=auto'; then
   pass "submit line says auto when unpinned"
 else
@@ -224,7 +226,7 @@ export OFOX_API_BASE_URL="http://127.0.0.1:1/v1"
 
 echo
 echo "=== batch forwards --provider ==="
-p=$(bash "$TARGET" batch --prompt x --takes 2 --duration 5 --provider volcengine --print-payload 2>&1 |
+p=$(bash "$TARGET" batch --prompt x --takes 2 --duration 5 --provider volcengine --print-payload --approved 2>&1 |
   sed -n '/^PAYLOAD /s/^PAYLOAD //p' | head -1)
 got="$(printf '%s' "$p" | jq -r '.provider.type // "<none>"' 2>/dev/null)"
 if [ "$got" = "volcengine" ]; then

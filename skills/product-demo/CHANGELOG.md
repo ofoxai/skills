@@ -2,6 +2,100 @@
 
 All notable changes to the **product-demo** skill. Versioning follows SemVer.
 
+## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
+
+**Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its
+four billable subcommands — `generate`, `create`, `batch`, `chain` — refuse to
+run unless `--approved` is on the command line. This skill's one real-run
+`generate` command now passes it. The `--dry-run` commands are untouched: a
+quote is how the number being approved gets produced, so gating it would close
+the only route through itself.
+
+**What a caller has to do differently**
+
+- **Install `ofox-video-core` 2.0.0 or newer.** This version of this skill
+  needs it. On an older core the updated commands stop with `unknown option
+  '--approved'` before any request — nothing is submitted and nothing is
+  billed, so the failure is safe, but every real run fails.
+- **A command copied from an older version of this file is now refused.**
+  Anything pasted from an earlier revision, a transcript or a wrapper script
+  hits the guard, prints the quote-first steps and exits non-zero. Nothing is
+  submitted and nothing is billed. Re-run it with `--dry-run` to get the
+  quote, or with `--approved` once the cost table has gone in front of the
+  user.
+- **The `batch` route needs it too.** This file shows only `batch --dry-run`;
+  its real run takes `--approved` in the same place.
+
+**What `--approved` is not.** It does not prove that an approval happened — an
+agent can type it without showing anyone a price, exactly as it could
+previously just run the command. What changed is that spending without quoting
+is no longer the default: it now has to be written into the command, where a
+transcript shows it and a reviewer can object. The gate in
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
+is still the rule, and this skill still states it in full.
+
+**Documentation only otherwise. No price, default, prompt template, flag
+meaning or generation behaviour changed.**
+
+## 1.1.2 — the recovery command asked for the whole repo, and asked the agent to run it
+
+**Documentation only. No flag, price, prompt template or generation behaviour
+changed.**
+
+"If the script isn't found" ended in a skills.sh command that installed *every*
+skill in this repo, into *every* agent, user-level, with confirmation
+suppressed — four widenings past the one skill that was actually missing.
+ClawHub's scanner flags exactly that (rule T08, "unpinned and overbroad
+third-party installation via npx"), and the flag is accurate rather than noise:
+an agent that read the line and ran it would have rewritten the user's whole
+skills setup to recover one relative path.
+
+The line now asks for the missing skill and nothing else —
+`npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that one
+skill and answers none of the agent, scope or confirmation questions on the
+user's behalf. The repo's own `npx ofox-skills ofox-video-core` still answers
+all three (every agent, user-level, no prompts), which is why the line handed
+to the user is the skills.sh one.
+
+**What a caller has to do**: nothing changes for any command this skill
+already prints, and nothing changes while `ofox-video-core` is installed. What
+changes is conduct on the one path where it genuinely is absent — **relay the
+command and let the user run it**; do not run an installer yourself. An
+install writes outside the working directory, and that is not a decision to
+take silently for someone.
+
+All three distribution routes are still named (this repo's own
+`npx ofox-skills`, skills.sh, and LobeHub or ClawHub), because recovery advice
+that names one installer is wrong advice on every other channel this skill
+ships through.
+
+## 1.1.1 — the borrowed timing claim is withdrawn
+
+**Documentation only. No default, price, prompt template or behaviour
+changed.** Nothing measured *in this skill* moved; what moved is a claim this
+file borrowed from its sibling.
+
+"The timing, from the sibling scenario" told callers to plan for
+`it settles early and then holds`, from `keyframe-animation`'s job `259c3ce2`
+(~53% of the distance in the first quarter, arrival at 3 of 4 seconds). A
+second run on that mechanism (`1b7a3fab`, 5s) came back near-linear, arriving
+at 4.5 of 5 seconds with about half a second of tail. Two clips, two curves,
+four variables different between them — so there is no curve to plan against,
+and the sibling has withdrawn the claim at source (`keyframe-animation`
+1.2.0).
+
+**What a caller has to do differently:** stop promising a hold at the end, and
+stop justifying a longer `--duration` as buying one. Plan for the final state
+to be **reached and legible** — which is this skill's actual deliverable and
+is measured, twice, on its own clips. If the length of the tail matters, draft
+it cheaply and look.
+
+This file's own observation is unchanged and still stands: its clips were
+crisp and settled by t=2.0s of 4 seconds. What was wrong was treating
+"compatible with an early settle" as evidence for a curve. The `--duration`
+row in the defaults table now gives the bill as the reason to stay at the
+model's minimum, rather than a hold nobody can predict.
+
 ## 1.1.0 — a face in a capture is no longer a flat dead end, and cropping is still the answer
 
 Three places in `SKILL.md` said `--real-person true` was untested on

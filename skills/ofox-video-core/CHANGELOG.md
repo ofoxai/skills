@@ -4,6 +4,310 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 2.0.0 — spending needs `--approved`
+
+**Breaking.** Every command in this repo, and in every skill built on it, that
+actually generates a video now has to carry one more flag. That is a change to
+the command-line contract rather than to any behaviour behind it, which is what
+a major version is for; calling it a minor bump would mean callers discovering
+it from an error instead of from this file.
+
+### What a caller has to do differently
+
+**Add `--approved` to every real run of `generate`, `create`, `batch` and
+`chain`.** Without it the command prints what to do and exits **1**, having
+submitted nothing and billed nothing.
+
+```bash
+# before
+bash references/ofox-video.sh generate --prompt "..." --duration 8 --resolution 720p
+# after
+bash references/ofox-video.sh generate --approved --prompt "..." --duration 8 --resolution 720p
+```
+
+`--dry-run` does **not** take it and never will: the quote is how the number
+being approved gets produced, so a gate in front of it would close the only
+route through itself. `batch` and `chain` forward the flag to each take/shot,
+so it is written once per command, not once per job.
+
+Nothing else is gated. `check`, `models`, `providers`, `contact-sheet`,
+`last-frame`, `frame-at`, `mux-audio` and — deliberately — **`poll`** all run
+exactly as before. `poll` is the command that collects a job you have already
+paid for, and it is what this script prints as the recovery step whenever a run
+is refused, times out or is interrupted; gating it would strand money rather
+than protect it.
+
+**Scenario skills still document the old commands.** Their examples are being
+updated in their own next versions. Until then, an example copied out of
+`shorts-reels`, `ugc-ads`, `product-demo`, `keyframe-animation`,
+`talking-head`, `music-video`, `explainer`, `image-edit`, `product-image`,
+`video-extend-edit` or any `seedance-*` skill needs `--approved` appended by
+hand. The command is otherwise unchanged.
+
+### Why
+
+ClawHub's registry scan reported it, and the report was right: the approval
+gate was written down in `references/approval-gate.md` as a rule an agent
+should obey, and the script did not check anything. The rule is unchanged; it
+now has a hook in the tool.
+
+### What the flag does and does not do
+
+It **records a stance. It cannot prove one.** No shell script can observe the
+conversation between an agent and its user, and an agent can pass `--approved`
+without ever showing anyone a price — exactly as it could previously just run
+the command. What changed is that spending without quoting is no longer the
+default: it has to be typed into the command, where a transcript shows it and a
+reviewer can object to it.
+
+This changelog, `SKILL.md` and `references/approval-gate.md` all say that in
+those terms on purpose. "Approval is now enforced" would be a claim about the
+world made from evidence that only supports a claim about the command line.
+
+### Where the guard sits, and one behaviour change that follows
+
+The refusal happens at the last free instant: after arguments are parsed, after
+every parameter is validated against the model, after the provider is resolved
+and after the estimate is printed — immediately before the one `POST` in this
+script. Two consequences worth knowing:
+
+- a wrong `--duration` is still reported as a wrong `--duration`, not as a
+  missing approval, so nobody learns "add `--approved`" as the way past a
+  parameter error;
+- the refusal carries the `Estimated cost:` line with it, which is the number
+  the user has to be shown anyway.
+
+To keep that ordering true for `batch` and `chain`, both now run their
+single-take/single-shot validation pass (the one `--dry-run` has always done)
+on the **real** path too, before the gate. It sends nothing and costs nothing;
+the visible difference is that a bad parameter is reported before
+`--- creating take 1/N ---` rather than inside it.
+
+### Tests
+
+New suite: `references/test/approval.test.sh` (41 checks). It derives the
+subcommand list from the script's own usage text, runs all twelve without the
+flag, and asserts the split is exactly 4 gated / 8 free — so a subcommand added
+later that reaches the billable request without a guard lands in the wrong set
+and turns it red. Two defects are planted in throwaway copies and both are
+confirmed to change the outcome: neutering `require_approved` makes an
+unapproved `generate` run straight to the create call, and removing `batch`'s
+forwarding makes an approved batch break at take 1.
+
+Existing suites were updated where a case has to reach the request to be about
+anything; `expect_reject` in `validation.test.sh` deliberately still runs
+without the flag, so the gate preempting validation would show up there.
+
+## 1.30.0 — the API key goes to one host, and the escape hatch cannot rewrite what you approved
+
+Four guards, all of them narrowing capabilities this script really had. None
+of them removes a capability; each one names the smaller shape it now has.
+New suite: `references/test/keyguard.test.sh` (55 checks), which constructs
+the refused input for every rule rather than watching a good input pass.
+
+### The polling URL out of the create response is no longer followed off-host
+
+`POST /videos` returns a `polling_url`, and the poll loop sends
+`Authorization: Bearer $OFOX_API_KEY` to it. Until now that URL was used
+verbatim, so **a tampered or misconfigured API response was enough to redirect
+the key to a third party** — the only path here that needs no compromised
+local environment at all.
+
+It is now followed only when its `scheme://host:port` matches `API_BASE`.
+Also refused: a URL whose authority hides the real host behind userinfo
+(`http://api.ofox.ai@evil.example/…` is `evil.example`), a different port, a
+different scheme, and anything that is not an http(s) URL.
+
+**What a caller has to do differently:** nothing, unless the response really
+does point elsewhere. The field is still used when it is on the configured
+host, and the `API_BASE/videos/<id>` fallback when the field is absent is
+unchanged. If it *is* refused, `generate`/`create` exits **3** with the job id
+still on stdout, the request handoff saved, and the recovery command printed —
+the job exists and is billable, so it is collected with
+`ofox-video.sh poll <id>`, not abandoned and not re-created. `poll` builds its
+URL itself and never reads one from a response.
+
+The same check also sits inside `poll_and_download`, next to the request that
+would leak rather than only next to the place the URL came from.
+
+### `OFOX_API_BASE_URL` must be https, and an override is announced
+
+Still supported — pointing a run at a staging deployment is a legitimate use
+— but it decides which host receives the key, so:
+
+- a non-`https://` base is refused (exit **2**) unless the host is loopback
+  (`localhost`, `127.0.0.1`, `[::1]`), which keeps local test servers working;
+- a value that is not an http(s) URL at all is refused (exit **2**);
+- when it is set, a `NOTE:` on stderr names the host that will receive the
+  key. **Relay that line** — it is the difference between "we are talking to
+  Ofox" and "we are talking to whatever that variable says".
+
+Checked for `check`, `models`, `providers`, `generate`, `create`, `batch`,
+`chain` and `poll`. The four local tools (`contact-sheet`, `last-frame`,
+`frame-at`, `mux-audio`) are deliberately excluded: they run ffmpeg over a
+file you already have, send nothing, and refusing them over a variable that
+cannot affect them would be overreach.
+
+### `--extra-json` cannot overwrite a field that has a flag
+
+It is merged **last** and its keys **win**, and the cost estimate is printed
+**before** the merge. So `--duration 4 --resolution 480p --extra-json
+'{"duration":30,"resolution":"1080p"}'` quoted 44 cents and would have
+submitted a job billing about 7 dollars, having skipped every per-model check
+on the way.
+
+Refused now (exit **1**, before any request): `model`, `prompt`, `duration`,
+`resolution`, `aspect_ratio`, `size`, `generate_audio`, `seed`,
+`real_person`, `callback_url`, `frame_images`, and `provider.type`. The error
+names the flag to use instead.
+
+**What a caller has to do differently:** move those keys onto their flags.
+Everything without a flag still passes through — `input_references` unchanged,
+and **`provider.options` still works**: only `provider.type` is refused, so
+`{"provider":{"options":{…}}}` merges alongside the pinned type rather than
+replacing it.
+
+### An explicitly empty `--extra-json` is an error (the 1.29.0 defect, closed)
+
+1.29.0 documented this and deliberately left the behaviour alone. It is fixed
+now, and the fix is narrow: the script records whether the flag was **written
+on the command line**, which is the one thing bash cannot recover from the
+value. Omitting `--extra-json` is byte-for-byte what it always was — asserted
+by comparing the built payload against `--extra-json '{}'` — and only the
+explicitly-empty spelling, which was never anything but a failed command
+substitution, is refused.
+
+**What a caller has to do differently:** an `--extra-json "$(jq …)"` whose
+`jq` died on `ARG_MAX` now exits 1 instead of submitting a fully billed job
+with none of your references in it. The `ARG_MAX` wall itself has not moved:
+keep an encoded reference small (a 768 px long edge is tens of kilobytes) or
+use `--frame-first-image`, which encodes through a temp file.
+
+Two smaller things in the same area, both fail-open cases that could empty the
+request body:
+
+- `--extra-json` must be a JSON **object**. It is merged with jq's `*`, which
+  is undefined between other types; a non-object made the merge fail, the
+  command substitution yield an empty payload, and an empty body go out.
+- validity is now checked with `jq empty` rather than `jq -e .`, which keyed
+  its exit status on the *output value* and so called a perfectly valid `null`
+  or `false` "not valid JSON". Both are still refused, by the object rule,
+  which says what is actually wrong with them.
+
+### The shared references now give the same recovery advice the scenario skills do
+
+`references/approval-gate.md` and `references/creative-brief.md` each end their
+"if this link didn't resolve" paragraph with an install command, and both still
+said `npx skills add ofoxai/skills` — the whole repo. The 14 scenario skills
+were narrowed in the same uncommitted change to ask for the **one** missing
+skill and to hand the command to the user rather than run it, so the repo was
+telling an agent two different things about the same situation depending on
+which file it happened to read. Both now match: one skill, three routes
+(skills.sh / `npx ofox-skills` / LobeHub-ClawHub), the user runs it.
+
+No behaviour change. It is here because a rule that lives in two places drifts,
+and this is the drift — the extraction convention in
+`.trellis/spec/skills/index.md` exists precisely to keep these paragraphs in
+one voice.
+
+## 1.29.0 — an oversized `--extra-json` drops your references and bills you anyway
+
+**Documentation only. No script, flag, default or guard changed** — and the
+`ofox-video.sh` empty-`--extra-json` behaviour is deliberately left alone; see
+the last paragraph.
+
+1.28.0 documented `input_references` as working and noted that an image
+reference accepts a `data:` URI, so no hosting is needed. True, and
+incomplete in a way that costs real money. Measured 2026-09-17:
+
+> Building that `data:` URI into `--extra-json` yourself passes it to `jq` as
+> a **command-line argument**, so it is bounded by `ARG_MAX` (1,048,576 bytes
+> here). Over the limit `jq` never executes — the shell writes one line to
+> stderr, the command substitution yields an **empty string**, and
+> `ofox-video.sh`'s `if [ -n "$extra_json" ]` guard treats an empty value as
+> *not passed*: no JSON validation, no `references_conflict` check, and
+> **nothing merged into the body**.
+
+Reproduced with a 1.9 MB PNG (2,515,046-byte URI): **no `input_references` in
+the printed payload, `STATUS dry_run`, exit `0`.** Without `--dry-run` that is
+a submitted, fully billed **plain text-to-video** job that the caller believes
+is reference-to-video — and the clip looks exactly like a model ignoring the
+references.
+
+**What a caller has to do differently:**
+
+- **Stop treating "no error" as "the reference arrived."** There is no error.
+  The single stderr line comes from the shell, not this script, so it carries
+  no prefix and scrolls past above the normal output.
+- **Downscale the image before encoding.** The measured r2v job's two
+  references were 33 KB and 43 KB at a 768 px long edge.
+- **Build the JSON into a variable, assert it is non-empty and parses**, then
+  **`--dry-run --print-payload` and confirm `input_references` is really in
+  the payload.** That last check is the only one that detects this. The guard
+  to copy is in `references/api-params.md`.
+- ⚠️ **Do not generalise from `--frame-first-image`, which is safe.** There
+  the script encodes through a temp file and `jq --rawfile`; re-verified the
+  same day on the same 1.9 MB PNG, whose full 2,515,046-byte URI really does
+  reach the payload. **The two paths behave in opposite directions at the same
+  file size.**
+
+**A correction to this skill's own history, in `SKILL.md`.** The 2026-08-29
+ARG_MAX write-up says the old `jq --arg` code failed "before any network call
+was made". What was actually recorded is a **stderr line**, not an exit
+status — nobody wrote down whether that run aborted or carried on, and the
+new measurement shows a visible `Argument list too long` is entirely
+compatible with the command continuing and succeeding. The sentence now says
+what was observed and flags that "ARG_MAX fails loudly and stops you" is not
+a safe general reading.
+
+**Not done on purpose:** hardening `ofox-video.sh` so an empty
+`--extra-json` is rejected rather than ignored. Treating empty as "not
+passed" is long-standing behaviour something else may depend on, so it is a
+separate decision rather than a fix smuggled into a documentation change.
+
+## 1.28.0 — `r2v` works and the catalog omits it; `mode` is accepted and discarded
+
+**Documentation only. No default, price, script or behaviour changed.** Three
+measurements from 2026-09-16/17, one of which upgrades an inference this repo
+had been repeating as if it were a finding.
+
+**Callers who need to change something:**
+
+- **If you told a user "Ofox does not support extend / edit", re-word it.** It
+  is not a rejection they can catch. Job `4686f434-16b0-451f-8941-970e5b3d4a15`
+  sent an invented `mode` value inside an ordinary text-to-video request and
+  got `200`, a completed 4-second t2v clip, and a normal $0.44 t2v bill. The
+  field is **accepted and discarded**. There is no error code, so anyone
+  debugging against one will search forever. `references/api-params.md` has
+  the wording to use and the three free probes that could not settle it alone.
+  `duration: -1` — the gallery's input-locking form — returns `502
+  route_error` instead, before any URL is fetched.
+- **If you assumed `input_references` images were untested, they are not.**
+  Job `0f5c8b4e-8813-40d2-a6bd-9e2d030b6d1e`, two images as `data:` URIs, 44
+  cents: both references' features came through and the `image1` / `image2`
+  position tokens resolved **in array order**, which had been this repo's one
+  unverified point about that shape. It bills at the **plain t2v rate**, not
+  the dearer video-to-video rate a `video_url` moves a job to. And an image
+  reference accepts a `data:` URI, so nothing needs hosting first.
+- **Do not read the catalog's `modes` column as a capability list.** It says
+  `t2v i2v v2v` on every model and reference-to-video demonstrably works. Only
+  `modes` is affected — the duration, resolution and aspect-ratio columns the
+  script enforces against have held up. `models-snapshot.json` is **not**
+  hand-edited for this; it is regenerated from the live catalog, so the
+  correction lives in the docs.
+- ⚠️ **Pass `--aspect-ratio` explicitly when you send image references.** That
+  one job, with no flag and two 16:9 **landscape** references, delivered
+  **480x854 portrait** — following neither the default nor the references.
+  `frame_images` does not behave this way. One observation, no explanation
+  offered, recorded as an anomaly rather than a rule.
+- **New in `references/prompt-structure.md`: an attached first frame whose
+  background disagrees with the written SCENE produces about 0.1s of the
+  supplied picture and then a hard cut** (job `ede33e6d`, background
+  brightness 250 through 0.08s, 33 from 0.12s). Three runs make a controlled
+  set: two where the frame and the SCENE agreed showed no cut, the one where
+  they disagreed did. Any scenario skill using `--frame-first-image` should
+  either write the SCENE the photo is in or trim the opening 0.15s.
+
 ## 1.27.1 — one sentence in the shared file still said the frame route was closed
 
 **Documentation only. No default, price, script or behaviour changed.**

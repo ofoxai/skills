@@ -4,6 +4,333 @@ All notable changes to the **ofox-image-core** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.14.0 — the API key goes to one host, and neither escape hatch can reach past its own job
+
+Three guards, each narrowing a capability this script really had rather than
+removing it. New suite: `references/test/keyguard.test.sh` (66 checks), which
+constructs the refused input for every rule instead of watching a good input
+pass. Written alongside the same change in `ofox-video-core` 1.30.0.
+
+### `--extra-form` will not read local files
+
+`--extra-form K=V` goes straight into curl's `-F`, where a **value** starting
+`@` uploads that local file and one starting `<` sends that file's contents as
+the field value. `--extra-form "mask=@$HOME/.ssh/id_rsa"` therefore worked:
+any file the user could read, uploaded to whatever `API_BASE` points at. The
+field name was never the issue, so the rule is on the value.
+
+Both prefixes are refused (exit **1**, before the request). Unaffected: every
+ordinary pair, including `k=user@example.com`, `k=a<b` and `k=` — only a value
+*starting* with the character is refused. Also unaffected are the script's own
+`-F "image=@PATH"` and `-F "image_url=<TEMPFILE"`, which are built from
+`--image` / `--image-url`, not from this flag; both are asserted still working
+in the new suite.
+
+**What a caller has to do differently:** send images with `--image` or
+`--image-url`. And the standing suggestion to try a mask with
+`--extra-form "mask=@FILE"` — in `SKILL.md` and `references/api-params.md` —
+is withdrawn: masked edits were never established, and establishing them needs
+a flag with its own path validation, not a general file-upload hole left open
+for the one field that might want it. Both documents now say so.
+
+### `--extra-form` cannot overwrite a field that has a flag either
+
+The value rule above closed the file-read. The **key** rule was the older one
+and had gone stale: it refused `image`, `image_url`, `model` and `prompt`
+while the same function also builds `quality`, `size`, `n`, `output_format`
+and `background` from flags. Those five were reachable, and a second multipart
+part with an owned name is not a harmless duplicate — the server picks one of
+the two, the value that arrived this way skipped the flag's own validation
+(`--quality` is checked per resolved model), and it is appended **after**
+`print_edit_estimate` has been computed from the flags.
+
+`n` is the sharp one, because it multiplies the bill. Measured on the dry-run
+path before the fix:
+
+```
+$ ofox-image.sh edit --image in.png --prompt p --extra-form "n=10" --dry-run
+Estimated cost: ROUGH UPPER BOUND ~$0.0164 ...
+N 1
+FORM_FIELDS image model prompt n
+```
+
+One image quoted and reported, ten requested. That is the never-under-quote
+rule broken through the escape hatch — the same defect `--extra-json` is
+refused for on the generations side, which the comment above it already
+claimed this path covered.
+
+All nine owned keys are refused now (exit **1**, before the request and before
+the quote). `--extra-form` keeps working for every field with no flag of its
+own; a name that merely *contains* an owned one (`n_hint`, `mask_hint`,
+`size_note`, `background_music`) is a different field and still passes.
+
+**What a caller has to do differently:** pass `--quality`, `--size`, `--n`,
+`--output-format` and `--background` as flags. Sent through `--extra-form`
+they now exit 1 instead of quietly changing what was billed.
+
+The test derives the list of owned keys from the script's own `form+=` lines
+rather than restating it, and asserts the count, so a flag added without a
+matching guard entry turns the suite red with no edit to the test —
+`falsifiable-gates.md`'s "the check and the code share one wrong premise" is
+exactly how the original four-name list survived review.
+
+### `--extra-json` cannot overwrite a field that has a flag, and cannot be empty
+
+It is merged **last** and its keys **win**, while the cost estimate is printed
+**before** the merge — so `--quality low --extra-json
+'{"quality":"high","size":"1792x1024"}'` quoted ~0.6 cents for the request
+that measured **15.4** cents.
+
+Refused now (exit **1**, before any request):
+
+- `model`, `prompt`, `quality`, `size`, `n`, `output_format`, `background` —
+  every field that has a flag. The error names the flag to use instead.
+  **This widens one existing rule**: an `n` key in `--extra-json` used to be
+  refused only for `google/gemini-3.1-flash-image`, and is now refused for
+  every model. The narrower branch was removed rather than left as a check
+  that could no longer run.
+- an explicitly empty value. The script now records whether the flag was
+  *written on the command line*, which is the one thing bash cannot recover
+  from the value; omitting it is byte-for-byte what it always was, asserted
+  against `--extra-json '{}'` in the new suite. An empty value is never
+  anything but a failed command substitution, and it used to mean *every check
+  skipped and nothing merged* — the request went out and billed without the
+  fields the caller meant to add. (Measured on the sibling video script,
+  2026-09-17; the same guard shape existed here.)
+- anything that is not a JSON **object**. The merge is jq's `*`, undefined
+  between other types: a non-object made the merge fail, the command
+  substitution yield an empty payload, and an empty body go out. Validity is
+  also now checked with `jq empty` rather than `jq -e .`, which keyed its exit
+  status on the *output value* and so reported a valid `null` or `false` as
+  "not valid JSON".
+
+Unaffected: `extra_body.provider.type`, and any other field with no flag.
+`--extra-json` is also merged through a temp file and `--slurpfile` now
+instead of `--argjson`, so a large value is not bounded by `ARG_MAX`.
+
+### `OFOX_API_BASE_URL` must be https, and an override is announced
+
+Still supported — a staging deployment is a legitimate use — but it decides
+which host receives the key:
+
+- a non-`https://` base is refused (exit **2**) unless the host is loopback
+  (`localhost`, `127.0.0.1`, `[::1]`), which keeps local test servers working;
+- a value that is not an http(s) URL at all is refused (exit **2**);
+- when it is set, a `NOTE:` on stderr names the host that will receive the
+  key. **Relay that line.**
+
+There is no polling-URL counterpart to the video skill's matching fix here,
+and that is checked rather than assumed: the new suite asserts that both
+authenticated requests are still built from `$API_BASE` and that no URL from a
+response body is ever fetched.
+
+### The "`ofox-video-core` isn't installed" paragraph matches the scenario skills again
+
+`SKILL.md`'s approval-gate probe ended by naming `npx skills add
+ofoxai/skills` — the whole repo — while the 14 scenario skills were narrowed in
+the same uncommitted change to ask for the **one** missing skill and to hand
+the command to the user rather than run it. It now says the same thing they do:
+one skill, three routes (skills.sh / `npx ofox-skills` / LobeHub-ClawHub), the
+user runs it. No behaviour change; `ofox-video-core` 1.30.0 carries the
+matching fix for its two shared reference files.
+
+## 1.13.1 — the edit estimate's "upper bound" could be below a known real bill
+
+**Code fix in `references/ofox-image.sh` (`print_edit_estimate`), plus the
+test that would have caught it.** Behaviour changes only on the **unmatched**
+path; an exact input-size match quotes exactly what it quoted in 1.13.0.
+
+**The defect.** When no measured point matches the request's input size, the
+script quotes the dearest one as a `ROUGH UPPER BOUND`. It chose "dearest" by
+`output_tokens`. An edit's bill is
+`output_tokens x out_rate + input_tokens x img_rate`, and at large input sizes
+the second term is most of it — 1508 image tokens is **74%** of the 1792x1008
+run's $0.016249. The four measured points run **129 / 229 / 301 / 129** output
+tokens and **0.006054 / 0.009182 / 0.013894 / 0.016438** in money, so the
+genuinely dearest point has the *equal-lowest* output count and the old key
+walked straight past it.
+
+**What a caller has to do differently:** nothing, but re-read any cost table
+built from an unmatched edit quote on 1.13.0 or earlier. Measured on a
+1400x787 input:
+
+```
+before:  ROUGH UPPER BOUND ~$0.0139   (854x480 point)    <- below a known bill
+after:   ROUGH UPPER BOUND ~$0.0164   (1792x1008 point)  <- correct
+```
+
+A bound that is not the largest known value is not a bound, and this one was
+**below a figure this repo had already been billed**. The never-under-quote
+rule exists for exactly this.
+
+**Why it survived four anchors: the test was wrong in the same place as the
+code.** `edit.test.sh` asserted the unmatched case quotes `301 output` and
+never `129 output` — encoding the identical premise that dearest means most
+output tokens. When the 1792x1008 point landed the assertion **inverted**, and
+began requiring the cheaper point and forbidding the dearest, the exact
+opposite of the intent in the comment above it. It had passed all along. A
+check cannot catch a bug it also contains.
+
+The assertion is now expressed in **money and derived from the data at run
+time** — it computes the dearest measured point's real cost from
+`token-anchors.json` and the rate card and asserts the quoted figure is `>=`
+it. No token count and no dollar figure is hardcoded, so a fifth anchor keeps
+it correct with no edit; swapping one constant for another would only have
+moved the mine. Verified by planting the defect: with the key reverted to
+`output_tokens` the suite reports
+
+```
+FAIL  an unmeasured input was quoted BELOW a known real bill
+      quoted=0.0139 dearest=0.016438
+```
+
+and returns to `passed: 50  failed: 0` when the fix is restored.
+
+**The `generate` path was audited and does not have this shape.** A
+generation's cost is `output_tokens x rate` — one term, rate constant per
+model — so "most output tokens" and "dearest" are the same ordering by
+construction. Confirmed live: an unmatched generate request quotes the 5063
+point at `~$0.1519`, the dearest it has. A comment in `print_estimate` now
+records that this was checked, and that it stops being safe if a per-point
+rate is ever introduced.
+
+Also refreshed: the `UPPER BOUND` explanation printed to the user still listed
+only three input sizes and their pixel/token ratios. It now carries all four,
+both ratio comparisons, and the reason the selector uses cost rather than
+output tokens.
+
+## 1.13.0 — 1.12.0 was wrong: the anchor is complete, and the under-quote never existed
+
+**Data and documentation only. `references/ofox-image.sh` is untouched.**
+
+**This entry retracts a claim 1.12.0 made.** That version recorded the
+1792x1008 edit as *unpriceable* — "output tokens never recorded and
+unrecoverable, the cost equation has two unknowns left" — filed it in a
+purpose-built `unpriceable_observations` list, and published a
+never-under-quote disclosure across five files telling callers to read a
+`ROUGH UPPER BOUND` on a large input as a **floor**. All of that was wrong,
+and it was wrong because the run's full output had scrolled out of the
+terminal rather than because anything was actually lost.
+
+The real figures, recovered from the session transcript:
+
+```
+USAGE_INPUT_TOKENS 1571   USAGE_INPUT_IMAGE_TOKENS 1508
+USAGE_INPUT_TEXT_TOKENS 63   USAGE_OUTPUT_TOKENS 129
+USAGE_TOTAL_TOKENS 1700   EDIT_COST 0.016249
+```
+
+They self-check three ways — `1508+63=1571`, `1571+129=1700`, and
+`63*0.000005 + 1508*0.000008 + 129*0.00003 = 0.016249`, matching the reported
+cost to six decimals. The equation was **underdetermined, not unsolvable**:
+one more observed value (the text-token count) closes it.
+
+**What a caller has to do differently:**
+
+- **Stop treating a large-input edit quote as a floor.** That instruction is
+  withdrawn from `references/pricing.md`, `SKILL.md`, `image-edit` and
+  `product-image`. Verified after the fix — a 1792x1008 input now quotes
+  `Estimated cost: ROUGH ~$0.0164 (129 output + 1571 input tokens, measured
+  2026-09-16 on an input image of 1792x1008 at --quality low)`, against a real
+  bill of $0.016249. An exact-pair `ROUGH`, above the real cost, which is
+  where the never-under-quote rule wants it.
+- ⚠️ **Do not reason about an edit's cost from its output tokens.** The new
+  point is what shows why. Ordered by input pixels the counts run **129**
+  (320x180), **229** (256x256), **301** (854x480), **129** (1792x1008) — not
+  monotonic, with the largest input tying the smallest for the lowest count.
+  The **input image** tokens are what track the upload (240 / 256 / 576 /
+  1508), and on a large source they are **74%** of the bill. The lever is the
+  size of the file you upload.
+
+**What the fourth point still establishes**, unchanged from 1.12.0: the
+~1.57 MP output budget is a **budget, not an upsample floor** — 1792x1008 is
+1,806,336 px, larger than the 1672x941 it returned, and the output did not
+grow. The three earlier points were all smaller than the output and could not
+separate those two readings.
+
+**Removed: `unpriceable_observations` and its three guard assertions.** With
+its only entry promoted to a real anchor the list is empty, so the assertions
+had no input that could make them fail — which is the exact shape
+`falsifiable-gates.md` warns about. A container built for one datum, once that
+datum turns out not to belong in it, is not infrastructure worth keeping. The
+pre-existing assertion that every entry in `additional_measurements` carries
+an `input_size` **and** a numeric `output_tokens` is untouched, and it is the
+check that caught the mis-filing in the first place.
+
+🚨 **Root cause, now documented: this script writes no sidecar.**
+`ofox-video-core` saves a `.json` beside every mp4 with the job id, seed,
+prompt and real cost. `ofox-image.sh` writes the image and nothing else —
+verified: the three edits behind this anchor have no companion file, while
+every video job from the same session has one on disk. The figures
+`_how_to_add_a_row` demands are precisely the ones this path never persists,
+which is how a complete measurement came to be written up as lost. `SKILL.md`
+gains a section telling callers to `tee` every paid run to a log, and
+`_how_to_add_a_row` now says so too. **Adding a sidecar to the script is a
+separate change and is not made here** — it has to decide a filename, a
+schema, and the `--n > 1` case where one call writes several files.
+
+## 1.12.0 — a fourth edit anchor, and an under-quote that turned out not to exist (see 1.13.0)
+
+> ⚠️ **WITHDRAWN IN PART BY 1.13.0.** Everything below about the run being
+> *unpriceable* is false: the token counts were never lost, only scrolled out
+> of the terminal, and they close the pricing formula exactly. The
+> never-under-quote disclosure this entry introduced is withdrawn, and the
+> `unpriceable_observations` list it created has been removed. The ~1.57 MP
+> budget finding and the non-linear input-token finding stand. Left in place
+> rather than rewritten, because a retraction a reader can see is worth more
+> than a tidy history.
+
+**Data and documentation only. No script, flag, default or formula changed**
+— `references/ofox-image.sh` is untouched, and `edit --dry-run` was re-run
+after the change to confirm it still prints an estimate on both a matching and
+a non-matching input size.
+
+**A fourth measured edit run recorded** (`references/token-anchors.json`,
+`references/pricing.md`): `openai/gpt-image-2`, a real 1792x1008 photograph,
+three background-swap edits on 2026-09-17, **1508 input image tokens**,
+`EDIT_COST` 0.016249 / 0.016289 / 0.016304, output 1672x941. It is the largest
+input measured here, the first real photograph rather than a synthetic
+flat-colour test image, and the first where **the input was bigger than the
+output** — which is what turns "the endpoint spends ~1.57 MP on the input's
+shape" from one of two readings into the surviving one.
+
+⚠️ **What a caller has to do differently, and it is a pricing matter.** That
+run's `USAGE_OUTPUT_TOKENS` was never recorded, and it cannot be recovered —
+the cost equation has two unknowns left and several integer pairs fit. The
+file's own rule forbids a derived figure, so the run is filed under a new
+`edit_anchors[model].unpriceable_observations` list that
+`edit_anchor_measurements()` never reads — **not** as an anchor. It was first
+put in `additional_measurements`, where `references/test/edit.test.sh` failed
+on it, because every entry there must carry an `input_size` **and** a numeric
+`output_tokens`. The gate was right and the filing was wrong, so the data moved
+and the assertion was left untouched. The estimator therefore falls back to the
+dearest point it can read:
+
+```
+input 1792x1008 -> Estimated cost: ROUGH UPPER BOUND ~$0.0139
+real bill for that input size ->                     $0.016249
+```
+
+**So on this endpoint a `ROUGH UPPER BOUND` is a floor, not a ceiling, for any
+input larger than every measured point** — 17% low here. Until someone spends
+1.6 cents re-measuring the pair, quote a large edit as a floor and say so in
+the cost table. Nothing was invented to paper over it, and nothing in the
+script was changed to work around it.
+
+**Three new assertions in `references/test/edit.test.sh`**, so the new list
+cannot become the place incomplete data goes to look complete: an entry must
+name its `input_size`, must say `why_this_is_not_an_anchor`, must **not** carry
+an `output_tokens` (if it had one it would be an anchor), and must not
+duplicate an input size that already exists as a real anchor. Each was
+verified by planting the corresponding defect and watching it fail, then
+restoring — a check nobody has seen fail is not a check.
+
+Raised, not changed: `print_edit_estimate` picks its "dearest" point by
+`output_tokens` alone, while at large input sizes the **input** term is most
+of the bill. The three readable points happen to agree today. Per the
+chain-order rule in `token-anchors.json`, a change that can move a quoted
+price gets raised before it is made.
+
 ## 1.11.2 — the frontmatter did not parse, and the installer said nothing
 
 The `description` carried a `: ` (colon then space) inside an unquoted YAML

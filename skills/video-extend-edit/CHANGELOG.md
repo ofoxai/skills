@@ -2,6 +2,143 @@
 
 All notable changes to the **video-extend-edit** skill. Versioning follows SemVer.
 
+## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
+
+**Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its
+four billable subcommands — `generate`, `create`, `batch`, `chain` — refuse to
+run unless `--approved` is on the command line. This skill's one real-run
+`chain` command now passes it. The `--dry-run` commands are untouched: a quote
+is how the number being approved gets produced, so gating it would close the
+only route through itself.
+
+**What a caller has to do differently**
+
+- **Install `ofox-video-core` 2.0.0 or newer.** This version of this skill
+  needs it. On an older core the updated commands stop with `unknown option
+  '--approved'` before any request — nothing is submitted and nothing is
+  billed, so the failure is safe, but every real run fails.
+- **A command copied from an older version of this file is now refused.**
+  Anything pasted from an earlier revision, a transcript or a wrapper script
+  hits the guard, prints the quote-first steps and exits non-zero. Nothing is
+  submitted and nothing is billed. Re-run it with `--dry-run` to get the
+  quote, or with `--approved` once the cost table has gone in front of the
+  user.
+- **The local ffmpeg steps are not gated** — extracting the last frame,
+  trimming a head, joining two files and building a contact sheet all spend
+  nothing and are untouched. A `chain` commits every segment at once, which is
+  why its dry run is the only place the sequence can still be stopped.
+
+**What `--approved` is not.** It does not prove that an approval happened — an
+agent can type it without showing anyone a price, exactly as it could
+previously just run the command. What changed is that spending without quoting
+is no longer the default: it now has to be written into the command, where a
+transcript shows it and a reviewer can object. The gate in
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
+is still the rule, and this skill still states it in full.
+
+**Documentation only otherwise. No price, default, prompt template, flag
+meaning or generation behaviour changed.**
+
+## 1.3.1 — the recovery command asked for the whole repo, and asked the agent to run it
+
+**Documentation only. No flag, price, prompt template or generation behaviour
+changed.**
+
+"If the script isn't found" ended in a skills.sh command that installed *every*
+skill in this repo, into *every* agent, user-level, with confirmation
+suppressed — four widenings past the one skill that was actually missing.
+ClawHub's scanner flags exactly that (rule T08, "unpinned and overbroad
+third-party installation via npx"), and the flag is accurate rather than noise:
+an agent that read the line and ran it would have rewritten the user's whole
+skills setup to recover one relative path.
+
+The line now asks for the missing skill and nothing else —
+`npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that one
+skill and answers none of the agent, scope or confirmation questions on the
+user's behalf. The repo's own `npx ofox-skills ofox-video-core` still answers
+all three (every agent, user-level, no prompts), which is why the line handed
+to the user is the skills.sh one.
+
+**What a caller has to do**: nothing changes for any command this skill
+already prints, and nothing changes while `ofox-video-core` is installed. What
+changes is conduct on the one path where it genuinely is absent — **relay the
+command and let the user run it**; do not run an installer yourself. An
+install writes outside the working directory, and that is not a decision to
+take silently for someone.
+
+All three distribution routes are still named (this repo's own
+`npx ofox-skills`, skills.sh, and LobeHub or ClawHub), because recovery advice
+that names one installer is wrong advice on every other channel this skill
+ships through.
+
+## 1.3.0 — an ACTION clause with no starting state fails silently
+
+**Documentation only. No default, price, prompt template slot, command or
+route changed.**
+
+Carrying a published 12-second product clip 12 seconds further (job
+`565e3193-68d7-4223-bb15-337723e89836`, $2.88, i2v + a local ffmpeg join)
+produced two findings about writing the prompt, and both are now in the file.
+
+- **An ACTION verb that has no starting state in the attached frame does
+  nothing, and says nothing.** The clause asked a hard case lid to close onto
+  its base; in the anchor frame that case was already closed. No error, no
+  warning, nothing in the returned metadata. The other half of the same ACTION
+  line — a cloth drawn out of frame — landed in the same job, verified as a
+  real translation rather than the push-in cropping it out. "Read the PNG
+  before you write the ACTION line" is now a measured step in **Pull the
+  frame**, not a line of craft advice, and the template's `ACTION` slot says
+  it too.
+- **"Negative clauses are honoured more reliably" is about the AVOID list, and
+  one `CAMERA` sentence warns against carrying it there.** The same sentence
+  produced three outcomes, now tabulated in **The prompt**: three qualitative
+  framing clauses landed; the one *quantified* clause came up short ("about two
+  thirds of the frame width" measured 52%, at most ~58% counting the part
+  cropped off-frame); and the one *negative* framing-state clause ("from 8s the
+  case is no longer in frame") did nothing at all. The quantified miss lines up
+  with this repo's existing count-versus-quality finding rather than being new.
+  Both readings are marked n=1 and as shapes to watch, not rules, and the
+  positive rewrite to reach for meanwhile is given.
+
+**What a caller has to do differently:** before writing `ACTION`, open the
+extracted PNG and walk it object by object, checking that each verb can start
+from what is actually in the picture. An agent that fills the slot from the
+scene described by the user — rather than from the frame — can write a clause
+that is silently discarded, and the job still completes and still bills.
+
+## 1.2.0 — this skill's reason for existing was an inference; it is now a measurement
+
+**Documentation only. No default, price, prompt template, command or route
+changed.** The frame-out / generate / join route is unchanged and remains the
+only way to lengthen a clip here.
+
+What changed is the evidence under it. This file argued, from inference, that
+Ofox exposes no native `extend` or `edit` mode. That was tested on 2026-09-16
+and the real behaviour is more specific than "unsupported":
+
+- **The `mode` field is accepted and discarded.** Job
+  `4686f434-16b0-451f-8941-970e5b3d4a15` sent an invented mode value inside an
+  ordinary text-to-video request and got `200`, a completed plain 4-second
+  t2v clip, and a $0.44 t2v bill. A value nothing could implement cannot have
+  been honoured, so the field is dropped somewhere in the chain.
+- **`duration: -1`** — the form the gallery's official edit case uses to lock
+  the output to the input's length — returns `502 route_error`, raised before
+  any reference URL is fetched.
+
+**What a caller has to do differently:** stop describing extend/edit as
+something the API *refuses*. Nothing refuses it. An agent that tells a user
+"the request will be rejected", or that watches for an error code before
+falling back to this skill's route, is waiting for something that never
+arrives — and a `200` on a request carrying `mode` is not evidence the mode
+ran. The description, "Read this before planning anything", "Unmeasured
+edges" and the "When NOT to use" table all now say *accepted and has no
+effect*, with the job id.
+
+Also noted, and it changes nothing here: `input_references` **images** were
+measured working the same day (job `0f5c8b4e`). That is subject/style
+guidance with an unchanged duration ceiling, not a clip to continue, so it is
+listed under "Unmeasured edges" as ruled out rather than as a new route.
+
 ## 1.1.0 — the chain command was run, and the real-person wall is now half a wall
 
 Two of this file's own "not measured here" statements were closed on

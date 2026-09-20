@@ -2,7 +2,154 @@
 
 All notable changes to the **seedance-anime-drama** skill. Versioning follows SemVer.
 
+## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
+
+**Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its
+four billable subcommands — `generate`, `create`, `batch`, `chain` — refuse to
+run unless `--approved` is on the command line. Both of this skill's real-run
+Step 2 `generate` commands now pass it. The `--dry-run` commands are
+untouched: a quote is how the number being approved gets produced, so gating
+it would close the only route through itself.
+
+**What a caller has to do differently**
+
+- **Install `ofox-video-core` 2.0.0 or newer.** This version of this skill
+  needs it. On an older core the updated commands stop with `unknown option
+  '--approved'` before any request — nothing is submitted and nothing is
+  billed, so the failure is safe, but every real run fails.
+- **A command copied from an older version of this file is now refused.**
+  Anything pasted from an earlier revision, a transcript or a wrapper script
+  hits the guard, prints the quote-first steps and exits non-zero. Nothing is
+  submitted and nothing is billed. Re-run it with `--dry-run` to get the
+  quote, or with `--approved` once the cost table has gone in front of the
+  user.
+- **Step 1 is unaffected.** `ofox-image.sh` has no equivalent flag, so
+  Approval 1 is unchanged mechanically — and still binds exactly as before.
+  Only Step 2's video commands gained the flag.
+
+**What `--approved` is not.** It does not prove that an approval happened — an
+agent can type it without showing anyone a price, exactly as it could
+previously just run the command. What changed is that spending without quoting
+is no longer the default: it now has to be written into the command, where a
+transcript shows it and a reviewer can object. The gate in
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
+is still the rule, and this skill still states it in full.
+
+**Documentation only otherwise. No price, default, prompt template, flag
+meaning or generation behaviour changed.**
+
 This file starts at 1.0.2; earlier versions predate it.
+
+## 1.14.2 — the recovery command asked for the whole repo, and asked the agent to run it
+
+**Documentation only. No flag, price, prompt template or generation behaviour
+changed.**
+
+"If the script isn't found" ended in a skills.sh command that installed *every*
+skill in this repo, into *every* agent, user-level, with confirmation
+suppressed — four widenings past the one skill that was actually missing.
+ClawHub's scanner flags exactly that (rule T08, "unpinned and overbroad
+third-party installation via npx"), and the flag is accurate rather than noise:
+an agent that read the line and ran it would have rewritten the user's whole
+skills setup to recover one relative path.
+
+The line now asks for the missing skill and nothing else —
+`npx skills add ofoxai/skills --skill ofox-video-core` (or
+`npx skills add ofoxai/skills --skill ofox-image-core`), which asks for that
+one core and answers none of the agent, scope or confirmation questions on the
+user's behalf. The repo's own `npx ofox-skills` wrapper still answers all
+three (every agent, user-level, no prompts), which is why the line handed to
+the user is the skills.sh one.
+
+**What a caller has to do**: nothing changes for any command this skill
+already prints, and nothing changes while the missing core is installed. What
+changes is conduct on the one path where it genuinely is absent — **relay the
+command and let the user run it**; do not run an installer yourself. An
+install writes outside the working directory, and that is not a decision to
+take silently for someone.
+
+All three distribution routes are still named (this repo's own
+`npx ofox-skills`, skills.sh, and LobeHub or ClawHub), because recovery advice
+that names one installer is wrong advice on every other channel this skill
+ships through.
+
+## 1.14.1 — the ARG_MAX warning pointed the wrong way
+
+**Documentation only. No flag, default, price or prompt template changed.**
+
+1.14.0 correctly removed the invented hosting requirement, then described the
+size limit backwards: *"a full-size photo's base64 will exceed the limit and
+fail with `Argument list too long` before any network call"*. It does not
+fail. Measured 2026-09-17 on a 1.9 MB PNG: `jq` never runs, the command
+substitution is empty, an empty `--extra-json` is treated as *not passed*, and
+the job goes out with **no `input_references` at all** — exit `0`. Unpaid that
+is a confusing dry run; paid, it is a full-price text-to-video job the caller
+believes is an identity-reference job, and the clip just looks like the model
+ignored the character sheet.
+
+**What a caller has to do differently:** the warning is not "you will see an
+error", it is **"you will pay for the wrong thing silently"**. The worked
+example now (1) downscales first, (2) builds the JSON **into a variable**,
+(3) refuses to continue if it is empty or unparseable, and (4) runs
+`--dry-run --print-payload` with a `grep -c input_references` check on the
+payload — which is the only step that actually detects the drop. Both sides
+were run: the guard fires and stops on an oversized image, and a 768 px
+reference passes with `input_references` present in the payload.
+
+⚠️ Also stated explicitly now: **`--frame-first-image` is not affected** — the
+script encodes that one itself through a temp file, and the same 1.9 MB PNG
+goes through intact. The two paths behave in opposite directions at the same
+file size, so neither is evidence about the other.
+
+## 1.14.0 — the identity route works, and this file was imposing a hosting step that does not exist
+
+**Documentation only. No flag, default, price or prompt template changed.**
+The frame-lock route this skill recommends is untouched. What changed is the
+identity-reference alternative, which this file described as unrun and harder
+to use than it is.
+
+`ofox-video-core` measured it on 2026-09-16 (job `0f5c8b4e`, two `image_url`
+references, 44 cents, billed at the plain text-to-video rate).
+
+**What a caller has to do differently:**
+
+- ✅ **Stop telling users to host their character image.** This file said
+  *"there is no documented local-file encoding for it … so a user's local
+  image has to be hosted somewhere reachable first"*. That was inference from
+  the docs being URL-only, and it is wrong: the API's own rejection message
+  names `data:` URIs, and the measured run sent two local files that way. The
+  hosting step was a barrier this file invented.
+- 🚨 **But shrink the image first, and verify the payload — because an
+  oversized reference does not fail, it is silently dropped and you pay for
+  the wrong job.** `--extra-json` takes its value as a **command-line
+  argument**, so a `data:` URI built into it is bounded by `ARG_MAX`
+  (1,048,576 bytes here). Over the limit `jq` never executes: the shell
+  prints one line to stderr, the command substitution yields an **empty
+  string**, and `ofox-video.sh` treats an empty `--extra-json` as *not
+  passed* — skipping validation and merging nothing. Measured 2026-09-17 on a
+  1.9 MB PNG: **no `input_references` in the payload, `STATUS dry_run`, exit
+  0.** Without `--dry-run` that is a fully billed plain text-to-video job the
+  caller believes is an identity-reference job, and the clip just looks like
+  the model ignored the character sheet. The worked example now downscales
+  first, builds the JSON **into a variable**, refuses to continue if it is
+  empty or unparseable, and uses `--print-payload` with a `grep -c
+  input_references` check — both sides of which were run to confirm the guard
+  fires on an oversized image and passes on a 768 px one. A hosted URL is the
+  fallback for a large image rather than the only route.
+  ⚠️ **Do not generalise this from `--frame-first-image`, which is safe** —
+  there the script encodes through a temp file and `jq --rawfile`, and a
+  1.9 MB PNG goes through intact. The two paths behave in opposite directions
+  at the same file size.
+- ✅ **The `image1` / `image2` position tokens do resolve**, in array order —
+  previously marked unverified in the comparison table.
+- ⚠️ **Pass `--aspect-ratio` explicitly on the identity route.** The table row
+  said "not tested here"; it is now one observation, and a strange one: the
+  measured job passed no ratio and came back **portrait from two landscape
+  references**, matching neither the default nor the images.
+
+Still true and still said: this skill has **not** run the identity route on an
+anime character, so the approval message still prices it as an experiment —
+just an experiment with a measured mechanism behind it rather than none.
 
 ## 1.13.1 — a seed does not reproduce a take, and this skill said it did
 

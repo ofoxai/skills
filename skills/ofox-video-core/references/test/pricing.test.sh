@@ -193,8 +193,10 @@ fi
 echo
 echo "=== A run that cannot be priced still proceeds ==="
 # Failing to price something must never block generation (fail open).
+# --approved: this case is about what happens AFTER the estimate fails, so
+# it has to be allowed past the spend gate. The base is unroutable.
 out=$(bash "$TARGET" generate --prompt x --duration 4 \
-  --model bytedance/some-unknown-model --resolution 720p 2>&1)
+  --model bytedance/some-unknown-model --resolution 720p --approved 2>&1)
 code=$?
 if [ "$code" -ne 1 ]; then
   pass "an unpriceable run still gets submitted (exit $code, not a validation block)"

@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "1.27.1"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "1.27.1"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -36,8 +36,18 @@ report the exact cost. Scenario skills (`seedance-short-drama`,
   Locate it (`.env` at the repo root is the usual spot), then
   `set -a; . <path>; set +a` in the shell you'll call the script from. Sourcing
   a dotenv pulls in *every* variable in the file, not just the key —
-  `OFOX_API_BASE_URL` is one this script reads, and it silently redirects every
-  API call — so read the file before you load it. Never echo the value.
+  `OFOX_API_BASE_URL` is one this script reads, and it redirects every API call
+  — so read the file before you load it. Never echo the value.
+- **The key goes to exactly one host, and you are told when that host is not
+  Ofox.** Since 1.30.0 `OFOX_API_BASE_URL` must be `https://` (a loopback host
+  may be `http://`, for a local test server) and an override prints a `NOTE:`
+  on stderr naming the host that will receive the key. Relay that line if you
+  see it: it is the difference between "we are talking to Ofox" and "we are
+  talking to whatever that variable says". And the `polling_url` the API
+  returns in its create response — which the poll loop authenticates to — is
+  followed only when it is on the same scheme/host/port as the base. A
+  response pointing somewhere else stops the run with the job id printed, so
+  the job you already paid for is collected with `poll`, not abandoned.
 - **Never print, log, or echo the raw key value** — not in chat, not in a
   file, not in a command you show the user, not in verbose curl output.
   `references/ofox-video.sh` never uses `curl -v`/`--trace` for exactly this
@@ -55,9 +65,20 @@ report the exact cost. Scenario skills (`seedance-short-drama`,
 ## Which model, and what it costs
 
 `bash references/ofox-video.sh models` lists every video model Ofox serves with
-its real duration range, resolutions, modes and base per-second price. It needs
+its duration range, resolutions, modes and base per-second price. It needs
 **no API key** — `GET /v1/models` is public — so it is safe to run before the
 user has signed up, and it costs nothing.
+
+⚠️ **The `modes` column under-reports, so do not read it as a capability
+list.** Every model's entry says `t2v i2v v2v` and nothing else, and
+reference-to-video through `input_references` was measured working on
+`bytedance/seedance-2.5` on 2026-09-16 (job `0f5c8b4e`, two image references,
+44 cents, billed at the plain t2v rate). The duration, resolution and
+aspect-ratio columns are a different matter — those are what the script
+enforces against and they have held up. Detail, and what the same session
+measured about the `mode` request field — accepted, discarded, and therefore
+no route to extend or edit — is in
+[`references/api-params.md`](references/api-params.md).
 
 The rate `models` prints is the one at each model's **own default
 resolution**, and that default is not the same tier for every model. It ranks
@@ -104,7 +125,7 @@ next one as its opening frame. The two mechanisms combine rather than compete
 — every job in a chain can itself contain several timestamped shots:
 
 ```bash
-bash references/ofox-video.sh chain \
+bash references/ofox-video.sh chain --approved \
   --shot "a white cup on a dark table, steam rising, static camera" \
   --shot "the camera pushes in slowly toward the same cup" \
   --duration 4 --resolution 480p
@@ -140,7 +161,7 @@ one prompt however many newlines it contains, which is the case a shots file
 cannot express:
 
 ```bash
-bash references/ofox-video.sh chain \
+bash references/ofox-video.sh chain --approved \
   --shot "$(cat shot1.txt)" \
   --shot "$(cat shot2.txt)" \
   --duration 8 --resolution 480p
@@ -252,7 +273,7 @@ makes that one command, and — the part nobody else does — tells you what it
 actually cost.
 
 ```bash
-bash references/ofox-video.sh batch --prompt "..." --takes 3 [OPTIONS]
+bash references/ofox-video.sh batch --approved --prompt "..." --takes 3 [OPTIONS]
 ```
 
 Every option `generate` takes works here. What `batch` adds:
@@ -301,11 +322,11 @@ Draft cheap, render the keeper expensive:
 
 ```bash
 # 5 drafts at 480p on the cheapest model — about 40 cents
-bash references/ofox-video.sh batch --prompt "..." --takes 5 \
+bash references/ofox-video.sh batch --approved --prompt "..." --takes 5 \
   --model bytedance/seedance-2.0-mini --resolution 480p --duration 4
 
 # then the winner, on the good model
-bash references/ofox-video.sh generate --prompt "<the one that worked>" \
+bash references/ofox-video.sh generate --approved --prompt "<the one that worked>" \
   --model bytedance/seedance-2.5 --resolution 1080p --duration 4
 ```
 
@@ -364,7 +385,7 @@ immediately — seconds, not minutes — printing the job id. Then poll in
 however many short calls it takes:
 
 ```bash
-bash references/ofox-video.sh create --prompt "..." --duration 15 --out-dir ./out
+bash references/ofox-video.sh create --approved --prompt "..." --duration 15 --out-dir ./out
 # -> STATUS submitted
 #    JOB_ID 7b41f0c9-...
 #    POLLING_URL https://api.ofox.ai/v1/videos/7b41f0c9-...
@@ -402,11 +423,11 @@ over every job id:
 
 ```bash
 # submit all three; each returns in seconds with its own job id
-bash references/ofox-video.sh create --prompt "<shot A>" --duration 15 \
+bash references/ofox-video.sh create --approved --prompt "<shot A>" --duration 15 \
   --resolution 720p --name "kitchen argument" --out-dir ./out
-bash references/ofox-video.sh create --prompt "<shot B>" --duration 15 \
+bash references/ofox-video.sh create --approved --prompt "<shot B>" --duration 15 \
   --resolution 720p --name "she walks out" --out-dir ./out
-bash references/ofox-video.sh create --prompt "<shot C>" --duration 15 \
+bash references/ofox-video.sh create --approved --prompt "<shot C>" --duration 15 \
   --resolution 720p --name "the station" --out-dir ./out
 
 # then wait for all three at once, not one after another
@@ -453,7 +474,7 @@ Serially, the answer to that was a re-run and another ten minutes. Concurrently
 it costs the same wall clock as the first attempt:
 
 ```bash
-bash references/ofox-video.sh batch --prompt "..." --takes 3 \
+bash references/ofox-video.sh batch --approved --prompt "..." --takes 3 \
   --duration 15 --resolution 720p --out-dir ./out
 ```
 
@@ -538,12 +559,33 @@ bash references/ofox-video.sh generate --dry-run --prompt "..." --duration 15 --
 
 # 2. tell the user the number, get a yes
 
-# 3. run the identical command without --dry-run
+# 3. run the identical command with --dry-run swapped for --approved
+bash references/ofox-video.sh generate --approved --prompt "..." --duration 15 --resolution 720p
 ```
 
 **Do not skip step 2.** The estimate a real run prints appears microseconds
 before the request goes out — by the time you could relay it, the job exists
 and is billable. `--dry-run` is what makes quoting-then-confirming possible.
+
+### `--approved` is required, and `--dry-run` never needs it
+
+Since 2.0.0 the four subcommands that can bill — `generate`, `create`, `batch`,
+`chain` — refuse to run without **`--approved`**, printing the three steps
+above and submitting nothing. Nothing else is gated: `check`, `models`,
+`providers`, the four local ffmpeg tools, and — deliberately — **`poll`**,
+which is the command that collects a job you have already paid for.
+
+Be accurate about what the flag is. **It records a stance; it cannot prove
+one.** No shell script can see the conversation between an agent and its user,
+and an agent is perfectly able to type `--approved` without ever showing anyone
+a price. What changed is that spending without quoting is no longer what
+happens by default — it now has to be written into the command, where a
+transcript shows it and a reviewer can object to it. Do not describe this as
+"approval is enforced".
+
+`--dry-run` works with no `--approved` and no API key, because the quote is how
+the number being approved is produced; a gate in front of it would close the
+only route through itself.
 
 A dry run also catches a bad parameter for free, so an invalid combination
 costs a message instead of a job.
@@ -574,8 +616,8 @@ Pricing is identical across the two — this is a region and moderation choice,
 never a cost one. Say so if a user asks which is cheaper.
 
 ```bash
-bash references/ofox-video.sh generate --provider volcengine ...  # mainland
-bash references/ofox-video.sh generate --provider auto ...        # let Ofox route
+bash references/ofox-video.sh generate --approved --provider volcengine ...  # mainland
+bash references/ofox-video.sh generate --approved --provider auto ...        # let Ofox route
 export OFOX_VIDEO_PROVIDER=volcengine                             # persistent default
 bash references/ofox-video.sh providers                           # see a model's upstreams
 ```
@@ -630,7 +672,7 @@ are present — it makes no network call. Handle each failure mode plainly:
 ```bash
 bash references/ofox-video.sh models
 bash references/ofox-video.sh generate --dry-run --prompt "..." [OPTIONS]
-bash references/ofox-video.sh generate --prompt "..." [OPTIONS]
+bash references/ofox-video.sh generate --approved --prompt "..." [OPTIONS]
 bash references/ofox-video.sh poll JOB_ID [--out-dir DIR] [--name TEXT]
 bash references/ofox-video.sh poll JOB_ID JOB_ID JOB_ID [--concurrency N]
 ```
@@ -655,7 +697,7 @@ VIDEO_COST <exact cost from usage.video_cost>
 Pass `--name` with a short description of what the clip actually is:
 
 ```bash
-bash references/ofox-video.sh generate --prompt "..." --name "convenience store breakup"
+bash references/ofox-video.sh generate --approved --prompt "..." --name "convenience store breakup"
 ```
 
 The file lands as `convenience-store-breakup-d12c2787.mp4` instead of a bare
@@ -784,8 +826,10 @@ Key flags: `--model` (default `bytedance/seedance-2.5`), `--duration`,
 `--frame-last-image URL|PATH`, `--real-person true|false` (**an authorization
 assertion about the attached likeness, not a moderation switch** — read the
 real-person section of `references/api-params.md` before you pass it),
-`--callback-url`, `--extra-json '<json>'` (advanced fields not covered by a flag, e.g.
-`input_references`, `provider`), `--max-wait SECONDS` (default 540),
+`--callback-url`, `--extra-json '<json>'` (a JSON **object** of fields not covered
+by a flag, e.g. `input_references`, `provider.options` — it may not be empty, and
+it may not set a field that has a flag; see below),
+`--max-wait SECONDS` (default 540),
 `--poll-interval SECONDS` (default 6). Full parameter reference:
 `references/api-params.md`. Pricing and the cost-estimate formula:
 `references/pricing.md`.
@@ -817,10 +861,37 @@ and posted to the API via `curl --data-binary @file`, never via a `jq
 --arg`/`--argjson` or `curl -d` **command-line** value. An earlier version
 of this script did the latter and broke on any real photo whose base64
 encoding exceeded the OS's `ARG_MAX` (roughly any real photo over ~750KB) —
-verified with a real 885KB PNG (1,179,996-byte base64 encoding) failing
-with `jq: Argument list too long` before any network call was made. Fixed
-2026-08-29; see `.trellis/spec/skills/external-api-integration.md` for the
-general lesson.
+seen with a real 885KB PNG (1,179,996-byte base64 encoding) producing
+`jq: Argument list too long`. Fixed 2026-08-29, and re-verified 2026-09-17
+on a 1.9 MB PNG: the payload really carries the full 2,515,046-byte data
+URI. See `.trellis/spec/skills/external-api-integration.md` for the general
+lesson.
+
+🚨 **Do not read that as "ARG_MAX fails loudly and stops you."** The
+2026-08-29 write-up says the old code failed "before any network call was
+made", and what was actually recorded is a **stderr line**, not an exit
+status — nobody wrote down whether that run aborted or carried on. The
+distinction turned out to matter, because the same wall on the **caller's**
+side of the fence did *not* stop anything:
+
+> Building a `data:` URI into `--extra-json` yourself — the documented route
+> for `input_references` — passes that URI to `jq` as a command-line
+> argument. Over `ARG_MAX`, `jq` never runs, the command substitution yields
+> an empty string, `--extra-json ""` was treated as **not passed**, and the
+> job was submitted and billed with **no references in it at all**. One line
+> on stderr, exit `0`. Measured 2026-09-17.
+
+**Closed in 1.30.0**: an `--extra-json` that was *written on the command line*
+but is empty is now an error (exit 1, nothing submitted), while omitting the
+flag is byte-for-byte what it always was. The script cannot tell an empty
+value from an absent one by looking at the value, so it remembers whether the
+flag was typed. The ARG_MAX wall itself is still there — this stops it costing
+money, it does not make a 2.5 MB argument work. Keep a reference small enough
+to pass (a 768 px long edge is tens of kilobytes), or attach it with
+`--frame-first-image`, which encodes through a temp file and has no such
+limit. The two paths are still asymmetric at the same file size; only the
+failure is now loud on both. Full reproduction in
+[`references/api-params.md`](references/api-params.md).
 
 **An attached frame changes what happens to `aspect_ratio`, and it is not
 the same on every model.** `bytedance/seedance-2.5` (the default model)

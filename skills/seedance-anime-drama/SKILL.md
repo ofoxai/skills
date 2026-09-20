@@ -2,11 +2,11 @@
 name: seedance-anime-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a novel/script excerpt into an anime-style storyboard shot using the Ofox image and video APIs. Runs a short creative brief first (how many shots, the aspect ratio before any image exists, which animation look; "Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), generates the character with ofox-image-core — one opening frame for a single shot, a design sheet to confirm plus one opening frame per shot for a sequence — then feeds each frame to ofox-video-core as `--frame-first-image`, so every shot starts on an image of that character rather than on a text description alone. Use when a user asks to turn a story excerpt into an anime video, e.g. "turn this novel excerpt into an anime video", "make an anime-style storyboard clip of this scene", "generate a manga-drama shot with this character", or "turn this chapter into an anime short with the same character in every shot". Do not use for realistic-human dialogue scenes with no anime styling (see seedance-short-drama), silent product/brand shots (see seedance-ad-creative), or plain catalog footage (see seedance-product-video).
 license: MIT
-version: "1.13.1"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-anime-drama
 metadata:
   author: ofoxai
-  version: "1.13.1"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -121,6 +121,14 @@ the other.
 Either probe printing nothing → that core isn't installed, and Step 1 needs
 `ofox-image-core` as surely as Step 2 needs `ofox-video-core`; see "If the
 script isn't found".
+
+**Step 2 needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+`ofox-video.sh` command below passes it. An older core does not know the flag
+and stops with `unknown option '--approved'` before any request — nothing is
+submitted and nothing is billed, so the fix is to update the core, never to
+drop the flag. Step 1's `ofox-image.sh` has no equivalent flag; the spend rule
+binds there in exactly the same way, only the reminder is missing.
 
 ## Before generating: two availability checks
 
@@ -632,8 +640,8 @@ comparison; the part that matters here:
 | The image is … | the literal first frame; the shot animates away from it | a source of appearance; no frame is locked, the shot composes itself |
 | Flag | `--frame-first-image PATH` (local file, auto base64) | none — `--extra-json '{"input_references":[…]}'` |
 | Prompt | opens on the frame; short character block | a role sentence per image: `image1 provides <tag>'s identity only: face, hair, accessory, outfit. Ignore its background and pose.` (cases 34, 40, 11, 44) |
-| Ratio | `adaptive`, follows the image | not tested here |
-| Status in this repo | exercised on real runs: a generated image fed as a first frame produced a clip that opens on it — that is how the sheet-as-frame mistake was caught — and `ofox-video-core` records a `chain` continuity run | the element shape is documented in `../ofox-video-core/references/api-params.md`, and a `video_url` reference has gone through in a real video-to-video run; an `image_url` identity reference has **not been exercised end-to-end from this skill**. Whether the `image1` token maps to the attachment by position is unverified too |
+| Ratio | `adaptive`, follows the image | ⚠️ **pass `--aspect-ratio` explicitly.** The one measured identity-reference job passed none and came back **portrait from two landscape references** — following neither the default nor the images. One observation, no explanation (`api-params.md`) |
+| Status in this repo | exercised on real runs: a generated image fed as a first frame produced a clip that opens on it — that is how the sheet-as-frame mistake was caught — and `ofox-video-core` records a `chain` continuity run | **measured 2026-09-16** in `ofox-video-core` (job `0f5c8b4e`, two `image_url` references, 44 cents, plain t2v rate): both references' named features came through, and the **`image1` / `image2` tokens do map to the attachments by position**, in array order. Still not exercised **from this skill** on an anime character, and two images is the most that has been sent |
 
 **They are mutually exclusive in one job** — the script rejects the
 combination client-side (`references_conflict`). A shot either starts on a
@@ -645,20 +653,91 @@ Neither route is affected by the real-person refusal for an anime character;
 the identity route's behaviour with a real person is untested in this repo
 and irrelevant here.
 
-If you take the identity route, `--dry-run` it first like anything else. Only
-the URL element shape is documented for `input_references` — there is no
-documented local-file encoding for it, unlike `--frame-first-image`, so a
-user's local image has to be hosted somewhere reachable first:
+If you take the identity route, `--dry-run` it first like anything else.
+
+✅ **A local image does not have to be hosted — if you shrink it first.** This
+file used to say hosting was required, on the grounds that only the URL
+element shape was documented. The API's own rejection message names `data:`
+URIs as acceptable and the measured run sent two local files that way, so the
+requirement was never real. But there is a size limit, and it is local rather
+than the API's:
+
+🚨 **An oversized reference does not fail the command — it is silently
+dropped and you pay for the wrong job.** This is the single most expensive
+thing to get wrong on this route, and it does not announce itself.
+
+`--extra-json` takes its value as a command-line argument, so a `data:` URI
+built into it is bounded by `ARG_MAX` (1,048,576 bytes on this machine).
+Over the limit, `jq` **never executes**: the shell writes one line to stderr,
+the command substitution yields an **empty string**, and `ofox-video.sh`
+treats an empty `--extra-json` as *not passed* — skipping validation and
+merging nothing. Measured 2026-09-17 with a 1.9 MB PNG:
+
+```
+(eval):10: argument list too long: jq
+PAYLOAD {"model":"bytedance/seedance-2.5","prompt":"x","duration":8,
+         "resolution":"720p","aspect_ratio":"16:9", ... }
+STATUS dry_run
+EXIT=0
+```
+
+**No `input_references` in the payload. Exit 0.** Without `--dry-run` that is
+a submitted, fully billed **plain text-to-video** job that you believe is an
+identity-reference job — and the clip that comes back just looks like the
+model ignored your character sheet. There is no error to catch. The one
+stderr line comes from the shell, not from the script, so it carries no
+prefix and scrolls past above the normal output.
+
+⚠️ **Do not generalise from `--frame-first-image`, which is safe.** There the
+script does the encoding itself through a temp file and `jq --rawfile`, and
+a 1.9 MB PNG goes through intact (verified the same day). The two paths
+behave in **opposite** directions at the same file size.
+
+**So do both of these, every time:**
+
+1. **Downscale the reference first.** The measured r2v run used JPEGs at a
+   768 px long edge — 33 KB and 43 KB. A character reference supplies
+   appearance, not pixels. If the image genuinely must stay large, a hosted
+   https URL is the alternative, and now a choice rather than a requirement.
+2. **Build the JSON into a variable, check it, and confirm it reached the
+   payload with your own eyes.** The check below is the only thing that
+   catches this.
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
+# 1. Shrink and re-encode first — the limit is local, not the API's.
+sips -Z 768 -s format jpeg /path/to/character.png --out /tmp/ref.jpg
+
+# 2. Build the JSON into a VARIABLE, never straight into the flag.
+REF="data:image/jpeg;base64,$(base64 < /tmp/ref.jpg | tr -d '\n')"
+EXTRA="$(jq -n --arg u "$REF" '{input_references:[{type:"image_url",image_url:{url:$u}}]}')"
+
+# 3. Refuse to continue if it did not build. Empty here = reference dropped.
+[ -n "$EXTRA" ] && printf '%s' "$EXTRA" | jq -e . >/dev/null \
+  || { echo "extra-json did not build (ARG_MAX?) — the reference would be dropped silently"; exit 1; }
+
+# 4. Dry-run WITH --print-payload, then read the payload yourself.
+bash ../ofox-video-core/references/ofox-video.sh generate --dry-run --print-payload \
   --prompt "image1 provides the girl's identity only: face, chestnut bunches with pale-yellow ribbons, cream sundress, blue sash. Ignore its background and pose. <the rest of the shot prompt from the template>" \
-  --extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"<a publicly reachable https URL>"}}]}' \
+  --extra-json "$EXTRA" \
+  --aspect-ratio 16:9 \
   --duration 8 --resolution 720p --out-dir ./out
 ```
 
-Say in the approval message that this route is documented but not yet run
-end-to-end here, so the user is pricing an experiment.
+**Then confirm `input_references` is actually in the printed payload before
+spending.** `--print-payload` writes to stderr, so:
+
+```bash
+... --dry-run --print-payload ... 2>&1 | grep '^PAYLOAD' | grep -c input_references
+# 1 = the reference is really in the request. 0 = it was dropped; do NOT spend.
+```
+
+`--dry-run` is free and makes no network call. It is not, on its own, enough:
+a dropped reference dry-runs perfectly happily. **The payload check is the
+step that matters.**
+
+Say in the approval message that the **mechanism** is measured
+(`ofox-video-core`, job `0f5c8b4e`) but that **this skill has not run it on an
+anime character**, so the user is still pricing an experiment.
 
 ## Step 2: generate each shot from its opening frame
 
@@ -678,7 +757,7 @@ frame-lock shape for a single shot, the 15–30s manifest when the job holds
 several timestamped shots — then call:
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the shot prompt from the template>" \
   --frame-first-image "<that shot's opening frame — the ABSOLUTE path printed in Step 1>" \
   --duration 8 \
@@ -688,6 +767,12 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 
 `ofox-video-core` auto-base64-encodes a local file path like this one — no
 need to upload it anywhere first.
+
+`--approved` is not decoration: without it the script refuses, submits
+nothing, and prints the quote-first steps instead. It belongs on this command
+only once the two-phase cost table has gone in front of the user and come back
+with a yes — the flag cannot check that for you. To price a shot without
+sending it, swap `--approved` for `--dry-run`.
 
 ### `aspect_ratio: adaptive` is applied for you here — expected, not a bug
 
@@ -853,6 +938,19 @@ would have been 30 cents/s. Only a *video* input moves the tier, and this
 skill never sends one. The script picks the tier; take it from the dry run
 rather than assuming either way.
 
+After the yes, run the identical command with `--dry-run` swapped for
+`--approved`. That flag is where the yes gets typed out: since
+`ofox-video-core` 2.0.0 the four billable subcommands — `generate`, `create`,
+`batch`, `chain` — refuse to run without it, while `--dry-run` never needs it,
+so both quotes above stay free and keep working with no API key. Be exact
+about what it does: it records a stance, it cannot prove one. Nothing in a
+shell script can observe the conversation you had, and it can be typed without
+showing anyone a price. What it changes is that spending without quoting is no
+longer the default — it has to be written into the command, where a transcript
+shows it. The two approvals above are still the rule, and they are still yours
+to follow. Phase 1's `ofox-image.sh` has no equivalent flag; Approval 1 binds
+there just as firmly, only the reminder is missing.
+
 Afterwards, report both real figures — `IMAGE_COST` from phase 1 and
 `VIDEO_COST` from each finished shot — and the total across the two phases.
 
@@ -1010,15 +1108,22 @@ opening frames:
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`, `ofoxai-skills-ofox-image-core`). Re-run
   the command against what the probe printed. Nothing needs installing.
-- **The probe printed nothing** — that core really is absent, and the fix
-  belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own, every skill into every agent) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install the missing core from the same
-  publisher. Naming only the skills.sh command to a LobeHub user reads as
-  "abandon your installer", which isn't the advice. Name **which** core is
-  missing — this skill needs both, and losing `ofox-image-core` alone stops
-  Step 1 while Step 2 would still run.
+- **The probe printed nothing** — that core really is absent, and installing
+  it is the user's call to make, not yours: an install writes outside this
+  working directory, so hand over the command and let them run it rather than
+  running it for them. Which command depends on the installer they already
+  have — skills.sh is `npx skills add ofoxai/skills --skill ofox-video-core`
+  (or `npx skills add ofoxai/skills --skill ofox-image-core`), which asks for
+  that one core and answers none of the agent, scope or confirmation questions
+  on the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core` (or `npx ofox-skills ofox-image-core`),
+  the same install with all three answered in advance (every agent,
+  user-level, no prompts); on LobeHub or ClawHub, install the missing core
+  from the same publisher. Ask for the one core that is missing rather than
+  the whole repo, and give all three routes — pointing a LobeHub user at the
+  skills.sh line alone reads as "abandon your installer", which isn't the
+  advice. Name **which** core is missing — this skill needs both, and losing
+  `ofox-image-core` alone stops Step 1 while Step 2 would still run.
 
 Either way, say which skill is missing and where it is expected rather than
 relaying the raw path error, which names neither.
@@ -1105,7 +1210,8 @@ bash ../ofox-image-core/references/ofox-image.sh generate \
 # IMAGE_PATH_UNCROPPED is the API's untouched bytes, kept for a human who wants a different crop.
 
 # Step 2 — the shot, opening on that exact frame (the SAME absolute IMAGE_PATH Step 1 printed)
-bash ../ofox-video-core/references/ofox-video.sh generate \
+# --approved goes on only after the two-phase table came back with a yes.
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "Start exactly on the opening frame. The silver-bobbed girl in the navy uniform stands at the rooftop edge at sunset; modern theatrical anime, cel-shaded. One shot, 8 seconds. Low medium shot, slow push-in. The wind lifts her hair; she looks toward the horizon, then says, quietly and without turning: \"I'm not going back.\" The camera settles; hold one second. AUDIO: wind, distant traffic, no music. CONSISTENCY: her face, silver bob, green eyes, uniform and red ribbon unchanged. AVOID: subtitles, watermarks; photorealism, game CG; identity drift." \
   --name "rooftop confession shot 1" \
   --frame-first-image "/absolute/path/to/assets/ofox_image_20260829183214_4821.png" \

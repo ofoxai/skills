@@ -424,16 +424,60 @@ unverified until someone reconciles an edit against a console line.
 | 2026-09-15 | `openai/gpt-image-2` | 854x480 (16:9) | 608 (576+32) | 301 | 1672x941 | 0.013798 |
 | 2026-09-15 | `openai/gpt-image-2` | 320x180 (16:9) | 273 (240+33) | 129 | 1672x941 | 0.005955 |
 | 2026-09-15 | `openai/gpt-image-2` | 256x256 (1:1) | 289 (256+33) | 229 | 1254x1254 | 0.009083 |
+| 2026-09-16 | `openai/gpt-image-2` | 1792x1008 (16:9) | 1571 (1508+63) | 129 | 1672x941 | 0.016249 |
+
+**The fourth row self-checks three ways**, which is worth stating because an
+earlier version of this file wrongly recorded its output-token count as lost:
+`1508+63 = 1571`, `1571+129 = 1700`, and
+
+```
+63*0.000005 + 1508*0.000008 + 129*0.00003 = 0.016249
+```
+
+— matching the run's own reported `EDIT_COST` to six decimals. Two sibling
+edits of the same file on the same day billed 0.016289 and 0.016304, which
+back out to 71 and 74 text tokens with the image and output counts unmoved:
+the same "prompt length moves only the text tokens" behaviour the 320x180
+replication shows.
+
+⚠️ **Output tokens do not track the input size, and this row is what proves
+it.** Ordered by input pixels the counts run **129** (320x180), **229**
+(256x256), **301** (854x480), **129** (1792x1008) — not monotonic, and the
+largest input ties the smallest for the lowest count. What *does* track the
+upload is the input **image** token count: 240, 256, 576, 1508. So at large
+input sizes the bill is dominated by the input term — `1508*0.000008 =
+0.012064` is **74%** of this run's 0.016249 — and an estimate reasoning from
+output tokens is reasoning from the smaller half.
+
+🚨 **Worth raising before another point is added, and now with numbers rather
+than in principle**: `print_edit_estimate` selects its "dearest" point by
+`output_tokens` alone. Computed per point, the costs are 0.013894 (854x480),
+0.006054 (320x180), 0.009182 (256x256) and **0.016438** (1792x1008) — so the
+dearest point *by cost* is the one with the **equal-lowest** output-token
+count, and the selector would pass over it. For any input with no exact match
+the estimate therefore quotes 0.013894 as an "upper bound" over a point known
+to bill 0.016438. That is invisible whenever an exact `input_size` match
+exists, which is why it survived three points. **The selection key is the
+thing to fix, not the data**, and per `_chain_order_history` a change that
+moves a quoted price gets raised rather than made quietly.
 
 Two things in that table are worth more than the dollar figures, because they
 mean an edit anchor has a **different shape** from a generation anchor:
 
 1. **A near-constant output pixel budget, spent on the input's aspect ratio.**
-   The two 16:9 inputs returned 1672x941; the 1:1 input returned 1254x1254.
+   The 16:9 inputs returned 1672x941; the 1:1 input returned 1254x1254.
    Those are 1,573,352 and 1,572,516 pixels — 0.05% apart — so the endpoint
    looks like it targets ~1.57 MP and takes the shape from the upload. 1.777
    is also the 16:9 that the generations `size` enum cannot express at all, so
    an edit reaches a ratio a generation cannot request.
+
+   **The 2026-09-17 row is what makes this a budget rather than a floor.**
+   The first three inputs were all *smaller* than the output, so "spends
+   ~1.57 MP on the input's shape" and "upsamples everything to ~1.57 MP" fit
+   them equally well. 1792x1008 is 1,806,336 pixels — larger than the output —
+   and still came back 1672x941. The endpoint spends that budget in both
+   directions. Same habit as the 1:1 run above: the sample that separates two
+   readings is worth more than another sample that fits both.
 
    The 1:1 run exists because the first two could not establish this. Both
    were 16:9, and "output follows the input ratio" and "output is a fixed
@@ -467,3 +511,8 @@ a generation is matched on. No match quotes the dearest point, labelled
 A directly actionable consequence, and the only lever a caller has here:
 downscaling the source from 854x480 to 320x180 took the bill from 1.4 cents to
 0.6. If the job does not need the extra input resolution, do not pay for it.
+
+The 1792x1008 point extends that in the other direction without making it
+linear: **4.4x the pixels of 854x480 bought 2.6x the image tokens** (1508
+against 576), 1.6 cents against 1.4. So the lever is real at both ends and the
+ratio is not quotable at either.

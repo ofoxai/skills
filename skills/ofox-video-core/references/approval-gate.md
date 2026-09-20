@@ -18,9 +18,13 @@ LobeHub unpacks each skill as `ofoxai-skills-<name>`, so there it is
 the link doesn't use — the skill's own "Where the core skill lives" section
 (called "Where the two core skills live" in a skill that uses both) has the
 probe that finds it. Only if that probe comes back empty was the
-skill really installed without `ofox-video-core`, which `npx ofox-skills`,
-`npx skills add ofoxai/skills`, or installing `ofox-video-core` from the same
-publisher on LobeHub / ClawHub each fix.
+skill really installed without `ofox-video-core`. Installing it is the user's
+call, not yours — hand over the command rather than running it: skills.sh is
+`npx skills add ofoxai/skills --skill ofox-video-core`, this repo's wrapper is
+`npx ofox-skills ofox-video-core`, and on LobeHub or ClawHub it is
+`ofox-video-core` from the same publisher. Ask for the one missing skill
+rather than the whole repo, and give all three routes — naming one installer
+tells a user of the other two to abandon theirs.
 
 ## The rule
 
@@ -31,6 +35,33 @@ Not "mentioned the price in a sentence". A table, then an explicit yes, then
 the spend. The user is not only approving a number — they are approving a
 model, a prompt, a resolution and a quantity, any of which can waste the
 money more thoroughly than a wrong price would.
+
+## `--approved`: the rule has a hook in the tool now
+
+`ofox-video.sh` **refuses to run a billable subcommand without `--approved`**
+(since `ofox-video-core` 2.0.0). The four it covers are `generate`, `create`,
+`batch` and `chain` — the only ones that reach a request that bills. Free
+subcommands are untouched, `poll` deliberately included: it is how a job you
+have already paid for gets collected, so gating it would strand money rather
+than protect it.
+
+So the flow is now three commands' worth of shape rather than two:
+
+1. `--dry-run` produces the number. It needs no `--approved` and no API key.
+2. The table goes in front of the user, and the user says yes.
+3. The same command runs again with `--dry-run` swapped for `--approved`.
+
+**Be exact about what this flag is, in anything you write for a user.** It
+records a stance; it cannot prove one. Nothing in a shell script can observe
+the conversation you had, and an agent can type `--approved` without having
+shown anyone a price — exactly as it could previously just run the command.
+What changed is that skipping this spec is no longer the default behaviour: it
+now has to be written into the command, where a transcript shows it and a
+reviewer can object. **Do not write "approval is enforced".** The rule above
+is still the rule, and it is still yours to follow.
+
+`ofox-image.sh` has no equivalent flag today. The rule binds there in exactly
+the same way; only the reminder is missing.
 
 ## The table
 
@@ -102,6 +133,10 @@ signing up.
 The estimate a *real* run prints appears microseconds before the request goes
 out. By the time you could relay it, the job exists and is billable. That is
 what `--dry-run` is for.
+
+This is also why `--dry-run` is never behind `--approved`: the quote is how
+the number being approved gets produced, so a gate in front of it would close
+the only route through itself.
 
 ### When there is no estimate
 

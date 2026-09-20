@@ -286,6 +286,10 @@ set -u
 . "$LIBSH"
 : > "$COUNTER"
 cmd_generate() {
+  # cmd_batch validates one take through a --dry-run pass before it
+  # submits anything. That call is not a submission and must not be
+  # counted as one, exactly as the real cmd_generate does not bill for it.
+  case " $* " in *" --dry-run "*) return 0 ;; esac
   printf 'x\n' >> "$COUNTER"
   local n; n=$(wc -l < "$COUNTER" | tr -d ' ')
   local seed="" a prev=""
@@ -313,7 +317,7 @@ poll_and_download() {
   return 0
 }
 make_contact_sheet() { return 1; }
-cmd_batch --prompt x --takes 3 --duration 5 --resolution 480p --out-dir "$OUTD" --concurrency 3
+cmd_batch --prompt x --takes 3 --duration 5 --resolution 480p --out-dir "$OUTD" --concurrency 3 --approved
 echo "BATCH_EXIT=$?"
 EOF
 mkdir -p "$WORK/att"
@@ -357,6 +361,10 @@ set -u
 . "$LIBSH"
 : > "$COUNTER"
 cmd_generate() {
+  # cmd_batch validates one take through a --dry-run pass before it
+  # submits anything. That call is not a submission and must not be
+  # counted as one, exactly as the real cmd_generate does not bill for it.
+  case " $* " in *" --dry-run "*) return 0 ;; esac
   printf 'x\n' >> "$COUNTER"
   local n; n=$(wc -l < "$COUNTER" | tr -d ' ')
   if [ "$n" -ge 3 ]; then
@@ -378,7 +386,7 @@ poll_and_download() {
   return 0
 }
 make_contact_sheet() { return 1; }
-cmd_batch --prompt x --takes 5 --duration 5 --resolution 480p --out-dir "$OUTD"
+cmd_batch --prompt x --takes 5 --duration 5 --resolution 480p --out-dir "$OUTD" --approved
 echo "BATCH_EXIT=$?"
 EOF
 mkdir -p "$WORK/sf"
@@ -422,6 +430,10 @@ set -u
 . "$LIBSH"
 : > "$COUNTER"
 cmd_generate() {
+  # cmd_batch validates one take through a --dry-run pass before it
+  # submits anything. That call is not a submission and must not be
+  # counted as one, exactly as the real cmd_generate does not bill for it.
+  case " $* " in *" --dry-run "*) return 0 ;; esac
   printf 'x\n' >> "$COUNTER"
   local n; n=$(wc -l < "$COUNTER" | tr -d ' ')
   echo "STATUS submitted"
@@ -447,7 +459,7 @@ poll_and_download() {
   return 0
 }
 make_contact_sheet() { return 1; }
-cmd_batch --prompt x --takes 3 --duration 5 --resolution 480p --out-dir "$OUTD"
+cmd_batch --prompt x --takes 3 --duration 5 --resolution 480p --out-dir "$OUTD" --approved
 echo "BATCH_EXIT=$?"
 EOF
 mkdir -p "$WORK/gf"

@@ -2,6 +2,131 @@
 
 All notable changes to the **explainer** skill. Versioning follows SemVer.
 
+## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
+
+**Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its
+four billable subcommands — `generate`, `create`, `batch`, `chain` — refuse to
+run unless `--approved` is on the command line. This skill's one real-run
+`generate` command now passes it. The `--dry-run` commands are untouched: a
+quote is how the number being approved gets produced, so gating it would close
+the only route through itself.
+
+**What a caller has to do differently**
+
+- **Install `ofox-video-core` 2.0.0 or newer.** This version of this skill
+  needs it. On an older core the updated commands stop with `unknown option
+  '--approved'` before any request — nothing is submitted and nothing is
+  billed, so the failure is safe, but every real run fails.
+- **A command copied from an older version of this file is now refused.**
+  Anything pasted from an earlier revision, a transcript or a wrapper script
+  hits the guard, prints the quote-first steps and exits non-zero. Nothing is
+  submitted and nothing is billed. Re-run it with `--dry-run` to get the
+  quote, or with `--approved` once the cost table has gone in front of the
+  user.
+- **The `batch` route needs it too.** This file shows only `batch --dry-run`;
+  its real run takes `--approved` in the same place.
+
+**What `--approved` is not.** It does not prove that an approval happened — an
+agent can type it without showing anyone a price, exactly as it could
+previously just run the command. What changed is that spending without quoting
+is no longer the default: it now has to be written into the command, where a
+transcript shows it and a reviewer can object. The gate in
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
+is still the rule, and this skill still states it in full.
+
+**Documentation only otherwise. No price, default, prompt template, flag
+meaning or generation behaviour changed.**
+
+## 1.2.1 — the recovery command asked for the whole repo, and asked the agent to run it
+
+**Documentation only. No flag, price, prompt template or generation behaviour
+changed.**
+
+"If the script isn't found" ended in a skills.sh command that installed *every*
+skill in this repo, into *every* agent, user-level, with confirmation
+suppressed — four widenings past the one skill that was actually missing.
+ClawHub's scanner flags exactly that (rule T08, "unpinned and overbroad
+third-party installation via npx"), and the flag is accurate rather than noise:
+an agent that read the line and ran it would have rewritten the user's whole
+skills setup to recover one relative path.
+
+The line now asks for the missing skill and nothing else —
+`npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that one
+skill and answers none of the agent, scope or confirmation questions on the
+user's behalf. The repo's own `npx ofox-skills ofox-video-core` still answers
+all three (every agent, user-level, no prompts), which is why the line handed
+to the user is the skills.sh one.
+
+**What a caller has to do**: nothing changes for any command this skill
+already prints, and nothing changes while `ofox-video-core` is installed. What
+changes is conduct on the one path where it genuinely is absent — **relay the
+command and let the user run it**; do not run an installer yourself. An
+install writes outside the working directory, and that is not a decision to
+take silently for someone.
+
+All three distribution routes are still named (this repo's own
+`npx ofox-skills`, skills.sh, and LobeHub or ClawHub), because recovery advice
+that names one installer is wrong advice on every other channel this skill
+ships through.
+
+## 1.2.0 — "about ninety words" is wrong; sentences cost seconds too
+
+**Documentation only. No flag, command or safety behaviour changed** — but the
+**word budget this skill is named for has changed**, so a script written
+against the old number can overrun. Read the first bullet before writing
+another one.
+
+A 30-second run (`42d8b5c3-31f4-41d2-90eb-b07a3181b465`, 2026-09-17, seed
+`1021654967`, 480p / 16:9, the **Voiceover** template, 80 words in 8
+sentences, $3.30) closed this skill's two biggest gaps at once — the duration
+it is named for, and the shape it had never generated.
+
+**What a caller has to do differently:**
+
+- 🚨 **Stop planning at "about ninety words in thirty seconds" or at a flat 3
+  words a second.** Both were in the description, the headline section, the
+  budget table, the defaults table and the recap. The new budget is a formula,
+  because the measurement showed the missing term:
+
+  ```
+  speech span ≈ words / 3.56 + 0.7 x (sentences − 1)
+  ```
+
+  Measured: 22.49s of actual speaking plus 5.64s of internal silence in **7
+  pauses — exactly the script's 7 sentence boundaries**, ~0.7s each. Speaking
+  rate 3.56 w/s. The formula predicts 27.4s for that script; the delivered
+  span was 28.13s, with 1.39s of tail and no truncation. **90 words in 8
+  sentences needs 30.2s of span and does not fit a 30-second clip.**
+- ⚠️ **Count sentences, not only words.** Two 80-word scripts can differ by
+  several seconds, and short punchy sentences are the *slower* ones. When a
+  script runs long, **joining sentences** buys back time that cutting words
+  does not. This is the opposite of how the old guidance read.
+- **The safe 30-second script is now ~80 words in ~8 sentences**, which is
+  measured. The 10 / 15 / 20-second rows apply the same formula with the same
+  headroom and have **not** been run at those lengths.
+
+**Why the old number survived this long, and it is worth knowing:** it was
+never measured. It was a 20-second clip's overall rate (3.05 w/s) multiplied
+by 1.5. The two runs' overall rates (3.05 and 2.84) look like a contradiction
+and are not — they are scripts with different sentence densities, and only the
+second run separated speech from silence and could say so.
+
+**What improved:**
+
+- **The voiceover shape is no longer unrun.** It was "gallery practice only,
+  never run here" — the last shape in this file with nothing behind it. The
+  clip has no person in any frame, a slow continuous push with no cut, no
+  invented lettering anywhere, and its ending holds on its final subject
+  (frames at 22s and 29.5s are nearly identical). One run, English, 480p.
+- Both shapes this skill offers now have a paid run at a duration the file
+  leads with, so the risk in a first clip has moved from the **format** to the
+  **script**.
+
+**Still unmeasured, and the file says so:** the 0.7s boundary cost comes from
+one script's 7 boundaries — the most load-bearing number here and the least
+replicated. Non-English scripts, other resolutions and durations past 30
+seconds remain untested, and the CJK character rates are still gallery-derived.
+
 ## 1.1.2 — the troubleshooting table still stated the old absolute
 
 **Documentation only. No default, price, prompt template or behaviour

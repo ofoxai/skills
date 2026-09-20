@@ -8,6 +8,13 @@
 # caller sources it into this script's environment first. The raw key is never
 # printed by this script.
 #
+# The key only ever goes to one host: whatever API_BASE names. Every request
+# here is built from API_BASE and no URL out of a response body is ever
+# fetched, so the only way to move it is OFOX_API_BASE_URL — still supported
+# (staging), but since 1.14.0 it must be https (loopback excepted) and the
+# override is announced on stderr, naming the host that will receive the key.
+# Covered by references/test/keyguard.test.sh.
+#
 # Unlike the Ofox video API, image generation is SYNCHRONOUS — there is no
 # job id and no polling. One request either returns the image(s) in the
 # response body, or fails. That also means there is no free "poll to check
@@ -101,15 +108,23 @@
 #                          that Gemini rejects the n field outright.
 #   --output-format VAL  optional. One of: png jpeg webp
 #   --background VAL     optional. One of: transparent opaque auto
-#   --extra-json JSON    optional, merged into the request body as-is
-#                          (escape hatch for fields not exposed as a flag,
-#                          e.g. extra_body.provider.type — gpt-image-2 only).
-#                          Rejected if it sets "input_images" (image-to-image
-#                          is out of scope for this script — see below) or
-#                          "stream": true (this script only parses a plain
-#                          JSON response body, not a streamed one), or if it
-#                          sets "n" while --model is
-#                          google/gemini-3.1-flash-image.
+#   --extra-json JSON    optional. A JSON OBJECT merged into the request body:
+#                          the escape hatch for fields with no flag of their
+#                          own, e.g. extra_body.provider.type (gpt-image-2
+#                          only). Rejected if it is empty (an explicit ""
+#                          used to be indistinguishable from omitting the
+#                          flag, which skipped every check below AND the
+#                          merge, and billed the request anyway), if it is not
+#                          an object (it is merged with jq's `*`, which only
+#                          works between objects), if it sets a field that has
+#                          a flag — model, prompt, quality, size, n,
+#                          output_format, background, which are validated and
+#                          priced from the flags while this merge happens
+#                          after the estimate — or if it sets "input_images"
+#                          (image-to-image is out of scope for this script —
+#                          see below) or "stream": true (this script only
+#                          parses a plain JSON response body, not a streamed
+#                          one).
 #   --out-dir DIR        optional, default: current directory.
 #   --out-name NAME      optional base filename (no extension, no path
 #                          separators). Default: ofox_image_<timestamp>_<pid>.
@@ -147,12 +162,15 @@
 #   --size VAL           optional, same enum as generate, validated for typos
 #                          only. Whether this endpoint honours it is UNTESTED
 #                          (see --quality: finding out costs a real edit). All
-#                          three measured runs passed no --size and got back a
+#                          four measured runs passed no --size and got back a
 #                          size in no enum, matching the INPUT's aspect ratio
-#                          at a near-constant ~1.57 MP: 1672x941 from both a
-#                          854x480 and a 320x180 input, 1254x1254 from a
-#                          256x256 one. 1672x941 is 1.777, i.e. the 16:9 that
-#                          generate's size enum cannot express at all.
+#                          at a near-constant ~1.57 MP: 1672x941 from a
+#                          854x480, a 320x180 and a 1792x1008 input, 1254x1254
+#                          from a 256x256 one. 1672x941 is 1.777, i.e. the 16:9
+#                          that generate's size enum cannot express at all. The
+#                          1792x1008 run is the one showing this is a BUDGET
+#                          and not an upsample floor: its input is larger than
+#                          the output and the output did not grow.
 #   --n N                optional, integer 1-10. Multiplies the spend; and
 #                          because this endpoint validates so little, a value
 #                          it does not like is more likely to render than to
@@ -164,11 +182,29 @@
 #                          loudly. Same reason as generate — an attached
 #                          frame's ratio becomes the finished video's ratio.
 #   --extra-form K=V     optional, repeatable. Escape hatch for a multipart
-#                          field with no flag. This endpoint is multipart, so
+#                          field with no flag — and only for those. A KEY this
+#                          script already sets from a flag (image, image_url,
+#                          model, prompt, quality, size, n, output_format,
+#                          background) is refused, because a second part with
+#                          the same name skips that flag's validation and is
+#                          added AFTER the estimate is computed: `--extra-form
+#                          "n=10"` used to quote one image and request ten.
+#                          Use the flag. This endpoint is multipart, so
 #                          there is no --extra-json equivalent: a JSON body is
 #                          rejected outright (measured — an application/json
 #                          body with model set came back "You must provide a
 #                          model parameter", i.e. the field was never seen).
+#                          The VALUE may not start with '@' or '<': curl reads
+#                          those as filesystem instructions ('@path' uploads
+#                          that file, '<path' sends its contents as the field
+#                          value), which made this flag a way to upload any
+#                          file the user can read. Refused since 1.14.0; every
+#                          ordinary key=value pair is unaffected, and the
+#                          script's own -F "image=@PATH" comes from --image,
+#                          not from here. Every OTHER field this script sets
+#                          goes through curl's --form-string, which has no
+#                          such prefixes — so a --prompt that opens with '@'
+#                          is a prompt, not a file read.
 #   --dry-run            validate everything, resolve the model, assemble and
 #                          print the multipart field list, quote a cost — then
 #                          stop. No request, no key needed, nothing billed.
@@ -182,8 +218,15 @@
 #     /v1/images/generations, which stays unexposed.
 #   - Masked / inpainting edits. The endpoint may or may not accept a 'mask'
 #     field; nothing here establishes that it does, and finding out costs a
-#     billed edit per attempt. Pass one via --extra-form if you want to try,
-#     and record what happens.
+#     billed edit per attempt.
+#     WHAT 1.14.0 NARROWED, stated rather than left to be discovered: until
+#     then the suggestion here was to attach one with
+#     --extra-form "mask=@FILE". That spelling is now refused along with
+#     every other '@'/'<' value, because the same spelling uploads any file
+#     the user can read. A mask therefore cannot be attached through this
+#     script today. Establishing masked edits needs its own flag, with its
+#     own path validation, not a general file-upload hole left open for the
+#     one field that might want it.
 #
 # Exit codes:
 #   0  success — image(s) decoded and saved, usage token counts printed.
@@ -210,7 +253,12 @@
 
 set -u
 
-API_BASE="${OFOX_API_BASE_URL:-https://api.ofox.ai/v1}"
+DEFAULT_API_BASE="https://api.ofox.ai/v1"
+# Overridable on purpose (pointing a run at a staging deployment is a real
+# need), but never silently: validate_api_base() below refuses a plaintext
+# non-loopback host and announces the override on stderr, because this
+# variable decides which host receives OFOX_API_KEY.
+API_BASE="${OFOX_API_BASE_URL:-$DEFAULT_API_BASE}"
 GET_KEY_URL="https://app.ofox.ai"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -385,6 +433,111 @@ list_contains() {
     [ "$item" = "$needle" ] && return 0
   done
   return 1
+}
+
+# ---------------------------------------------------------------------------
+# where OFOX_API_KEY is allowed to go
+#
+# This script makes exactly three network calls — the public keyless model
+# list, POST /images/generations and POST /images/edits — and every one of
+# them is built from API_BASE. No URL from a response body is ever fetched,
+# so the sibling ofox-video.sh's polling_url problem has no counterpart here.
+# What both scripts do share is OFOX_API_BASE_URL: it points the client, and
+# the Authorization header with it, at whatever host it names. That stays (a
+# staging deployment is the obvious legitimate use) but is narrowed to https
+# — loopback excepted, for a local test server — and is announced on stderr
+# naming the host that is about to receive the key.
+#
+# Duplicated in ofox-video-core/references/ofox-video.sh on purpose: each
+# skill has to work when installed on its own, so a file shared across skill
+# directories is not an option (CONTRIBUTING rule 7). Fix both.
+# ---------------------------------------------------------------------------
+
+url_origin() {
+  # $1 = a URL. Prints "scheme://host:port" lowercased, with the scheme's
+  # default port made explicit so https://api.ofox.ai and
+  # https://api.ofox.ai:443 compare equal. Returns 1 for anything that is not
+  # an http(s) URL.
+  local url="$1" scheme rest authority host port
+  case "$url" in
+    [Hh][Tt][Tt][Pp]://*|[Hh][Tt][Tt][Pp][Ss]://*) : ;;
+    *) return 1 ;;
+  esac
+  scheme="$(printf '%s' "${url%%://*}" | tr '[:upper:]' '[:lower:]')"
+  rest="${url#*://}"
+  authority="${rest%%/*}"
+  authority="${authority%%\?*}"
+  authority="${authority%%#*}"
+  # Keep only what follows the last '@': the userinfo of
+  # "https://api.ofox.ai@evil.example/v1" is not the host, and the host is
+  # what receives the request.
+  authority="${authority##*@}"
+  case "$authority" in
+    \[*\]*)
+      host="${authority%%\]*}]"
+      port="${authority#*\]}"
+      port="${port#:}"
+      ;;
+    *:*)
+      host="${authority%%:*}"
+      port="${authority#*:}"
+      ;;
+    *)
+      host="$authority"
+      port=""
+      ;;
+  esac
+  [ -n "$host" ] || return 1
+  if [ -z "$port" ]; then
+    case "$scheme" in
+      http) port=80 ;;
+      https) port=443 ;;
+    esac
+  fi
+  case "$port" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s://%s:%s' "$scheme" "$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')" "$port"
+}
+
+url_host() {
+  # $1 = a URL. Prints just the host, for messages that have to name it.
+  local origin="$1"
+  origin="$(url_origin "$origin")" || return 1
+  origin="${origin#*://}"
+  printf '%s' "${origin%:*}"
+}
+
+is_loopback_host() {
+  case "$1" in
+    localhost|127.*|\[::1\]|::1) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_api_base() {
+  # Runs once per invocation, before anything can use API_BASE. The default
+  # is fine by construction, so this is entirely about the override.
+  local override="${OFOX_API_BASE_URL:-}" origin host
+  [ -n "$override" ] || return 0
+
+  if ! origin="$(url_origin "$override")"; then
+    echo "ERROR: OFOX_API_BASE_URL is set to '$override', which is not an http:// or https:// URL." >&2
+    echo "Unset it to use $DEFAULT_API_BASE, or set it to a full base URL such as https://staging.example.com/v1." >&2
+    return 2
+  fi
+  host="$(url_host "$override")"
+  case "$origin" in
+    https://*) : ;;
+    *)
+      if ! is_loopback_host "$host"; then
+        echo "ERROR: OFOX_API_BASE_URL is set to '$override', which is not https://." >&2
+        echo "OFOX_API_KEY travels in an Authorization header on every request this script makes, so a plaintext base URL would put your key on the wire in clear text." >&2
+        echo "Use an https:// URL, or a loopback host (localhost, 127.0.0.1, [::1]) for a local test server." >&2
+        return 2
+      fi
+      ;;
+  esac
+  echo "NOTE: OFOX_API_BASE_URL is set, so this run talks to host '$host' ($override) instead of $DEFAULT_API_BASE — including any request that carries your OFOX_API_KEY in an Authorization header. Unset OFOX_API_BASE_URL to go back to Ofox." >&2
+  return 0
 }
 
 decode_b64_to_file() {
@@ -1083,6 +1236,15 @@ print_estimate() {
     if [ -n "$pair_known" ] && [ "$m_q" = "$req_q" ] && [ "$m_size" = "$req_size" ]; then
       exact="$m_tokens|$m_q|$m_size|$m_date"
     fi
+    # Ranking on output tokens is CORRECT here, unlike on the edit path.
+    # Audited 2026-09-17 when the edit selector was fixed: a generation's cost
+    # is tokens * rate — ONE term, with a rate that is constant per model — so
+    # "most output tokens" and "dearest" are the same ordering by
+    # construction. An edit adds a second term for the uploaded image, which
+    # dominates at large input sizes, and that is what made the same key wrong
+    # over there. If a per-point rate is ever introduced here, this stops being
+    # safe and must move to comparing computed cost, as print_edit_estimate
+    # now does.
     if [ "$m_tokens" -gt "$best_tokens" ]; then
       best_tokens="$m_tokens"
       best="$m_tokens|$m_q|$m_size|$m_date"
@@ -1216,21 +1378,45 @@ print_edit_estimate() {
   # approved for a 15.4-cent frame.
   local model="$1" count="${2:-1}" req_q="${3:-}" in_size="${4:-}"
   local rate rate_img per_image total tail
-  local best="" best_tokens=-1 points=0 exact="" bound=""
-  local m_out m_in m_insize m_q m_date measurements
+  local best="" best_tokens=-1 best_cost=-1 points=0 exact="" bound=""
+  local m_out m_in m_insize m_q m_date m_cost measurements
   local a_out a_in a_insize a_q a_date
 
   load_models >/dev/null 2>&1 || true
   rate="$(output_image_rate "$model")" || rate=""
   measurements="$(edit_anchor_measurements "$model")" || measurements=""
 
+  # Resolved BEFORE the loop on purpose: the dearest point has to be chosen on
+  # the money, and the money needs the input-token rate as well as the output
+  # one. This used to sit below the loop, which is why the loop could only
+  # compare output tokens.
+  rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '.pricing.image // empty' 2>/dev/null)" || rate_img=""
+  [ -n "$rate_img" ] || rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '(.pricing.input // .pricing.prompt) // empty' 2>/dev/null)" || rate_img=""
+  [ -n "$rate_img" ] || rate_img=0
+
   # Same shape as print_estimate: quote the point measured at this request's
   # own conditions when one exists, otherwise the DEAREST point, never an
   # interpolation between them. The condition that matters differs though.
   # For a generation it is (quality, size); for an edit the two measured
   # points have identical output size, quality and model and still differ 2.3x
-  # in output tokens, while tracking the INPUT image closely — so the input's
-  # size is what a point is matched on here.
+  # in output tokens, while the INPUT image is what the bill tracks — so the
+  # input's size is what a point is matched on here.
+  #
+  # "DEAREST" IS MEASURED IN MONEY, NOT IN OUTPUT TOKENS, and that is a fix
+  # rather than a preference. Through 1.13.0 this loop kept the point with the
+  # highest output_tokens. The four measured points run 129 / 229 / 301 / 129
+  # output tokens ordered by input size, and 0.006054 / 0.009182 / 0.013894 /
+  # 0.016438 in real cost — so the genuinely dearest point (1792x1008) has the
+  # EQUAL-LOWEST output count and the old key skipped straight past it. Any
+  # input without an exact match was handed 0.013894 as an "upper bound" over
+  # a point known to bill 0.016438. On an edit the uploaded picture is most of
+  # the bill at large sizes (1508 image tokens = 74% of that run), so output
+  # tokens are the smaller half and ranking on them ranks on the wrong thing.
+  # A bound that is not the largest known value is not a bound.
+  #
+  # With no published rate there is no money to compare, so the old
+  # output-token ordering stays as the fallback — that path cannot print a
+  # figure anyway and only names the point's token counts.
   while IFS="$(printf '\t')" read -r m_out m_in m_insize m_q m_date; do
     [ -n "${m_out:-}" ] || continue
     case "$m_out" in '' | *[!0-9]*) continue ;; esac
@@ -1238,7 +1424,14 @@ print_edit_estimate() {
     if [ -n "$in_size" ] && [ "$m_insize" = "$in_size" ]; then
       exact="$m_out|$m_in|$m_insize|$m_q|$m_date"
     fi
-    if [ "$m_out" -gt "$best_tokens" ]; then
+    if [ -n "$rate" ]; then
+      m_cost="$(awk -v o="$m_out" -v i="$m_in" -v r="$rate" -v ri="$rate_img" \
+        'BEGIN { printf "%.10f", o * r + i * ri }')"
+      if awk -v a="$m_cost" -v b="$best_cost" 'BEGIN { exit !(a > b) }'; then
+        best_cost="$m_cost"
+        best="$m_out|$m_in|$m_insize|$m_q|$m_date"
+      fi
+    elif [ "$m_out" -gt "$best_tokens" ]; then
       best_tokens="$m_out"
       best="$m_out|$m_in|$m_insize|$m_q|$m_date"
     fi
@@ -1273,9 +1466,7 @@ EOF
     echo "Estimated cost: cannot be predicted — no published output_image rate for '$model' (offline, or the model is missing from the list). Its measured edit spent $a_out output tokens and $a_in input tokens (input image $a_insize, --quality $a_q); the rate to multiply them by is what's missing." >&2
     return 0
   fi
-  rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '.pricing.image // empty' 2>/dev/null)" || rate_img=""
-  [ -n "$rate_img" ] || rate_img="$(printf '%s' "$(model_entry "$model")" | jq -er '(.pricing.input // .pricing.prompt) // empty' 2>/dev/null)" || rate_img=""
-  [ -n "$rate_img" ] || rate_img=0
+  # rate_img was resolved before the selection loop — see the note there.
 
   per_image="$(awk -v o="$a_out" -v i="$a_in" -v r="$rate" -v ri="$rate_img" \
     'BEGIN { printf "%.4f", o * r + i * ri }')"
@@ -1304,12 +1495,12 @@ EOF
   # request's own input is a different size from the measured one.
   if [ -n "$bound" ]; then
     if [ -n "$in_size" ]; then
-      echo "  UPPER BOUND because nothing has been measured on a $in_size input for '$model'; this is the dearest of $points measured point(s), quoted as a ceiling so the figure errs high rather than low. An edit bills the uploaded picture as input tokens, and the points on record move with it but NOT in proportion to it — 240 image tokens for a 320x180 input, 256 for 256x256, 576 for 854x480, which is 6.3x the pixels of the last for 2.25x the tokens. That is exactly why nothing is interpolated between them; see references/token-anchors.json's edit_anchors." >&2
+      echo "  UPPER BOUND because nothing has been measured on a $in_size input for '$model'; this is the dearest of $points measured point(s), quoted as a ceiling so the figure errs high rather than low. An edit bills the uploaded picture as input tokens, and the points on record move with it but NOT in proportion to it — 240 image tokens for a 320x180 input, 256 for 256x256, 576 for 854x480 and 1508 for 1792x1008; 854x480 has 6.3x the pixels of 256x256 for 2.25x the tokens, and 1792x1008 has 4.4x the pixels of 854x480 for 2.6x the tokens. That input term is most of the bill at large sizes (1508 tokens = 74% of the 1792x1008 run), which is why the dearest point is chosen on computed cost rather than on output tokens — those run 129/229/301/129 across the four points and do not track the input at all. Nothing is interpolated between them; see references/token-anchors.json's edit_anchors." >&2
     else
       echo "  UPPER BOUND because the input image could not be measured (ffprobe missing, or --image-url was used), so no measured point can be matched to it. This is the dearest of $points measured point(s). Nothing is interpolated; see references/token-anchors.json's edit_anchors." >&2
     fi
   else
-    echo "  Measured on an input image of exactly this size, which is the condition that matters most on this endpoint: two of the points on record share a model, a quality and an identical 1672x941 output and still differ 2.3x in output tokens, tracking the input rather than the output. The token count is still only exact after the fact." >&2
+    echo "  Measured on an input image of exactly this size, which is the condition that matters most on this endpoint: two of the points on record share a model, a quality and an identical 1672x941 output and still differ 2.3x in output tokens. What the bill tracks is the uploaded image, not the delivered one. The token count is still only exact after the fact." >&2
   fi
   if [ "$points" -le 1 ]; then
     echo "  Single sample: '$model' has been measured on exactly one edit, so this is not a ceiling anyone has tested — on the generations endpoint the same model's measured points sit 26x apart across two flags. Measure more pairs and add them to references/token-anchors.json rather than leaning on this line." >&2
@@ -1617,6 +1808,13 @@ cmd_generate() {
   local output_format=""
   local background=""
   local extra_json=""
+  # Whether --extra-json was written on the command line at all. bash cannot
+  # tell "flag omitted" from "flag given an empty value" by looking at the
+  # value, and treating the two as one is a fail-open: an empty value from a
+  # command substitution that died (jq over ARG_MAX is the measured case on
+  # the sibling video script) skipped every check below AND the merge, and
+  # the request went out and billed without the fields the caller meant.
+  local extra_json_seen=""
   local out_dir="$PWD"
   local out_name=""
   local dry_run=""
@@ -1653,7 +1851,7 @@ cmd_generate() {
       --n) n="$val" ;;
       --output-format) output_format="$val" ;;
       --background) background="$val" ;;
-      --extra-json) extra_json="$val" ;;
+      --extra-json) extra_json="$val"; extra_json_seen=1 ;;
       --out-dir) out_dir="$val" ;;
       --out-name) out_name="$val" ;;
       --target-aspect) target_aspect="$val" ;;
@@ -1857,9 +2055,46 @@ cmd_generate() {
     esac
   fi
 
+  # An explicitly empty --extra-json is an error; omitting the flag behaves
+  # byte-for-byte as it always did. The asymmetry is the point — no existing
+  # caller that leaves the flag off is affected, and the one shape that used
+  # to be dropped in silence now stops the run before anything is billed.
+  if [ -n "$extra_json_seen" ] && [ -z "$extra_json" ]; then
+    echo "ERROR: --extra-json was given an empty value." >&2
+    echo "This usually means a command substitution produced nothing. Before 1.14.0 that empty string was treated as 'flag not passed': no JSON check, nothing merged, and the request sent and billed without your extra fields." >&2
+    echo "Build the JSON into a variable, check it with 'jq -e .', then pass it — or drop the flag if you meant to send nothing." >&2
+    return 1
+  fi
+
   if [ -n "$extra_json" ]; then
-    if ! printf '%s' "$extra_json" | jq -e . >/dev/null 2>&1; then
+    # `jq empty`, not `jq -e .`: -e keys its exit status on the OUTPUT value,
+    # so a perfectly valid `null` or `false` was reported as "not valid
+    # JSON". Both are still refused — by the object check below, which says
+    # what is actually wrong with them.
+    if ! printf '%s' "$extra_json" | jq empty >/dev/null 2>&1; then
       echo "ERROR: --extra-json is not valid JSON." >&2
+      return 1
+    fi
+    # It is merged with jq's `*`, which is only defined between objects. A
+    # valid-but-not-object value made the merge fail, the command
+    # substitution yield an empty payload, and the request go out empty.
+    if ! printf '%s' "$extra_json" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      echo "ERROR: --extra-json must be a JSON object (it is merged into the request body), got $(printf '%s' "$extra_json" | jq -r 'type')." >&2
+      return 1
+    fi
+    # Merged last, so its keys win over the flags — including over the model,
+    # size and n that the estimate was just computed from. A field this
+    # script owns through a flag is therefore refused here, exactly as the
+    # edit path already refuses one through --extra-form. Everything without
+    # a flag (extra_body.provider.type, the documented case) still passes.
+    local clash
+    clash=$(printf '%s' "$extra_json" | jq -r '
+      ["model","prompt","quality","size","n","output_format","background"] as $guarded
+      | [ keys_unsorted[] | select(. as $k | $guarded | index($k)) ] | join(", ")')
+    if [ -n "$clash" ]; then
+      echo "ERROR: --extra-json sets $clash, which this script validates and prices from its own flag(s). Use the flag instead: --model, --prompt, --quality, --size, --n, --output-format, --background." >&2
+      echo "A key merged through --extra-json wins over the flags and is applied AFTER the cost estimate is computed, so this would send a request that does not match the price anyone approved." >&2
+      echo "Fields with no flag are unaffected — extra_body.provider.type still passes through here." >&2
       return 1
     fi
     if printf '%s' "$extra_json" | jq -e 'has("input_images")' >/dev/null 2>&1; then
@@ -1870,10 +2105,12 @@ cmd_generate() {
       echo "ERROR: --extra-json sets 'stream: true' — this script only parses a plain JSON response body, not a streamed one. Omit stream or leave it false." >&2
       return 1
     fi
-    if [ "$model" = "$NO_N_MODEL" ] && printf '%s' "$extra_json" | jq -e 'has("n")' >/dev/null 2>&1; then
-      echo "ERROR: --extra-json sets 'n' while --model is $NO_N_MODEL, which does not support n at all. Remove it from --extra-json." >&2
-      return 1
-    fi
+    # There used to be a narrower rule here, rejecting an `n` key only when
+    # the resolved model was $NO_N_MODEL. The clash rule above now refuses
+    # `n` for every model — `n` has a flag — so that branch could never run
+    # again and was removed rather than left as a check nobody can make fire.
+    # Passing n through --n is still refused for $NO_N_MODEL specifically,
+    # above, where that message lives.
   fi
 
   # --out-dir is resolved (created if needed) and validated BEFORE the
@@ -1906,7 +2143,22 @@ cmd_generate() {
   [ -n "$background" ] && payload=$(printf '%s' "$payload" | jq --arg v "$background" '.background=$v')
 
   if [ -n "$extra_json" ]; then
-    payload=$(printf '%s' "$payload" | jq --argjson extra "$extra_json" '. * $extra')
+    # Through a temp file and --slurpfile, not --argjson: a command-line
+    # value is bound by ARG_MAX, and --extra-json is exactly where a caller
+    # might embed something large. Same fix the video script's frame_images
+    # build already carries.
+    local tmp_extra merged
+    tmp_extra=$(mktemp)
+    printf '%s' "$extra_json" >"$tmp_extra"
+    merged=$(printf '%s' "$payload" | jq --slurpfile extra "$tmp_extra" '. * $extra[0]')
+    rm -f "$tmp_extra"
+    # A failed merge leaves the command substitution empty, which without
+    # this would POST an empty body to a billable endpoint.
+    if [ -z "$merged" ]; then
+      echo "ERROR: merging --extra-json into the request body failed, so nothing was submitted and nothing was billed." >&2
+      return 1
+    fi
+    payload="$merged"
   fi
 
   # Say what this will cost before spending anything. The quality and size
@@ -2400,9 +2652,46 @@ cmd_edit() {
         return 1
         ;;
     esac
+    # Every field this function adds to the form from a flag. The list used to
+    # be image/image_url/model/prompt while the builder below also set
+    # quality, size, n, output_format and background — the guard and the
+    # builder had drifted, and the comment on --extra-json above claimed the
+    # two hatches were symmetric, which made the gap read as covered.
+    # A duplicate part is not a harmless
+    # duplicate: the server picks one of the two (which one is not this
+    # script's to decide), the value that arrived here skipped the flag's
+    # validation — `quality` is checked per-model, and the union-table defect
+    # this repo already has a gotcha for lives on that path — and it is added
+    # to the form AFTER print_edit_estimate has been computed from the flags.
+    # `n` is the sharp one: it multiplies the bill directly, so
+    # `--extra-form "n=10"` quoted one image, printed `N 1`, and asked for
+    # ten. That is the never-under-quote rule broken through the escape
+    # hatch, which is the same shape --extra-json is refused for in
+    # cmd_generate above. Keep the two lists in step with what each path
+    # actually sends.
     case "${form_item%%=*}" in
-      ''|image|image_url|model|prompt)
-        echo "ERROR: --extra-form '${form_item%%=*}' collides with a field this script sets from a flag. Use the flag." >&2
+      ''|image|image_url|model|prompt|quality|size|n|output_format|background)
+        echo "ERROR: --extra-form '${form_item%%=*}' collides with a field this script sets from a flag. Use the flag: --model, --prompt, --quality, --size, --n, --output-format, --background, --image/--image-url." >&2
+        echo "A second multipart part with the same name skips that flag's validation and is added after the cost estimate is computed, so this would send a request that does not match the price anyone approved — '--extra-form \"n=10\"' quoted one image and asked for ten." >&2
+        return 1
+        ;;
+    esac
+    # curl's -F reads two prefixes on a VALUE as filesystem instructions:
+    # '@path' uploads that file, '<path' reads the file and sends its
+    # contents as the field value. Passed straight through, --extra-form was
+    # therefore a way to make this script upload any file the user can read
+    # (`--extra-form "mask=@$HOME/.ssh/id_rsa"`) to whatever API_BASE points
+    # at. The field itself stays available; only the two curl prefixes are
+    # refused, so every ordinary key=value pair is untouched.
+    #
+    # The script's own -F "image=@$image" / -F "image_url=<$url_file" are
+    # built from --image / --image-url, which are validated paths this
+    # function chose. They do not come through here.
+    case "${form_item#*=}" in
+      @*|\<*)
+        echo "ERROR: --extra-form '${form_item%%=*}' has a value starting with '$(printf '%s' "${form_item#*=}" | cut -c1)', which curl reads as a filesystem instruction: '@path' uploads that file and '<path' sends that file's contents as the field value." >&2
+        echo "This script will not use --extra-form to read local files — it is an escape hatch for extra FIELDS, not a file picker. To send an image, use --image (upload) or --image-url." >&2
+        echo "If the value is genuinely meant to start with that character, there is no way to send it through this flag today; say what you need it for rather than working around this." >&2
         return 1
         ;;
     esac
@@ -2444,14 +2733,14 @@ cmd_edit() {
     if ! check_image_tools; then return 2; fi
     # No size is picked for the caller here, unlike generate. On generate the
     # requested --size decides the delivered pixels, so choosing it well is
-    # what makes a target reachable. On edits all three measured runs passed no
+    # what makes a target reachable. On edits all four measured runs passed no
     # --size and got back a size in no enum, matching the INPUT's ratio at a
-    # near-constant ~1.57 MP (1672x941 from two 16:9 inputs, 1254x1254 from a
+    # near-constant ~1.57 MP (1672x941 from three 16:9 inputs, 1254x1254 from a
     # 1:1 one). Whether --size is even honoured here is untested, so picking
     # one on the caller's behalf would be acting on a guess. The crop still
     # happens; it just works from whatever comes back.
     echo "NOTE: the delivered file will be measured and centre-cropped to $target_label." >&2
-    echo "  No --size is chosen for you on this endpoint: the three measured edits each returned a size matching the INPUT image's aspect ratio at a near-constant ~1.57 megapixels (854x480 and 320x180 both gave 1672x941; 256x256 gave 1254x1254), and whether --size is honoured here has not been established. So the delivered ratio follows your input, not your target — the crop works from the real file either way, and will fail loudly rather than hand back the wrong ratio if your input's shape cannot cover $target_label." >&2
+    echo "  No --size is chosen for you on this endpoint: the four measured edits each returned a size matching the INPUT image's aspect ratio at a near-constant ~1.57 megapixels (854x480, 320x180 and 1792x1008 all gave 1672x941; 256x256 gave 1254x1254), and whether --size is honoured here has not been established. So the delivered ratio follows your input, not your target — the crop works from the real file either way, and will fail loudly rather than hand back the wrong ratio if your input's shape cannot cover $target_label." >&2
   fi
 
   # --out-dir before the network call, same as generate.
@@ -2478,6 +2767,20 @@ cmd_edit() {
   # URI of any real photo runs past this machine's ARG_MAX (1,048,576 bytes)
   # and dies with "Argument list too long" before a single byte is sent — the
   # exact failure ofox-video.sh's frame_images build already had to fix.
+  #
+  # Which is also why every field whose value this script sets LITERALLY uses
+  # `--form-string`, not `-F`. Those two prefixes are not opt-in: curl applies
+  # them to any -F value, including one that arrived as free text. `--prompt`
+  # is free text, and a prompt may legitimately open with '@' ("@golden hour,
+  # ...") or '<'. Measured 2026-09-18 against a local listener, curl 8.7.1:
+  # `-F "prompt=@secret.txt"` sent that file's contents as the prompt field,
+  # with `filename="secret.txt"` in the part header; pointed at a file that
+  # does not exist it aborts with exit 26 before connecting. `--form-string`
+  # takes the value verbatim, whatever it starts with.
+  #
+  # `--extra-form` keeps plain `-F` on purpose: its values are screened above,
+  # and moving it to --form-string would make that screen unfalsifiable while
+  # quietly re-opening the '@path' spelling this version refuses (ADR D1).
   local -a form=()
   local url_file=""
   if [ -n "$image" ]; then
@@ -2491,13 +2794,13 @@ cmd_edit() {
     printf '%s' "$image_url" >"$url_file"
     form+=(-F "image_url=<$url_file")
   fi
-  form+=(-F "model=$model")
-  form+=(-F "prompt=$prompt")
-  [ -n "$quality" ] && form+=(-F "quality=$quality")
-  [ -n "$size" ] && form+=(-F "size=$size")
-  [ -n "$n" ] && form+=(-F "n=$n")
-  [ -n "$output_format" ] && form+=(-F "output_format=$output_format")
-  [ -n "$background" ] && form+=(-F "background=$background")
+  form+=(--form-string "model=$model")
+  form+=(--form-string "prompt=$prompt")
+  [ -n "$quality" ] && form+=(--form-string "quality=$quality")
+  [ -n "$size" ] && form+=(--form-string "size=$size")
+  [ -n "$n" ] && form+=(--form-string "n=$n")
+  [ -n "$output_format" ] && form+=(--form-string "output_format=$output_format")
+  [ -n "$background" ] && form+=(--form-string "background=$background")
   for form_item in ${extra_form+"${extra_form[@]}"}; do
     form+=(-F "$form_item")
   done
@@ -2539,7 +2842,7 @@ cmd_edit() {
     local f names=""
     for f in "${form[@]}"; do
       case "$f" in
-        -F) continue ;;
+        -F|--form-string) continue ;;
       esac
       names="$names ${f%%=*}"
     done
@@ -2749,6 +3052,16 @@ cmd_edit() {
 
 main() {
   local mode="${1:-}"
+  # Every subcommand here builds its requests from API_BASE, so the base is
+  # validated (and an override announced) before any of them runs. The list is
+  # written out rather than applied unconditionally so that adding a local,
+  # offline subcommand later is a deliberate decision about this guard too —
+  # the sibling ofox-video.sh has four such commands and they are excluded.
+  case "$mode" in
+    check|models|generate|edit)
+      validate_api_base || return 2
+      ;;
+  esac
   case "$mode" in
     check)
       cmd_check

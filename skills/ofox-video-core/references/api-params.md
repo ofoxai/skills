@@ -22,15 +22,120 @@ Seedance 2.5) before it ever calls the API.
 | `generate_audio` | boolean | no | `--generate-audio true\|false` | Default `true` server-side. |
 | `seed` | integer | no | `--seed` | Ofox documents this as "deterministic generation". **Measured otherwise** — an identical request on a fixed seed returned visibly different clips, and one of three submissions failed outright. See the Seed section below before telling a user a take can be reproduced. |
 | `frame_images` | array | no | `--frame-first-image URL\|PATH`, `--frame-last-image URL\|PATH` | Image-to-video via first/last frame. Accepts a remote URL (used as-is) or a local readable file path (auto base64-encoded into a `data:image/<ext>;base64,...` URI). The script builds the `{type, image_url, frame_type}` objects for you — pass either or both flags. |
-| `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Element types are `image_url`, `audio_url`, `video_url` — see below. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. **An accepted `audio_url` does not become the clip's audio** — see the audio section below before building anything on it. |
+| `input_references` | array | no | via `--extra-json` | ≤9 images, ≤3 audio clips (each ≤15s), ≤1 video. Element types are `image_url`, `audio_url`, `video_url` — see below. Not exposed as its own flag (structure is nested/varied) — pass `{"input_references": [...]}` through `--extra-json`. **Cannot be combined with `frame_images`** — the script rejects this client-side (`references_conflict`) if you try. **An `image_url` reference works and bills at the t2v rate** — measured 2026-09-16, and it is the `r2v` mode the catalog's `modes` list does not name; see the image section below, including an unexplained aspect-ratio observation. **An accepted `audio_url` does not become the clip's audio** — see the audio section below before building anything on it. |
 | `real_person` | boolean | no | `--real-person true\|false` | Default `false`. Routes an **authorized** real-person reference image through Ofox's privacy-preserving preprocessing, which is otherwise refused by the upstream. Ofox documents this for `bytedance/seedance-2.0`, and a single-variable A/B on 2026-09-16 confirmed it lifts the refusal on `bytedance/seedance-2.5` too (byteplus, 480p, 4s, i2v). It is an **authorization mechanism for footage the user has the right to use, not a way past moderation** — see the real-person section below before offering it to anyone. |
 | `callback_url` | string | no | `--callback-url` | Must be `https://` and must not point to a private network. |
 | `provider` | object | no | `--provider SLUG` | Pins the upstream that serves the job. **Defaults to `byteplus` for `bytedance/seedance-*`** — see below. `--provider auto` sends no pin. `provider.options.<slug>` passthrough is not exposed as a flag; use `--extra-json`. |
 
 `--extra-json` is merged into the built request body last (object merge —
 its keys win over anything the flags set), so it's the escape hatch for any
-field not exposed as a dedicated flag. It must be valid JSON; the script
-checks that with `jq` before submitting.
+field not exposed as a dedicated flag. It must be a valid JSON **object**; the
+script checks both with `jq` before submitting.
+
+### What `--extra-json` will not do (1.30.0)
+
+Because it is merged *last* and *wins*, it could rewrite fields the script had
+just validated and priced. Three refusals, all before any request:
+
+| Input | Result |
+|---|---|
+| `--extra-json ""` written explicitly | error, exit 1. Omitting the flag is unchanged. |
+| anything that is not a JSON object (`[…]`, `"s"`, `42`, `null`, `false`) | error, exit 1 — the merge is jq's `*`, which only works between objects |
+| a key that has a flag: `model`, `prompt`, `duration`, `resolution`, `aspect_ratio`, `size`, `generate_audio`, `seed`, `real_person`, `callback_url`, `frame_images`, and `provider.type` | error, exit 1, naming the flag to use instead |
+
+Everything else still passes straight through. `input_references` is the main
+one, and **`provider.options` still works** — only `provider.type` is refused,
+so `{"provider":{"options":{"byteplus":{…}}}}` merges alongside the pinned
+type rather than replacing it.
+
+The third rule is the one with money attached: `--duration 4 --resolution 480p
+--extra-json '{"duration":30,"resolution":"1080p"}'` quoted 44 cents and would
+have submitted a job billing about 7 dollars, because the estimate is printed
+from the flags and the merge happens after it.
+
+### 🚨 An empty `--extra-json` used to be treated as "not passed" — and a big `data:` URI produces one silently
+
+**Measured 2026-09-17, fixed in 1.30.0.** The fix is the first row of the
+table above; everything below is the reproduction, kept because the *cause* is
+still live — `jq` still dies over `ARG_MAX`, it just cannot cost you a job
+silently any more.
+
+The validation was guarded by `if [ -n "$extra_json" ]`. An **empty string was
+therefore indistinguishable from the flag never being passed**: no JSON check,
+no `references_conflict` check, and **nothing merged into the body**. That is
+fine when you meant to pass nothing. The problem is how easily you can mean to
+pass something and hand over an empty string anyway.
+
+The usual way: `--extra-json "$(jq -n --arg u "$REF" …)"` where `$REF` is a
+`data:` URI built from a real photo. `jq` receives that URI **as a
+command-line argument**, so it is bound by `ARG_MAX` (1,048,576 bytes on this
+machine). Above the limit `jq` never executes at all — the shell writes one
+line to stderr, the command substitution yields **empty**, and everything
+downstream proceeds as though you passed no `--extra-json`.
+
+Reproduced end to end with a 1.9 MB PNG (2,515,046-byte data URI):
+
+```
+(eval):10: argument list too long: jq
+PAYLOAD {"model":"bytedance/seedance-2.5","prompt":"x","duration":8,
+         "resolution":"720p","aspect_ratio":"16:9","seed":95234386,
+         "provider":{"type":"byteplus"}}
+STATUS dry_run
+EXIT=0
+```
+
+**There is no `input_references` in that payload.** Exit code `0`. Dropping
+`--dry-run` submitted a fully billed **plain text-to-video job** that the
+caller believed was a reference-to-video job — nothing refused it, nothing
+warned, and the delivered clip simply ignored the reference, which looks
+exactly like the model "not following" the references.
+
+**The one stderr line was the only signal, and it is easy to miss** — it is
+emitted by the shell, not by this script, so it does not carry a script
+prefix and it scrolls past above the normal output. That line is still the
+only warning you get *before* the script sees the empty value; what changed in
+1.30.0 is what happens next:
+
+```
+ERROR: --extra-json was given an empty value.
+...
+EXIT=1
+```
+
+**How to not get caught** (1 and 2 still matter — the script can only refuse
+the job, it cannot make an oversized argument work):
+
+1. **Build the JSON into a variable first, and check it is non-empty and
+   parses**, before it ever reaches the command line.
+2. **Keep the encoded image well under `ARG_MAX`.** Downscaling a reference to
+   a 768 px long edge puts it in the tens of kilobytes; the measured r2v job's
+   two references were 33 KB and 43 KB.
+3. **`--dry-run --print-payload` and look for `input_references` in the
+   payload with your own eyes.** Free, no network call, and it is the only
+   check that actually confirms the field arrived.
+
+```bash
+EXTRA="$(jq -n --arg u "$REF" '{input_references:[{type:"image_url",image_url:{url:$u}}]}')"
+[ -n "$EXTRA" ] && printf '%s' "$EXTRA" | jq -e . >/dev/null \
+  || { echo "extra-json did not build — reference would be dropped silently"; exit 1; }
+```
+
+⚠️ **This does not apply to `--frame-first-image` / `--frame-last-image`.**
+Those are the script's own job: it encodes the file through a temp file and
+`jq --rawfile` / `--slurpfile`, so nothing large ever becomes an argument.
+Verified on the same 1.9 MB PNG — the payload really carries the full
+2,515,046-byte data URI. **The two paths behave in opposite ways at the same
+file size**, which is precisely why the flag path is not evidence about the
+`--extra-json` path.
+
+**Script hardening for the empty-string case landed in 1.30.0** (this section
+previously said it was deliberately not done, on the grounds that something
+might rely on the old behaviour). What made it safe: the script now records
+whether the flag was *written*, so "omitted" and "empty" stop being the same
+input. Omitting `--extra-json` is byte-for-byte unchanged — asserted in
+`references/test/keyguard.test.sh` by comparing the built payload against
+`--extra-json '{}'` — and only the explicitly-empty spelling, which was never
+anything but a failure, is refused.
 
 ## Reference inputs (`input_references`) and video-to-video
 
@@ -58,6 +163,67 @@ A working source, if the input is something this API produced: the
 unauthenticated ranged GET returned `HTTP 206 video/mp4`, and the upstream
 fetched it successfully. Those links are documented as temporary (may expire
 within 24h), so this works for a fresh job, not an archival one.
+
+### An `image_url` reference works — this is `r2v`, and the catalog does not list it
+
+**Measured 2026-09-16.** Until then `input_references` had only ever been sent
+with `audio_url` (twice) and `video_url` (once); the image element type had
+never been tried from this repo, and every model's
+`video_attributes.modes` in the catalog lists `t2v` / `i2v` / `v2v` and
+nothing else. The reference-to-video mode is real and the list is the thing
+that is incomplete — do not read a missing `modes` entry as a missing
+capability. (Do not hand-edit `models-snapshot.json` to "fix" it either; that
+file is regenerated by `refresh-snapshot.sh` from the live catalog, so the
+correction belongs here.)
+
+Two probes, one free and one paid:
+
+1. **A well-formed but unresolvable URL, free** — `HTTP 400`,
+   `error.code: invalid_request`, upstream message `input_references[0]: url
+   must be a public HTTPS URL (or data: URI): cannot resolve hostname: …`. The
+   server parses the element, knows the type, and reaches DNS. It also names
+   `data:` URIs, so **an image reference needs no hosting**, unlike a
+   `video_url`. ⚠️ It still has to fit: see "An empty `--extra-json` is
+   treated as 'not passed'" above — over `ARG_MAX` the reference is dropped
+   silently and the job bills as plain t2v.
+2. **Two real images as `data:` URIs**, job
+   `0f5c8b4e-8813-40d2-a6bd-9e2d030b6d1e`, seed `638796173`,
+   `bytedance/seedance-2.5` on `byteplus`, 4s / 480p, `generate_audio: false`,
+   **billed $0.44**. `image1` was a vacuum flask (brushed steel body, copper
+   knurled cap, a `KELVIN` wordmark), `image2` a hooded jacket (orange
+   shoulder yoke, charcoal body, three orange zip pulls, a triangular sleeve
+   patch). The prompt cast them by position: image1 the foreground flask,
+   image2 the coat behind it.
+
+Read off the delivered frames at 0.1s and 3.5s: every named feature of both
+references is present — the knurled copper cap, the readable `KELVIN`, the
+orange yoke against charcoal, all three zip pulls, the sleeve patch — and
+**image1 rendered as the flask and image2 as the coat, not swapped**. So the
+`image1` / `image2` position tokens are resolved to the attachments in array
+order. That had been flagged as this repo's one unverified point about the
+identity-reference shape (`prompt-structure.md` → "Identity-reference
+example"); it is now a measurement.
+
+Two more things from that job:
+
+- **An image reference bills at the t2v rate** ($0.11/s at 480p): $0.44 for 4
+  seconds, quoted and billed the same. It does **not** move the job to the
+  video-to-video tier the way a `video_url` does (that is the
+  estimated-$0.44 / billed-$0.56 trap recorded above).
+- ⚠️ **An aspect-ratio observation nobody can explain yet, n=1.** Neither
+  that job nor the plain text-to-video job run the same day passed
+  `--aspect-ratio`. The t2v job delivered **854x480, landscape**; this one,
+  carrying two **16:9 landscape** reference images, delivered **480x854,
+  portrait** — matching neither the default nor the references. It is one
+  observation of one job and no mechanism is offered for it here.
+  `frame_images` behaves differently and is well measured (the output follows
+  the attached frame). **Pass `--aspect-ratio` explicitly when you send image
+  references**, rather than finding out afterwards what shape you bought.
+
+What this does not cover: one job, one model, one upstream, 4s/480p, two
+images. Nine images, an image mixed with an audio or video element, another
+model, and whether the ordering rule survives more than two attachments are
+all unmeasured.
 
 ### An `audio_url` reference is accepted, fetched, and does not become the audio
 
@@ -115,6 +281,68 @@ For multi-shot continuity, `chain` is the better tool on every axis that was
 measured: it bills at the t2v rate ($0.11/s vs $0.14/s at 480p), takes a local
 file instead of requiring a hosted URL, and anchors on an actual frame rather
 than a soft reference.
+
+## `mode` is accepted and has no effect — extend and edit cannot be requested here
+
+**Measured 2026-09-16.** The public Seedance gallery contains prompts run in
+an `extend` mode (continue an existing clip past its own length) and an `edit`
+mode (change what is inside footage that already exists). Both are written as
+a `mode` field on the create request. This repo had been saying, from
+inference, that Ofox "does not support" them. The measurement says something
+more precise, and the difference matters to anyone debugging:
+
+> **The `mode` field is accepted and discarded.** Job
+> `4686f434-16b0-451f-8941-970e5b3d4a15` (seed `123884406`,
+> `bytedance/seedance-2.5` on `byteplus`, 4s / 480p,
+> `generate_audio: false`) sent `"mode": "this_is_not_a_real_mode_xyz"` —
+> a value that cannot possibly be implemented anywhere — inside an otherwise
+> ordinary text-to-video request. It returned **HTTP 200**, ran to
+> `completed`, delivered a plain 854x480 / 4.04s t2v clip of a white cup on a
+> table, and **billed $0.44 at the ordinary t2v rate**.
+
+A garbage value cannot be honoured, so a normal completion is proof the field
+was dropped rather than acted on. Whether Ofox never forwards it or the
+upstream ignores an unknown key is invisible from here and makes no
+difference to a caller: **the parameter does nothing.**
+
+How to say this to a user, and how not to:
+
+| ❌ Don't write | ✅ Write |
+|---|---|
+| "Ofox does not support extend / edit" | "Measured 2026-09-16 (job `4686f434`): the `mode` field is accepted but has no effect — an invented mode value returns 200 and bills as ordinary text-to-video. So extend and edit cannot be requested through this API" |
+
+The first version implies an error the caller will go looking for and never
+see. There is no rejection to catch, no error code to map, and nothing in the
+response that differs from an ordinary job.
+
+Three supporting probes, all free (a rejected create is never billed):
+
+| Sent | Result |
+|---|---|
+| `mode: "extend"` with an unresolvable reference URL | `400`, the URL error only — `mode` triggered no validation |
+| `mode: "edit"` with the same unresolvable URL | `400`, byte-identical to the above |
+| `mode: "this_is_not_a_real_mode_xyz"`, same scaffold | `400`, **byte-identical to both real values** — the giveaway that nothing was validating the field |
+
+Those three could not settle it on their own: "no validation error" is also
+what a field forwarded to a stricter upstream would look like, because the URL
+check fires first. Only the paid run above, with a value that could not
+possibly work, separated "accepted" from "honoured". **A `200` is not evidence
+of support when an unrecognised field is dropped rather than rejected** —
+judge the artifact (here: the clip was exactly the requested length, where
+`extend` would have produced source + N seconds).
+
+**`duration: -1` fails differently, and earlier.** The gallery's official
+`edit` case locks the output to the input's length with `duration: -1`. Sent
+here it returns **`HTTP 502` `route_error`** — a different code from every
+probe above, raised *before* any reference URL is fetched. So it breaks
+routing rather than validation; it is not a usable way to ask for
+input-locked duration.
+
+**What to do instead**: extending footage is `chain`, or the frame-out /
+generate / join route that the `video-extend-edit` scenario skill wraps (it
+may not be installed alongside this one — it is a separate skill, not a file
+here). Changing what is inside existing footage has no route through this API
+at all — and that is now a measurement, not a guess.
 
 ## Upstream providers (`provider.type`)
 
@@ -254,7 +482,7 @@ off. Regenerate the snapshot with `bash references/refresh-snapshot.sh`.
 ## Image-to-video example (first frame only)
 
 ```bash
-bash references/ofox-video.sh generate \
+bash references/ofox-video.sh generate --approved \
   --model bytedance/seedance-2.0 \
   --prompt "Make the dog in the frame start running" \
   --duration 5 \
@@ -264,7 +492,7 @@ bash references/ofox-video.sh generate \
 A local file path also works and is preferred when available (see below):
 
 ```bash
-bash references/ofox-video.sh generate \
+bash references/ofox-video.sh generate --approved \
   --prompt "Make the dog in the frame start running" \
   --duration 5 \
   --frame-first-image "/Users/me/photos/dog.jpg"
@@ -299,6 +527,12 @@ cache → live → stale → snapshot ladder, no second hardcoded model list.
 Until 2026-09-14 only the first row existed, so naming any other model with a
 frame attached sent **no `aspect_ratio` field at all** and the frame's shape
 could be quietly lost — a defect you paid for before discovering it.
+
+⚠️ **None of the above is known to apply to `input_references`.** Every row
+here is about `frame_images`. The one job run with image references and no
+`--aspect-ratio` came back portrait from landscape references — see the
+⚠️ under "An `image_url` reference works" — so pass the flag explicitly on
+that path instead of assuming this table covers it.
 
 **The converse is now confirmed too: with no image attached,
 `--aspect-ratio` controls the output ratio exactly.** Verified 2026-09-05 on
@@ -511,7 +745,7 @@ script), and **always** also prints `error.message` when present, labeled
 | 404 | `not_found` | Job id invalid or not accessible with this key. |
 | 404 | `model_not_found` | Model unavailable. |
 | 429 | `rate_limited` | Poll too frequently, or upstream rate limit. |
-| 502 | `upstream_error` / `route_error` | Provider-side failure. |
+| 502 | `upstream_error` / `route_error` | Provider-side failure. `route_error` is also what a `duration: -1` returns (measured 2026-09-16) — raised before any reference URL is fetched, so an out-of-contract value can surface here rather than as a `400`. See "`mode` is accepted and has no effect" above. |
 | 500 | `internal_error` | Platform-side failure. |
 | 400 | `input_moderation_failed` | The **input** image/video was rejected before generation — most often a real person's face. Distinct from `output_moderation_failed` below: this happens at submission, so nothing was generated and nothing was billed. |
 | n/a (seen on a terminal `failed` job, not a create-time HTTP error) | `output_moderation_failed` | The generated **output** failed a post-generation content check — happens *after* the job ran, not at submission, so it cannot be caught by client-side validation. Verified: the response's `usage` field is `null`/absent, so **this job is not billed**. Safe to retry with a brand-new `generate` call using a different prompt/reference — that's a new request, not a resubmission of the failed one. **The check covers the audio track as well as the picture**: job `1ff72400-0f30-4be1-a417-f52d43955d09` (2026-09-04) failed this way on a prompt that asked for a cello note and a bell chime, with `Upstream message: the output audio may be related to copyright restrictions`; dropping the music and keeping only recorded sound effects passed on the next run. See "Asking for music can fail output moderation on copyright" in `prompt-structure.md`. |

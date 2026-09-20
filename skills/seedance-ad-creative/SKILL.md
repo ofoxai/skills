@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "1.13.4"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "1.13.4"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -71,6 +71,12 @@ commands and in the `references/*.md` links alike.
 
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
+
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
 
 ## Before generating: the availability check
 
@@ -809,7 +815,7 @@ An attached image means one of two things, and the API has a field for each
 | Meaning | Flag | What it does | Status in this repo |
 |---|---|---|---|
 | **First frame** — the clip starts on this exact picture | `--frame-first-image PATH` | locks the opening composition (case 15's `Begin with the exact composition of the reference image`); on `bytedance/seedance-2.5` forces `aspect_ratio: adaptive`, so crop or pad the photo to the target ratio first | verified with real runs; this skill's default route |
-| **Identity reference** — the model borrows the product's appearance, no frame is locked | `--extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"…"}}]}'`, up to 9 images | what nearly every gallery prompt with an image does (cases 12, 13, 24): one role line per image, `image1: the product's exact packaging; image2: the logo, last second only` | element shape documented in `api-params.md`; no image-reference job has been run end to end in this repo, and whether `@image1` tokens resolve by position is unverified — the role sentence must read correctly as plain text either way |
+| **Identity reference** — the model borrows the product's appearance, no frame is locked | `--extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"…"}}]}'`, up to 9 images | what nearly every gallery prompt with an image does (cases 12, 13, 24): one role line per image, `image1: the product's exact packaging; image2: the logo, last second only` | element shape documented in `api-params.md`, and **measured end to end on 2026-09-16** (job `0f5c8b4e`, two images, 44 cents, billed at the plain t2v rate): both references' named features came through and the **`image1` / `image2` tokens resolved by position, in array order**. A local file needs no hosting — an image reference accepts a `data:` URI. ⚠️ **A `data:` URI you build into `--extra-json` yourself is bounded by `ARG_MAX`, and over the limit the reference is dropped silently while the job is submitted and billed anyway** — downscale the image, and confirm `input_references` is in a `--dry-run --print-payload` before spending. See `api-params.md` → "An empty `--extra-json` is treated as 'not passed'". Two images is what was run; nine, and mixing image with audio or video elements, are untested. ⚠️ Pass `--aspect-ratio` explicitly here — the measured job passed none and came back portrait from two landscape references |
 
 **The two are mutually exclusive** in one job: the script rejects a request
 that carries both (`references_conflict`). Choose the first-frame route when
@@ -817,11 +823,15 @@ the opening composition matters; choose identity references when several
 product images (front, back, box, logo) should inform the whole clip.
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "Begin with the exact composition of the reference image. Camera slowly orbits 30 degrees around the product, soft rim light, cinematic color grade, no dialogue" \
   --frame-first-image "/path/to/local/product-photo.jpg" \
   --duration 10 --resolution 1080p
 ```
+
+That is a real run, which is why it carries `--approved` — see "Before you
+spend". To see what it would cost without sending it, run the same line with
+`--dry-run` in place of `--approved`.
 
 **Do not pass `--aspect-ratio` on this route.** With an image attached,
 `ofox-video-core` forces `aspect_ratio` to `adaptive` on
@@ -1075,9 +1085,19 @@ bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
 ```
 
 Relay the `Estimated cost:` line it prints — never a number of your own — then
-wait for a yes, then re-run the identical command with `--dry-run` removed.
-The estimate a *real* run prints comes microseconds before the request goes
-out, too late to relay; that is what `--dry-run` is for.
+wait for a yes, then re-run the identical command with `--dry-run` swapped for
+`--approved`. The estimate a *real* run prints comes microseconds before the
+request goes out, too late to relay; that is what `--dry-run` is for.
+
+`--approved` is where that yes gets typed out. Since `ofox-video-core` 2.0.0
+the four billable subcommands — `generate`, `create`, `batch`, `chain` —
+refuse to run without it, while `--dry-run` never needs it, so the quote above
+is still free and still works with no API key. Be exact about what the flag
+does: it records a stance, it cannot prove one. Nothing in a shell script can
+observe the conversation you had, and it can be typed without showing anyone a
+price. What it changes is that spending without quoting is no longer the
+default — it has to be written into the command, where a transcript shows it.
+The rule above is still the rule, and it is still yours to follow.
 
 The brief recap (see the creative brief section) goes in the **same
 message** as the prompt and the table, above them — the user approves the
@@ -1186,13 +1206,20 @@ lives" before deciding which one it is:
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run the command against what the
   probe printed. Nothing needs installing.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own, every skill into every agent) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher. Naming only the skills.sh command to a LobeHub user reads as
-  "abandon your installer", which isn't the advice.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, say which skill is missing and where it is expected rather than
 relaying the raw path error, which names neither.
@@ -1261,13 +1288,18 @@ it is `skills/ofox-video-core/references/ofox-video.sh`.
 ## Generating
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --prompt "<the ad-creative prompt built above>" \
   --name "<short spot name, e.g. perfume bottle hero ad>" \
   --duration 10 \
   --resolution 1080p \
   --aspect-ratio 16:9
 ```
+
+`--approved` is not decoration: without it the script refuses, submits
+nothing, and prints the quote-first steps instead. Add it only once the cost
+table has actually gone in front of the user and come back with a yes — the
+flag cannot check that for you.
 
 This one call validates the parameters, submits the job, polls to
 completion, downloads the mp4, and prints `STATUS`, `JOB_ID`, `VIDEO_PATH`,

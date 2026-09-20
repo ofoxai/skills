@@ -1,6 +1,6 @@
 {
   "name": "ofox-skills",
-  "version": "1.5.5",
+  "version": "1.6.0",
   "description": "Agent skills for the Ofox platform: video generation (Seedance 2.5 short drama, ad creative, product video, anime drama, first-to-last-frame keyframe animation, UI product demos, extending footage you already have or re-shooting its ending from one of its own frames, handheld UGC clips, cheap vertical Shorts/Reels drafts, talking-head clips from a portrait and a script, explainers that pick the one idea a short clip can actually hold, and music videos whose visuals are written to a track's structure because the model never hears the audio), image generation and editing (change one thing in a photo you already have, or a whole set of product images priced as a set), SSH-key encrypted secrets, ImageMagick image handling, and static-site deploys to Cloudflare.",
   "keywords": [
     "claude-code",
@@ -39,6 +39,12 @@
     "README.md",
     "LICENSE"
   ],
+  "scripts": {
+    "check": "node bin/check-frontmatter.mjs && node bin/check-skills.mjs",
+    "test": "npm run test:shell && npm run test:node",
+    "test:shell": "files=$(find skills -name '*.test.sh' | sort); test -n \"$files\" || { echo 'test:shell matched no files — the suites moved and this would have passed'; exit 1; }; for f in $files; do printf '\\n=== %s\\n' \"$f\"; bash \"$f\" || exit 1; done",
+    "test:node": "files=$(find bin skills test -name '*.test.mjs' 2>/dev/null | sort); test -n \"$files\" || { echo 'test:node matched no files — the suites moved and this would have passed'; exit 1; }; node --test $files"
+  },
   "engines": {
     "node": ">=18"
   }

@@ -2,11 +2,11 @@
 name: talking-head
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a portrait plus a short script into a clip of one person speaking those words to camera. You supply the text and the model generates the voice — audio cannot be uploaded, measured. Defaults to alibaba/wan-3.0-prime rather than this repo's usual seedance-2.5, because seedance-2.5 refuses a real person's photo at submission. Use when a user has a face and some words and wants the face to say them, e.g. "make this headshot read my intro", "a spokesperson clip from this portrait", "have her say this line to camera", "use this avatar to read the announcement". Do not use for a scene between two or more people (see seedance-short-drama), a polished brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the words still have to be pulled out of an article and no particular face is required (see explainer).
 license: MIT
-version: "1.1.0"
+version: "2.0.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/talking-head
 metadata:
   author: ofoxai
-  version: "1.1.0"
+  version: "2.0.0"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -311,6 +311,12 @@ root.
 Nothing found → the core skill isn't installed; see "If the script isn't
 found".
 
+**This skill needs `ofox-video-core` 2.0.0 or newer.** From that version the
+billable subcommands refuse to run without `--approved`, and every real-run
+command below passes it. An older core does not know the flag and stops with
+`unknown option '--approved'` before any request — nothing is submitted and
+nothing is billed, so the fix is to update the core, never to drop the flag.
+
 ## Before generating: the availability check
 
 Run this once per session (not on every request):
@@ -606,9 +612,19 @@ bash ../ofox-video-core/references/ofox-video.sh generate --dry-run \
 ```
 
 Relay the `Estimated cost:` line it prints — never a number of your own — then
-wait for a yes, then re-run the identical command with `--dry-run` removed.
-The estimate a *real* run prints comes microseconds before the request goes
-out, too late to relay. Pass the same `--out-dir` to both.
+wait for a yes, then re-run the identical command with `--dry-run` swapped
+for `--approved`. The estimate a *real* run prints comes microseconds before
+the request goes out, too late to relay. Pass the same `--out-dir` to both.
+
+`--approved` is where that yes gets typed out. Since `ofox-video-core` 2.0.0
+the four billable subcommands — `generate`, `create`, `batch`, `chain` —
+refuse to run without it, while `--dry-run` never needs it, so the quote above
+is still free and still works with no API key. Be exact about what the flag
+does: it records a stance, it cannot prove one. Nothing in a shell script can
+observe the conversation you had, and it can be typed without showing anyone a
+price. What it changes is that spending without quoting is no longer the
+default — it has to be written into the command, where a transcript shows it.
+The rule above is still the rule, and it is still yours to follow.
 
 Two things belong in that message beyond the table:
 
@@ -675,12 +691,20 @@ before deciding which:
 - **The probe printed a directory** — the core is installed and only the
   directory *name* was wrong, which is the normal LobeHub case
   (`ofoxai-skills-ofox-video-core`). Re-run against what the probe printed.
-- **The probe printed nothing** — `ofox-video-core` really is absent, and the
-  fix belongs to whichever installer the user already has: `npx ofox-skills`
-  (this repo's own) or the underlying
-  `npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes` for
-  skills.sh; on LobeHub or ClawHub, install `ofox-video-core` from the same
-  publisher.
+- **The probe printed nothing** — `ofox-video-core` really is absent, and
+  installing it is the user's call to make, not yours: an install writes
+  outside this working directory, so hand over the command and let them run
+  it rather than running it for them. Which command depends on the installer
+  they already have — skills.sh is
+  `npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that
+  one skill and answers none of the agent, scope or confirmation questions on
+  the user's behalf; this repo's own wrapper is
+  `npx ofox-skills ofox-video-core`, the same install with all three answered
+  in advance (every agent, user-level, no prompts); on LobeHub or ClawHub,
+  install `ofox-video-core` from the same publisher. Ask for the one skill
+  that is missing rather than the whole repo, and give all three routes —
+  pointing a LobeHub user at the skills.sh line alone reads as "abandon your
+  installer", which isn't the advice.
 
 Either way, name the missing skill and where it was expected rather than
 relaying the raw path error, which names neither.
@@ -732,7 +756,7 @@ full job id, the prompt, the seed and the real cost.
 ## Generating
 
 ```bash
-bash ../ofox-video-core/references/ofox-video.sh generate \
+bash ../ofox-video-core/references/ofox-video.sh generate --approved \
   --model alibaba/wan-3.0-prime \
   --prompt "<the talking-head prompt built above>" \
   --name "<short clip name, e.g. anna dashboard intro>" \
@@ -745,6 +769,11 @@ bash ../ofox-video-core/references/ofox-video.sh generate \
 Drop `--frame-first-image` and add `--aspect-ratio 9:16` on the
 described-presenter route, and drop `--model` with it — that route goes to the
 script's own default.
+
+`--approved` is not decoration: without it the script refuses, submits
+nothing, and prints the quote-first steps instead. Add it only once the cost
+table has actually gone in front of the user and come back with a yes — the
+flag cannot check that for you.
 
 This one call validates the parameters, submits the job, polls to completion,
 downloads the mp4, and prints `STATUS`, `JOB_ID`, `VIDEO_PATH`,

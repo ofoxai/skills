@@ -8,6 +8,17 @@
 # caller sources it into this script's environment first. The raw key is never
 # printed by this script.
 #
+# The key only ever goes to one host: whatever API_BASE names. Two ways that
+# could have stopped being true, both closed in 1.30.0 and both covered by
+# references/test/keyguard.test.sh —
+#   - OFOX_API_BASE_URL overrides API_BASE. Still supported (staging), but it
+#     must be https (loopback excepted) and the override is announced on
+#     stderr, naming the host that will receive the key.
+#   - the create response supplies its own polling_url, and the poll loop
+#     authenticates to it. It is now followed only when its scheme://host:port
+#     matches API_BASE; otherwise the run stops with the job id printed, so
+#     the paid job is collected with `poll` instead of being abandoned.
+#
 # Usage:
 #   ofox-video.sh check
 #   ofox-video.sh models
@@ -51,6 +62,18 @@
 #                               payload and print the cost estimate, then stop
 #                               WITHOUT submitting. Nothing is billed. Use this
 #                               to quote a price to someone before spending.
+#   --approved                  required by generate/create/batch/chain, and
+#                               only by those four — they are the only
+#                               subcommands that can reach the one billable
+#                               request in this file. Without it the command
+#                               refuses, having submitted nothing. --dry-run
+#                               does not need it and must not: quoting is how
+#                               the number being approved is produced.
+#                               It records a stance; it cannot prove one. An
+#                               agent can pass it without showing anyone a
+#                               price. What it changes is that spending
+#                               unquoted now has to be typed out rather than
+#                               being the default.
 #   --print-payload             dump the request body to stderr before sending
 #                               (the API key is in a header, not the body)
 #   --name TEXT                 short, human-readable name for the output file,
@@ -82,8 +105,25 @@
 #                               file support and aspect_ratio behavior)
 #   --real-person true|false
 #   --callback-url URL          must be https://
-#   --extra-json JSON           merged into the request body as-is (advanced:
-#                               input_references, provider, etc.)
+#   --extra-json JSON           a JSON OBJECT merged into the request body,
+#                               for fields with no flag of their own
+#                               (input_references, provider.options, ...).
+#                               Three things it will not do, each of which
+#                               used to be possible and expensive:
+#                                 - be empty. An explicit --extra-json ""
+#                                   is an error, because it used to be
+#                                   indistinguishable from not passing the
+#                                   flag: every check skipped, nothing
+#                                   merged, job billed without your fields.
+#                                 - not be an object. It is merged with jq's
+#                                   `*`, which only works between objects.
+#                                 - set a field that has a flag (model,
+#                                   prompt, duration, resolution,
+#                                   aspect_ratio, size, generate_audio, seed,
+#                                   real_person, callback_url, frame_images,
+#                                   provider.type). Those are validated and
+#                                   priced from the flags, and this merge
+#                                   happens after the estimate is printed.
 #   --out-dir DIR                default: current directory
 #   --max-wait SECONDS           default: 540 (9 minutes)
 #   --poll-interval SECONDS      default: 6
@@ -100,7 +140,8 @@
 #
 # Exit codes:
 #   0  success — job completed, video downloaded
-#   1  usage / parameter validation error (no network call made)
+#   1  usage / parameter validation error (no network call made) — including
+#      a billable subcommand run without --approved
 #   2  environment error (missing curl/jq/OFOX_API_KEY)
 #   3  API rejected the request, or the job ended failed/cancelled/expired
 #   4  timed out waiting for a terminal state — the job is still running
@@ -127,7 +168,12 @@
 
 set -u
 
-API_BASE="${OFOX_API_BASE_URL:-https://api.ofox.ai/v1}"
+DEFAULT_API_BASE="https://api.ofox.ai/v1"
+# Overridable on purpose (pointing a run at a staging deployment is a real
+# need), but never silently: validate_api_base() below refuses a plaintext
+# non-loopback host and announces the override on stderr, because this
+# variable decides which host receives OFOX_API_KEY.
+API_BASE="${OFOX_API_BASE_URL:-$DEFAULT_API_BASE}"
 GET_KEY_URL="https://app.ofox.ai"
 DEFAULT_MODEL="bytedance/seedance-2.5"
 DEFAULT_MAX_WAIT=540
@@ -258,6 +304,136 @@ list_contains() {
   for item in $hay; do
     [ "$item" = "$needle" ] && return 0
   done
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# where OFOX_API_KEY is allowed to go
+#
+# Two hosts in this script are not chosen by its own code, and the key rides
+# along with both:
+#
+#   1. OFOX_API_BASE_URL points the whole client — Authorization header
+#      included — wherever it says. That is a capability worth keeping (a
+#      staging deployment is the obvious legitimate use), so it is not
+#      removed; it is narrowed to https (loopback excepted, for a local test
+#      server) and made impossible to set without being told, on stderr,
+#      which host is about to receive the key.
+#   2. The create response carries its own `polling_url`, and the poll loop
+#      sends `Authorization: Bearer $OFOX_API_KEY` to it. That is the one
+#      path here that needs no compromised local environment at all: a
+#      tampered or misconfigured API response is enough to hand the key to a
+#      third party. So every polling URL is checked against API_BASE's origin
+#      before the first request goes to it. The field is still honoured —
+#      it is a normal shape for a job API — it just cannot move hosts.
+#
+# Duplicated in ofox-image-core/references/ofox-image.sh on purpose: each
+# skill has to work when installed on its own, so a file shared across skill
+# directories is not an option (CONTRIBUTING rule 7). Fix both.
+# ---------------------------------------------------------------------------
+
+url_origin() {
+  # $1 = a URL. Prints "scheme://host:port" lowercased, with the scheme's
+  # default port made explicit so https://api.ofox.ai and
+  # https://api.ofox.ai:443 compare equal. Returns 1 for anything that is not
+  # an http(s) URL.
+  local url="$1" scheme rest authority host port
+  case "$url" in
+    [Hh][Tt][Tt][Pp]://*|[Hh][Tt][Tt][Pp][Ss]://*) : ;;
+    *) return 1 ;;
+  esac
+  scheme="$(printf '%s' "${url%%://*}" | tr '[:upper:]' '[:lower:]')"
+  rest="${url#*://}"
+  authority="${rest%%/*}"
+  authority="${authority%%\?*}"
+  authority="${authority%%#*}"
+  # Userinfo is never part of an Ofox URL, and keeping only what follows the
+  # last '@' is what makes "https://api.ofox.ai@evil.example/v1/videos/x"
+  # report evil.example — the host that would really receive the request —
+  # instead of reading as ours to anyone (or any check) skimming the string.
+  authority="${authority##*@}"
+  case "$authority" in
+    \[*\]*)
+      host="${authority%%\]*}]"
+      port="${authority#*\]}"
+      port="${port#:}"
+      ;;
+    *:*)
+      host="${authority%%:*}"
+      port="${authority#*:}"
+      ;;
+    *)
+      host="$authority"
+      port=""
+      ;;
+  esac
+  [ -n "$host" ] || return 1
+  if [ -z "$port" ]; then
+    case "$scheme" in
+      http) port=80 ;;
+      https) port=443 ;;
+    esac
+  fi
+  case "$port" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s://%s:%s' "$scheme" "$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')" "$port"
+}
+
+url_host() {
+  # $1 = a URL. Prints just the host, for messages that have to name it.
+  local origin="$1"
+  origin="$(url_origin "$origin")" || return 1
+  origin="${origin#*://}"
+  printf '%s' "${origin%:*}"
+}
+
+is_loopback_host() {
+  case "$1" in
+    localhost|127.*|\[::1\]|::1) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_api_base() {
+  # Runs once per invocation, before anything can use API_BASE. The default
+  # is fine by construction, so this is entirely about the override.
+  local override="${OFOX_API_BASE_URL:-}" origin host
+  [ -n "$override" ] || return 0
+
+  if ! origin="$(url_origin "$override")"; then
+    echo "ERROR: OFOX_API_BASE_URL is set to '$override', which is not an http:// or https:// URL." >&2
+    echo "Unset it to use $DEFAULT_API_BASE, or set it to a full base URL such as https://staging.example.com/v1." >&2
+    return 2
+  fi
+  host="$(url_host "$override")"
+  case "$origin" in
+    https://*) : ;;
+    *)
+      if ! is_loopback_host "$host"; then
+        echo "ERROR: OFOX_API_BASE_URL is set to '$override', which is not https://." >&2
+        echo "OFOX_API_KEY travels in an Authorization header on every request this script makes, so a plaintext base URL would put your key on the wire in clear text." >&2
+        echo "Use an https:// URL, or a loopback host (localhost, 127.0.0.1, [::1]) for a local test server." >&2
+        return 2
+      fi
+      ;;
+  esac
+  echo "NOTE: OFOX_API_BASE_URL is set, so this run talks to host '$host' ($override) instead of $DEFAULT_API_BASE — including any request that carries your OFOX_API_KEY in an Authorization header. Unset OFOX_API_BASE_URL to go back to Ofox." >&2
+  return 0
+}
+
+assert_same_origin_as_api_base() {
+  # $1 = a URL the API handed back, $2 = what it is, for the message.
+  # Succeeds only when that URL points at the same scheme://host:port this
+  # client was configured for.
+  local url="$1" what="$2" got want
+  want="$(url_origin "$API_BASE")" || want=""
+  got="$(url_origin "$url")" || got=""
+  if [ -z "$got" ]; then
+    echo "ERROR: the API returned a $what this script will not follow: '$url' is not an http:// or https:// URL." >&2
+    return 1
+  fi
+  [ "$got" = "$want" ] && return 0
+  echo "ERROR: the API returned a $what pointing at a different host: '$(url_host "$url")' (from '$url'), while this client is configured for '$(url_host "$API_BASE")' ($API_BASE)." >&2
+  echo "Polling sends 'Authorization: Bearer \$OFOX_API_KEY', so a URL from the response body is never followed off the configured host — a tampered or misconfigured response must not be able to redirect your API key." >&2
   return 1
 }
 
@@ -477,6 +653,9 @@ ofox-video.sh — Ofox video generation API client (create, poll, download).
   ofox-video.sh generate --prompt "..." [OPTIONS]
   ofox-video.sh create   --prompt "..." [OPTIONS]   (submit only, returns a job id)
          add --dry-run to any of generate/batch/chain to price it without spending
+         generate/create/batch/chain refuse to run without --approved. Quote the
+         job with --dry-run, show the user the estimate, then re-run the same
+         command with --approved. --dry-run itself never needs it.
   ofox-video.sh batch --prompt "..." --takes N [--contact-sheet|--no-contact-sheet] [--concurrency N] [OPTIONS]
   ofox-video.sh poll JOB_ID [JOB_ID...] [--out-dir DIR] [--name TEXT] [--max-wait SECONDS] [--poll-interval SECONDS] [--concurrency N]
   ofox-video.sh chain --shot "..." --shot "..." [--shots-file FILE] [--no-concat] [OPTIONS]
@@ -748,6 +927,69 @@ print_api_error() {
 }
 
 # ---------------------------------------------------------------------------
+# the spend gate
+# ---------------------------------------------------------------------------
+
+# There is exactly one billable request in this file: the POST to
+# $API_BASE/videos in cmd_generate. Every other curl here is a GET. So the set
+# of subcommands that can put a charge on the account is exactly the set that
+# reaches that POST — `generate`, `create` (the same call without the wait),
+# `batch` (N of them) and `chain` (N of them) — and those four refuse to run
+# without --approved.
+#
+# Nothing else is guarded, and each omission is a decision rather than an
+# oversight:
+#   check / models / providers   read-only, and `models`/`providers` are the
+#                                public catalog: free, no key needed.
+#   contact-sheet / last-frame / frame-at / mux-audio
+#                                local ffmpeg over a file the caller already
+#                                has. No network call at all.
+#   poll                         only ever issues GETs against a job that
+#                                already exists. Guarding it would be actively
+#                                harmful: it is the recovery command this
+#                                script prints whenever a run is refused,
+#                                times out or is interrupted, so blocking it
+#                                would strand a job that has already been paid
+#                                for.
+# references/test/approval.test.sh derives both halves of that split from the
+# usage text at run time rather than from a list retyped here, so a new
+# subcommand that reaches the POST without a guard turns the suite red.
+#
+# --dry-run returns before this guard in all four, on purpose. Quoting a price
+# is the step that produces the number the user approves; a gate that blocked
+# the quote would close the only route through itself.
+#
+# What this flag is: a place where spending has to be typed out, which makes it
+# visible in a transcript and refusable by a reviewer.
+#
+# What it is NOT — and the docs must not claim otherwise: evidence that an
+# approval happened. Nothing in a shell script can observe the conversation
+# between an agent and its user, and an agent can pass --approved without ever
+# showing anyone a price, exactly as it could previously just run the command.
+# This moves "spend without quoting" from the default behaviour to a
+# deliberate, auditable act. It does not detect it.
+require_approved() {
+  # require_approved SUBCOMMAND APPROVED_FLAG
+  local sub="$1" approved="${2:-}"
+  [ -n "$approved" ] && return 0
+  echo "" >&2
+  echo "ERROR: '$sub' spends real money and was run without --approved." >&2
+  echo "Nothing was submitted and nothing was billed." >&2
+  echo "  1. Quote it first, for free: re-run this exact command with --dry-run" >&2
+  echo "       $0 $sub --dry-run ...   (submits nothing, needs no API key)" >&2
+  echo "  2. Show the user the 'Estimated cost:' line it prints, together with" >&2
+  echo "     the model, the full prompt and the parameters being quoted. The" >&2
+  echo "     table that belongs in front of them is in this skill's" >&2
+  echo "     references/approval-gate.md." >&2
+  echo "  3. Once they have said yes to THAT table, run the original command" >&2
+  echo "     again with --approved added." >&2
+  echo "--approved records a stance; it cannot prove anyone was asked. It is" >&2
+  echo "here so that spending without quoting has to be typed out instead of" >&2
+  echo "being what happens by default." >&2
+  return 1
+}
+
+# ---------------------------------------------------------------------------
 # generate: validate params, build payload, POST, poll, download
 # ---------------------------------------------------------------------------
 
@@ -759,6 +1001,7 @@ cmd_generate() {
   local provider_explicit=""
   local print_payload=""
   local dry_run=""
+  local approved=""
   local submit_only="${OFOX_SUBMIT_ONLY:-}"
   local prompt=""
   local duration=""
@@ -772,6 +1015,13 @@ cmd_generate() {
   local real_person=""
   local callback_url=""
   local extra_json=""
+  # Whether --extra-json was written on the command line at all. bash cannot
+  # tell "flag omitted" from "flag given an empty value" by looking at the
+  # value, and the difference is the whole of the 2026-09-17 defect: a
+  # `--extra-json "$(jq …)"` whose jq died on ARG_MAX hands over an empty
+  # string, the `[ -n "$extra_json" ]` guard skips every check AND the merge,
+  # and the job is submitted and billed with none of the references in it.
+  local extra_json_seen=""
   local name_hint=""
   local out_dir="$PWD"
   local max_wait="$DEFAULT_MAX_WAIT"
@@ -788,6 +1038,11 @@ cmd_generate() {
         ;;
       --dry-run)
         dry_run=1
+        shift
+        continue
+        ;;
+      --approved)
+        approved=1
         shift
         continue
         ;;
@@ -820,7 +1075,7 @@ cmd_generate() {
       --frame-last-image) frame_last="$val" ;;
       --real-person) real_person="$val" ;;
       --callback-url) callback_url="$val" ;;
-      --extra-json) extra_json="$val" ;;
+      --extra-json) extra_json="$val"; extra_json_seen=1 ;;
       --name) name_hint="$val" ;;
       --out-dir) out_dir="$val" ;;
       --max-wait) max_wait="$val" ;;
@@ -1007,13 +1262,58 @@ cmd_generate() {
     esac
   fi
 
+  # An explicitly empty --extra-json is an error, and omitting the flag is
+  # byte-for-byte what it always was. The asymmetry is the point: every
+  # existing caller that does not pass the flag is unaffected, while the one
+  # shape that used to be silently dropped now stops the run before anything
+  # is billed.
+  if [ -n "$extra_json_seen" ] && [ -z "$extra_json" ]; then
+    echo "ERROR: --extra-json was given an empty value." >&2
+    echo "This usually means a command substitution produced nothing — most often '\$(jq -n …)' with a large data: URI, which dies on ARG_MAX, writes one line to stderr and yields an empty string." >&2
+    echo "Until 1.30.0 that empty string was treated as 'flag not passed': no JSON check, nothing merged, and the job submitted and billed with none of your extra fields in it. Build the JSON into a variable, check it with 'jq -e .', then pass it — or drop the flag if you meant to send nothing." >&2
+    return 1
+  fi
+
   if [ -n "$extra_json" ]; then
-    if ! printf '%s' "$extra_json" | jq -e . >/dev/null 2>&1; then
+    # `jq empty`, not `jq -e .`: -e keys its exit status on the OUTPUT value,
+    # so a perfectly valid `null` or `false` was reported as "not valid
+    # JSON". Both are still refused — by the object check below, which says
+    # what is actually wrong with them.
+    if ! printf '%s' "$extra_json" | jq empty >/dev/null 2>&1; then
       echo "ERROR: --extra-json is not valid JSON." >&2
+      return 1
+    fi
+    # It is merged with jq's `*`, which is only defined between objects. A
+    # valid-but-not-object value made the merge fail, the command
+    # substitution yield an empty payload, and the request go out empty.
+    if ! printf '%s' "$extra_json" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      echo "ERROR: --extra-json must be a JSON object (it is merged into the request body), got $(printf '%s' "$extra_json" | jq -r 'type')." >&2
       return 1
     fi
     if { [ -n "$frame_first" ] || [ -n "$frame_last" ]; } && printf '%s' "$extra_json" | jq -e 'has("input_references")' >/dev/null 2>&1; then
       echo "ERROR: cannot combine --frame-first-image/--frame-last-image with input_references in --extra-json (references_conflict) — use one or the other." >&2
+      return 1
+    fi
+    # --extra-json is merged LAST, so any key it carries wins over the flags.
+    # For a field with a flag, that means it lands in the request having
+    # skipped the per-model validation, the aspect-ratio rules and the price
+    # estimate the flag goes through — i.e. the body says 30 seconds at 1080p
+    # while the quote the user approved said 4 seconds at 480p. Same rule the
+    # sibling ofox-image.sh already applies to --extra-form: if a flag owns
+    # the field, use the flag. Everything without a flag still passes
+    # through, which is what the escape hatch is for.
+    local clash
+    clash=$(printf '%s' "$extra_json" | jq -r '
+      ["model","prompt","duration","resolution","aspect_ratio","size",
+       "generate_audio","seed","real_person","callback_url","frame_images"] as $guarded
+      | [ (keys_unsorted[] | select(. as $k | $guarded | index($k)))
+        , (select(.provider? | type == "object" and has("type")) | "provider.type")
+        , (select(has("provider") and (.provider | type != "object")) | "provider")
+        ] | join(", ")')
+    if [ -n "$clash" ]; then
+      echo "ERROR: --extra-json sets $clash, which this script validates and prices from its own flag(s). Use the flag instead: --model, --prompt, --duration, --resolution, --aspect-ratio, --size, --generate-audio, --seed, --real-person, --callback-url, --frame-first-image/--frame-last-image, --provider." >&2
+      echo "A key merged through --extra-json wins over the flags and is merged AFTER the cost estimate is computed, so this would submit a job that does not match the price anyone approved." >&2
+      echo "Fields with no flag are unaffected — input_references and provider.options still pass through here." >&2
       return 1
     fi
   fi
@@ -1038,6 +1338,11 @@ cmd_generate() {
     DRY_RUN_ACTIVE=1
   else
     if ! check_api_key; then return 2; fi
+    # A run with no --approved is going to be refused below, after the estimate
+    # has printed. DRY_RUN_ACTIVE means "this run is quoting, not spending",
+    # which is exactly true here — without it the estimate would end "Actual
+    # billing is reported below" on a run that reports no billing at all.
+    [ -z "$approved" ] && DRY_RUN_ACTIVE=1
   fi
 
   # --out-dir is resolved here, under dry run too. A path that can't be
@@ -1169,11 +1474,20 @@ cmd_generate() {
   fi
 
   if [ -n "$extra_json" ]; then
-    local tmp_extra
+    local tmp_extra merged
     tmp_extra=$(mktemp)
     printf '%s' "$extra_json" >"$tmp_extra"
-    payload=$(printf '%s' "$payload" | jq --slurpfile extra "$tmp_extra" '. * $extra[0]')
+    merged=$(printf '%s' "$payload" | jq --slurpfile extra "$tmp_extra" '. * $extra[0]')
     rm -f "$tmp_extra"
+    # A failed merge leaves the command substitution empty, which without this
+    # would post an empty body to a billable endpoint. The object check above
+    # should make it unreachable; an unreachable check that costs nothing and
+    # guards a paid request stays.
+    if [ -z "$merged" ]; then
+      echo "ERROR: merging --extra-json into the request body failed, so nothing was submitted and nothing was billed." >&2
+      return 1
+    fi
+    payload="$merged"
   fi
 
   if [ -n "$print_payload" ]; then
@@ -1218,6 +1532,14 @@ cmd_generate() {
     [ -n "$resolution" ] && echo "RESOLUTION $resolution"
     return 0
   fi
+
+  # Last free instant. Everything above is validation, resolution and the
+  # quote; the next statement is the POST that bills. The guard sits here
+  # rather than at the top of the function on purpose: refusing after the
+  # estimate has printed means the refusal carries the number the user needs
+  # to be shown, and it leaves every parameter error still reported as a
+  # parameter error.
+  require_approved "${SUBCOMMAND:-generate}" "$approved" || return 1
 
   echo "Submitting job to Ofox (model=$model, provider=$provider_label)..." >&2
   # payload can itself now be well over 1MB (a resolved frame image is
@@ -1264,7 +1586,29 @@ cmd_generate() {
     printf '%s\n' "$body" >&2
     return 3
   fi
-  [ -z "$polling_url" ] && polling_url="$API_BASE/videos/$job_id"
+  # The response's own polling_url is used when it is on the host this client
+  # is configured for, and the canonical URL is the fallback when the field is
+  # absent — both are normal. What is not normal is a polling_url on another
+  # host: the poll loop authenticates, so following one would send the key
+  # somewhere the caller never named. That is refused, and refusing it must
+  # not strand the job, which by this line exists and is billable.
+  if [ -z "$polling_url" ]; then
+    polling_url="$API_BASE/videos/$job_id"
+  elif ! assert_same_origin_as_api_base "$polling_url" "polling_url"; then
+    local bad_abs_out
+    bad_abs_out="$(cd "$out_dir" 2>/dev/null && pwd)" || bad_abs_out="$out_dir"
+    # The request half of the record, so the recovery poll below can still
+    # write a complete sidecar.
+    save_request_handoff "$payload" "$bad_abs_out" "$job_id"
+    echo "" >&2
+    echo "The job WAS created and is billable: $job_id. Nothing has been lost — it was not polled, that is all." >&2
+    echo "Collect it over the configured host instead (poll builds the URL itself, it never reads one from a response):" >&2
+    echo "  $0 poll $job_id --out-dir $bad_abs_out" >&2
+    echo "JOB_ID $job_id"
+    echo "SEED $seed"
+    echo "OUT_DIR $bad_abs_out"
+    return 3
+  fi
 
   echo "Job created: $job_id" >&2
   echo "Polling: $polling_url" >&2
@@ -1359,7 +1703,7 @@ cmd_generate() {
 MAX_TAKES=10
 
 cmd_batch() {
-  local takes="" seed_given="" prompt_seen="" batch_provider="" batch_dry=""
+  local takes="" seed_given="" prompt_seen="" batch_provider="" batch_dry="" batch_approved=""
   local passthrough=() out_dir="$PWD" duration="" resolution="" model="$DEFAULT_MODEL"
   local sheet="auto"
   local concurrency="$DEFAULT_CONCURRENCY"
@@ -1392,6 +1736,11 @@ cmd_batch() {
         ;;
       --dry-run)
         batch_dry=1; shift; continue
+        ;;
+      --approved)
+        # Forwarded as well as recorded: every take goes through cmd_generate,
+        # which has the same guard sitting next to the POST it makes.
+        batch_approved=1; passthrough+=("$key"); shift; continue
         ;;
       *)
         if [ $# -lt 2 ]; then
@@ -1453,22 +1802,30 @@ cmd_batch() {
   # --- estimate before spending ---
 
   [ -n "$batch_dry" ] && DRY_RUN_ACTIVE=1
+  # Same reason as cmd_generate's copy: an unapproved batch is refused below,
+  # so its estimate must not promise a bill "reported below".
+  [ -z "$batch_approved" ] && DRY_RUN_ACTIVE=1
   print_estimate "$model" "${resolution:-}" "t2v" "${batch_provider:-}" "$duration" "$takes"
 
+  # Validate one take through the real path so a bad parameter is caught here
+  # rather than after the first one is paid for. This used to run only under
+  # --dry-run; it runs on both paths now, because it has to come BEFORE the
+  # spend gate below. A batch with a bad --duration and no --approved would
+  # otherwise report the missing approval, and "add --approved and try again"
+  # is the last thing to teach someone whose parameters are wrong.
+  #
+  # Capture the inner call's stderr instead of letting it through: it prints
+  # its own single-take estimate, and a caller told "there is exactly one
+  # Estimated cost line, relay it" would otherwise see two and quite
+  # reasonably relay the last one — the per-take figure this skill spends
+  # two documents telling people not to quote. Errors still surface.
+  local inner_err
+  if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --dry-run 2>&1 >/dev/null)"; then
+    printf '%s\n' "$inner_err" >&2
+    return 1
+  fi
+
   if [ -n "$batch_dry" ]; then
-    # Validate one take through the real path so a bad parameter is caught
-    # here rather than after the first one is paid for, then stop.
-    #
-    # Capture the inner call's stderr instead of letting it through: it prints
-    # its own single-take estimate, and a caller told "there is exactly one
-    # Estimated cost line, relay it" would otherwise see two and quite
-    # reasonably relay the last one — the per-take figure this skill spends
-    # two documents telling people not to quote. Errors still surface.
-    local inner_err
-    if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --dry-run 2>&1 >/dev/null)"; then
-      printf '%s\n' "$inner_err" >&2
-      return 1
-    fi
     echo "DRY RUN — $takes takes would be created one at a time, then waited for concurrently, $concurrency at once. Nothing was billed." >&2
     echo "The figure above is the whole batch. $takes takes means $takes bills, and running them concurrently means they all arrive at once — quote the total before starting, never the per-take figure." >&2
     concurrency_rpm_note "$concurrency" "$poll_interval"
@@ -1478,6 +1835,12 @@ cmd_batch() {
     echo "CONCURRENCY $concurrency"
     return 0
   fi
+
+  # Checked here as well as inside each take's cmd_generate. Letting take 1
+  # trip the inner guard would work, but it would report a money refusal as
+  # "take 1 could not be submitted (exit 1)" — and a batch is N bills, so the
+  # one place it can still be stopped is before the first submission.
+  require_approved "${SUBCOMMAND:-batch}" "$batch_approved" || return 1
 
   # --- phase 1: create every take, one at a time ---
   #
@@ -2176,7 +2539,7 @@ shot_looks_like_prompt_fragment() {
 
 cmd_chain() {
   local shots=() shots_file="" out_dir="$PWD" duration="" resolution=""
-  local model="$DEFAULT_MODEL" concat="auto" aspect="" chain_dry=""
+  local model="$DEFAULT_MODEL" concat="auto" aspect="" chain_dry="" chain_approved=""
   local chain_name=""
   local passthrough=() key val
 
@@ -2196,6 +2559,10 @@ cmd_chain() {
         ;;
       --dry-run)
         chain_dry=1; shift; continue
+        ;;
+      --approved)
+        # Forwarded as well as recorded, for the same reason batch forwards it.
+        chain_approved=1; passthrough+=("$key"); shift; continue
         ;;
       --print-payload)
         passthrough+=("$key"); shift; continue
@@ -2295,20 +2662,31 @@ cmd_chain() {
   fi
 
   [ -n "$chain_dry" ] && DRY_RUN_ACTIVE=1
+  [ -z "$chain_approved" ] && DRY_RUN_ACTIVE=1
   print_estimate "$model" "${resolution:-}" "t2v" "" "$duration" "$n"
 
+  # Shot 1 through the real path, stopping before the request. Like batch's
+  # copy of this, it used to run only under --dry-run and now runs on both
+  # paths, so that a bad parameter is reported as a bad parameter rather than
+  # as a missing approval.
+  local inner_err
+  if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --prompt "${shots[0]}" --dry-run 2>&1 >/dev/null)"; then
+    printf '%s\n' "$inner_err" >&2
+    return 1
+  fi
+
   if [ -n "$chain_dry" ]; then
-    local inner_err
-    if ! inner_err="$(cmd_generate ${passthrough[@]+"${passthrough[@]}"} --prompt "${shots[0]}" --dry-run 2>&1 >/dev/null)"; then
-      printf '%s\n' "$inner_err" >&2
-      return 1
-    fi
     echo "DRY RUN — $n shots would be submitted in sequence. Nothing was billed." >&2
     echo "Re-run without --dry-run to generate." >&2
     echo "STATUS dry_run"
     echo "SHOTS_REQUESTED $n"
     return 0
   fi
+
+  # Same reasoning as batch: a chain is N bills, and shot 1 tripping the inner
+  # guard would be reported as "shot 1 failed (exit 1)" rather than as a money
+  # refusal.
+  require_approved "${SUBCOMMAND:-chain}" "$chain_approved" || return 1
 
   mkdir -p "$out_dir" 2>/dev/null
   local abs_out
@@ -2664,6 +3042,19 @@ poll_and_download() {
   # unlucky — retrying at the same cadence keeps it over budget. Any response
   # that gets through resets this to 0.
   local rate_limit_hits=0
+
+  # Second line of defence for the same thing cmd_generate checks: every
+  # request below carries the API key, and this function is reached with a URL
+  # its caller chose. cmd_poll and cmd_batch build that URL from API_BASE, and
+  # cmd_generate has already screened the one the response supplied — but the
+  # check belongs next to the request that would leak, not only next to the
+  # place the URL came from, because a future caller will not remember.
+  if ! assert_same_origin_as_api_base "$polling_url" "polling URL"; then
+    echo "Job $job_id was NOT polled and was not affected by this. Do NOT re-run 'generate' — collect it with:" >&2
+    echo "  $0 poll $job_id --out-dir $out_dir" >&2
+    return 3
+  fi
+
   poll_started=$(date +%s)
   local out_dir_input="$out_dir"
 
@@ -3307,6 +3698,22 @@ download_result() {
 
 main() {
   local mode="${1:-}"
+  # Recorded so require_approved can echo back the subcommand the caller
+  # actually typed ('create' and 'batch' both run cmd_generate). Taken from
+  # main's own dispatch word, never by scanning "$@" for it: a prompt is free
+  # text, and `--prompt "run it with --approved"` must not read as a flag.
+  SUBCOMMAND="$mode"
+  # Every subcommand that builds a request from API_BASE validates the base
+  # first, and says so when it has been overridden. The four local tools are
+  # deliberately not in this list: they run ffmpeg over a file the caller
+  # already has, so an environment variable that cannot affect them is no
+  # reason to refuse them — and a notice about where the API key goes is
+  # false on a command that sends none.
+  case "$mode" in
+    check|models|providers|generate|create|batch|chain|poll)
+      validate_api_base || return 2
+      ;;
+  esac
   case "$mode" in
     check)
       cmd_check

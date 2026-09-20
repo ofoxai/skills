@@ -2,7 +2,139 @@
 
 All notable changes to the **seedance-product-video** skill. Versioning follows SemVer.
 
+## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
+
+**Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its
+four billable subcommands — `generate`, `create`, `batch`, `chain` — refuse to
+run unless `--approved` is on the command line. All four of this skill's
+real-run commands — three `generate` and one `chain` — now pass it. The
+`--dry-run` commands are untouched: a quote is how the number being approved
+gets produced, so gating it would close the only route through itself.
+
+**What a caller has to do differently**
+
+- **Install `ofox-video-core` 2.0.0 or newer.** This version of this skill
+  needs it. On an older core the updated commands stop with `unknown option
+  '--approved'` before any request — nothing is submitted and nothing is
+  billed, so the failure is safe, but every real run fails.
+- **A command copied from an older version of this file is now refused.**
+  Anything pasted from an earlier revision, a transcript or a wrapper script
+  hits the guard, prints the quote-first steps and exits non-zero. Nothing is
+  submitted and nothing is billed. Re-run it with `--dry-run` to get the
+  quote, or with `--approved` once the cost table has gone in front of the
+  user.
+- **The `batch` route needs it too.** This file shows only `batch --dry-run`;
+  its real run takes `--approved` in the same place. A `chain` commits every
+  shot at once, so quoting it first matters more there than anywhere else.
+
+**What `--approved` is not.** It does not prove that an approval happened — an
+agent can type it without showing anyone a price, exactly as it could
+previously just run the command. What changed is that spending without quoting
+is no longer the default: it now has to be written into the command, where a
+transcript shows it and a reviewer can object. The gate in
+[`../ofox-video-core/references/approval-gate.md`](../ofox-video-core/references/approval-gate.md)
+is still the rule, and this skill still states it in full.
+
+**Documentation only otherwise. No price, default, prompt template, flag
+meaning or generation behaviour changed.**
+
 This file starts at 1.0.2; earlier versions predate it.
+
+## 1.17.2 — the recovery command asked for the whole repo, and asked the agent to run it
+
+**Documentation only. No flag, price, prompt template or generation behaviour
+changed.**
+
+"If the script isn't found" ended in a skills.sh command that installed *every*
+skill in this repo, into *every* agent, user-level, with confirmation
+suppressed — four widenings past the one skill that was actually missing.
+ClawHub's scanner flags exactly that (rule T08, "unpinned and overbroad
+third-party installation via npx"), and the flag is accurate rather than noise:
+an agent that read the line and ran it would have rewritten the user's whole
+skills setup to recover one relative path.
+
+The line now asks for the missing skill and nothing else —
+`npx skills add ofoxai/skills --skill ofox-video-core`, which asks for that one
+skill and answers none of the agent, scope or confirmation questions on the
+user's behalf. The repo's own `npx ofox-skills ofox-video-core` still answers
+all three (every agent, user-level, no prompts), which is why the line handed
+to the user is the skills.sh one.
+
+**What a caller has to do**: nothing changes for any command this skill
+already prints, and nothing changes while `ofox-video-core` is installed. What
+changes is conduct on the one path where it genuinely is absent — **relay the
+command and let the user run it**; do not run an installer yourself. An
+install writes outside the working directory, and that is not a decision to
+take silently for someone.
+
+All three distribution routes are still named (this repo's own
+`npx ofox-skills`, skills.sh, and LobeHub or ClawHub), because recovery advice
+that names one installer is wrong advice on every other channel this skill
+ships through.
+
+## 1.17.1 — the "no hosting needed" note needed its other half
+
+**Documentation only. No flag, default, price or prompt template changed.**
+One cell of the identity-reference row.
+
+1.17.0 added that an image reference accepts a `data:` URI so a local file
+needs no hosting. True, and dangerous on its own: a `data:` URI built into
+`--extra-json` is bounded by `ARG_MAX`, and over the limit **the reference is
+dropped silently and the job is submitted and billed as plain text-to-video**
+(measured 2026-09-17, exit `0`, no `input_references` in the payload). The row
+now carries that caveat and points at the reproduction and the guard in
+`ofox-video-core`'s `references/api-params.md`.
+
+## 1.17.0 — the headline route was finally run, and the 5-second template failed it
+
+**Documentation only. No flag, default, price or command changed** — but one
+piece of **planning guidance is new and it forbids something the template used
+to permit**, so read the first bullet before writing another short clip.
+
+Until 2026-09-17 every clip this file was built on was **pure text-to-video
+with a fictional product**, while the skill's own description leads with
+turning a **real product photo** into listing footage. Job
+`54a721ce-61a1-46cf-b5bf-6973f31b8258` (5s, 480p, 16:9, a real photograph as
+`--frame-first-image`, 55 cents) closed that gap, and the result is split.
+
+**What a caller has to do differently:**
+
+- 🚨 **At 5 seconds, never put DETAIL in the same clip as TURNTABLE or ORBIT.**
+  "Scale the segments, don't copy the stamps" told you to scale the
+  timestamps. Measured: **scaling a timestamp does not scale the camera
+  move.** A one-second DETAIL pushed all the way to a cap macro anyway, and
+  the three turntable seconds after it happened inside that macro — the clip
+  never returned to the whole product and is not deliverable as a listing
+  showcase. A short clip is **one** move. If the user wants a detail and a
+  rotation, that is a longer clip or two clips, and both go in the cost table
+  as rows. Where the boundary sits between 5s (one move) and 12s (four
+  segments, three clips) is **not measured** — quote 8 or 10 as an experiment.
+- **Do not describe the turntable as measured on the photo path.** It is not.
+  `54a721ce` never framed its rotation wide enough to read, so the only
+  turntable evidence is still the text-to-video run `dc02f604`. The clip that
+  would settle it has **no DETAIL segment in it**.
+
+**Separately, the identity-reference row is no longer "never run".** It said
+*"no image-reference job has been run end to end in this repo"* and that
+whether the `image1` tokens resolve by position was unverified. Both were
+closed on 2026-09-16 (`ofox-video-core`, job `0f5c8b4e`, two `image_url`
+references, 44 cents): the features came through and **the tokens resolve in
+array order**. It bills at the plain t2v rate and accepts a `data:` URI, so a
+local file needs no hosting — but ⚠️ pass `--aspect-ratio` explicitly, because
+the measured job passed none and came back portrait from landscape
+references.
+
+**What it confirmed, and it is worth as much as the failure:**
+
+- **The photo anchor works.** Frame 0 is the attached photograph — whole
+  product, white background, wordmark legible. Everything this file says about
+  attaching a photo for a real SKU held on its first real outing.
+- **The white-surface SCENE convention is doing more work than anyone knew.**
+  There is no cut at the top of that clip, and that is causal: measured
+  elsewhere the same day, a supplied first frame whose background **disagrees**
+  with the written SCENE yields about 0.1s of the photo and then a hard cut
+  (`ofox-video-core` 1.28.0). Writing the SCENE as the surface the photo was
+  actually shot on is what keeps this skill out of that trap. Keep doing it.
 
 ## 1.16.1 — the real-person flag is measured; two rows and a paragraph said otherwise
 
