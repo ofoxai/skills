@@ -18,8 +18,8 @@ npx ofox-skills doctor    # 查哪些 agent 现在真的能看到它们
 ## 视频类和图像类 skill 会真实花钱 —— 先用这招查清再决定
 
 视频场景 skill（四个 `seedance-*` 再加 `keyframe-animation`、`product-demo`、
-`video-extend-edit`、`ugc-ads`、`shorts-reels`、`talking-head`、`explainer`、
-`music-video`）调用 Ofox 视频 API，跑的是
+`video-extend-edit`、`previs-rerender`、`ugc-ads`、`shorts-reels`、
+`talking-head`、`explainer`、`music-video`）调用 Ofox 视频 API，跑的是
 [Seedance 2.5](https://ofox.ai/models/bytedance/seedance-2.5?utm_source=github&utm_medium=readme&utm_campaign=skills)，
 **按生成秒数计费**。15 秒 720p 约 **$3.60**，4 秒 480p 草稿约 **$0.44**，还有更便宜的模型。
 生成本身是老虎机 —— 你往往要出好几条、留一条 —— 所以单条价格不等于总成本。
@@ -166,6 +166,7 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 | [keyframe-animation](skills/keyframe-animation/SKILL.md) | 你手上已有的两张图：A 当首帧、B 当尾帧，同一个 job 里由模型补中间。两端实测逐像素还原（三次运行）。但**到位的时机不可预测**：两次实测量到两条差别很大的缓动曲线。 |
 | [product-demo](skills/product-demo/SKILL.md) | 界面变更前后的两张截图，动画成一条片子。模型只交叉淡入淡出变了的那几个值，文字保持可读 —— 所以这一个刻意不带"禁止画面文字"那条规则。 |
 | [video-extend-edit](skills/video-extend-edit/SKILL.md) | 把你已有的片子接长，或者换掉结尾。从你的片子里本地抽一帧（零成本），拿它当新片段的首帧，再把新片段接到原片后面。新片段的像素尺寸只取决于你付费的分辨率档和帧的宽高比，**永远不来自你的源片**，所以拼接必须先缩放：直接 concat 不会报错，出来的却是分辨率中途变化的文件。 |
+| [previs-rerender](skills/previs-rerender/SKILL.md) | 把粗糙的白模、clay、线框、blockout 或 animatic 片段当成终稿视觉的结构蓝图。一次 4 秒/480p 合成控制实测保住了镜头顺序、剪辑点、构图、空间布局和运动方向；另一次从末态继续且未重播白模。其它输入和档位仍应视为实验。 |
 | [ugc-ads](skills/ugc-ads/SKILL.md) | 手机实拍感的 UGC 短片 —— 开箱、初体验、真实测评。刻意反转其它场景默认的"精致"：只用一个现场光源、构图不完美、不调色、不磨皮。 |
 | [shorts-reels](skills/shorts-reels/SKILL.md) | 一次批量出好几条便宜的竖屏 9:16 草稿，先报价，再用联系表挑一条，最后只把选中的那条重渲好。它管格式和成本账；prompt 交给对应的场景 skill 写。 |
 | [talking-head](skills/talking-head/SKILL.md) | 一张人像加一段短文案，生成这个人对着镜头把这段话说出来。**你给文字、模型生成配音 —— 音频无法上传**（实测）。这是这里唯一不默认用 Seedance 2.5 的 skill：2.5 在提交阶段就拒真人照片，所以它跑 `wan-3.0-prime`。 |

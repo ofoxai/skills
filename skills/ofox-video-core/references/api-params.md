@@ -153,16 +153,27 @@ cosmetic: the cost estimate keys off it, and an earlier version of this script
 guessed `video` and therefore quoted the t2v rate for a v2v job (estimated
 $0.44, billed $0.56).
 
-**A video reference must be a URL.** No base64 data URI form is documented for
-video, and none has been tested — unlike `frame_images`, where a local file is
-supported and is in fact *preferred* over a URL. So anything wanting v2v needs
-its input hosted somewhere publicly reachable first.
+**A video reference must be a public web URL.** A small
+`data:video/mp4;base64,...` value survived the core's JSON and payload path,
+then the current route rejected it before job creation with HTTP 400
+`invalid_request`: `reference_video must be provided as a web url`. The
+rejected request created no job and was not billed. Unlike `frame_images`, a
+local video therefore needs authorized public hosting before this route can
+use it.
 
 A working source, if the input is something this API produced: the
 `unsigned_urls` link from a completed job. Verified 2026-08-31 — an
 unauthenticated ranged GET returned `HTTP 206 video/mp4`, and the upstream
 fetched it successfully. Those links are documented as temporary (may expire
-within 24h), so this works for a fresh job, not an archival one.
+within 24h), so this works for a fresh job, not an archival one. A public R2
+object was also fetched successfully for the 2026-09-22 experiments below;
+its unauthenticated ranged read returned `206`, `video/mp4`, 17,914 bytes.
+
+The shipped core refuses `frame_images` together with `input_references` as
+`references_conflict` before estimate or submission. Consequently a caller
+using this script cannot combine a video reference with first/last-frame
+anchors in one job. This is a client boundary; whether a direct request that
+bypasses the core can combine them was not tested.
 
 ### An `image_url` reference works — this is `r2v`, and the catalog does not list it
 
@@ -263,24 +274,57 @@ limits imply. Concretely:
   capability flag and a parameter's documented limits disagree, the flag was
   the one worth believing, and it took 55 cents to find that out.
 
-### What v2v does — and what one real run did not settle
+### What v2v did on a known-answer control
 
-Ofox describes a video reference as "Guide subject / style
-(reference-to-video), **not precise frame anchors**." The duration ceiling is
-unchanged at 4-30s, so there is **no mechanism here for extending a video
-beyond a single job's length**.
+Ofox describes a video reference as “Guide subject / style
+(reference-to-video), **not precise frame anchors**.” The two experiments here
+do not turn that description into a universal frame-lock guarantee. They do
+settle two narrower questions that the earlier motionless-cup run could not.
 
-One real run (4s 480p, feeding a previous job's output, prompt asking to
-continue the scene) produced an output whose opening frame closely matched the
-input's closing frame. That is consistent with continuation — and equally
-consistent with a style reference reproducing a near-identical static scene,
-because the subject was a motionless cup. **The run does not distinguish the
-two**, and nothing here should be read as proving continuation works.
+The input was a synthetic 4-second / 480p control with four one-second beats:
+a three-bay frontal composition with a red marker moving right; a single-bay
+close view with a blue marker rising; an overhead triangular layout with a
+green marker moving side to side; and a right-bay view with a yellow marker
+exiting right. Those independent composition and direction cues make replay,
+reordering, and final-frame copying distinguishable.
 
-For multi-shot continuity, `chain` is the better tool on every axis that was
-measured: it bills at the t2v rate ($0.11/s vs $0.14/s at 480p), takes a local
-file instead of requiring a hosted URL, and anchors on an actual frame rather
-than a soft reference.
+Both jobs used `bytedance/seedance-2.5`, `byteplus`, 4 seconds, 480p,
+`generate_audio: false`, and seed `314159265`. A dry run immediately before
+each create quoted `$0.56`; each completed job billed `$0.56`. That agreement
+is evidence for this measured parameter pair, not a permanent rate promise.
+
+#### Structure-preserving rerender
+
+Job `30c3e3e0-ec28-4988-91a2-95b440a24629` asked the model to treat the input
+as exact previs, preserve order, timing, framing, layout and directions, and
+replace the white-grid treatment with a dark industrial exhibition space.
+Manual review of an 8fps contact sheet and frames around every transition found
+all four compositions in order, all four motion directions preserved, no
+added/reordered beat, and hard boundaries at exactly 1.0, 2.0 and 3.0 seconds.
+That meets the pre-registered pass criterion for this control.
+
+#### Continuation
+
+Job `e15cdaef-c1b3-4a23-9ebc-4484be926a1b` described the input as preceding
+footage rather than a shot list, required the opening to use the final
+right-bay state, prohibited replay of the first three layouts, and asked for a
+rightward exit into a newly revealed bay. The output opened from that final
+state, the yellow object exited right, the camera revealed further/new bays,
+and none of the first three layouts replayed. This is continuation evidence
+for that prompt/control pair.
+
+The prompt distinction is load-bearing: a rerender names the whole reference
+as structure to preserve; a continuation names only its final state as the
+starting point and explicitly prohibits replay. Neither result establishes
+photoreal inputs, longer clips, 720p/1080p, another model or provider, several
+video references, or simultaneous material/identity images.
+
+The duration ceiling remains 4–30 seconds, and a continuation job returns a
+new standalone clip rather than appending the source. `chain` remains the
+better measured route for continuity across generated jobs when a frame anchor
+is enough: it takes a local file and uses an actual extracted frame rather
+than a soft video reference. Use a video reference when the temporal structure
+or the source's final-state context is the information the prompt needs.
 
 ## `mode` is accepted and has no effect — extend and edit cannot be requested here
 

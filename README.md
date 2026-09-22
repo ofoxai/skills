@@ -20,8 +20,8 @@ these skills spend real money.
 ## The video and image skills cost real money — here's how to check before you commit
 
 The video scenario skills — the four `seedance-*` ones plus
-`keyframe-animation`, `product-demo`, `video-extend-edit`, `ugc-ads`,
-`shorts-reels`, `talking-head`, `explainer` and `music-video` —
+`keyframe-animation`, `product-demo`, `video-extend-edit`, `previs-rerender`,
+`ugc-ads`, `shorts-reels`, `talking-head`, `explainer` and `music-video` —
 call Ofox's video API, which runs
 [Seedance 2.5](https://ofox.ai/models/bytedance/seedance-2.5?utm_source=github&utm_medium=readme&utm_campaign=skills)
 and bills per second of generated video. A 15-second 720p clip runs about
@@ -190,6 +190,7 @@ the measured costs.
 | [keyframe-animation](skills/keyframe-animation/SKILL.md) | Two stills you already have: image A as the first frame, image B as the last, in one job — the model fills the middle. Both ends come back honoured to the pixel — measured three times. When the subject gets there is not predictable: two runs produced two different easing curves. |
 | [product-demo](skills/product-demo/SKILL.md) | Two screenshots of your interface, before and after a state change, animated as one clip. The model cross-fades only the values that differ; the strings stay legible, so this one carries no anti-text rule. |
 | [video-extend-edit](skills/video-extend-edit/SKILL.md) | Footage you already have, made longer — or given a different ending. A frame comes out of your clip locally for nothing and becomes the first frame of a new segment, which is joined onto the original. The new segment's pixel size comes from the tier you paid for and never from your clip, so the join has to rescale: concatenating without it produces a variable-resolution file that ffmpeg reports no error about. |
+| [previs-rerender](skills/previs-rerender/SKILL.md) | A rough white-model, clay, wireframe, blockout or animatic clip used as the blueprint for a finished treatment. One measured 4s/480p synthetic run kept its shot order, cut timing, framing, layout and motion directions; a second continued from the final state without replaying the rough cut. Other inputs and tiers remain experiments. |
 | [ugc-ads](skills/ugc-ads/SKILL.md) | Handheld, phone-shot creator clips — unboxing, first impression, honest review. Deliberately inverts the polish the other scenarios default to: one practical light, imperfect framing, no grading, no beauty filter. |
 | [shorts-reels](skills/shorts-reels/SKILL.md) | Several cheap vertical 9:16 drafts in one priced batch, a contact sheet to pick from, then one proper re-render of the winner. Brings the format and the economics; the prompt comes from whichever scenario skill fits. |
 | [talking-head](skills/talking-head/SKILL.md) | A portrait plus a short script, as one person saying those words to camera. You supply the text and the model generates the voice — audio can't be uploaded. The only skill here that doesn't default to Seedance 2.5: it refuses a real person's photo, so this one runs on `wan-3.0-prime`. |

@@ -2,11 +2,11 @@
 name: ofox-video-core
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Shared execution layer for the Ofox video generation API (api.ofox.ai) — creates a video job, polls it to completion, downloads the finished mp4 from a persistent CDN URL, and reports the real cost. This is a library skill, not a standalone user-facing one — it is invoked by scenario skills such as seedance-short-drama, seedance-ad-creative, and seedance-product-video, which build model/prompt/resolution choices for a specific use case and then call into this skill's script rather than re-implementing the API calls. Load this skill directly only when a user explicitly names the Ofox video API, asks to call it with specific low-level parameters, or asks to debug/resume a stuck or failed Ofox video job by job id — for a plain scenario request ("make me a short drama scene", "generate a cinematic ad clip"), use the relevant scenario skill instead, which itself depends on this one.
 license: MIT
-version: "2.0.2"
+version: "2.0.3"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ofox-video-core
 metadata:
   author: ofoxai
-  version: "2.0.2"
+  version: "2.0.3"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -833,6 +833,26 @@ it may not set a field that has a flag; see below),
 `--poll-interval SECONDS` (default 6). Full parameter reference:
 `references/api-params.md`. Pricing and the cost-estimate formula:
 `references/pricing.md`.
+
+### Video references: rerender and continuation are different prompts
+
+A video inside `input_references` is a measured route, not only a documented
+field. Two 4-second / 480p Seedance 2.5 jobs on `byteplus` established two
+different prompt contracts: one preserved four compositions, their order,
+motion directions and hard boundaries while changing the visual treatment;
+the other began from the source's final state and continued into new space
+without replaying its earlier layouts. The jobs, artifact-level readings and
+untested range are in `references/api-params.md`.
+
+This does **not** make video input a precise frame anchor. It is one measured
+pair on one synthetic control, model, upstream, duration and tier. A video
+must be supplied as a public web URL: the current route rejected a small
+`data:video/mp4` URI before job creation. The core also refuses a video
+reference together with `frame_images` before estimate or submission. That
+last statement is a shipped-client boundary, not a claim about direct API
+calls that bypass this script. For the scenario workflow and manual
+frame-by-frame review, use
+[`previs-rerender`](../previs-rerender/SKILL.md).
 
 ⚠️ **There is no way to supply the audio.** `input_references` documents an
 audio allowance and the server really does accept, validate and fetch an

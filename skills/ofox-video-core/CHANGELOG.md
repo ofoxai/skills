@@ -4,6 +4,23 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 2.0.3 — video-reference behavior now has a known-answer test
+
+The video-reference documentation now reflects two artifact-level Seedance
+2.5 measurements instead of the earlier inconclusive motionless-cup run. On a
+four-beat synthetic control, one job preserved composition order, motion
+directions and the three exact hard boundaries while changing the treatment;
+a second began from the final state and continued into new space without
+replaying the earlier layouts. Both 4-second / 480p `byteplus` dry-run quotes
+matched their 56-cent bills.
+
+The input contract is narrower and now tested: a small video data URI reaches
+the client payload but the current route rejects it before job creation, so a
+public web URL is required. The existing `frame_images` plus
+`input_references` refusal is stated explicitly as a shipped-client boundary,
+not generalized into a claim about direct API calls. The new
+`previs-rerender` scenario skill owns the prompt and manual-review workflow.
+
 ## 2.0.2 — one authoritative multi-image reference recipe
 
 The shared prompt guide now owns the complete `input_references` recipe:
