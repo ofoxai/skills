@@ -17,12 +17,63 @@
 // fallback that would silently install nothing.
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { checkAll } from "./check-frontmatter.mjs";
 import { checkSkills } from "./check-skills.mjs";
 
 const REPO = "ofoxai/skills";
 const argv = process.argv.slice(2);
+const manifestUrl = new URL("../skills.sh.json", import.meta.url);
+
+const loadManifest = () => {
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(manifestUrl, "utf8"));
+  } catch (error) {
+    throw new Error(`cannot read packaged skills.sh.json: ${error.message}`);
+  }
+
+  if (!Array.isArray(parsed?.groupings) || parsed.groupings.length === 0) {
+    throw new Error("packaged skills.sh.json must contain a non-empty groupings array");
+  }
+
+  const seen = new Set();
+  for (const [index, grouping] of parsed.groupings.entries()) {
+    if (typeof grouping?.title !== "string" || grouping.title.trim() === "") {
+      throw new Error(`packaged skills.sh.json groupings[${index}] needs a title`);
+    }
+    if (!Array.isArray(grouping.skills) || grouping.skills.length === 0) {
+      throw new Error(`packaged skills.sh.json groupings[${index}] needs a non-empty skills array`);
+    }
+    for (const skill of grouping.skills) {
+      if (typeof skill !== "string" || skill.trim() === "") {
+        throw new Error(`packaged skills.sh.json groupings[${index}] has an invalid skill name`);
+      }
+      if (seen.has(skill)) {
+        throw new Error(`packaged skills.sh.json lists ${skill} more than once`);
+      }
+      seen.add(skill);
+    }
+  }
+
+  return parsed;
+};
+
+let manifest;
+try {
+  manifest = loadManifest();
+} catch (error) {
+  console.error(`ofox-skills: ${error.message}`);
+  process.exit(1);
+}
+
+const GROUPINGS = manifest.groupings;
+const ALL_SKILLS = GROUPINGS.flatMap(({ skills }) => skills);
+const longestTitle = Math.max(...GROUPINGS.map(({ title }) => title.length));
+const SKILLS_HELP = GROUPINGS.map(
+  ({ title, skills }) => `  ${title.padEnd(longestTitle)}  ${skills.join(", ")}`,
+).join("\n");
 
 const HELP = `ofox-skills — install the Ofox agent skills
 
@@ -33,9 +84,10 @@ Usage:
   npx ofox-skills doctor --project       ...checking this project instead of global
   npx ofox-skills [...] --agent <agent>  target specific agents instead
 
-Defaults: every skill, every agent, user-level, no prompts
-(\`--skill '*' --agent '*' --global --yes\`). Pass any of those flags yourself
-and yours is used instead — \`--agent codex\`, \`--project\`, and so on.
+Defaults: every published skill, every agent, user-level, no prompts. The skill
+names come from this package's \`skills.sh.json\`; internal repository helpers
+are not installed. Pass any scope or agent flag yourself and yours is used
+instead — \`--agent codex\`, \`--project\`, and so on.
 
 Why every agent by default: \`skills add\` otherwise asks interactively, or —
 when an agent is driving — installs only to the agent it detects. Both leave
@@ -48,14 +100,7 @@ video scenarios need ofox-video-core, image-edit and product-image need
 ofox-image-core, and seedance-anime-drama needs both.
 
 Skills in this repo:
-  Video    ofox-video-core, seedance-short-drama, seedance-ad-creative,
-           seedance-product-video, seedance-anime-drama, keyframe-animation,
-           product-demo, video-extend-edit, ugc-ads, shorts-reels,
-           talking-head, explainer, music-video
-  Image    ofox-image-core, image-edit, product-image
-  Secrets  hal-vault
-  Media    hal-image
-  Deploy   cloudflare-drop
+${SKILLS_HELP}
 
 Every Ofox skill needs OFOX_API_KEY: https://app.ofox.ai (Settings -> API Keys)
 Docs: https://github.com/ofoxai/skills#readme`;
@@ -85,21 +130,10 @@ const bail = (result, suggestion) => {
 // Scope is stated in the output and never guessed at. `skills ls` reports one
 // scope at a time, so a doctor that silently picked global would cheerfully
 // print "all of them installed" to someone standing in a project that has
-// none — which is the one situation this command exists to catch. (The count
-// in that message comes from OURS.length, never from a number typed here:
-// a hardcoded total goes stale the next time a skill is added.)
+// none — which is the one situation this command exists to catch. The list
+// and count come from skills.sh.json, the same manifest that publishes them;
+// a second hand-maintained list would drift the next time a skill is added.
 if (argv[0] === "doctor") {
-  const OURS = [
-    "ofox-video-core", "ofox-image-core",
-    "seedance-short-drama", "seedance-ad-creative",
-    "seedance-product-video", "seedance-anime-drama",
-    "keyframe-animation", "product-demo",
-    "video-extend-edit", "ugc-ads", "shorts-reels",
-    "talking-head", "explainer", "music-video",
-    "image-edit", "product-image",
-    "hal-vault", "hal-image", "cloudflare-drop",
-  ];
-
   const wantsProject = argv.includes("-p") || argv.includes("--project");
   const scopeFlag = wantsProject ? "-p" : "-g";
   const scopeName = wantsProject ? "this project" : "user-level (global)";
@@ -166,7 +200,7 @@ if (argv[0] === "doctor") {
 
   let missing = 0;
   let broken = 0;
-  for (const skill of OURS) {
+  for (const skill of ALL_SKILLS) {
     const agents = agentsOf(skill);
     const bad = unparseable.get(skill);
     if (bad) {
@@ -187,7 +221,7 @@ if (argv[0] === "doctor") {
 
   console.log("");
   if (broken) {
-    console.log(`${broken} of ${OURS.length} skills have frontmatter that will not parse.`);
+    console.log(`${broken} of ${ALL_SKILLS.length} skills have frontmatter that will not parse.`);
     console.log("The installer skips those silently, so reinstalling will not help —");
     console.log("they have to be fixed at the source. For the file and column:");
     console.log("  node bin/check-frontmatter.mjs");
@@ -205,12 +239,12 @@ if (argv[0] === "doctor") {
     console.log("");
   }
   if (missing) {
-    console.log(`${missing} of ${OURS.length} skills are missing from ${scopeName}, or are`);
+    console.log(`${missing} of ${ALL_SKILLS.length} skills are missing from ${scopeName}, or are`);
     console.log("installed there without being linked into any agent. Install them all:");
     console.log(`  npx ofox-skills${wantsProject ? " --project" : ""}`);
   }
   if (missing || broken) process.exit(1);
-  console.log(`All ${OURS.length} skills are installed and linked in ${scopeName}. If an`);
+  console.log(`All ${ALL_SKILLS.length} skills are installed and linked in ${scopeName}. If an`);
   console.log("agent still cannot see one, restart it — most read their skills at startup.");
   process.exit(0);
 }
@@ -224,7 +258,7 @@ const passthrough = wantsOneSkill ? argv.slice(1) : argv;
 // Defaults, each dropped the moment the caller expresses an opinion about it.
 const has = (...flags) => flags.some((f) => passthrough.includes(f));
 const defaults = [];
-if (!wantsOneSkill && !has("-s", "--skill")) defaults.push("--skill", "*");
+if (!wantsOneSkill && !has("-s", "--skill")) defaults.push("--skill", ...ALL_SKILLS);
 if (!has("-a", "--agent")) defaults.push("--agent", "*");
 if (!has("-g", "--global", "-p", "--project")) defaults.push("--global");
 if (!has("-y", "--yes")) defaults.push("--yes");
