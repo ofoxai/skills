@@ -4,6 +4,19 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 2.0.1 — expired 1080p promotion no longer under-quotes offline
+
+Seedance 2.5's 1080p promotion ended: the public catalog now reports $0.60/s
+for t2v and $0.71/s for v2v, replacing $0.48/s and $0.568/s. The bundled
+pricing snapshot and dated pricing reference now carry the live rates, so an
+offline dry run no longer approves a bill below the current catalog price.
+
+The pricing test no longer copies external rate constants. It reads the
+fresh catalog cache when available and the generated bundled snapshot when
+offline, then checks that the estimator agrees with that source. Future
+repricing therefore exercises the estimator instead of failing on a stale
+number handwritten into its own test.
+
 ## 2.0.0 — spending needs `--approved`
 
 **Breaking.** Every command in this repo, and in every skill built on it, that

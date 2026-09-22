@@ -18,11 +18,10 @@ resolution x mode price matrix.
 
 ## The cheap-to-expensive ladder
 
-Text-to-video, per second, cheapest first. **Snapshot as of 2026-08-30** — treat
-the shape as durable and the digits as stale until checked. Several of these
-are promotional (Seedance 2.0 at 10% off, 2.0-fast at 30%, 2.5's 1080p a
-time-limited $0.48 against a $0.60 list), so a promo ending is a real reason a
-number moves.
+Text-to-video, per second, cheapest first. **Snapshot as of 2026-09-22** — treat
+the shape as durable and the digits as stale until checked. Promotional rates
+can expire without a code change: Seedance 2.5's 1080p promotion ended between
+2026-08-30 and 2026-09-22, moving the live rate from $0.48 to $0.60 per second.
 
 | Model | 480p | 720p | 1080p | 4k | Duration |
 |---|---|---|---|---|---|
@@ -30,8 +29,8 @@ number moves.
 | `bytedance/seedance-2.0-fast` | $0.042 | $0.091 | — | — | 4-15s |
 | `bytedance/seedance-2.0` | $0.063 | $0.15 | $0.31 | $1.24 | 4-15s |
 | `alibaba/wan-2.7` | — | $0.10 | $0.15 | — | 2-15s |
-| `bytedance/seedance-2.5` | $0.11 | $0.24 | $0.48 | — | 4-30s |
-| `alibaba/happyhorse-1.1` | — | $0.13 | $0.17 | — | 3-15s |
+| `bytedance/seedance-2.5` | $0.11 | $0.24 | $0.60 | — | 4-30s |
+| `alibaba/happyhorse-1.1` | — | $0.14 | $0.18 | — | 3-15s |
 
 **Why this table matters even though the script doesn't read it:** at 720p,
 `seedance-2.0-mini` is 6x cheaper than `seedance-2.5`. Five 4-second drafts
@@ -48,7 +47,7 @@ Two things to keep straight:
   *video* is the input. Verified by a real i2v run billing 4s x $0.11 at 480p.
 
 Video-to-video costs more everywhere it is offered — Seedance 2.5:
-$0.14 / $0.30 / $0.568 for 480p / 720p / 1080p.
+$0.14 / $0.30 / $0.71 for 480p / 720p / 1080p.
 
 ## Provider does not change the price
 
@@ -76,10 +75,10 @@ would understate a default job by more than half.
 
 ## Seedance 2.5 pricing
 
-Source: `https://ofox.ai/models/bytedance/seedance-2.5` (verified
-2026-08-29). Prices, especially the "time-limited" 1080p rate, can change —
-re-verify against the live page before quoting a number you intend to hold
-someone to, particularly for anything beyond a quick estimate.
+Source: the public model catalog read by `ofox-video.sh providers` (verified
+2026-09-22). Prices can change — re-run that command before quoting a number
+you intend to hold someone to, particularly for anything beyond a quick
+estimate.
 
 ## Per-second rate
 
@@ -87,7 +86,7 @@ someone to, particularly for anything beyond a quick estimate.
 |---|---|---|
 | 480p | $0.11/s | $0.14/s |
 | 720p | $0.24/s | $0.30/s |
-| 1080p | $0.48/s (list $0.60/s, time-limited) | $0.568/s (list $0.71/s) |
+| 1080p | $0.60/s | $0.71/s |
 
 - Duration range: 4–30 seconds, any integer.
 - Aspect ratios: 21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16 / adaptive.
@@ -106,9 +105,8 @@ someone to, particularly for anything beyond a quick estimate.
 estimated_cost = duration_seconds * price_per_second(resolution, mode)
 ```
 
-Example: a 5-second, 1080p, text-to-video clip ≈ `5 * 0.48 = $2.40`
-(using the time-limited rate; `5 * 0.60 = $3.00` at list price if the
-promo has ended — check the live pricing page if the number matters).
+Example: a 5-second, 1080p, text-to-video clip ≈ `5 * 0.60 = $3.00` at the
+2026-09-22 rate. Check the live catalog if the number matters.
 
 **Actual — report this *after* generating, don't recompute it:**
 

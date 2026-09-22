@@ -45,6 +45,35 @@ warm() {
   offline
 }
 
+# Read the rate from the source the run is meant to agree with. The live
+# catalog cache has a different envelope from the bundled offline snapshot,
+# so keep both paths explicit instead of copying today's external prices into
+# this test. A price change should test the estimator, not break a stale
+# constant in the test itself.
+catalog_rate() {
+  local res="$1" mode="$2"
+  local live="$XDG_CACHE_HOME/ofox/catalog-bytedance-seedance-2.5.json"
+  if [ -f "$live" ]; then
+    jq -r --arg res "$res" --arg mode "$mode" '
+      first(.provider_cards[]
+        | select(.provider_type == "byteplus")
+        | .pricing.video_pricing.tiers[]
+        | select(.resolution == $res and .input_type == $mode)
+        | .price) // empty
+    ' "$live"
+  else
+    jq -r --arg res "$res" --arg mode "$mode" '
+      first(.models[]
+        | select(.id == "bytedance/seedance-2.5")
+        | .provider_cards[]
+        | select(.provider_type == "byteplus")
+        | .pricing.video_pricing.tiers[]
+        | select(.resolution == $res and .input_type == $mode)
+        | .price) // empty
+    ' "$SCRIPT_DIR/../pricing-snapshot.json"
+  fi
+}
+
 # Pulls the dollar figure out of an "Estimated cost: ~$X.XX ..." line.
 est_amount() {
   sed -n 's/.*Estimated cost: ~\$\([0-9.]*\).*/\1/p' | head -1
@@ -61,10 +90,15 @@ fi
 echo
 echo "=== Estimates match the live catalog ==="
 warm
-# seedance-2.5 t2v: 480p 0.11, 720p 0.24, 1080p 0.48 (per the catalog)
 check_rate() {
-  local res="$1" want="$2" dur=4 takes=2
+  local res="$1" dur=4 takes=2
   local out amount expect
+  local want
+  want="$(catalog_rate "$res" t2v)"
+  if [ -z "$want" ]; then
+    fail "catalog has a seedance-2.5 t2v rate for $res" "no byteplus tier found"
+    return
+  fi
   out=$(bash "$TARGET" batch --prompt x --takes "$takes" --duration "$dur" --resolution "$res" 2>&1)
   amount=$(printf '%s' "$out" | est_amount)
   expect=$(awk -v d="$dur" -v n="$takes" -v r="$want" 'BEGIN{printf "%.2f", d*n*r}')
@@ -74,15 +108,19 @@ check_rate() {
     fail "batch estimate at $res should be \$$expect" "got '\$$amount'"
   fi
 }
-check_rate 480p 0.11
-check_rate 720p 0.24
-check_rate 1080p 0.48
+check_rate 480p
+check_rate 720p
+check_rate 1080p
+
+rate_480_t2v="$(catalog_rate 480p t2v)"
+rate_720_t2v="$(catalog_rate 720p t2v)"
+rate_480_v2v="$(catalog_rate 480p v2v)"
 
 echo
 echo "=== generate estimates too, on stderr ==="
 out=$(bash "$TARGET" generate --prompt x --duration 5 --resolution 720p 2>&1)
 amount=$(printf '%s' "$out" | est_amount)
-expect=$(awk 'BEGIN{printf "%.2f", 5*0.24}')
+expect=$(awk -v r="$rate_720_t2v" 'BEGIN{printf "%.2f", 5*r}')
 if [ "$amount" = "$expect" ]; then
   pass "generate prints an estimate before submitting (\$$amount)"
 else
@@ -110,14 +148,14 @@ fi
 
 echo
 echo "=== Image-to-video bills at t2v rates, not v2v ==="
-# A frame image is i2v, which bills as t2v. At 480p that's 0.11, not 0.14.
+# A frame image is i2v, which bills as t2v rather than the v2v tier.
 printf 'not-a-real-image' > "$WORK/frame.png"
 out=$(bash "$TARGET" generate --prompt x --duration 4 --resolution 480p \
   --frame-first-image "$WORK/frame.png" 2>&1)
 amount=$(printf '%s' "$out" | est_amount)
-expect_i2v=$(awk 'BEGIN{printf "%.2f", 4*0.11}')
+expect_i2v=$(awk -v r="$rate_480_t2v" 'BEGIN{printf "%.2f", 4*r}')
 if [ "$amount" = "$expect_i2v" ]; then
-  pass "i2v estimates at the t2v rate (\$$amount, not the v2v 0.14)"
+  pass "i2v estimates at the t2v rate (\$$amount, not the v2v tier)"
 else
   fail "i2v should estimate at the t2v rate \$$expect_i2v" "got '\$$amount'"
 fi
@@ -130,7 +168,7 @@ v2v_refs='{"input_references":[{"type":"video_url","video_url":{"url":"https://e
 out=$(bash "$TARGET" generate --prompt x --duration 4 --resolution 480p \
   --extra-json "$v2v_refs" 2>&1)
 amount=$(printf '%s' "$out" | est_amount)
-expect_v2v=$(awk 'BEGIN{printf "%.2f", 4*0.14}')
+expect_v2v=$(awk -v r="$rate_480_v2v" 'BEGIN{printf "%.2f", 4*r}')
 if [ "$amount" = "$expect_v2v" ]; then
   pass "a video_url reference estimates at the v2v rate (\$$amount)"
 else
@@ -154,7 +192,7 @@ img_refs='{"input_references":[{"type":"image_url","image_url":{"url":"https://e
 out=$(bash "$TARGET" generate --prompt x --duration 4 --resolution 480p \
   --extra-json "$img_refs" 2>&1)
 amount=$(printf '%s' "$out" | est_amount)
-expect_t2v=$(awk 'BEGIN{printf "%.2f", 4*0.11}')
+expect_t2v=$(awk -v r="$rate_480_t2v" 'BEGIN{printf "%.2f", 4*r}')
 if [ "$amount" = "$expect_t2v" ]; then
   pass "image references still estimate at the t2v rate (\$$amount)"
 else
@@ -167,7 +205,16 @@ rm -rf "${XDG_CACHE_HOME:?}"
 offline
 out=$(bash "$TARGET" batch --prompt x --takes 2 --duration 4 --resolution 720p 2>&1)
 amount=$(printf '%s' "$out" | est_amount)
-expect_snap=$(awk 'BEGIN{printf "%.2f", 4*2*0.24}')
+snapshot_rate=$(jq -r '
+  first(.models[]
+    | select(.id == "bytedance/seedance-2.5")
+    | .provider_cards[]
+    | select(.provider_type == "byteplus")
+    | .pricing.video_pricing.tiers[]
+    | select(.resolution == "720p" and .input_type == "t2v")
+    | .price) // empty
+' "$SCRIPT_DIR/../pricing-snapshot.json")
+expect_snap=$(awk -v r="$snapshot_rate" 'BEGIN{printf "%.2f", 4*2*r}')
 if [ "$amount" = "$expect_snap" ]; then
   pass "cold cache + no network still estimates from the bundled snapshot"
 else
