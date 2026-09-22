@@ -1689,12 +1689,11 @@ image supplies who the character is or what the product looks like, and the
 prompt says which attributes to take. That is a different job from "animate
 this picture", and the sentence patterns below are for it.
 
-One open point: whether the vendor's `@image1` token is resolved to the
-right attachment on the Ofox `input_references` path has **not been verified
-in this repo**. The reference is attached either way; the untested part is
-whether the model maps the token to the attachment by position. Write the
-role sentence so it still reads correctly as plain text ("image 1 provides
-…").
+The Ofox `input_references` path has been measured with two images: the
+attachments map by **array position**, first item to `@image1`, second item
+to `@image2`. The tags are prompt labels for the model; the array order is
+the binding. Use only the canonical `@imageN` spelling in prompts, and keep
+each label aligned with that position.
 
 ### What a frame lock actually holds, measured
 
@@ -1927,7 +1926,25 @@ semantics you can use.
   been rejected upstream with a download error while the same file,
   base64-encoded, went through.
 
-### Identity-reference example
+### Identity-reference recipe — the authoritative copy
+
+Use this recipe from every scenario skill; do not copy it into another skill:
+
+1. Put the images in `input_references` in the intended order.
+2. Use the matching canonical labels `@image1`, `@image2`, and so on. Array
+   order is authoritative; the label does not reorder an attachment.
+3. Give every asset one role sentence that says both what it supplies and
+   what to ignore: `@image1 supplies <X>; ignore <Y>.`
+4. Build the JSON into a non-empty variable, then use `--dry-run
+   --print-payload` and confirm `input_references` is present before any paid
+   run.
+
+**Evidence boundary:** one paid run measured exactly **two** images. Three or
+more images, non-character roles, and mixed image/audio/video references have
+not been exercised in this repo. The API limit is **at most nine images**, not
+a tested recommendation to use nine. A gallery case that used 18 images
+cannot be reproduced through this API as one job; do not truncate it silently
+or claim that it is supported.
 
 The element shape is the one `api-params.md` documents:
 `{"type": "image_url", "image_url": {"url": …}}`. `--extra-json` is merged
@@ -1938,7 +1955,7 @@ last, so its keys win over any flag. Do not combine with
 bash references/ofox-video.sh generate --dry-run \
   --model bytedance/seedance-2.5 \
   --duration 10 --resolution 720p \
-  --prompt "image1 provides the heroine's identity only: face, short lilac hair, blue-and-white flower hairpin. Ignore its outfit, background and pose. image2 provides the venue: the bright school corridor, its overcast daylight and floor reflections. The lilac-haired girl walks down the corridor toward the camera; medium shot, slow handheld follow, shallow depth of field. No subtitles, no text, no watermarks." \
+  --prompt "@image1 supplies the heroine's identity only: face, short lilac hair, blue-and-white flower hairpin; ignore its outfit, background and pose. @image2 supplies the venue: the bright school corridor, its overcast daylight and floor reflections; ignore any people or text in it. The lilac-haired girl walks down the corridor toward the camera; medium shot, slow handheld follow, shallow depth of field. No subtitles, no text, no watermarks." \
   --extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"https://example.com/heroine-sheet.png"}},{"type":"image_url","image_url":{"url":"https://example.com/corridor.jpg"}}]}'
 ```
 
@@ -1948,7 +1965,7 @@ Drop `--dry-run` only after the approval gate (`approval-gate.md`).
 **The shape above has now been run, and the position tokens resolve.** Job
 `0f5c8b4e-8813-40d2-a6bd-9e2d030b6d1e` (2026-09-16, `bytedance/seedance-2.5`
 on `byteplus`, 4s / 480p, **44 cents**) sent two images as `data:` URIs and
-cast them by position exactly as this example does — image1 an object, image2
+cast them by position exactly as this example does — `@image1` an object, `@image2`
 a garment. Both references' named features came through, and **image1
 rendered as the object and image2 as the garment, in array order, not
 swapped**. Whether the tokens resolve by position used to be the one

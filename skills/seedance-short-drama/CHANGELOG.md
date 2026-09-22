@@ -2,6 +2,13 @@
 
 All notable changes to the **seedance-short-drama** skill. Versioning follows SemVer.
 
+## 2.0.1 — multi-image story assets route to the shared recipe
+
+Fictional characters, props, storyboards and environments supplied as several
+images now have a discoverable `input_references` route. The skill links to
+the core's single recipe and keeps its evidence boundary explicit rather than
+claiming the gallery's four-image, non-character examples were tested here.
+
 ## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
 
 **Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its

@@ -2,11 +2,11 @@
 name: seedance-product-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a clean, catalog-style e-commerce product video from a real product photo (or, for a generic or fictional product, a text description) using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, target platform and aspect ratio, background, camera orbit or turntable) when the request leaves them open, writes a plain-background, literal-accuracy prompt (precise product description, a simple camera orbit or turntable motion, no dramatic cinematography), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a product photo into catalog/listing footage, e.g. "make this product photo a 360-degree white-background showcase", "turn this photo into a white-background product video", "make a clean turntable video of this item", or "give me a 5-second white-background rotation video of this product for my listing". Do not use for cinematic brand/mood advertising (see seedance-ad-creative) or for anything involving people/dialogue (see seedance-short-drama).
 license: MIT
-version: "2.0.0"
+version: "2.0.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-product-video
 metadata:
   author: ofoxai
-  version: "2.0.0"
+  version: "2.0.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -163,7 +163,7 @@ Every answer has to be findable in the prompt or the flags.
 
 | Answer | Lands in |
 |---|---|
-| Photo: yes, path | `--frame-first-image PATH`, the `image1 provides the product exactly` sentence in the PRODUCT block, and the crop/pad step before generating |
+| Photo: yes, path | `--frame-first-image PATH`, the `@image1 supplies the product exactly` sentence in the PRODUCT block, and the crop/pad step before generating |
 | Photo: no | a text-only PRODUCT block, an expectation note in the recap, and `--aspect-ratio` becomes effective |
 | Aspect | the crop/pad ratio for the photo (image-to-video), or `--aspect-ratio` (text-to-video) |
 | Background | the SCENE line: `pure white surface and backdrop` / `light grey studio surface` / `keep the background exactly as in image1` |
@@ -218,7 +218,7 @@ template.
 [<N> seconds, <1:1 | 9:16 | 16:9 | 4:3>.]                                  — optional; must match the flags (cases 18, 39, 41 write it; the vendor says it is not needed)
 PRODUCT: <product name>, <main colour> with <accent colour>, <material and finish>, <shape and structural points>[, printed text verbatim: "<text>"][, accessories: <A>, <B>, <C>].
          The product stays identical in shape, colour, proportions and label throughout.          (cases 19, 24, 39, 41)
-         [image1 provides the product exactly as it is; take nothing from its background.]
+         [@image1 supplies the product exactly as it is; ignore its background.]
 SCENE: the product centered on a <pure white | light grey | matte neutral> surface against a <pure white | neutral> backdrop; even studio softbox lighting, soft true reflections, no props, no shadows on the backdrop. Background and light do not change.   (case 17 for the surface and light; the white is a listing convention)
 
 0–<a>s     [REVEAL, optional — <the box lid lifts away | a hand moves away from the lens | the product fades up from dark> to show the product]   (cases 17, 19, 41)
@@ -432,7 +432,7 @@ verb" and section 4 below; the slot notes above for the accessory reading).
 
 ```
 12 seconds, 1:1.
-PRODUCT: a hair dryer, deep blue body with copper accents, matte finish with polished copper trim, slim cylindrical barrel with a round rear intake; accessories: straight nozzle, diffuser nozzle, styling barrel. The product stays identical in shape, colour, proportions and trim throughout. image1 provides the product exactly as it is; take nothing from its background.
+PRODUCT: a hair dryer, deep blue body with copper accents, matte finish with polished copper trim, slim cylindrical barrel with a round rear intake; accessories: straight nozzle, diffuser nozzle, styling barrel. The product stays identical in shape, colour, proportions and trim throughout. @image1 supplies the product exactly as it is; ignore its background.
 SCENE: the product centered on a pure white surface against a pure white backdrop; even studio softbox lighting, soft true reflections, no props, no shadows on the backdrop. Background and light do not change.
 
 0–3s    REVEAL — a plain white box lid lifts away, showing the hair dryer standing upright.
@@ -957,7 +957,7 @@ An attached image means one of two things, and the API has a field for each
 | Meaning | Flag | What it does | Status in this repo |
 |---|---|---|---|
 | **First frame** — the clip starts on this exact picture | `--frame-first-image PATH` | locks the opening view to the photo; on `bytedance/seedance-2.5` forces `aspect_ratio: adaptive`, so the photo is cropped or padded to the target ratio **before** generating | verified with real runs; this skill's default route |
-| **Identity reference** — the model borrows the product's appearance from one or more images, no frame is locked | `--extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"…"}}, …]}'`, up to 9 images | lets front, back, top and box photos all inform the clip, with one role line per image (`image1: front view; image2: the label, verbatim`) — the pattern nearly every gallery prompt with an image uses (cases 24, 37) | element shape documented in `api-params.md`, and **measured end to end on 2026-09-16** (job `0f5c8b4e`, two images, 44 cents, billed at the plain t2v rate): both references' named features came through and **the `image1` / `image2` tokens resolved by position, in array order**. A local file needs no hosting — an image reference accepts a `data:` URI. ⚠️ **A `data:` URI you build into `--extra-json` yourself is bounded by `ARG_MAX`, and over the limit the reference is dropped silently while the job is submitted and billed anyway** — downscale the image, and confirm `input_references` is in a `--dry-run --print-payload` before spending. See `api-params.md` → "An empty `--extra-json` is treated as 'not passed'". Still one job with two images; nine images, and mixing an image with an audio or video element, are untested. ⚠️ Pass `--aspect-ratio` explicitly on this route: the one measured job passed none and came back portrait from two landscape references |
+| **Identity reference** — the model borrows the product's appearance from several photos, no frame is locked | `input_references` through `--extra-json` | lets front, back, top and box photos inform the clip | Follow the shared [`Identity-reference recipe — the authoritative copy`](../ofox-video-core/references/prompt-structure.md#identity-reference-recipe--the-authoritative-copy). It owns the payload shape, canonical `@imageN` labels, array-order rule, dry-run guard, measured two-image boundary and nine-image ceiling. For this product route, pass `--aspect-ratio` explicitly. |
 
 **The two are mutually exclusive** in one job: the script rejects a request
 carrying both (`references_conflict`). For a single photo, the first-frame

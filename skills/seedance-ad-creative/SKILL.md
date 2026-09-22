@@ -2,11 +2,11 @@
 name: seedance-ad-creative
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a cinematic brand/product ad clip from a product description or photo using the Ofox video API (Seedance 2.5) — runs a short creative brief (product photo, brand tone, camera move, aspect ratio) when the request leaves them open, writes a timestamped shot-craft prompt (hook, showcase, slow-motion climax, hero close), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks for a commercial-style product or brand video, e.g. "give this perfume bottle a 10-second cinematic brand ad", "make a product ad for our new sneaker", "turn this product photo into a hero video for the landing page", or "I need a 15-second brand video with a slow orbit around the bottle". Do not use for dialogue-driven scenes with people talking (see seedance-short-drama).
 license: MIT
-version: "2.0.0"
+version: "2.0.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-ad-creative
 metadata:
   author: ofoxai
-  version: "2.0.0"
+  version: "2.0.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -233,7 +233,7 @@ STYLE: <ad category> commercial, <capture anchor: 8K photoreal studio | 35mm fil
 COLOR PALETTE: <dominant>, <the product's warm or cool accent>, <contrast colour>, <metallic accent>.                        (case 14)
 [CHARACTER: <one block — age range, build, hair, wardrobe item by item with colours, one signature accessory>. Referred to below as "<tag>".]   (case 14; text only — see the real-person note below)
 PRODUCT: <shape> <material and finish> <colour> <product name>, <label text in quotes, verbatim>, <contents or accessories item by item>.
-         [image1 provides the product exactly — <shape, label, cap, colour>; ignore its background.]                     (cases 12, 24)
+         [@image1 supplies the product exactly — <shape, label, cap, colour>; ignore its background.]                   (cases 12, 24)
 SCENE: <backdrop>, <one or two props framing the shot>, <light: saturated studio key with a warm rim | golden hour | single hard key>.
 
 0–<3–5>s    HOOK — <one visual focus: a macro of one ingredient | the cap | the clock face>; <one strong move: a hard cut lands as the detail completes its motion | low-angle dolly-in | a white flash freezes the frame | layers unfold>.   (cases 12, 13, 15, 14)
@@ -267,8 +267,9 @@ Notes on the slots:
   `--frame-first-image` job) ·
   `Preserve the product exactly as in @image1 throughout — frame shape,
   lenses, hinges, colours, materials, proportions.` (adapted from case 24) ·
-  one role line per asset, `image1: product appearance. image2: logo, last
-  second only.` (cases 12, 13). Sentence patterns and the `@image1` caveat:
+  one role line per asset, `@image1 supplies product appearance; @image2
+  supplies the logo, last second only.` (cases 12, 13). Sentence patterns and
+  the `@image1` caveat:
   `Reference assets as visual anchors`.
 - **Several pieces or an unboxing** (case 24): name every piece and lock each
   — `Use the uploaded sunglasses, retail box and leather case as locked
@@ -402,7 +403,7 @@ manifest — the vendor's formula order, subject and action first (shared
 file, `The vendor's own formula (ByteDance first-party)`).
 
 ```
-<Product> <one action or event> on <backdrop>; <tone archetype>, <capture anchor>. [image1 provides the product exactly.]
+<Product> <one action or event> on <backdrop>; <tone archetype>, <capture anchor>. [@image1 supplies the product exactly; ignore its background.]
 0–3s: <a macro of one detail>; a hard cut lands as it completes its motion.
 3–7s: <the physical event> in slow motion — <micro-detail>; rim light along the edge.
 7–10s: product hero frame, centered; [the slogan "<text>" | the logo per image2 in the last second;] hold the final frame.
@@ -433,7 +434,7 @@ departure from the original, not a translation of it.
 FORMAT: 20 seconds, 16:9, hard cuts on the timestamps.
 STYLE: bright, multicoloured snack commercial; clean, premium, strongly rhythmic; glossy high-speed capture.
 COLOR PALETTE: strawberry red, mango yellow, blueberry violet and kiwi green on white; gold foil accents.
-PRODUCT: rectangular fruit-filled biscuits in four flavours, each beside its fruit; image1 provides the strawberry variant's exact packaging and filling colour.
+PRODUCT: rectangular fruit-filled biscuits in four flavours, each beside its fruit; @image1 supplies the strawberry variant's exact packaging and filling colour; ignore its background.
 SCENE: white seamless backdrop, the fruit as the only props, saturated studio key light with a warm rim.
 
 0–3s    HOOK — a single strawberry fills the frame in macro; the cut lands as it rotates to catch the key light.
@@ -815,7 +816,7 @@ An attached image means one of two things, and the API has a field for each
 | Meaning | Flag | What it does | Status in this repo |
 |---|---|---|---|
 | **First frame** — the clip starts on this exact picture | `--frame-first-image PATH` | locks the opening composition (case 15's `Begin with the exact composition of the reference image`); on `bytedance/seedance-2.5` forces `aspect_ratio: adaptive`, so crop or pad the photo to the target ratio first | verified with real runs; this skill's default route |
-| **Identity reference** — the model borrows the product's appearance, no frame is locked | `--extra-json '{"input_references":[{"type":"image_url","image_url":{"url":"…"}}]}'`, up to 9 images | what nearly every gallery prompt with an image does (cases 12, 13, 24): one role line per image, `image1: the product's exact packaging; image2: the logo, last second only` | element shape documented in `api-params.md`, and **measured end to end on 2026-09-16** (job `0f5c8b4e`, two images, 44 cents, billed at the plain t2v rate): both references' named features came through and the **`image1` / `image2` tokens resolved by position, in array order**. A local file needs no hosting — an image reference accepts a `data:` URI. ⚠️ **A `data:` URI you build into `--extra-json` yourself is bounded by `ARG_MAX`, and over the limit the reference is dropped silently while the job is submitted and billed anyway** — downscale the image, and confirm `input_references` is in a `--dry-run --print-payload` before spending. See `api-params.md` → "An empty `--extra-json` is treated as 'not passed'". Two images is what was run; nine, and mixing image with audio or video elements, are untested. ⚠️ Pass `--aspect-ratio` explicitly here — the measured job passed none and came back portrait from two landscape references |
+| **Identity reference** — the model borrows the product's appearance, no frame is locked | `input_references` through `--extra-json` | use one asset for exact packaging and another for the logo, for example | Follow the shared [`Identity-reference recipe — the authoritative copy`](../ofox-video-core/references/prompt-structure.md#identity-reference-recipe--the-authoritative-copy). It owns the payload shape, canonical `@imageN` labels, array-order rule, dry-run guard, measured two-image boundary and nine-image ceiling. For this ad route, pass `--aspect-ratio` explicitly. |
 
 **The two are mutually exclusive** in one job: the script rejects a request
 that carries both (`references_conflict`). Choose the first-frame route when

@@ -2,6 +2,14 @@
 
 All notable changes to the **music-video** skill. Versioning follows SemVer.
 
+## 2.0.1 — image-led visuals have an honest multi-reference route
+
+The skill now routes visual reference images to the core's authoritative
+`input_references` recipe without changing the rule that the user's audio
+stays local and is muxed afterwards. It calls out that only two images were
+measured, the API accepts at most nine, and the gallery's 18-image case is not
+reproducible as one Ofox job.
+
 ## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
 
 **Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its

@@ -4,6 +4,16 @@ All notable changes to the **ofox-video-core** skill. Versioning follows SemVer.
 
 This file starts at 1.2.0; earlier versions predate it.
 
+## 2.0.2 — one authoritative multi-image reference recipe
+
+The shared prompt guide now owns the complete `input_references` recipe:
+canonical `@imageN` labels, array-order binding, one “supplies / ignore” role
+sentence per asset, and a payload check before spending. It states the actual
+evidence boundary—two images measured once, three or more untested, nine the
+API ceiling—and explicitly rejects treating an 18-image gallery case as a
+reproducible one-job example. The obsolete claim that position mapping was
+unverified is removed.
+
 ## 2.0.1 — expired 1080p promotion no longer under-quotes offline
 
 Seedance 2.5's 1080p promotion ended: the public catalog now reports $0.60/s

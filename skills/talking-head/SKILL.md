@@ -2,11 +2,11 @@
 name: talking-head
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Turn a portrait plus a short script into a clip of one person speaking those words to camera. You supply the text and the model generates the voice — audio cannot be uploaded, measured. Defaults to alibaba/wan-3.0-prime rather than this repo's usual seedance-2.5, because seedance-2.5 refuses a real person's photo at submission. Use when a user has a face and some words and wants the face to say them, e.g. "make this headshot read my intro", "a spokesperson clip from this portrait", "have her say this line to camera", "use this avatar to read the announcement". Do not use for a scene between two or more people (see seedance-short-drama), a polished brand or product ad (see seedance-ad-creative), a handheld creator clip (see ugc-ads), or when the words still have to be pulled out of an article and no particular face is required (see explainer).
 license: MIT
-version: "2.0.0"
+version: "2.0.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/talking-head
 metadata:
   author: ofoxai
-  version: "2.0.0"
+  version: "2.0.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -468,11 +468,17 @@ A talking head is a single shot with performance beats inside it, so the
 shared file's "Short prompts (10 seconds or less)" shape applies even above
 10 seconds: **no shot manifest, no cut list.**
 
+If several images should supply identity or wardrobe without locking the
+opening frame, follow the shared
+[`Identity-reference recipe — the authoritative copy`](../ofox-video-core/references/prompt-structure.md#identity-reference-recipe--the-authoritative-copy).
+Do not restate its payload, evidence or limits here; this skill owns only the
+speaker-specific role assigned to each image.
+
 Slots in `<angle brackets>`; optional lines in `[square brackets]`.
 
 ```
 One continuous shot, <T> seconds, fixed camera, no cuts.
-IDENTITY: image1 is the speaker — take the face, hair and clothing from it exactly and keep them unchanged for the whole clip. [Ignore its background.]
+IDENTITY: @image1 supplies the speaker's face, hair and clothing — keep them unchanged for the whole clip. [Ignore its background.]
 [SPEAKER: <only when no portrait is attached: age range, build, hair, top with colour and material, one bearing word>.]
 SCENE: <where they are — a plain wall, a home study, an office with the room softly out of focus behind>. <One light source and its direction: soft window light from front-left.>
 FRAMING: chest-up medium close-up, <fixed camera | a faint breathing handheld>, <background softness>; <capture medium: real mirrorless texture, slight sensor noise>, real skin texture, no smoothing.
@@ -522,7 +528,7 @@ Seven notes on that shape:
 
 ```
 One continuous shot, 12 seconds, fixed camera, no cuts.
-IDENTITY: image1 is the speaker — take the face, hair and clothing from it exactly and keep them unchanged for the whole clip.
+IDENTITY: @image1 supplies the speaker's face, hair and clothing — keep them unchanged for the whole clip.
 SCENE: a home study; a bookshelf softly out of focus behind her. The only light is a window to the front-left, soft and slightly cool, with a gentle falloff across the far cheek.
 FRAMING: chest-up medium close-up, fixed camera, background softly blurred; real mirrorless texture with slight sensor noise, real skin texture, no smoothing.
 

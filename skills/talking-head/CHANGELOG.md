@@ -2,6 +2,11 @@
 
 All notable changes to the **talking-head** skill. Versioning follows SemVer.
 
+## 2.0.1 — multi-image references defer to the shared recipe
+
+The prompt section now routes identity or wardrobe reference sets to the
+core's authoritative recipe while keeping speaker-specific guidance local.
+
 ## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
 
 **Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its

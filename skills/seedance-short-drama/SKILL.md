@@ -2,11 +2,11 @@
 name: seedance-short-drama
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a realistic-human, dialogue-driven short-drama clip — one shot, or a few hard-cut shots inside one job — from a script or scene description using the Ofox video API (Seedance 2.5). Runs a short creative brief when the input leaves beat, aspect ratio, emotional arc or camera register open (one held take, a travelling take, or a multi-shot cut list) ("Let the AI decide" is offered on the taste questions, never on a must-ask one, and never as the default), writes a structured prompt (header manifest, timestamped shots, quoted dialogue with delivery notes, consistency lock), shows a cost estimate, then calls ofox-video-core to submit, poll, download, and report the real cost. Use when a user asks to turn a script beat into video, e.g. "generate scene 3 of this script, two characters talking, 15 seconds", "make a vertical short-drama clip of these two arguing in a kitchen", "turn this dialogue into a 12-second video", or "give me a realistic short-drama shot of a couple breaking up at a train station". Do not use for silent product/brand shots (see seedance-ad-creative), for anime- or manga-styled scenes (see seedance-anime-drama), for one person addressing the viewer rather than another character — a script read from a supplied portrait is talking-head, an idea pulled out of an article is explainer — or for anything not involving people/dialogue.
 license: MIT
-version: "2.0.0"
+version: "2.0.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/seedance-short-drama
 metadata:
   author: ofoxai
-  version: "2.0.0"
+  version: "2.0.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -654,6 +654,15 @@ the shared file) run into the same check in this scenario:
   limit on it:
   [`../ofox-video-core/references/api-params.md`](../ofox-video-core/references/api-params.md)
   → "`--real-person true` lifts that refusal on 2.5".
+
+For fictional characters, props, storyboards, or environments supplied as
+several images, use the shared
+[`Identity-reference recipe — the authoritative copy`](../ofox-video-core/references/prompt-structure.md#identity-reference-recipe--the-authoritative-copy).
+It covers the gallery shape behind cases 1 and 2 without pretending that
+their four-image and non-character combinations were tested here: only two
+images have been exercised, while the API ceiling is nine. Keep the JSON
+array and canonical `@image1`, `@image2` labels in the same order, and state
+what each asset supplies and what the model must ignore.
 
 **That opens a door this scenario has not walked through.** What was measured
 is a single 4-second 480p image-to-video job on one first frame, with a

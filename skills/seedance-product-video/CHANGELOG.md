@@ -2,6 +2,13 @@
 
 All notable changes to the **seedance-product-video** skill. Versioning follows SemVer.
 
+## 2.0.1 — product identity references use the shared recipe
+
+The several-photo route now links to the core's authoritative multi-image
+recipe instead of maintaining a second copy of its payload, evidence and
+failure warnings. Product-specific angle selection and aspect-ratio guidance
+remain here.
+
 ## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
 
 **Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its

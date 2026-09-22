@@ -2,11 +2,11 @@
 name: music-video
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai, plus the music file the finished video must carry. Your audio never reaches the API (measured) — the visuals are written to the track's tempo, mood and sections, then your own file is laid on locally at zero cost. One job caps at 30 seconds, so a three-minute song is six jobs minimum and the cost table says that before anything is spent. Use when a user has a specific piece of music and wants visuals for it, e.g. "make a music video for this track", "visuals for my song", "an MV for this instrumental", "generate footage cut to this beat". Do not use for cheap vertical social drafts (shorts-reels), a brand film that happens to have a music bed (seedance-ad-creative), or when there is no particular audio file the finished video has to carry.
 license: MIT
-version: "2.0.0"
+version: "2.0.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/music-video
 metadata:
   author: ofoxai
-  version: "2.0.0"
+  version: "2.0.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -85,6 +85,18 @@ does instead:
                                     no key, no cost, and the only way to get a
                                     specific track onto a clip
 ```
+
+### When the visual concept comes with several images
+
+Images can guide the generated visuals even though the audio cannot. Use the
+shared
+[`Identity-reference recipe — the authoritative copy`](../ofox-video-core/references/prompt-structure.md#identity-reference-recipe--the-authoritative-copy)
+for `input_references`, canonical `@imageN` labels, and the required
+“supplies / ignore” sentence for each asset. This is the route suggested by
+gallery cases 57 and 59, with an important limit: this repo has measured only
+two images and the API accepts at most nine. Case 59's 18-image arrangement
+cannot be reproduced as one Ofox job; do not silently drop half the assets.
+The user's track still stays local and is muxed after generation.
 
 **What that buys, stated honestly, because it is the sentence the user is
 actually paying against:** the visuals are cut to a structure *you* describe

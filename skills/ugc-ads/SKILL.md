@@ -2,11 +2,11 @@
 name: ugc-ads
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate a handheld, phone-shot UGC clip — imperfect framing, one practical light, vertical, no cinematic grading, no beauty filter. It inverts the polish every other video skill here defaults to — a UGC clip that looks like an ad has failed. Use when a user wants a video that reads as filmed by a real customer rather than by an agency, e.g. "a real-looking phone unboxing of this product", "a creator first-impression clip for TikTok", "an honest review video, nothing slick", or "make it look like a customer shot it". Do not use for a polished brand ad (see seedance-ad-creative), plain catalog footage (see seedance-product-video), a dialogue scene between people (see seedance-short-drama), or a set of cheap vertical drafts to choose from (see shorts-reels).
 license: MIT
-version: "2.0.0"
+version: "2.0.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/ugc-ads
 metadata:
   author: ofoxai
-  version: "2.0.0"
+  version: "2.0.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -511,6 +511,12 @@ role sentences are all in
 [`../ofox-video-core/references/prompt-structure.md`](../ofox-video-core/references/prompt-structure.md).
 What follows is the UGC shape.
 
+If several images should supply appearance without locking the opening frame,
+use the shared
+[`Identity-reference recipe — the authoritative copy`](../ofox-video-core/references/prompt-structure.md#identity-reference-recipe--the-authoritative-copy).
+Do not reproduce its payload or limits here; this file owns only the UGC role
+each image plays.
+
 Slots in `<angle brackets>`; optional lines in `[square brackets]`.
 
 ```
@@ -518,7 +524,7 @@ STYLE: <consumer-capture anchor, from the shared file's Consumer capture row —
 CAPTURE: <the viewpoint, as a property of the shot and never as a phone standing somewhere: a fixed viewpoint from the back of the table, at mug height and a little too low, so the near table edge cuts across the bottom of the frame | a close handheld viewpoint that drifts and re-settles | an arm's-length frontal viewpoint>. <Its flaws for this clip: the focus hunts once when the hands move in; the exposure lifts when the white box fills the frame.>
 SCENE: <a real room, named: a kitchen counter at the end of the day | a desk with the day's things still on it>. <The one light source, and where it is.> <What it does badly: the near side bright, the far side in shadow.>
 PRODUCT: <shape, material, colour, and any text on it verbatim in quotes>.
-         [image1 is the product exactly — <shape, label, colour>; ignore its background.]
+         [@image1 supplies the product exactly — <shape, label, colour>; ignore its background.]
 [PERSON: <only what is in frame — two hands, adult, no jewellery | a person in their 20s in a grey hoodie, seen from the chest up>. <No name, no wardrobe manifest: this is not a character that has to survive anything.>]
 
 0–<N>s    <one ordinary action>. <What the frame does about it: it sits a touch low, the focus hunts, the view tilts up.> <the sound this action makes>

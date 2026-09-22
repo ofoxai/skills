@@ -2,6 +2,12 @@
 
 All notable changes to the **seedance-anime-drama** skill. Versioning follows SemVer.
 
+## 2.0.1 — identity references defer to the shared recipe
+
+The identity-reference table no longer duplicates the core's measured job,
+limits and payload rules. It links to the authoritative recipe, keeps only
+anime-specific guidance, and uses the canonical `@image1` label.
+
 ## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
 
 **Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its

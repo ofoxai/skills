@@ -2,11 +2,11 @@
 name: shorts-reels
 description: Requires OFOX_API_KEY — create one at https://app.ofox.ai. Generate cheap vertical 9:16 drafts in one priced batch, pick a winner off the contact sheet, then re-render only that one. The cheap tier is the point — several times cheaper per second, so a whole set can cost less than one flagship clip. Use when a user wants Shorts/Reels/TikTok raw material rather than one finished video, e.g. "give me 5 vertical clips to choose from", "a few Reels drafts for this product", "some cheap options before we commit", or "batch me some 9:16 takes". Do not use when one finished clip is wanted — go straight to the scenario skill (seedance-ad-creative, ugc-ads, seedance-short-drama, seedance-product-video), which is also where this skill gets the prompt it drafts.
 license: MIT
-version: "2.0.0"
+version: "2.0.1"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/shorts-reels
 metadata:
   author: ofoxai
-  version: "2.0.0"
+  version: "2.0.1"
   openclaw:
     requires:
       env: [OFOX_API_KEY]
@@ -58,6 +58,18 @@ something, and the craft for that belongs to whichever scenario fits:
 Write it there, run the set through here. The two things this skill adds on
 top are **vertical** and **cheap enough to throw most of them away** — and
 that second one is the whole reason it exists separately.
+
+### When the user brings several reference images
+
+Keep this skill's batching and vertical defaults, but build the prompt and
+`input_references` payload from the shared
+[`Identity-reference recipe — the authoritative copy`](../ofox-video-core/references/prompt-structure.md#identity-reference-recipe--the-authoritative-copy).
+This is the route for gallery-shaped Shorts such as cases 29 and 70. Do not
+copy the recipe here: its measured boundary is two images, the API ceiling is
+nine, and the array order—not a creative tag spelling—binds `@image1`,
+`@image2`, and later labels. Every asset needs a “supplies / ignore” role
+sentence. If a source example has more than nine images, it is not directly
+reproducible as one Ofox job.
 
 ⚠️ **Do not reach for the ad template just because b-roll isn't in the list
 above.** An atmosphere clip borrowed from `seedance-ad-creative`'s skeleton

@@ -2,6 +2,14 @@
 
 All notable changes to the **shorts-reels** skill. Versioning follows SemVer.
 
+## 2.0.1 — multi-image Shorts route points to the shared recipe
+
+Users who bring several character, product or layout images now have an
+explicit route from this skill to the core's authoritative
+`input_references` recipe. The route preserves this skill's batching and
+vertical defaults while stating the measured two-image boundary, nine-image
+API ceiling and array-order rule.
+
 ## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
 
 **Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its

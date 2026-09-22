@@ -2,6 +2,13 @@
 
 All notable changes to the **seedance-ad-creative** skill. Versioning follows SemVer.
 
+## 2.0.1 — ad identity references use the shared recipe
+
+The product-reference table now links to the core's authoritative
+multi-image recipe instead of copying its payload, evidence and failure
+warnings. This file retains only the ad-specific choice and aspect-ratio
+guidance.
+
 ## 2.0.0 — every real-run command carries `--approved`, and the core refuses without it
 
 **Breaking, and the break is upstream.** `ofox-video-core` 2.0.0 makes its
