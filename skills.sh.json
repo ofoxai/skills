@@ -3,7 +3,7 @@
   "groupings": [
     {
       "title": "Secrets",
-      "description": "Agent-safe secret management with hal-vault: SSH-key encrypted storage, tag search, and masked-by-default output.",
+      "description": "Agent-safe secret management with hal-vault: SSH-key encrypted storage, tag search, masked-by-default output, and hal7:// references injected into a command with hal-vault run.",
       "skills": ["hal-vault"]
     },
     {
