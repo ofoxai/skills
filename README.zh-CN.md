@@ -186,7 +186,7 @@ npx skills add ofoxai/skills --skill '*' --agent '*' --global --yes
 
 | Skill | 做什么 |
 |-------|--------|
-| [hal-vault](skills/hal-vault/SKILL.md) | SSH 密钥加密的本地密钥库。默认打码，所以 agent 能搜索并注入凭据而**从不打印它**。 |
+| [hal-vault](skills/hal-vault/SKILL.md) | SSH 密钥加密的本地密钥库。默认打码，所以 agent 能搜索并注入凭据而**从不打印它**；多个凭据可用 `hal7://` 引用写成 `.env.tpl`，交给 `hal-vault run` 一次注入。 |
 | [hal-image](skills/hal-image/SKILL.md) | ImageMagick 配方 —— 缩放、裁切、合成、拼图、水印、格式转换 —— 外加发送前的无损压缩，让传输保持小体积。需要装 `magick`。 |
 | [cloudflare-drop](skills/cloudflare-drop/SKILL.md) | 一个静态文件夹换一个可分享的在线链接。配了 `CLOUDFLARE_API_TOKEN` 是永久部署，没配是 60 分钟可认领预览 —— 而且它会明说你拿到的是哪一种、会自检返回的内容、绝不编造链接。 |
 

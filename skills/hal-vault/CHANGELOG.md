@@ -4,6 +4,32 @@ All notable changes to the **hal-vault** skill. Versioning follows SemVer.
 
 This file starts at 1.1.0; earlier versions predate it.
 
+## 1.3.0 — `.env.tpl` + `hal-vault run` for several secrets at once
+
+hal-vault CLI v0.1.0 adds `hal7://` references and two commands, `run` and
+`check`. The skill now makes `run` the first choice whenever a command needs
+more than one secret:
+
+```
+# before: one decryption per variable
+OPENAI_API_KEY="$(hal-vault get openai --reveal)" \
+GITHUB_TOKEN="$(hal-vault get github-pat --reveal)" pnpm run e2e
+
+# after (CLI v0.1.0+): a committable template, one decryption, masked output
+hal-vault run --env-file .env.tpl -- pnpm run e2e
+```
+
+- New workflow "Several secrets for one command", and `run` as item 0 of
+  "The order to reach for" — it is the environment-variable form, done once
+  for all variables, with the child's output masked.
+- `--no-masking` is documented as human-terminal only: never when the output
+  comes back to the agent.
+- `references/cli-reference.md` documents `run`, `check` and the env file
+  format.
+- The per-variable `get --reveal` forms are unchanged and remain the way to
+  go on a CLI older than v0.1.0.
+- The frontmatter `description` now names the multi-secret trigger.
+
 ## 1.2.0 — `--reveal` in an argument is an exposure, and the docs now say so
 
 Answers the two findings ClawHub's scanner raised against 1.1.0 ("raw secrets

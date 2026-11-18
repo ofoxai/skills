@@ -95,6 +95,73 @@ hal-vault rm ID|LABEL [-f] [-d DIR]
 Asks `remove <id> (<label>)? [y/N]` on a terminal. Non-interactive use
 (piped stdin) requires `-f`.
 
+## run
+
+```
+hal-vault run [--env-file FILE]... [--no-masking] [-d DIR] -- CMD [ARGS...]
+```
+
+Requires CLI v0.1.0 or later. Runs `CMD` with every `hal7://` reference in
+its environment replaced by the secret value.
+
+- **References.** A variable whose *whole* value is `hal7://<label-or-id>`;
+  resolved like `get` (ID first, then case-insensitive label; an ambiguous
+  label is an error listing candidate IDs). No interpolation inside longer
+  values.
+- **Environment.** The current process environment, then each `--env-file`
+  in order; a later definition overrides an earlier one. References already
+  present in the current environment are resolved too.
+- **One decryption.** All references are resolved from a single load of the
+  vault. Without any reference the vault is not opened at all.
+- **Fail fast.** Any unresolved reference → `CMD` is not started, stderr
+  lists every failing `KEY  hal7://ref  reason`, exit code `1`.
+- **No leaks by `run` itself.** Values go only into the child's environment
+  — not into files, not into argv, not into `run`'s output.
+- **Output masking (default).** Injected secrets of 6 or more characters are
+  replaced with their masked form wherever they appear in `CMD`'s stdout
+  and stderr, including matches split across writes. Shorter values are not
+  masked. Masking pipes the output, so `CMD` does not see a terminal.
+- `--no-masking`: connect `CMD`'s output directly (interactive/TTY use). Only
+  when a human is watching that terminal.
+- stdin is passed through; SIGINT and SIGTERM are forwarded to `CMD`
+  (best effort on Windows); the exit code is `CMD`'s own (`128+N` when it
+  was killed by signal N).
+- Flags go before `--`; everything after it is the command line of `CMD`.
+
+### Env file format
+
+A dotenv subset, conventionally named `.env.tpl`:
+
+```
+# comment
+PLAIN=value                 # unquoted; " # ..." starts a comment
+export EXPORTED=value       # "export " is ignored
+SINGLE='taken verbatim'
+DOUBLE="escapes: \" \\ \n \r \t"
+EMPTY=
+OPENAI_API_KEY=hal7://openai
+```
+
+Keys must match `[A-Za-z_][A-Za-z0-9_]*`. No `${VAR}` expansion, no
+multi-line values. Parse errors name the file and line, never the value.
+
+## check
+
+```
+hal-vault check [--env-file FILE]... [-d DIR]
+```
+
+Requires CLI v0.1.0 or later. Resolves the same references as `run` (same
+environment layering) without running anything and without printing any
+value.
+
+- All resolve → exit `0`, one line per reference:
+  `KEY  hal7://ref  <id> <label>: <masked>`, then `all N references resolve.`
+- Any failure → exit `1`, stderr lists every failing reference.
+- No references at all → exit `0`, `no hal7:// references found.`
+
+Use it in CI and before starting work to catch a renamed or deleted entry.
+
 ## version
 
 ```
@@ -108,8 +175,9 @@ Prints the release version (e.g. `v0.0.1`).
 | Code | Meaning |
 |------|---------|
 | 0 | success |
-| 1 | runtime error (not found, decryption failure, I/O) |
+| 1 | runtime error (not found, decryption failure, I/O, unresolved `hal7://` reference) |
 | 2 | usage error (bad flags/arguments, unknown command) |
+| any | `run`, once `CMD` has started: `CMD`'s own exit code |
 
 ## Storage model
 

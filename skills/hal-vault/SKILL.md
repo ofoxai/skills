@@ -1,12 +1,12 @@
 ---
 name: hal-vault
-description: Securely store, search, and use secrets (API keys, tokens, passwords, SSH keys) with hal-vault, an SSH-key encrypted local secret store. Use when the user shares a credential that should be saved, asks what secrets are stored or where a key is, or when a command/workflow needs a secret injected. Core discipline - never print raw secret values into chat, logs, or files; reference secrets only by their masked form, and use --reveal only to feed another process, never into a command argument (where it lands in the machine's process table) or into text you write down.
+description: Securely store, search, and use secrets (API keys, tokens, passwords, SSH keys) with hal-vault, an SSH-key encrypted local secret store. Use when the user shares a credential that should be saved, asks what secrets are stored or where a key is, or when a command/workflow needs one or more secrets injected (several at once via a .env.tpl of hal7:// references and hal-vault run). Core discipline - never print raw secret values into chat, logs, or files; reference secrets only by their masked form, and use --reveal only to feed another process, never into a command argument (where it lands in the machine's process table) or into text you write down.
 license: MIT
-version: "1.2.0"
+version: "1.3.0"
 homepage: https://github.com/ofoxai/skills/tree/main/skills/hal-vault
 metadata:
   author: ofoxai
-  version: "1.2.0"
+  version: "1.3.0"
   openclaw:
     requires:
       bins: [hal-vault]
@@ -33,7 +33,8 @@ Use this skill when:
 - The user asks "what secrets do we have", "do we still have the X key",
   or wants to find/rotate/remove a stored credential
 - A command, script, or deployment you are running needs a secret (an API
-  key in an env var, a token in a header)
+  key in an env var, a token in a header) — or several of them, which is
+  what `.env.tpl` + `hal-vault run` is for
 
 ## Check availability
 
@@ -143,6 +144,11 @@ machine, a jump host, or anything multi-tenant, treat form A as a disclosure.
 
 ### The order to reach for
 
+0. **Several variables for one command → `hal-vault run`** (CLI v0.1.0+). It
+   is form 1 below done for you: one decryption, every value placed in the
+   child's environment only, and the child's output masked on its way back to
+   you. See "Several secrets for one command" under Workflows.
+
 1. **The tool reads an environment variable** — the value goes into that one
    child's environment, and into no argument list. Measured the same way: the
    process showed as `/bin/sleep 3`, with the value nowhere in `ps -A -o args=`.
@@ -215,7 +221,61 @@ hal-vault search "" --type api_key
 All output is masked; safe to show the table directly. Use `--json` when
 you need to process the results.
 
+### Several secrets for one command: `.env.tpl` + `hal-vault run` (preferred)
+
+Requires hal-vault **v0.1.0 or later** — check with `hal-vault version`. On an
+older CLI, use the per-variable form in the next section.
+
+Keep a template of references next to the project. A value of exactly
+`hal7://<label-or-id>` points at a vault entry; anything else passes through
+as is. The template holds no secrets, so it can be committed — never put a raw
+value in it:
+
+```
+# .env.tpl
+OPENAI_API_KEY=hal7://openai
+GITHUB_TOKEN=hal7://github-pat
+PORT=8080
+```
+
+Verify, then run:
+
+```
+hal-vault check --env-file .env.tpl            # masked confirmation per KEY; exit 1 lists every failure
+hal-vault run --env-file .env.tpl -- pnpm run e2e
+```
+
+What `run` guarantees, so you can rely on it:
+
+- **One decryption** for all references, resolved like `get` (label or ID;
+  an ambiguous label fails and lists candidate IDs — use the ID).
+- **Fail fast.** If any reference fails, the command is not started and
+  stderr lists every failing KEY and reference (no values). Exit code `1`.
+- **Values only in the child's environment** — never in a file, never in
+  argv, never in `run`'s own output.
+- **Masked output by default.** Any injected secret of 6+ characters that
+  appears in the child's stdout/stderr is replaced with its masked form, even
+  when split across writes. Shorter values (`8080`, `true`) are left alone.
+- stdin, SIGINT/SIGTERM and the child's exit code pass through.
+
+Layering: the current environment, then each `--env-file` in order (later
+wins). A `hal7://` value already in the environment is resolved too, so a
+one-off works without a file: `OPENAI_API_KEY=hal7://openai hal-vault run --
+./deploy.sh`.
+
+`--no-masking` hands the child a real terminal (interactive programs). Use it
+only when a human is watching that terminal — **never when the output comes
+back to you**, because the masking is what keeps a value that the child
+prints out of the transcript. Masking catches verbatim echoes only; a child
+that encodes or reformats a secret can still print it.
+
+Env files are a dotenv subset: `KEY=VALUE`, `export KEY=VALUE`, `#`
+comments, blank lines, single- or double-quoted values. No `${VAR}`
+expansion and no interpolation inside a value (`foo-hal7://x` is plain text).
+
 ### Use a secret in a command
+
+For a single variable, or on a CLI older than v0.1.0:
 
 Substitute at run time so the value never enters the transcript, and pick the
 form that keeps it out of the argument list too (see the section above):
@@ -253,7 +313,8 @@ Confirm with the user before removing anything you did not just create.
 - `get` accepts an ID or a label; ambiguous labels return the candidate
   IDs (masked-safe) — retry with the ID.
 - Exit codes: `0` success, `1` runtime error (e.g. not found), `2` usage
-  error. Read stderr for the reason.
+  error. Read stderr for the reason. `run` returns the child's exit code
+  once the child has started (`128+N` if it was killed by signal N).
 - Concurrent invocations are safe (the vault takes an exclusive lock).
 - Secrets must be valid UTF-8; binary material should be base64-encoded
   before storing (hal-vault rejects it otherwise, it will not corrupt it).
